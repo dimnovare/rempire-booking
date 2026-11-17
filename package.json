@@ -1,0 +1,31 @@
+{
+  "name": "rempire-booking",
+  "version": "0.1.0",
+  "private": true,
+  "description": "REMPIRE booking: client booking, Renat's admin, the barber PWA, product sales and invoices. Replaces Altegio and Isolta.",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "next dev --port 3400",
+    "build": "next build",
+    "start": "next start --port 3400",
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "check:noindex": "node tools/check-noindex.mjs"
+  },
+  "dependencies": {
+    "next": "16.4.6",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/turbopack": "4.3.3",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tailwindcss": "4.3.3",
+    "typescript": "^5",
+    "vitest": "^5.1.0"
+  }
+}
