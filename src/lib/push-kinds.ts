@@ -156,6 +156,15 @@ export function safeClient(name: string, locale: Locale): string {
   return !n || DIGITS.test(n) ? W[locale].client : n.slice(0, 40);
 }
 
+/** Free text a barber typed (a cancel reason), with any run of digits that could be a phone taken out. */
+export function safeText(s: string, max = 120): string {
+  return String(s ?? "")
+    .replace(/\+?\d[\d\s().-]{4,}\d/g, "…")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
+}
+
 const weekday = new Map<string, Intl.DateTimeFormat>();
 
 /** «ср 18.11, 14:30» on the salon's clock. */
@@ -220,7 +229,8 @@ export function pushText(kind: string, payload: Record<string, unknown>, locale:
         ? { title: w.clientMoved, body: `${p.staff} · ${moved}`, url: salon, tag }
         : { title: w.clientCancelled, body: `${p.staff} · ${line}`, url: salon, tag };
     case "own_barber": {
-      const reason = p.reason ? ` · «${String(p.reason).slice(0, 120)}»` : "";
+      const why = p.reason ? safeText(p.reason) : "";
+      const reason = why ? ` · «${why}»` : "";
       return p.action === "moved"
         ? { title: w.barberMoved(p.staff), body: moved, url: salon, tag }
         : { title: w.barberCancelled(p.staff), body: `${line}${reason}`, url: salon, tag };

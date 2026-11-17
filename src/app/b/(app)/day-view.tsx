@@ -5,16 +5,21 @@
  * day's money, the next client with «call» and one tap for «arrived» or
  * «done», then the whole day in order: visits, free time, breaks.
  * Pull down (or come back to the app) to refresh.
+ *
+ * B3: «+» or a tap on free time books a visit in his column; a visit's sheet
+ * moves it, cancels it (with a reason) or books the client again.
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import type { Offer } from "@/lib/barber/book";
 import type { BBlock, BDay, BVisit } from "@/lib/barber/day";
 import { coversDay, freeGaps, hoursText, nextVisit, type Gap } from "@/lib/barber/gaps";
-import { addDays, startOfDay } from "@/lib/tz";
-import { NextIcon, PrevIcon } from "../../admin/icons";
+import { addDays, localParts, startOfDay } from "@/lib/tz";
+import { NextIcon, PlusIcon, PrevIcon } from "../../admin/icons";
 import { cap, dateWords, eur, hm, minsText, pick3 } from "../copy.shared";
 import { useB, useTitle } from "../lang";
+import { CancelSheet, MoveSheet, NewVisitSheet, type NewPrefill } from "./book-sheets";
 import { BSheet } from "./sheet";
 import { setVisitStatus } from "./visit-actions";
 
@@ -22,21 +27,24 @@ const MIN = 60_000;
 /** how far to pull (px, after the drag is halved) before letting go refreshes */
 const PULL = 64;
 
-type Props = { days: BDay[]; date: string; today: string; now: number; tz: string; step: number };
+type Props = { days: BDay[]; date: string; today: string; now: number; tz: string; step: number; offers: Offer[] };
 
-export function DayView({ days, date, today, now: serverNow, tz, step }: Props) {
+/** What is open over the day: a visit, a new visit, or a visit being moved or cancelled. */
+type Open = { kind: "visit" | "move" | "cancel"; id: string } | { kind: "new"; prefill: NewPrefill };
+
+export function DayView({ days, date, today, now: serverNow, tz, step, offers }: Props) {
   const B = useB();
   useTitle(B.nav.day);
   const router = useRouter();
   const [sel, setSel] = useState(days.some((d) => d.date === date) ? date : days[0].date);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [sheet, setSheet] = useState<Open | null>(null);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ text: string; bad?: boolean } | null>(null);
   const now = useNow(serverNow);
   const online = useOnline();
   const [refreshing, startRefresh] = useTransition();
   const reload = useCallback(() => startRefresh(() => router.refresh()), [router]);
-  const pulled = usePullRefresh(reload, openId === null);
+  const pulled = usePullRefresh(reload, sheet === null);
   useAutoRefresh(reload);
 
   useEffect(() => {
@@ -47,7 +55,7 @@ export function DayView({ days, date, today, now: serverNow, tz, step }: Props) 
 
   const choose = (d: string) => {
     setSel(d);
-    setOpenId(null);
+    setSheet(null);
     // the address follows the strip: a reload, «back» or the refresh land on this day
     window.history.replaceState(null, "", d === today ? "/b" : `/b?d=${d}`);
   };
@@ -65,7 +73,19 @@ export function DayView({ days, date, today, now: serverNow, tz, step }: Props) 
   };
 
   const day = days.find((d) => d.date === sel) ?? days[0];
-  const open = openId ? (days.flatMap((d) => d.visits).find((v) => v.id === openId) ?? null) : null;
+  const visitOf = (id: string) => days.flatMap((d) => d.visits).find((v) => v.id === id) ?? null;
+  const open = sheet && sheet.kind !== "new" ? visitOf(sheet.id) : null;
+  const openVisit = (id: string) => setSheet({ kind: "visit", id });
+  const book = (prefill: Partial<NewPrefill>) => setSheet({ kind: "new", prefill: { date: sel < today ? today : sel, ...prefill } });
+
+  /** After a booking or a move: say so, and show that day (a day of another week loads it). */
+  const done = (text: string, date?: string) => {
+    setSheet(null);
+    setToast({ text });
+    if (!date || date === sel) return;
+    if (days.some((d) => d.date === date)) choose(date);
+    else router.replace(date === today ? "/b" : `/b?d=${date}`);
+  };
   const rel = sel === today ? B.day.today : sel === addDays(today, 1) ? B.day.tomorrow : sel === addDays(today, -1) ? B.day.yesterday : null;
   const words = cap(dateWords(sel, B.lang));
   const wholeDay = day.blocks.find((b) => coversDay(b, sel, tz));
@@ -140,11 +160,40 @@ export function DayView({ days, date, today, now: serverNow, tz, step }: Props) 
         ))}
       </header>
 
-      {next && <NextCard v={next} now={now} tz={tz} busy={busy} onOpen={() => setOpenId(next.id)} onStatus={status} />}
+      {next && <NextCard v={next} now={now} tz={tz} busy={busy} onOpen={() => openVisit(next.id)} onStatus={status} />}
 
-      <Timeline day={day} now={now} tz={tz} step={step} onOpen={setOpenId} />
+      <Timeline day={day} now={now} tz={tz} step={step} onOpen={openVisit} onFree={(start) => book({ start })} />
 
-      {open && <VisitSheet v={open} tz={tz} busy={busy} onClose={() => setOpenId(null)} onStatus={status} />}
+      {offers.length > 0 && (
+        <button type="button" className="bx-fab" aria-label={B.book.new} onClick={() => book({})}>
+          <PlusIcon size={26} />
+        </button>
+      )}
+
+      {open && sheet?.kind === "visit" && (
+        <VisitSheet
+          v={open}
+          tz={tz}
+          busy={busy}
+          canBook={offers.length > 0}
+          onClose={() => setSheet(null)}
+          onStatus={status}
+          onMove={() => setSheet({ kind: "move", id: open.id })}
+          onCancel={() => setSheet({ kind: "cancel", id: open.id })}
+          onAgain={() => {
+            // the usual four weeks on, from that visit
+            const later = addDays(localParts(open.start, tz).date, 28);
+            book({
+              date: later < today ? today : later,
+              client: { id: open.clientId, name: open.clientName, phone: open.clientPhone },
+              serviceIds: open.services.map((x) => x.serviceId),
+            });
+          }}
+        />
+      )}
+      {open && sheet?.kind === "move" && <MoveSheet v={open} tz={tz} today={today} onClose={() => openVisit(open.id)} onDone={done} />}
+      {open && sheet?.kind === "cancel" && <CancelSheet v={open} tz={tz} onClose={() => openVisit(open.id)} onDone={(t) => done(t)} />}
+      {sheet?.kind === "new" && <NewVisitSheet offers={offers} tz={tz} today={today} prefill={sheet.prefill} onClose={() => setSheet(null)} onDone={done} />}
       {toast && (
         <p className={`adm-toast${toast.bad ? " is-bad" : ""}`} role="status">
           {toast.text}
@@ -192,7 +241,7 @@ function NextCard({ v, now, tz, busy, onOpen, onStatus }: { v: BVisit; now: numb
 
 type Item = { at: number; order: number; key: string } & ({ kind: "visit"; v: BVisit } | { kind: "gap"; g: Gap } | { kind: "block"; b: BBlock });
 
-function Timeline({ day, now, tz, step, onOpen }: { day: BDay; now: number; tz: string; step: number; onOpen: (id: string) => void }) {
+function Timeline({ day, now, tz, step, onOpen, onFree }: { day: BDay; now: number; tz: string; step: number; onOpen: (id: string) => void; onFree: (start: number) => void }) {
   const B = useB();
   const d0 = startOfDay(day.date, tz);
   const d1 = startOfDay(addDays(day.date, 1), tz);
@@ -235,14 +284,19 @@ function Timeline({ day, now, tz, step, onOpen }: { day: BDay; now: number; tz: 
             const g = it.g;
             return (
               <li key={it.key} className={`bx-gap${g.extraCents ? " is-sp" : ""}`}>
-                <span className="bx-t">
-                  <b>{hm(g.from, tz)}</b>
-                  <small>{hm(g.to, tz)}</small>
-                </span>
-                <span className="bx-gap-main">
-                  {B.day.gap(minsText(Math.round((g.to - g.from) / MIN), B.h, B.min))}
-                  {g.extraCents > 0 && <small> · +{eur(g.extraCents)}</small>}
-                </span>
+                <button type="button" aria-label={`${B.book.addAt(hm(g.from, tz))}. ${B.day.gap(minsText(Math.round((g.to - g.from) / MIN), B.h, B.min))}`} onClick={() => onFree(g.from)}>
+                  <span className="bx-t">
+                    <b>{hm(g.from, tz)}</b>
+                    <small>{hm(g.to, tz)}</small>
+                  </span>
+                  <span className="bx-gap-main">
+                    {B.day.gap(minsText(Math.round((g.to - g.from) / MIN), B.h, B.min))}
+                    {g.extraCents > 0 && <small> · +{eur(g.extraCents)}</small>}
+                  </span>
+                  <span className="bx-gap-add" aria-hidden="true">
+                    <PlusIcon />
+                  </span>
+                </button>
               </li>
             );
           }
@@ -266,9 +320,31 @@ function Timeline({ day, now, tz, step, onOpen }: { day: BDay; now: number; tz: 
   );
 }
 
-function VisitSheet({ v, tz, busy, onClose, onStatus }: { v: BVisit; tz: string; busy: boolean; onClose: () => void; onStatus: (v: BVisit, s: string) => void }) {
+function VisitSheet({
+  v,
+  tz,
+  busy,
+  canBook,
+  onClose,
+  onStatus,
+  onMove,
+  onCancel,
+  onAgain,
+}: {
+  v: BVisit;
+  tz: string;
+  busy: boolean;
+  canBook: boolean;
+  onClose: () => void;
+  onStatus: (v: BVisit, s: string) => void;
+  onMove: () => void;
+  onCancel: () => void;
+  onAgain: () => void;
+}) {
   const B = useB();
   const date = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(v.start);
+  // a visit still to come can be moved or cancelled (one that took place is history)
+  const ahead = v.status === "booked" || v.status === "pending";
   return (
     <BSheet title={v.clientName} onClose={onClose}>
       <p className="adm-time">
@@ -333,6 +409,25 @@ function VisitSheet({ v, tz, busy, onClose, onStatus }: { v: BVisit; tz: string;
         {B.visit.source[v.source] ?? v.source}
         {v.reminder ? "" : ` · ${B.visit.reminderOff}`}
       </p>
+      {(ahead || canBook) && (
+        <div className="adm-bar-row bx-visit-acts">
+          {ahead && (
+            <button type="button" className="adm-btn adm-btn-line adm-btn-auto" onClick={onMove}>
+              {B.book.move}
+            </button>
+          )}
+          {canBook && (
+            <button type="button" className="adm-btn adm-btn-ghost adm-btn-auto" onClick={onAgain}>
+              {B.book.again}
+            </button>
+          )}
+        </div>
+      )}
+      {ahead && (
+        <button type="button" className="adm-txt warn bx-cancel" onClick={onCancel}>
+          {B.book.cancel}
+        </button>
+      )}
     </BSheet>
   );
 }

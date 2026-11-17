@@ -179,6 +179,10 @@ describe("push: the words", () => {
     expect(safeClient("Ivan", "en")).toBe("Ivan");
     const t = pushText("visit_new", { ...payload, client: "55550101" }, "ru");
     expect(t?.body).not.toMatch(/\d{4}/);
+    // nor a phone typed into a cancel reason
+    const c = pushText("own_barber", { ...payload, action: "cancelled", reason: "перенёс, клиент +372 5555 0101 в курсе" }, "ru");
+    expect(c?.body).toContain("«перенёс, клиент … в курсе»");
+    expect(c?.body.replace(/\d\d\.\d\d, \d\d:\d\d/g, "")).not.toMatch(/\d{3}/);
   });
 
   it("the plan for tomorrow", () => {
@@ -254,8 +258,11 @@ describe("push: the outbox", () => {
       return { devices: 1, sent: 1, failed: 0, gone: 0 };
     },
   };
-  beforeEach(() => {
+  beforeEach(async () => {
     sent.length = 0;
+    // these run on the real clock; after 20:00 in Tallinn the outbox would
+    // also plan tomorrow's push. The last test turns it back on.
+    await query(`update users set notify = notify || '{"day_plan": false}'::jsonb`);
   });
 
   it("sends a due push in the reader's language and marks it sent", async () => {
@@ -288,6 +295,7 @@ describe("push: the outbox", () => {
   });
 
   it("queues tomorrow's plan from 20:00, once, and builds it when it goes", async () => {
+    await query("update users set notify = '{}'::jsonb");
     await setNotify(query, demo.business.id, ids.owner, "own_plan", true);
     const v = await adminCreateVisit(demo.business, visit("valentin", "10:30"), ids.owner);
     if (!v.ok) throw new Error(v.code);

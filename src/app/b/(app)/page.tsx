@@ -6,6 +6,7 @@
 import { Suspense } from "react";
 import { weekStart } from "@/lib/admin/grid";
 import { requireStaff } from "@/lib/auth/current";
+import { barberOffers } from "@/lib/barber/book";
 import { loadBarberDays } from "@/lib/barber/day";
 import { dbConfigured, query } from "@/lib/db";
 import { isLocalDate, todayIn } from "@/lib/tz";
@@ -31,7 +32,7 @@ async function Day({ searchParams }: { searchParams: PageProps<"/b">["searchPara
   const today = todayIn(tz, now);
   const date = isLocalDate(sp.d) ? sp.d : today;
   const from = weekStart(date);
-  const days = await loadBarberDays(query, business, staff.id, from, 7);
+  const [days, offers] = await Promise.all([loadBarberDays(query, business, staff.id, from, 7), barberOffers(query, business.id, staff.id)]);
   return (
     <DayView
       // a new week (or barber) starts fresh: scroll, the open sheet
@@ -42,6 +43,7 @@ async function Day({ searchParams }: { searchParams: PageProps<"/b">["searchPara
       now={now}
       tz={tz}
       step={business.settings.slot_step_min}
+      offers={offers}
     />
   );
 }

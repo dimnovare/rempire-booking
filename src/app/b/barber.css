@@ -120,11 +120,15 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-v.st-no_show > button { border-left-color: var(--warn) !important; }
 .bx-v.st-no_show .bx-v-main b { text-decoration: line-through; color: var(--mute); }
 .bx-v.is-sp .bx-v-side b { color: var(--lime); }
-.bx-gap, .bx-blk { min-height: 48px; padding: 6px 0 6px 13px; gap: 10px; }
+.bx-blk { min-height: 48px; padding: 6px 0 6px 13px; gap: 10px; }
+.bx-gap > button { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 0 6px 13px; text-align: left; }
 .bx-gap .bx-t, .bx-blk .bx-t { width: 46px; }
 .bx-gap .bx-t b, .bx-blk .bx-t b { font-size: 15px; color: var(--mute); }
-.bx-gap-main { align-self: center; color: var(--mute); font-size: 14px; }
+.bx-gap-main { flex: 1; min-width: 0; color: var(--mute); font-size: 14px; }
 .bx-gap.is-sp .bx-gap-main { color: var(--lime); }
+/* free time books a visit: the «+» says so */
+.bx-gap-add { flex: none; width: 36px; height: 36px; display: grid; place-items: center; color: var(--lime); border: 1px dashed var(--line-2); }
+.bx-gap > button:is(:hover, :focus-visible) .bx-gap-add { border-style: solid; border-color: var(--lime); }
 .bx-blk { background: repeating-linear-gradient(135deg, transparent 0 8px, var(--raise-2) 8px 16px); }
 .bx-blk-main { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 14px; }
 .bx-blk-main small { color: var(--mute); font-size: 13px; }
@@ -157,3 +161,32 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-kinds legend { margin-bottom: 6px; }
 .bx-kind { justify-content: space-between; border-top: 1px solid var(--line); padding: 4px 0; }
 .bx-kind span { flex: 1; min-width: 0; }
+
+/* ---------- booking from the phone (B3) ---------- */
+/* room under the last row for the «+» */
+.bx-day { padding-bottom: 96px; }
+.bx-fab { position: fixed; z-index: 25; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom, 0px)); width: 58px; height: 58px; display: grid; place-items: center; background: var(--lime); color: var(--on-lime); box-shadow: 0 0 0 1px #000; }
+.bx-daypick { display: flex; align-items: center; gap: 6px; }
+.bx-daypick .adm-ibtn { flex: none; width: 48px; height: 48px; }
+.bx-daypick .adm-ibtn:disabled { opacity: .35; }
+.bx-daypick label { position: relative; flex: 1; min-width: 0; display: grid; place-items: center; min-height: 48px; border: 1px solid var(--line-2); cursor: pointer; }
+.bx-daypick label b { font-size: 16px; font-weight: 600; pointer-events: none; }
+/* the native date picker opens from the whole box; its own text stays hidden */
+.bx-daypick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.bx-times { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; }
+.bx-times button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 48px; padding: 4px 2px; border: 1px solid var(--line-2) !important; font-variant-numeric: tabular-nums; }
+.bx-times b { font: 800 16px/1 var(--display); letter-spacing: .02em; }
+.bx-times small { font-size: 11px; color: var(--mute); }
+.bx-times .is-sp b, .bx-times .is-sp small { color: var(--lime); }
+.bx-times button[aria-pressed="true"] { background: var(--lime); border-color: var(--lime) !important; }
+.bx-times button[aria-pressed="true"] :is(b, small) { color: var(--on-lime); }
+.bx-times button:disabled { opacity: .45; }
+.bx-other { align-self: flex-start; }
+.bx-reasons { display: flex; flex-wrap: wrap; gap: 6px; }
+.bx-reasons button { min-height: 40px; padding: 0 12px; border: 1px solid var(--line-2) !important; font-size: 14px; }
+.bx-reasons button[aria-pressed="true"] { border-color: var(--warn) !important; color: var(--warn); }
+.bx-visit-acts { margin-top: 4px; }
+.bx-cancel { align-self: flex-start; }
+/* the admin's tick box (.adm-svcs .bx), under its own name: .bx is this app's root */
+.adm-svcs .bx-tick { flex: none; width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--line-2); color: transparent; }
+.adm-svcs button[aria-pressed="true"] .bx-tick { background: var(--lime); border-color: var(--lime); color: var(--on-lime); }
