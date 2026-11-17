@@ -201,6 +201,20 @@ export const ru = {
     reminderOff: "без SMS-напоминания",
   },
 
+  client: {
+    card: "Карточка клиента",
+    withYou: (n: number) => `${n} ${plural(n, "визит", "визита", "визитов")} у вас`,
+    noShows: (n: number) => `неявки: ${n}`,
+    ahead: "Впереди",
+    past: "Были",
+    none: "Пока ничего.",
+    gone: "Карточка недоступна.",
+    edit: "Изменить",
+    addNote: "Добавить заметку",
+    noteSaved: "Заметка сохранена",
+    back: "К записи",
+  },
+
   book: {
     new: "Новая запись",
     addAt: (t: string) => `Записать на ${t}`,

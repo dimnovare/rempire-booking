@@ -12,6 +12,7 @@ import { refresh } from "next/cache";
 import { adminSetStatus, isUuid, type AdminOutcome } from "@/lib/admin/visits";
 import { requireStaff } from "@/lib/auth/current";
 import { barberBook, barberCancel, barberFreeStarts, barberMove, searchMyClients, type MyClient, type NewVisitInput, type StartsAnswer } from "@/lib/barber/book";
+import { clientCard, setClientNote, setVisitNote, type ClientCard } from "@/lib/barber/clients";
 import { query } from "@/lib/db";
 
 export async function setVisitStatus(visitId: string, status: string): Promise<boolean> {
@@ -61,4 +62,26 @@ export async function cancelVisit(visitId: string, reason: string): Promise<"can
   const out = await barberCancel(business, staff.id, user.id, String(visitId), String(reason ?? ""));
   if (out === "cancelled") refresh();
   return out;
+}
+
+/** The card of a client of his (B6): null for anyone without a visit in his column. */
+export async function loadClientCard(clientId: string): Promise<ClientCard | null> {
+  const { business, staff } = await requireStaff();
+  return clientCard(query, business, staff.id, String(clientId ?? ""));
+}
+
+/** The one shared note about a client of his; every barber and Renat see it. */
+export async function saveClientNote(clientId: string, note: string): Promise<boolean> {
+  const { user, business, staff } = await requireStaff();
+  const ok = await setClientNote(business, staff.id, user.id, String(clientId ?? ""), String(note ?? ""));
+  if (ok) refresh();
+  return ok;
+}
+
+/** The note on one of his own visits. */
+export async function saveVisitNote(visitId: string, note: string): Promise<boolean> {
+  const { user, business, staff } = await requireStaff();
+  const ok = await setVisitNote(business, staff.id, user.id, String(visitId ?? ""), String(note ?? ""));
+  if (ok) refresh();
+  return ok;
 }

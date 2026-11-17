@@ -8,6 +8,8 @@
  *
  * B3: «+» or a tap on free time books a visit in his column; a visit's sheet
  * moves it, cancels it (with a reason) or books the client again.
+ * B6: the visit's sheet edits the client's shared note and the visit's own
+ * note, and opens the client's card (his visits with this client).
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -20,8 +22,9 @@ import { NextIcon, PlusIcon, PrevIcon } from "../../admin/icons";
 import { cap, dateWords, eur, hm, minsText, pick3 } from "../copy.shared";
 import { useB, useTitle } from "../lang";
 import { CancelSheet, MoveSheet, NewVisitSheet, type NewPrefill } from "./book-sheets";
+import { ClientSheet, NoteEditor } from "./client-sheet";
 import { BSheet } from "./sheet";
-import { setVisitStatus } from "./visit-actions";
+import { saveClientNote, saveVisitNote, setVisitStatus } from "./visit-actions";
 
 const MIN = 60_000;
 /** how far to pull (px, after the drag is halved) before letting go refreshes */
@@ -30,7 +33,7 @@ const PULL = 64;
 type Props = { days: BDay[]; date: string; today: string; now: number; tz: string; step: number; offers: Offer[] };
 
 /** What is open over the day: a visit, a new visit, or a visit being moved or cancelled. */
-type Open = { kind: "visit" | "move" | "cancel"; id: string } | { kind: "new"; prefill: NewPrefill };
+type Open = { kind: "visit" | "move" | "cancel" | "client"; id: string } | { kind: "new"; prefill: NewPrefill };
 
 export function DayView({ days, date, today, now: serverNow, tz, step, offers }: Props) {
   const B = useB();
@@ -77,6 +80,15 @@ export function DayView({ days, date, today, now: serverNow, tz, step, offers }:
   const open = sheet && sheet.kind !== "new" ? visitOf(sheet.id) : null;
   const openVisit = (id: string) => setSheet({ kind: "visit", id });
   const book = (prefill: Partial<NewPrefill>) => setSheet({ kind: "new", prefill: { date: sel < today ? today : sel, ...prefill } });
+  /** «Записать снова»: the usual four weeks on from that visit, the same client and services. */
+  const again = (v: BVisit) => {
+    const later = addDays(localParts(v.start, tz).date, 28);
+    book({
+      date: later < today ? today : later,
+      client: { id: v.clientId, name: v.clientName, phone: v.clientPhone },
+      serviceIds: v.services.map((x) => x.serviceId),
+    });
+  };
 
   /** After a booking or a move: say so, and show that day (a day of another week loads it). */
   const done = (text: string, date?: string) => {
@@ -180,15 +192,21 @@ export function DayView({ days, date, today, now: serverNow, tz, step, offers }:
           onStatus={status}
           onMove={() => setSheet({ kind: "move", id: open.id })}
           onCancel={() => setSheet({ kind: "cancel", id: open.id })}
-          onAgain={() => {
-            // the usual four weeks on, from that visit
-            const later = addDays(localParts(open.start, tz).date, 28);
-            book({
-              date: later < today ? today : later,
-              client: { id: open.clientId, name: open.clientName, phone: open.clientPhone },
-              serviceIds: open.services.map((x) => x.serviceId),
-            });
-          }}
+          onAgain={() => again(open)}
+          onClient={() => setSheet({ kind: "client", id: open.id })}
+          onSaved={(text) => setToast({ text })}
+        />
+      )}
+      {open && sheet?.kind === "client" && (
+        <ClientSheet
+          clientId={open.clientId}
+          name={open.clientName}
+          tz={tz}
+          canBook={offers.length > 0}
+          onClose={() => setSheet(null)}
+          onBack={() => openVisit(open.id)}
+          onAgain={() => again(open)}
+          onSaved={(text) => setToast({ text })}
         />
       )}
       {open && sheet?.kind === "move" && <MoveSheet v={open} tz={tz} today={today} onClose={() => openVisit(open.id)} onDone={done} />}
@@ -330,6 +348,8 @@ function VisitSheet({
   onMove,
   onCancel,
   onAgain,
+  onClient,
+  onSaved,
 }: {
   v: BVisit;
   tz: string;
@@ -340,6 +360,8 @@ function VisitSheet({
   onMove: () => void;
   onCancel: () => void;
   onAgain: () => void;
+  onClient: () => void;
+  onSaved: (text: string) => void;
 }) {
   const B = useB();
   const date = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(v.start);
@@ -360,12 +382,20 @@ function VisitSheet({
       ) : (
         <p className="adm-meta">{B.visit.noPhone}</p>
       )}
-      {v.clientNote && (
-        <div className="bx-noteblk">
-          <small>{B.visit.clientNote}</small>
-          <p className="adm-note">{v.clientNote}</p>
-        </div>
-      )}
+      <button type="button" className="adm-txt lime bx-card-link" onClick={onClient}>
+        {B.client.card}
+      </button>
+      <NoteEditor
+        key={`c-${v.clientId}`}
+        label={B.visit.clientNote}
+        hint={B.visit.clientNoteHint}
+        value={v.clientNote}
+        onSave={async (text) => {
+          const ok = await saveClientNote(v.clientId, text);
+          if (ok) onSaved(B.client.noteSaved);
+          return ok;
+        }}
+      />
       <div className="adm-status" role="group" aria-label={B.visit.setStatus}>
         {(["arrived", "done", "no_show"] as const).map((s) => (
           <button key={s} type="button" aria-pressed={v.status === s} disabled={busy} onClick={() => onStatus(v, v.status === s ? "booked" : s)}>
@@ -399,12 +429,16 @@ function VisitSheet({
           <p className="adm-note">«{v.comment}»</p>
         </div>
       )}
-      {v.staffNote && (
-        <div className="bx-noteblk">
-          <small>{B.visit.visitNote}</small>
-          <p className="adm-note">{v.staffNote}</p>
-        </div>
-      )}
+      <NoteEditor
+        key={`v-${v.id}`}
+        label={B.visit.visitNote}
+        value={v.staffNote}
+        onSave={async (text) => {
+          const ok = await saveVisitNote(v.id, text);
+          if (ok) onSaved(B.client.noteSaved);
+          return ok;
+        }}
+      />
       <p className="adm-meta">
         {B.visit.source[v.source] ?? v.source}
         {v.reminder ? "" : ` · ${B.visit.reminderOff}`}

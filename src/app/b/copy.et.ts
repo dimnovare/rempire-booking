@@ -190,6 +190,20 @@ export const et: Copy = {
     reminderOff: "ilma SMS-meeldetuletuseta",
   },
 
+  client: {
+    card: "Kliendi kaart",
+    withYou: (n: number) => `${n} ${pl(n, "külastus", "külastust")} sinu juures`,
+    noShows: (n: number) => `ei tulnud: ${n}`,
+    ahead: "Ees ootamas",
+    past: "Varem",
+    none: "Veel midagi pole.",
+    gone: "Kaart pole saadaval.",
+    edit: "Muuda",
+    addNote: "Lisa märkus",
+    noteSaved: "Märkus salvestatud",
+    back: "Broneeringu juurde",
+  },
+
   book: {
     new: "Uus broneering",
     addAt: (t: string) => `Broneeri kell ${t}`,

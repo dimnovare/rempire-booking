@@ -223,3 +223,14 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-step { display: flex; align-items: center; gap: 12px; }
 .bx-step b { min-width: 96px; text-align: center; font: 800 20px/1 var(--display); font-variant-numeric: tabular-nums; }
 .bx-step .adm-ibtn { font-size: 22px; }
+
+/* ---------- the client's card (B6) ---------- */
+.bx-card-link { align-self: flex-start; min-height: 40px; }
+.bx-note-edit { align-self: flex-start; min-height: 36px; font-size: 14px; }
+.bx-noteblk textarea { width: 100%; min-height: 84px; resize: vertical; }
+.bx-cvs { border-top: 0; }
+.bx-cv { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+.bx-cv .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.bx-cv .txt b { font-weight: 700; font-size: 15px; }
+.bx-cv .txt small { color: var(--mute); font-size: 13px; overflow-wrap: anywhere; }
+.bx-cv .end { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-variant-numeric: tabular-nums; }

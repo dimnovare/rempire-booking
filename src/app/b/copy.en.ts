@@ -190,6 +190,20 @@ export const en: Copy = {
     reminderOff: "no SMS reminder",
   },
 
+  client: {
+    card: "Client card",
+    withYou: (n: number) => `${n} ${pl(n, "visit", "visits")} with you`,
+    noShows: (n: number) => `no-shows: ${n}`,
+    ahead: "Ahead",
+    past: "Earlier",
+    none: "Nothing yet.",
+    gone: "This card is not available.",
+    edit: "Edit",
+    addNote: "Add a note",
+    noteSaved: "Note saved",
+    back: "Back to the visit",
+  },
+
   book: {
     new: "New visit",
     addAt: (t: string) => `Book at ${t}`,
