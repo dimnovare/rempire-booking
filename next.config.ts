@@ -32,8 +32,18 @@ const nextConfig: NextConfig = {
   // X-Robots-Tag on every path, files in /public included (headers are
   // checked before the filesystem). See src/lib/indexing.ts.
   async headers() {
-    if (indexingAllowed()) return [];
+    // The barber app's service worker sits in /b/ but runs the app at /b
+    // (public/b/sw.js), and every start must see a new one at once.
+    const sw = {
+      source: "/b/sw.js",
+      headers: [
+        { key: "Service-Worker-Allowed", value: "/b" },
+        { key: "Cache-Control", value: "no-cache" },
+      ],
+    };
+    if (indexingAllowed()) return [sw];
     return [
+      sw,
       {
         source: "/:path*",
         headers: [{ key: "X-Robots-Tag", value: NOINDEX_HEADER }],

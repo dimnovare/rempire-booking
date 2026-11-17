@@ -1,8 +1,9 @@
 /**
  * The logged-in staff user for this request: the one place that reads the
  * session cookie (the Data Access Layer of Next's auth guide). Every admin
- * page and every Server Action calls requireAdmin() itself; the check in
- * src/proxy.ts is only a fast redirect for a missing cookie.
+ * page and every Server Action calls requireAdmin() itself, every barber
+ * app page and action requireStaff(); the check in src/proxy.ts is only a
+ * fast redirect for a missing cookie.
  */
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -11,7 +12,7 @@ import { cache } from "react";
 import type { Business } from "../availability";
 import { currentBusiness } from "../business";
 import { query } from "../db";
-import { SESSION_COOKIE, SESSION_COOKIE_MAX_AGE } from "./cookie";
+import { SESSION_COOKIE, SESSION_COOKIE_MAX_AGE, VIEW_AS_COOKIE } from "./cookie";
 import { canUseAdmin, createSession, readSession, revokeSession, type StaffUser } from "./sessions";
 
 export const currentStaffUser = cache(async (): Promise<StaffUser | null> => {
@@ -21,14 +22,56 @@ export const currentStaffUser = cache(async (): Promise<StaffUser | null> => {
   return token ? readSession(query, token) : null;
 });
 
-/** Renat or the front desk, with the business; anyone else goes to the login page. */
+/** Renat or the front desk, with the business; a barber goes to his app, anyone else to the login page. */
 export async function requireAdmin(): Promise<{ user: StaffUser; business: Business }> {
   const user = await currentStaffUser();
   if (!user) redirect("/admin/login");
-  if (!canUseAdmin(user)) redirect("/admin/login?e=role");
+  if (!canUseAdmin(user)) redirect(user.role === "staff" ? "/b" : "/admin/login?e=role");
   const business = await currentBusiness();
   if (!business || business.id !== user.businessId) redirect("/admin/login?e=role");
   return { user, business };
+}
+
+/** Any logged-in login of this business (the barber app's own pages: settings, the barber picker). */
+export async function requireStaffUser(): Promise<{ user: StaffUser; business: Business }> {
+  const user = await currentStaffUser();
+  if (!user) redirect("/b/login");
+  const business = await currentBusiness();
+  if (!business || business.id !== user.businessId) redirect("/b/login?e=role");
+  return { user, business };
+}
+
+export type BarberCtx = {
+  user: StaffUser;
+  business: Business;
+  /** the one column this request may see and change */
+  staff: { id: string; name: string; photoUrl: string | null };
+  /** Renat or the front desk looking at the barber app as this barber */
+  viewing: boolean;
+};
+
+/**
+ * The barber app (Phase B): a barber gets his own column and nothing else;
+ * every barber page and Server Action calls this and works only on
+ * `staff.id`. An owner or admin picks a barber first (/b/pick), so Renat
+ * sees what that barber sees.
+ */
+export async function requireStaff(): Promise<BarberCtx> {
+  const { user, business } = await requireStaffUser();
+  let staffId: string | null = null;
+  if (user.role === "staff") {
+    if (!user.staffId) redirect("/b/login?e=nostaff");
+    staffId = user.staffId;
+  } else {
+    staffId = (await cookies()).get(VIEW_AS_COOKIE)?.value ?? null;
+    if (!staffId || !/^[0-9a-f-]{36}$/i.test(staffId)) redirect("/b/pick");
+  }
+  const [s] = await query<{ id: string; display_name: string; photo_url: string | null; active: boolean }>(
+    "select id, display_name, photo_url, active from staff where id = $1 and business_id = $2",
+    [staffId, business.id],
+  );
+  if (!s || (user.role === "staff" && !s.active)) redirect(user.role === "staff" ? "/b/login?e=nostaff" : "/b/pick");
+  return { user, business, staff: { id: s.id, name: s.display_name, photoUrl: s.photo_url }, viewing: user.role !== "staff" };
 }
 
 export async function requireOwner(): Promise<{ user: StaffUser; business: Business }> {

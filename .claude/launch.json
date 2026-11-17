@@ -6,6 +6,19 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 3400
+    },
+    {
+      "name": "barber-dev",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "dev", "--port", "3410"],
+      "port": 3410,
+      "env": {
+        "DB_DRIVER": "pglite",
+        "SEED_DEMO": "yes",
+        "DEMO_LOGINS": "yes",
+        "EMAIL_TRANSPORT": "console",
+        "SMS_TRANSPORT": "console"
+      }
     }
   ]
 }

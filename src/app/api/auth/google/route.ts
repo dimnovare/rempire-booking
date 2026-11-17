@@ -1,20 +1,20 @@
 /**
- * GET /api/auth/google?next=/admin/…: start «Sign in with Google»
+ * GET /api/auth/google?next=/admin/… (or /b…, the barber app): start «Sign in with Google»
  * (src/lib/auth/google.ts). Without the OAuth client it sends the user back
  * to the login page, which then shows no Google button anyway.
  */
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-import { GOOGLE_COOKIE, safeAdminPath } from "@/lib/auth/cookie";
+import { GOOGLE_COOKIE, loginPageFor, safeStaffPath } from "@/lib/auth/cookie";
 import { GOOGLE, googleAuthUrl, googleLoginConfigured, newGoogleAttempt, packAttempt } from "@/lib/auth/google";
 
 export async function GET(request: Request) {
   // env, cookies and a fresh state: never prerendered
   await connection();
-  if (!googleLoginConfigured()) redirect("/admin/login");
   const url = new URL(request.url);
-  const next = safeAdminPath(url.searchParams.get("next") ?? "");
+  const next = safeStaffPath(url.searchParams.get("next") ?? "");
+  if (!googleLoginConfigured()) redirect(loginPageFor(next));
   const a = newGoogleAttempt();
   (await cookies()).set(GOOGLE_COOKIE, packAttempt({ state: a.state, verifier: a.verifier, next }), {
     httpOnly: true,

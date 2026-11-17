@@ -6,7 +6,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-import { GOOGLE_COOKIE, safeAdminPath } from "@/lib/auth/cookie";
+import { GOOGLE_COOKIE, loginPageFor, safeStaffPath } from "@/lib/auth/cookie";
 import { startSession } from "@/lib/auth/current";
 import { exchangeGoogleCode, googleLoginConfigured, loginWithGoogle, readGoogleIdToken, sameState, unpackAttempt } from "@/lib/auth/google";
 import { dbConfigured, query } from "@/lib/db";
@@ -22,8 +22,10 @@ export async function GET(request: Request) {
 
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state") ?? "";
+  // the login page the attempt started from: the admin's or the barber app's
+  const login = loginPageFor(attempt ? safeStaffPath(attempt.next) : "");
   // «Cancel» on Google's screen, an old tab, or a forged request
-  if (!attempt || !code || !sameState(state, attempt.state)) redirect("/admin/login?e=google");
+  if (!attempt || !code || !sameState(state, attempt.state)) redirect(`${login}?e=google`);
 
   let userId: string | null = null;
   let reason = "google";
@@ -38,7 +40,7 @@ export async function GET(request: Request) {
   } catch (err) {
     console.error("google login:", err instanceof Error ? err.message : err);
   }
-  if (!userId) redirect(`/admin/login?e=${reason}`);
+  if (!userId) redirect(`${login}?e=${reason}`);
   await startSession(userId);
-  redirect(safeAdminPath(attempt.next));
+  redirect(safeStaffPath(attempt.next));
 }

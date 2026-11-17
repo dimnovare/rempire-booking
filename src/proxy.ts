@@ -7,20 +7,27 @@
  * session cookie it goes to /admin/login; whether the cookie is valid is
  * checked by the page itself (src/lib/auth/current.ts). The admin is never
  * indexed, even after the move to rempire.ee.
+ *
+ * /b is the barber app (Phase B), the same way: no cookie → /b/login. Its
+ * manifest, icons and service worker have a file extension, so they never
+ * come here and need no login.
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth/cookie";
 import { isLocale, pickLocale } from "@/lib/i18n";
 import { indexingAllowed, NOINDEX_HEADER } from "@/lib/indexing";
 
-function admin(request: NextRequest): NextResponse {
+/** /admin and the barber app /b: without a session cookie, their own login page. */
+function staffArea(request: NextRequest, root: "/admin" | "/b"): NextResponse {
   const { pathname, search } = request.nextUrl;
-  const open = pathname === "/admin/login" || pathname.startsWith("/admin/login/");
+  const login = `${root}/login`;
+  // the barber app's install guide works before the login too
+  const open = pathname === login || pathname.startsWith(`${login}/`) || pathname === "/b/install";
   let res: NextResponse;
   if (!open && !request.cookies.has(SESSION_COOKIE)) {
     const url = request.nextUrl.clone();
-    url.pathname = "/admin/login";
-    url.search = pathname === "/admin" && !search ? "" : `?next=${encodeURIComponent(pathname + search)}`;
+    url.pathname = login;
+    url.search = pathname === root && !search ? "" : `?next=${encodeURIComponent(pathname + search)}`;
     res = NextResponse.redirect(url, 307);
   } else res = NextResponse.next();
   res.headers.set("X-Robots-Tag", NOINDEX_HEADER);
@@ -29,7 +36,8 @@ function admin(request: NextRequest): NextResponse {
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (pathname === "/admin" || pathname.startsWith("/admin/")) return admin(request);
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) return staffArea(request, "/admin");
+  if (pathname === "/b" || pathname.startsWith("/b/")) return staffArea(request, "/b");
   // the SMS reminder's short link picks the visit's own language (src/app/v)
   if (pathname.startsWith("/v/")) return NextResponse.next();
   if (isLocale(pathname.split("/")[1])) return NextResponse.next();

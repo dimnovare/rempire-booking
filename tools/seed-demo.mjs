@@ -167,6 +167,30 @@ export async function seedOwnerQa(db, forms = OWNER_QA) {
   return added;
 }
 
+/**
+ * Logins to try the admin and the barber app on a local run: an owner and
+ * one per demo barber, at example.test (a name that can never get mail), with
+ * no password: they log in with the e-mail code, which the console transport
+ * prints. Only the in-memory database calls this (src/lib/db.ts,
+ * DEMO_LOGINS=yes); never a real one.
+ * @param {{query: (sql: string, params?: unknown[]) => Promise<{rows: any[]}>}} db
+ */
+export async function seedDemoLogins(db) {
+  const [biz] = (await db.query("select id from businesses where slug = $1", [DEMO.business.slug])).rows;
+  if (!biz) return 0;
+  let added = 0;
+  const add = async (email, name, role, staffId) => {
+    const r = await db.query(
+      "insert into users (business_id, email, name, role, staff_id) values ($1, $2, $3, $4, $5) on conflict (email) do nothing returning id",
+      [biz.id, email, name, role, staffId],
+    );
+    added += r.rows.length;
+  };
+  await add("owner@example.test", "Owner (demo)", "owner", null);
+  for (const st of DEMO.staff) await add(`${st.slug}@example.test`, st.name, "staff", demoId("staff", st.slug));
+  return added;
+}
+
 async function main() {
   if (process.argv.includes("--if-enabled") && process.env.SEED_DEMO !== "yes") {
     console.log("Demo seed skipped (SEED_DEMO is not yes).");

@@ -32,6 +32,15 @@ it("the root layout takes its robots meta from the switch", () => {
   expect(src).toContain("robots: robotsMeta()");
 });
 
+// the barber app's worker runs /b from /b/sw.js (public/b/sw.js)
+const SW_HEADERS = {
+  source: "/b/sw.js",
+  headers: [
+    { key: "Service-Worker-Allowed", value: "/b" },
+    { key: "Cache-Control", value: "no-cache" },
+  ],
+};
+
 describe("signals", () => {
   let saved: string | undefined;
   beforeEach(() => {
@@ -48,6 +57,7 @@ describe("signals", () => {
     const { headers, robots, metadata, redirect } = await load();
 
     expect(headers).toEqual([
+      SW_HEADERS,
       {
         source: "/:path*",
         headers: [{ key: "X-Robots-Tag", value: NOINDEX_HEADER }],
@@ -68,8 +78,9 @@ describe("signals", () => {
     process.env.ALLOW_INDEXING = "yes";
     const { headers, robots, metadata, redirect } = await load();
 
-    expect(headers).toEqual([]);
-    expect(robots).toEqual({ rules: { userAgent: "*", allow: "/", disallow: ["/admin", "/api/", "/v/"] } });
+    // only the barber app's service-worker header stays
+    expect(headers).toEqual([SW_HEADERS]);
+    expect(robots).toEqual({ rules: { userAgent: "*", allow: "/", disallow: ["/admin", "/b", "/api/", "/v/"] } });
     expect(metadata.robots).toMatchObject({ index: true, follow: true });
     expect(redirect.headers.get("x-robots-tag")).toBeNull();
   });

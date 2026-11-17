@@ -1,0 +1,55 @@
+/* The barber app (/b): on top of admin.css (read only, the same look).
+   Phone first, one column. On a wide screen it stays a phone-wide column
+   in the middle, with the four sections always at the bottom. */
+
+.bx { min-height: 100dvh; }
+.bx-app { max-width: 640px; margin: 0 auto; }
+@media (min-width: 640px) {
+  .bx-app { border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+}
+
+/* the top bar: logo, whose day it is */
+.bx-top { gap: 8px; }
+.bx-who { gap: 8px; }
+.bx-me { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; min-width: 0; text-decoration: none; }
+.bx-me b { font: 800 15px/1 var(--display); text-transform: uppercase; letter-spacing: .06em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bx-viewing { padding: 0 10px 0 4px; border: 1px solid var(--line-2); color: var(--lime); font-size: 13px; }
+.bx-viewing span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46vw; }
+.adm-ava.bx-ava { width: 26px; height: 32px; font-size: 13px; }
+
+/* the sections stay at the bottom at every width */
+@media (min-width: 900px) {
+  :root { --top-h: 52px; }
+  .bx-top { gap: 8px; padding-left: max(16px, env(safe-area-inset-left, 0px)); }
+  .bx .logo { height: 19px; }
+  .bx-nav { position: fixed; display: grid; height: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px)); padding: 0 0 env(safe-area-inset-bottom, 0px); background: var(--raise); border-top: 1px solid var(--line-2); max-width: 640px; margin: 0 auto; }
+  .bx-nav a { flex-direction: column; gap: 5px; margin-top: -1px; padding: 0; font-size: 11px; border-top: 2px solid transparent; border-bottom: 0; }
+  .bx-nav a svg { width: 22px; height: 22px; }
+  .bx-nav a[aria-current="page"] { border-top-color: var(--lime); }
+  .bx .adm-main { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px)); }
+  .bx .adm-email { display: none; }
+}
+
+/* «install the app» line under the top bar */
+.bx-banner { display: flex; align-items: center; gap: 8px; padding: 4px max(8px, env(safe-area-inset-right, 0px)) 4px max(16px, env(safe-area-inset-left, 0px)); background: var(--lime-bg); border-bottom: 1px solid var(--line); }
+.bx-banner a { flex: 1; min-height: 40px; display: flex; align-items: center; color: var(--lime); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+.bx-banner .adm-ibtn { width: 36px; height: 36px; border-color: transparent !important; color: var(--mute); }
+
+/* login and the install guide */
+.bx-login-head { display: flex; flex-direction: column; gap: 6px; }
+.bx-install { gap: 20px; }
+.bx-steps { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--line-2); }
+.bx-steps ol { margin: 0; padding: 0 0 0 22px; display: flex; flex-direction: column; gap: 8px; list-style: decimal; }
+.bx-steps li { padding-left: 4px; }
+.bx-steps li::marker { color: var(--lime); font-family: var(--display); }
+.bx-share { display: inline-block; vertical-align: -3px; margin-right: 6px; color: var(--lime); }
+
+/* plain lists of rows (the barber picker, clients, requests) */
+.bx-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.bx-list > li { border-bottom: 1px solid var(--line); }
+.bx-list form { display: contents; }
+.bx-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 8px 0; text-align: left; text-decoration: none; }
+.bx-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.bx-row-main b { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bx-row-main small { font-size: 13px; color: var(--mute); }
+.bx-strong { margin: 0; font-size: 17px; }
