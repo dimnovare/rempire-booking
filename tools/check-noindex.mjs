@@ -21,12 +21,21 @@ function header(res) {
   return res.headers.get("x-robots-tag") || "";
 }
 
+// "/" redirects to a language (/ru, /et, /en): the redirect itself and
+// every language's page must carry the header, the pages also the meta tag.
 const home = await get("/");
 if (!/noindex/i.test(header(home.res))) {
   fails.push(`/ X-Robots-Tag is "${header(home.res)}"`);
 }
-if (!/<meta[^>]*name="robots"[^>]*content="[^"]*noindex/i.test(home.body)) {
-  fails.push('/ has no <meta name="robots" content="noindex…">');
+const pages = home.res.status >= 300 && home.res.status < 400 ? ["/ru", "/et", "/en"] : ["/"];
+for (const path of pages) {
+  const page = path === "/" ? home : await get(path);
+  if (path !== "/" && !/noindex/i.test(header(page.res))) {
+    fails.push(`${path} X-Robots-Tag is "${header(page.res)}"`);
+  }
+  if (!/<meta[^>]*name="robots"[^>]*content="[^"]*noindex/i.test(page.body)) {
+    fails.push(`${path} has no <meta name="robots" content="noindex…">`);
+  }
 }
 
 const robots = await get("/robots.txt");
@@ -37,9 +46,11 @@ if (!/noindex/i.test(header(robots.res))) {
   fails.push(`robots.txt X-Robots-Tag is "${header(robots.res)}"`);
 }
 
-const missing = await get(`/no-such-page-${Date.now()}`);
-if (!/noindex/i.test(header(missing.res))) {
-  fails.push(`a 404 page's X-Robots-Tag is "${header(missing.res)}"`);
+for (const path of [`/no-such-page-${Date.now()}`, `/ru/no-such-page-${Date.now()}`]) {
+  const missing = await get(path);
+  if (!/noindex/i.test(header(missing.res))) {
+    fails.push(`${path} (${missing.res.status}) X-Robots-Tag is "${header(missing.res)}"`);
+  }
 }
 
 if (fails.length) {

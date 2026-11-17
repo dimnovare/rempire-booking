@@ -18,13 +18,13 @@
     "check:noindex": "node tools/check-noindex.mjs"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.16",
     "next": "16.4.6",
     "pg": "^8.23.1",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.16",
     "@tailwindcss/turbopack": "4.3.3",
     "@types/node": "^22",
     "@types/pg": "^8.23.1",

@@ -9,8 +9,8 @@ Screens: `docs/client-flow.md` and the approved mock.*
 | # | What | Needs from outside | Status |
 |---|---|---|---|
 | A1 | **Data core:** migrations, `db.ts`, migrate on deploy, Tallinn time maths, free slots, booking with no double booking, demo seed. Tests on PGlite. | nothing | done 17.11 |
-| A2 | **Client flow on real data:** the 4 screens, `/api/slots`, `/api/bookings`, the change-or-cancel page, «book again». | nothing | next |
-| A3 | **Staging database:** a Railway project on the shop's account; migrations and the demo seed on deploy. | Dim pastes `DATABASE_URL` into Vercel | |
+| A2 | **Client flow on real data:** the 4 screens, `/api/slots`, `/api/bookings`, the change-or-cancel page, «book again». | nothing | done 17.11; staging runs it on an in-memory demo database until A3 |
+| A3 | **Staging database:** a Postgres for staging; migrations and the demo seed run on every deploy (`postbuild`). | Dim: where it lives, then `DATABASE_URL` into Vercel | waiting |
 | A4 | **Staff login:** password, 6-digit e-mail code, Google. | Resend account; Google OAuth client (whose account?) | |
 | A5 | **Renat's admin:** day and week calendar, one column per barber; add, move, cancel; barbers; services with each barber's price and time; hours, breaks, vacations. | | |
 | A6 | **Messages:** e-mail confirmation with `.ics` and the change link; the 2-hour SMS behind `sendSms(to, text)`; a cron for the outbox. | Resend; SMS provider account | |
@@ -60,3 +60,24 @@ inside one working window; the chair (visit plus the services' largest
 tidy-up buffer) touches no visit and no time off; 30 minutes' notice;
 60 days ahead. «Anyone» goes to the barber with fewer visits that day.
 A double tap with one `Idempotency-Key` returns the first booking.
+
+## Where the code is (A2)
+
+| Path | Does |
+|---|---|
+| `src/proxy.ts` | `/` → `/ru`, `/et` or `/en` by the browser's language |
+| `src/app/[locale]/page.tsx` + `booking-flow.tsx` | the 4 screens of the mock |
+| `src/app/[locale]/visit/[token]/` | the client's own link: see, add to calendar, cancel until the cutoff |
+| `src/app/api/slots` | free times for the whole horizon in one call |
+| `src/app/api/bookings` | «Book»; 409 with the three nearest times if taken |
+| `src/app/api/ics/[token]` | the calendar file |
+| `src/lib/i18n.ts` | RU / ET / EN copy |
+
+**Staging database until A3:** CI deploys with `DB_DRIVER=auto`. With no
+`DATABASE_URL` the app runs an in-memory Postgres (PGlite) with the demo
+data, and says so in a banner. Bookings there vanish when the server
+restarts. As soon as `DATABASE_URL` is in Vercel, the same deploy uses it.
+
+**Not in A2 yet:** moving a visit in one step (now: book the new time, then
+cancel the old one); e-mail and SMS (A6); the salon phone (not in the demo
+data); a privacy policy page; rate limits on `/api/bookings`.

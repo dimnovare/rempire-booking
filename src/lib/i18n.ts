@@ -1,0 +1,285 @@
+/**
+ * Client-facing copy in RU, ET and EN. Texts from the approved mock
+ * (Dim, 17.11.2026). Russian is the default: most of REMPIRE's clients.
+ */
+export const LOCALES = ["ru", "et", "en"] as const;
+export type Locale = (typeof LOCALES)[number];
+export const DEFAULT_LOCALE: Locale = "ru";
+
+export function isLocale(s: unknown): s is Locale {
+  return typeof s === "string" && (LOCALES as readonly string[]).includes(s);
+}
+
+/** The best of our locales for an Accept-Language header. */
+export function pickLocale(acceptLanguage: string | null | undefined): Locale {
+  const wanted = String(acceptLanguage ?? "")
+    .split(",")
+    .map((part) => {
+      const [tag, ...params] = part.trim().toLowerCase().split(";");
+      const qp = params.find((p) => p.trim().startsWith("q="));
+      return { lang: tag.split("-")[0], q: qp ? Number(qp.trim().slice(2)) : 1 };
+    })
+    .filter((x) => x.lang && x.q > 0)
+    .sort((a, b) => b.q - a.q);
+  for (const w of wanted) if (isLocale(w.lang)) return w.lang;
+  return DEFAULT_LOCALE;
+}
+
+export const INTL: Record<Locale, string> = { ru: "ru-RU", et: "et-EE", en: "en-GB" };
+
+const en = {
+  loc: "Mardi 1 · Tallinn",
+  title: "Book a visit",
+  barber: "Barber",
+  service: "Service",
+  anyone: "Anyone",
+  earliest: "Earliest",
+  pickBarber: "Now pick a barber, or Anyone.",
+  choose: "Choose a time",
+  when: "When",
+  change: "Change",
+  back: "Back",
+  earliestFree: "Earliest free time",
+  morning: "Morning",
+  day: "Day",
+  evening: "Evening",
+  dayFull: (d: string) => `No free time on ${d}.`,
+  closedOn: (d: string) => `${d}: the salon is closed.`,
+  nextFree: (d: string) => `Next free time: ${d}.`,
+  goTo: (d: string) => `Go to ${d}`,
+  noneAhead: (n: string, days: number) => `${n} has no free time in the next ${days} days.`,
+  callSalon: "Call the salon",
+  anyoneInstead: "Book with anyone",
+  details: "Your details",
+  name: "Name",
+  phone: "Phone",
+  email: "E-mail",
+  optional: "optional",
+  emailHint: "For the confirmation and a calendar file.",
+  comment: "Comment",
+  sms: "SMS reminder 2 hours before",
+  book: "Book",
+  booking: "Booking…",
+  privacy: "We use your details only for this booking.",
+  policy: "Privacy policy",
+  errName: "Enter your name.",
+  errPhone: "Enter a phone number.",
+  errEmail: "Check the e-mail address.",
+  errGeneric: "Something went wrong. Try again, or call the salon.",
+  taken: "This time was just taken",
+  takenSub: "Pick one of the nearest times. Your details stay filled in.",
+  booked: "You're booked",
+  seeYou: (d: string, t: string) => `See you ${d} at ${t}.`,
+  smsNote: "We'll send an SMS 2 hours before.",
+  addCal: "Add to calendar",
+  changeCancel: "Change or cancel",
+  cutoff: (h: number) => `Free until ${h} hours before the visit.`,
+  again: "Book again",
+  total: "Total",
+  barberK: "Barber",
+  dateK: "Date",
+  timeK: "Time",
+  whereK: "Where",
+  welcome: "Filled in from your last visit on this device.",
+  firstFree: "first free",
+  add: "Add another service",
+  min: "min",
+  h: "h",
+  reviews: "reviews",
+  loading: "Loading…",
+  noDb: "Online booking opens here soon.",
+  demo: "Demo: example data, bookings are not kept.",
+  // the change-or-cancel page
+  yourVisit: "Your visit",
+  cancelled: "Cancelled",
+  cancelledLead: "This visit is cancelled.",
+  cancel: "Cancel the visit",
+  cancelSure: "Cancel this visit?",
+  cancelYes: "Yes, cancel",
+  keep: "Keep it",
+  tooLate: (h: number) => `Less than ${h} hours to go: please call the salon to change or cancel.`,
+  move: "Pick another time",
+  moveHint: "Book the new time, then cancel this one here.",
+  past: "This visit is over.",
+  notFound: "We could not find this booking. The link may be old.",
+};
+
+export type Copy = typeof en;
+
+const ru: Copy = {
+  loc: "Марди 1 · Таллинн",
+  title: "Запись",
+  barber: "Барбер",
+  service: "Услуга",
+  anyone: "Любой",
+  earliest: "Ближайшее",
+  pickBarber: "Теперь выберите барбера или «Любой».",
+  choose: "Выбрать время",
+  when: "Когда",
+  change: "Изменить",
+  back: "Назад",
+  earliestFree: "Ближайшее свободное время",
+  morning: "Утро",
+  day: "День",
+  evening: "Вечер",
+  dayFull: (d) => `${d}: свободного времени нет.`,
+  closedOn: (d) => `${d}: салон закрыт.`,
+  nextFree: (d) => `Ближайшее свободное: ${d}.`,
+  goTo: (d) => `Перейти: ${d}`,
+  noneAhead: (n, days) => `${n}: нет свободного времени в ближайшие ${days} дней.`,
+  callSalon: "Позвонить в салон",
+  anyoneInstead: "Записаться к любому",
+  details: "Ваши данные",
+  name: "Имя",
+  phone: "Телефон",
+  email: "E-mail",
+  optional: "необязательно",
+  emailHint: "Пришлём подтверждение и файл для календаря.",
+  comment: "Комментарий",
+  sms: "SMS-напоминание за 2 часа",
+  book: "Записаться",
+  booking: "Записываем…",
+  privacy: "Ваши данные нужны только для этой записи.",
+  policy: "Политика конфиденциальности",
+  errName: "Введите имя.",
+  errPhone: "Введите номер телефона.",
+  errEmail: "Проверьте адрес e-mail.",
+  errGeneric: "Что-то пошло не так. Попробуйте ещё раз или позвоните в салон.",
+  taken: "Это время только что заняли",
+  takenSub: "Выберите ближайшее время. Ваши данные сохранены.",
+  booked: "Вы записаны",
+  seeYou: (d, t) => `Ждём вас: ${d}, ${t}.`,
+  smsNote: "Напомним по SMS за 2 часа.",
+  addCal: "Добавить в календарь",
+  changeCancel: "Перенести или отменить",
+  cutoff: (h) => `Бесплатно до ${h} часов до визита.`,
+  again: "Записаться снова",
+  total: "Итого",
+  barberK: "Барбер",
+  dateK: "Дата",
+  timeK: "Время",
+  whereK: "Адрес",
+  welcome: "Заполнено с прошлого визита на этом устройстве.",
+  firstFree: "первый свободный",
+  add: "Добавить ещё услугу",
+  min: "мин",
+  h: "ч",
+  reviews: "отзывов",
+  loading: "Загружаем…",
+  noDb: "Скоро здесь будет онлайн-запись.",
+  demo: "Демо: данные-примеры, записи не сохраняются.",
+  yourVisit: "Ваш визит",
+  cancelled: "Отменено",
+  cancelledLead: "Этот визит отменён.",
+  cancel: "Отменить визит",
+  cancelSure: "Отменить этот визит?",
+  cancelYes: "Да, отменить",
+  keep: "Оставить",
+  tooLate: (h) => `До визита меньше ${h} часов: чтобы перенести или отменить, позвоните в салон.`,
+  move: "Выбрать другое время",
+  moveHint: "Запишитесь на новое время, потом отмените этот визит здесь.",
+  past: "Этот визит уже прошёл.",
+  notFound: "Мы не нашли эту запись. Возможно, ссылка устарела.",
+};
+
+const et: Copy = {
+  loc: "Mardi 1 · Tallinn",
+  title: "Broneeri aeg",
+  barber: "Meister",
+  service: "Teenus",
+  anyone: "Ükskõik kes",
+  earliest: "Varaseim",
+  pickBarber: "Nüüd vali meister või «Ükskõik kes».",
+  choose: "Vali aeg",
+  when: "Millal",
+  change: "Muuda",
+  back: "Tagasi",
+  earliestFree: "Varaseim vaba aeg",
+  morning: "Hommik",
+  day: "Päev",
+  evening: "Õhtu",
+  dayFull: (d) => `${d}: vabu aegu pole.`,
+  closedOn: (d) => `${d}: salong on suletud.`,
+  nextFree: (d) => `Järgmine vaba aeg: ${d}.`,
+  goTo: (d) => `Ava ${d}`,
+  noneAhead: (n, days) => `${n}: järgmise ${days} päeva jooksul vabu aegu pole.`,
+  callSalon: "Helista salongi",
+  anyoneInstead: "Broneeri ükskõik kellele",
+  details: "Sinu andmed",
+  name: "Nimi",
+  phone: "Telefon",
+  email: "E-post",
+  optional: "valikuline",
+  emailHint: "Saadame kinnituse ja kalendrifaili.",
+  comment: "Kommentaar",
+  sms: "SMS-meeldetuletus 2 tundi enne",
+  book: "Broneeri",
+  booking: "Broneerin…",
+  privacy: "Kasutame sinu andmeid ainult selle broneeringu jaoks.",
+  policy: "Privaatsuspoliitika",
+  errName: "Sisesta nimi.",
+  errPhone: "Sisesta telefoninumber.",
+  errEmail: "Kontrolli e-posti aadressi.",
+  errGeneric: "Midagi läks valesti. Proovi uuesti või helista salongi.",
+  taken: "See aeg broneeriti just ära",
+  takenSub: "Vali lähim aeg. Sinu andmed jäävad alles.",
+  booked: "Broneeritud",
+  seeYou: (d, t) => `Ootame sind: ${d} kell ${t}.`,
+  smsNote: "Saadame SMS-i 2 tundi enne.",
+  addCal: "Lisa kalendrisse",
+  changeCancel: "Muuda või tühista",
+  cutoff: (h) => `Tasuta kuni ${h} tundi enne külastust.`,
+  again: "Broneeri uuesti",
+  total: "Kokku",
+  barberK: "Meister",
+  dateK: "Kuupäev",
+  timeK: "Kellaaeg",
+  whereK: "Aadress",
+  welcome: "Täidetud sinu eelmise külastuse põhjal sellel seadmel.",
+  firstFree: "esimene vaba",
+  add: "Lisa veel teenus",
+  min: "min",
+  h: "t",
+  reviews: "arvustust",
+  loading: "Laadin…",
+  noDb: "Varsti saab siin aega broneerida.",
+  demo: "Demo: näidisandmed, broneeringuid ei salvestata.",
+  yourVisit: "Sinu külastus",
+  cancelled: "Tühistatud",
+  cancelledLead: "See külastus on tühistatud.",
+  cancel: "Tühista külastus",
+  cancelSure: "Kas tühistada see külastus?",
+  cancelYes: "Jah, tühista",
+  keep: "Jäta alles",
+  tooLate: (h) => `Külastuseni on alla ${h} tunni: muutmiseks või tühistamiseks helista salongi.`,
+  move: "Vali teine aeg",
+  moveHint: "Broneeri uus aeg, siis tühista see siin.",
+  past: "See külastus on möödas.",
+  notFound: "Me ei leidnud seda broneeringut. Link võib olla vana.",
+};
+
+export const COPY: Record<Locale, Copy> = { ru, et, en };
+
+/** A jsonb {ru, et, en} text in the reader's language, falling back sensibly. */
+export function pick(text: { ru?: string; et?: string; en?: string } | null | undefined, locale: Locale): string {
+  if (!text) return "";
+  return text[locale] || text.ru || text.et || text.en || "";
+}
+
+export const eur = (cents: number) => {
+  const e = cents / 100;
+  return `${Number.isInteger(e) ? e : e.toFixed(2)} €`;
+};
+
+export const euroRange = (cents: number[]) => {
+  if (!cents.length) return "—";
+  const lo = Math.min(...cents);
+  const hi = Math.max(...cents);
+  return lo === hi ? eur(lo) : `${lo / 100}–${eur(hi)}`;
+};
+
+export function duration(min: number, c: Copy): string {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return h ? `${h} ${c.h}${m ? ` ${m} ${c.min}` : ""}` : `${m} ${c.min}`;
+}

@@ -66,7 +66,8 @@ export async function quoteStaff(q: Querier, businessId: string, serviceIds: str
   }));
 }
 
-export type DayAvailability = { date: string; slots: Slot[] };
+/** open = some barber works that day (so no slots means «full», not «closed»). */
+export type DayAvailability = { date: string; open: boolean; slots: Slot[] };
 
 export type AvailabilityQuery = {
   business: Business;
@@ -96,7 +97,7 @@ export async function loadAvailability(q: Querier, a: AvailabilityQuery): Promis
     if (d >= today && d <= lastDay) dates.push(d);
   }
   const quotes = await quoteStaff(q, business.id, a.serviceIds, a.staffId);
-  if (!dates.length || !quotes.length) return { quotes, days: dates.map((date) => ({ date, slots: [] })) };
+  if (!dates.length || !quotes.length) return { quotes, days: dates.map((date) => ({ date, open: false, slots: [] })) };
 
   const staffIds = quotes.map((x) => x.staffId);
   const fromMs = startOfDay(dates[0], tz);
@@ -153,7 +154,7 @@ export async function loadAvailability(q: Querier, a: AvailabilityQuery): Promis
         sort: qt.sort,
       };
     });
-    return { date, slots: mergeSlots(staffDays, opts) };
+    return { date, open: staffDays.some((d) => d.windows.length > 0), slots: mergeSlots(staffDays, opts) };
   });
   return { quotes, days };
 }

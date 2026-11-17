@@ -33,10 +33,10 @@ async function runBatch(db, sql) {
 /** Every migration file, LF line ends, in order. */
 export function migrationFiles(dir = MIGRATIONS_DIR) {
   return fs
-    .readdirSync(dir)
+    .readdirSync(/* turbopackIgnore: true */ dir)
     .filter((f) => f.endsWith(".sql"))
     .sort()
-    .map((name) => ({ name, sql: fs.readFileSync(path.join(dir, name), "utf8").replace(/\r\n/g, "\n") }));
+    .map((name) => ({ name, sql: fs.readFileSync(/* turbopackIgnore: true */ path.join(dir, name), "utf8").replace(/\r\n/g, "\n") }));
 }
 
 /**

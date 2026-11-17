@@ -10,11 +10,9 @@
 import { createHash, randomBytes } from "node:crypto";
 import { loadAvailability, type Business } from "./availability";
 import { withTx, type Querier } from "./db";
+import { isLocale, type Locale } from "./i18n";
 import { normalizePhone } from "./phone";
 import { localParts } from "./tz";
-
-export type Locale = "ru" | "et" | "en";
-export const LOCALES: readonly Locale[] = ["ru", "et", "en"];
 
 export type BookingInput = {
   serviceIds: string[];
@@ -84,7 +82,7 @@ export function validateBooking(input: BookingInput): { ok: true; value: Omit<Cl
   if (input.staffId !== null && !UUID_RE.test(String(input.staffId))) return { ok: false, field: "staff" };
   const start = Date.parse(input.startsAt);
   if (!Number.isFinite(start)) return { ok: false, field: "startsAt" };
-  if (!LOCALES.includes(input.locale)) return { ok: false, field: "locale" };
+  if (!isLocale(input.locale)) return { ok: false, field: "locale" };
   const key = String(input.idempotencyKey ?? "");
   if (key.length < 16 || key.length > 200) return { ok: false, field: "idempotencyKey" };
   return {

@@ -13,6 +13,7 @@
  *
  * jsonb: pass jsonbParam(value) and cast in SQL ($1::jsonb).
  */
+import path from "node:path";
 import type { Pool, PoolClient } from "pg";
 
 export type Row = Record<string, unknown>;
@@ -116,22 +117,28 @@ type PgliteDb = PgliteTx & {
   close: () => Promise<void>;
 };
 
-/* PGlite is a devDependency: the specifiers are built at run time so the
-   production bundle never pulls it in. Only DB_DRIVER=pglite reaches here. */
+/*
+ * PGlite: Postgres in memory (or in PGLITE_PATH). Tests hand in a migrated
+ * snapshot (tests/helpers.ts). Otherwise it migrates itself on start and,
+ * with SEED_DEMO=yes, loads the demo data: a local run, or staging before
+ * it has a real database. Everything in it is gone on a restart.
+ */
 async function makePglite(): Promise<Raw> {
-  const base = ["@electric-sql", "pglite"].join("/");
-  const mod = (await import(/* webpackIgnore: true */ base)) as {
-    PGlite: new (opts: object) => PgliteDb;
-  };
-  const gist = (await import(/* webpackIgnore: true */ base + "/contrib/btree_gist")) as { btree_gist: unknown };
+  const tools = await import("../../tools/migrate.mjs");
   const seed = g.__bookingPgliteSeed;
-  const dataDir = seed ? undefined : process.env.PGLITE_PATH || undefined;
-  // options-only form: PGlite(undefined, opts) would drop the options
-  const db = new mod.PGlite({
-    ...(dataDir ? { dataDir } : {}),
-    ...(seed ? { loadDataDir: seed } : {}),
-    extensions: { btree_gist: gist.btree_gist },
-  });
+  let db: PgliteDb;
+  if (seed) {
+    const { PGlite } = await import("@electric-sql/pglite");
+    const { btree_gist } = await import("@electric-sql/pglite/contrib/btree_gist");
+    db = new PGlite({ loadDataDir: seed, extensions: { btree_gist } }) as unknown as PgliteDb;
+  } else {
+    db = (await tools.newPglite(process.env.PGLITE_PATH || undefined)) as unknown as PgliteDb;
+    await tools.migrate(db, { dir: path.join(process.cwd(), "db", "migrations") });
+    if (process.env.SEED_DEMO === "yes") {
+      const { seedDemo } = await import("../../tools/seed-demo.mjs");
+      await seedDemo(db);
+    }
+  }
   return {
     kind: "pglite",
     query: (sql, params) => db.query(sql, cleanParams(params) as unknown[]),
@@ -149,9 +156,25 @@ async function makePglite(): Promise<Raw> {
   };
 }
 
+/**
+ * DB_DRIVER: "pg" (default) needs DATABASE_URL; "pglite" is in-memory;
+ * "auto" is pg when DATABASE_URL is set, else in-memory (staging before A3).
+ */
+export function dbKind(env: Record<string, string | undefined> = process.env): "pg" | "pglite" {
+  const d = env.DB_DRIVER;
+  if (d === "pglite") return "pglite";
+  if (d === "auto") return env.DATABASE_URL ? "pg" : "pglite";
+  return "pg";
+}
+
+/** True when a database can be reached at all. */
+export function dbConfigured(env: Record<string, string | undefined> = process.env): boolean {
+  return dbKind(env) === "pglite" || !!env.DATABASE_URL;
+}
+
 function driver(): Promise<Raw> {
   if (!g.__bookingDb) {
-    g.__bookingDb = (process.env.DB_DRIVER === "pglite" ? makePglite() : makePg()).catch((err) => {
+    g.__bookingDb = (dbKind() === "pglite" ? makePglite() : makePg()).catch((err) => {
       g.__bookingDb = undefined; // never cache a failed connection
       throw err;
     });
