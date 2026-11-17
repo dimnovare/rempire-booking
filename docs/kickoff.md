@@ -374,3 +374,15 @@ No secrets are written here. The full registry for the shop is
 - Step 2 is half done: `docs/data-model.md` and `docs/client-flow.md`
   (draft 1). The visual mock waits for `look`.
 - Step 4 waits for the logins.
+- **Step 1, the same day:** the repo is `dimnovare/rempire-booking`
+  (private).
+  - Next.js 16.4, noindex in all three places, tests, and CI.
+  - Commits use Dim's GitHub noreply address, because his account refuses
+    pushes that show his private e-mail.
+- **Blocker for the deploy:**
+  - Rempire's Vercel team and the shop's Railway both sign in as GitHub
+    `rempireshop` (shop's `docs/accounts.md`).
+  - Dim's Vercel CLI login only sees his own team, and the Railway CLI is on
+    Dim's own account.
+  - On Pro every team member is a paid seat. Dim chooses how staging reaches
+    the Rempire team.
