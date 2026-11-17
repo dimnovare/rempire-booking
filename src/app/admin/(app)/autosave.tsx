@@ -19,7 +19,7 @@
  * a move, a new login): those keep their one button.
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { A } from "../copy";
+import { useA } from "../lang";
 import { TickIcon } from "../icons";
 
 type Result = { ok: boolean; field?: string } | boolean;
@@ -65,6 +65,7 @@ export type AutoSave = { phase: Phase; text: string; canUndo: boolean; undo: () 
  * `off` turns it all off (a form that creates has its own button).
  */
 export function useAutoSave<T>(value: T, set: (v: T) => void, save: (v: T) => Promise<Result>, opts?: { check?: (v: T) => string | null; label?: string; off?: boolean }): AutoSave {
+  const A = useA();
   const [phase, setPhase] = useState<Phase>("idle");
   const [text, setText] = useState("");
   const [canUndo, setCanUndo] = useState(false);
@@ -208,6 +209,7 @@ export function useAutoSave<T>(value: T, set: (v: T) => void, save: (v: T) => Pr
  * closes it); a wide screen has the part open all the time and the box.
  */
 export function SaveState({ auto, onDone }: { auto: AutoSave; onDone?: () => void }) {
+  const A = useA();
   const { phase } = auto;
   return (
     <div className="adm-auto">
@@ -258,6 +260,7 @@ export function SaveState({ auto, onDone }: { auto: AutoSave; onDone?: () => voi
  * own line is the live region, so a screen reader hears each save once.
  */
 export function SaveToast() {
+  const A = useA();
   const list = useSyncExternalStore(
     subscribe,
     () => notes,

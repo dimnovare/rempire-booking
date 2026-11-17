@@ -3,10 +3,8 @@ import { listStaff, staffDetail } from "@/lib/admin/staff";
 import { requireAdmin } from "@/lib/auth/current";
 import { dbConfigured, query } from "@/lib/db";
 import { todayIn } from "@/lib/tz";
-import { A } from "../../copy";
+import { getA } from "../../lang-server";
 import { BarberPage } from "./[id]/barber";
-
-export const metadata = { title: A.staff.title };
 
 /**
  * «Барберы». The list itself is in the layout (the rail). On a phone it is
@@ -25,7 +23,7 @@ async function First() {
   if (!dbConfigured())
     return (
       <main className="adm-page">
-        <p className="adm-wait">{A.noDb}</p>
+        <p className="adm-wait">{(await getA()).noDb}</p>
       </main>
     );
   const { business } = await requireAdmin();

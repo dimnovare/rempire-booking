@@ -8,12 +8,13 @@
  */
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { A } from "../../copy";
+import { useA } from "../../lang";
 import { Ava, NextIcon, PlusIcon } from "../../icons";
 
 export type RailItem = { id: string; name: string; photoUrl: string | null; active: boolean; line: string; services: number; hidden: boolean };
 
 export function StaffRail({ items }: { items: RailItem[] }) {
+  const A = useA();
   const path = usePathname();
   const index = path === "/admin/staff";
   const current = path.split("/")[3];

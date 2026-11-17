@@ -2,8 +2,8 @@ import { Suspense } from "react";
 import { Logo } from "@/components/brand";
 import { currentStaffUser } from "@/lib/auth/current";
 import { dbConfigured, dbKind } from "@/lib/db";
-import { A } from "../copy";
 import { OutIcon } from "../icons";
+import { getA } from "../lang-server";
 import { logout } from "./account/actions";
 import { SaveToast } from "./autosave";
 import { Nav, NavLinks } from "./nav";
@@ -38,6 +38,7 @@ async function Me() {
   if (!dbConfigured()) return null;
   const user = await currentStaffUser();
   if (!user) return null;
+  const A = await getA();
   return (
     <div className="adm-me">
       {dbKind() === "pglite" && (

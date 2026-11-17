@@ -7,10 +7,11 @@
  * so «Записать» or «Сохранить» is always in reach.
  */
 import { useEffect } from "react";
-import { A } from "../copy";
+import { useA } from "../lang";
 import { XIcon } from "../icons";
 
 export function Sheet({ title, onClose, bar, children, alert }: { title: string; onClose: () => void; bar?: React.ReactNode; children: React.ReactNode; alert?: boolean }) {
+  const A = useA();
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", k);
@@ -40,6 +41,7 @@ export function Sheet({ title, onClose, bar, children, alert }: { title: string;
  * Its content stays mounted either way: what was typed is kept.
  */
 export function Pane({ title, open, onClose, bar, children }: { title: string; open: boolean; onClose: () => void; bar?: React.ReactNode; children: React.ReactNode }) {
+  const A = useA();
   useEffect(() => {
     if (!open) return;
     const k = (e: KeyboardEvent) => e.key === "Escape" && onClose();

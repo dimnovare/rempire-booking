@@ -4,7 +4,7 @@ import { listStaff } from "@/lib/admin/staff";
 import { requireAdmin } from "@/lib/auth/current";
 import { dbConfigured, query } from "@/lib/db";
 import { todayIn } from "@/lib/tz";
-import { A } from "../../copy";
+import { getA } from "../../lang-server";
 import { StaffRail, type RailItem } from "./rail";
 
 /** «Барберы»: the list (the whole page on a phone, a rail on the left from 900px) and the barber beside it. */
@@ -25,8 +25,8 @@ async function Rail() {
   const { business } = await requireAdmin();
   const tz = business.timezone;
   const today = todayIn(tz);
-  const [staff, day] = await Promise.all([listStaff(query, business.id), loadCalendar(query, business, today, 1)]);
-  const t = new Intl.DateTimeFormat("ru-RU", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  const [A, staff, day] = await Promise.all([getA(), listStaff(query, business.id), loadCalendar(query, business, today, 1)]);
+  const t = new Intl.DateTimeFormat(A.intl, { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   const items: RailItem[] = staff.map((s) => {
     const work = day.work[s.id]?.[today] ?? [];
     const visits = day.visits.filter((v) => v.staffId === s.id).length;

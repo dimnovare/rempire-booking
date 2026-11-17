@@ -10,7 +10,8 @@ import { useState } from "react";
 import { hhmm, momentAt } from "@/lib/admin/grid";
 import type { DayOverride, HoursDay, Offer, SpecialRow, TimeOffRow } from "@/lib/admin/staff";
 import { addDays } from "@/lib/tz";
-import { A, eur, mins, ru } from "../../../copy";
+import { eur } from "../../../copy";
+import { useA } from "../../../lang";
 import { Ava, XIcon } from "../../../icons";
 import { SaveState, useAutoSave } from "../../autosave";
 import { addOff, addSpecial, removeOff, removeSpecial, saveDay, saveHours, saveOffers, saveProfile, uploadPhoto } from "../actions";
@@ -18,6 +19,7 @@ import { addOff, addSpecial, removeOff, removeSpecial, saveDay, saveHours, saveO
 type Msg = { ok: boolean; text: string } | null;
 
 function useSaver() {
+  const A = useA();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<Msg>(null);
   const run = async (fn: () => Promise<{ ok: boolean; field?: string } | boolean>, okText: string = A.saved) => {
@@ -47,8 +49,8 @@ function useSaver() {
 }
 
 const toMin = (t: string) => (/^\d{2}:\d{2}$/.test(t) ? Number(t.slice(0, 2)) * 60 + Number(t.slice(3)) : NaN);
-const dt = (tz: string) => new Intl.DateTimeFormat("ru-RU", { timeZone: tz, day: "numeric", month: "short", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-const dOnly = (date: string) => new Intl.DateTimeFormat("ru-RU", { timeZone: "UTC", weekday: "short", day: "numeric", month: "long" }).format(Date.parse(`${date}T12:00:00Z`));
+const dt = (intl: string, tz: string) => new Intl.DateTimeFormat(intl, { timeZone: tz, day: "numeric", month: "short", weekday: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const dOnly = (intl: string, date: string) => new Intl.DateTimeFormat(intl, { timeZone: "UTC", weekday: "short", day: "numeric", month: "long" }).format(Date.parse(`${date}T12:00:00Z`));
 
 /** The bottom of each part: its message and its one button; it stays in view while the part scrolls. */
 function SaveBar({ children }: { children: React.ReactNode }) {
@@ -56,6 +58,7 @@ function SaveBar({ children }: { children: React.ReactNode }) {
 }
 
 function Remove({ onClick, disabled }: { onClick: () => void; disabled: boolean }) {
+  const A = useA();
   return (
     <button type="button" className="adm-ibtn" aria-label={A.remove} disabled={disabled} onClick={onClick}>
       <XIcon size={18} />
@@ -88,6 +91,7 @@ async function shrinkPhoto(file: File): Promise<Blob> {
 
 /** A barber who exists saves by itself; a new one is made with the one button. */
 export function ProfileForm({ id, initial, onDone }: { id: string | null; initial: Profile; onDone?: () => void }) {
+  const A = useA();
   const [p, setP] = useState(initial);
   const s = useSaver();
   const router = useRouter();
@@ -196,6 +200,7 @@ type OfferRow = Offer & { price: string; dur: string };
 const num = (s: string) => Number(s.replace(",", "."));
 
 export function OffersForm({ staffId, offers, onDone }: { staffId: string; offers: Offer[]; onDone?: () => void }) {
+  const A = useA();
   const [rows, setRows] = useState<OfferRow[]>(() => offers.map((o) => ({ ...o, price: o.priceCents == null ? "" : String(o.priceCents / 100), dur: o.durationMin == null ? "" : String(o.durationMin) })));
   const set = (i: number, patch: Partial<OfferRow>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const auto = useAutoSave<OfferRow[]>(
@@ -248,20 +253,20 @@ export function OffersForm({ staffId, offers, onDone }: { staffId: string; offer
           {rows.map((r, i) => (
             <tr key={r.serviceId} className={r.offered ? "" : "is-off"}>
               <td>
-                <input type="checkbox" aria-label={`${A.staff.offered}: ${ru(r.name)}`} checked={r.offered} onChange={(e) => set(i, { offered: e.target.checked })} />
+                <input type="checkbox" aria-label={`${A.staff.offered}: ${A.pick(r.name)}`} checked={r.offered} onChange={(e) => set(i, { offered: e.target.checked })} />
               </td>
               <td className="n">
-                {ru(r.name)}
+                {A.pick(r.name)}
                 {!r.active && <span className="adm-tag">{A.services.inactive}</span>}
                 <small>
-                  {mins(r.defaultMin)} · {eur(r.defaultCents)}
+                  {A.mins(r.defaultMin)} · {eur(r.defaultCents)}
                 </small>
               </td>
               <td>
-                <input type="number" inputMode="decimal" min={0} step="0.5" aria-label={`${A.staff.price}: ${ru(r.name)}`} placeholder={String(r.defaultCents / 100)} value={r.price} onChange={(e) => set(i, { price: e.target.value })} />
+                <input type="number" inputMode="decimal" min={0} step="0.5" aria-label={`${A.staff.price}: ${A.pick(r.name)}`} placeholder={String(r.defaultCents / 100)} value={r.price} onChange={(e) => set(i, { price: e.target.value })} />
               </td>
               <td>
-                <input type="number" inputMode="numeric" min={5} max={720} step={5} aria-label={`${A.staff.duration}: ${ru(r.name)}`} placeholder={String(r.defaultMin)} value={r.dur} onChange={(e) => set(i, { dur: e.target.value })} />
+                <input type="number" inputMode="numeric" min={5} max={720} step={5} aria-label={`${A.staff.duration}: ${A.pick(r.name)}`} placeholder={String(r.defaultMin)} value={r.dur} onChange={(e) => set(i, { dur: e.target.value })} />
               </td>
             </tr>
           ))}
@@ -277,6 +282,7 @@ export function OffersForm({ staffId, offers, onDone }: { staffId: string; offer
 type Week = Record<number, [string, string][]>;
 
 export function HoursForm({ staffId, hours, onDone }: { staffId: string; hours: HoursDay[]; onDone?: () => void }) {
+  const A = useA();
   const [days, setDays] = useState<Week>(() => Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map((wd) => [wd, hours.find((h) => h.weekday === wd)?.spans ?? []])));
   const setDay = (wd: number, spans: [string, string][]) => setDays({ ...days, [wd]: spans });
   const auto = useAutoSave<Week>(days, setDays, (v) => saveHours(staffId, v), {
@@ -359,6 +365,7 @@ export function HoursForm({ staffId, hours, onDone }: { staffId: string; hours: 
 }
 
 export function DaysForm({ staffId, overrides, today }: { staffId: string; overrides: DayOverride[]; today: string }) {
+  const A = useA();
   const [date, setDate] = useState(addDays(today, 1));
   const [off, setOff] = useState(true);
   const [from, setFrom] = useState("10:00");
@@ -373,7 +380,7 @@ export function DaysForm({ staffId, overrides, today }: { staffId: string; overr
           {overrides.map((o) => (
             <li key={o.date}>
               <span>
-                {dOnly(o.date)} · {o.spans.length ? o.spans.map(([a, b]) => `${a}–${b}`).join(", ") : A.staff.dayOff}
+                {dOnly(A.intl, o.date)} · {o.spans.length ? o.spans.map(([a, b]) => `${a}–${b}`).join(", ") : A.staff.dayOff}
                 {o.note && <small> · {o.note}</small>}
               </span>
               <Remove disabled={s.busy} onClick={() => void s.run(() => saveDay(staffId, o.date, null, ""))} />
@@ -416,12 +423,13 @@ export function DaysForm({ staffId, overrides, today }: { staffId: string; overr
 }
 
 export function TimeOffForm({ staffId, rows, tz, today }: { staffId: string; rows: TimeOffRow[]; tz: string; today: string }) {
+  const A = useA();
   const [kind, setKind] = useState("vacation");
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
   const [note, setNote] = useState("");
   const s = useSaver();
-  const f = dt(tz);
+  const f = dt(A.intl, tz);
   return (
     <div className="adm-form">
       {rows.length ? (
@@ -481,14 +489,15 @@ export function TimeOffForm({ staffId, rows, tz, today }: { staffId: string; row
 }
 
 export function SpecialForm({ staffId, rows, tz, today }: { staffId: string; rows: SpecialRow[]; tz: string; today: string }) {
+  const A = useA();
   const [date, setDate] = useState(today);
   const [from, setFrom] = useState("20:00");
   const [to, setTo] = useState("22:00");
   const [extra, setExtra] = useState("20");
   const [note, setNote] = useState("");
   const s = useSaver();
-  const f = dt(tz);
-  const t = new Intl.DateTimeFormat("ru-RU", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  const f = dt(A.intl, tz);
+  const t = new Intl.DateTimeFormat(A.intl, { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   return (
     <div className="adm-form">
       <p className="adm-meta">{A.staff.specialHint}</p>

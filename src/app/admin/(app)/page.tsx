@@ -9,21 +9,20 @@ import { weekStart } from "@/lib/admin/grid";
 import { requireAdmin } from "@/lib/auth/current";
 import { dbConfigured, query } from "@/lib/db";
 import { isLocalDate, todayIn } from "@/lib/tz";
-import { A } from "../copy";
+import { Wait } from "../lang";
+import { getA } from "../lang-server";
 import { Calendar } from "./calendar";
-
-export const metadata = { title: A.nav.calendar };
 
 export default function CalendarPage({ searchParams }: PageProps<"/admin">) {
   return (
-    <Suspense fallback={<p className="adm-wait">{A.loading}</p>}>
+    <Suspense fallback={<Wait />}>
       <Loaded searchParams={searchParams} />
     </Suspense>
   );
 }
 
 async function Loaded({ searchParams }: { searchParams: PageProps<"/admin">["searchParams"] }) {
-  if (!dbConfigured()) return <p className="adm-wait">{A.noDb}</p>;
+  if (!dbConfigured()) return <p className="adm-wait">{(await getA()).noDb}</p>;
   const { business } = await requireAdmin();
   const sp = await searchParams;
   const tz = business.timezone;

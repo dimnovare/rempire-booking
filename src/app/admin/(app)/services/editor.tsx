@@ -9,7 +9,8 @@
  */
 import { useState } from "react";
 import type { ServiceRow } from "@/lib/admin/services";
-import { A, eur, mins, ru } from "../../copy";
+import { eur, type Copy } from "../../copy";
+import { useA } from "../../lang";
 import { PlusIcon } from "../../icons";
 import { SaveState, useAutoSave } from "../autosave";
 import { Pane } from "../sheet";
@@ -35,7 +36,7 @@ const BUFFERS = ["0", "5", "10", "15"];
 const NEW = "new";
 
 /** What is wrong with a draft, or null. A half-typed price or time is not sent. */
-function wrong(d: Draft): string | null {
+function wrong(A: Copy, d: Draft): string | null {
   if (!d.name.ru.trim()) return A.services.needName;
   if (d.price.trim() === "" || !(num(d.price) >= 0)) return A.visit.invalid("priceCents");
   if (!(Number.isInteger(Number(d.duration)) && Number(d.duration) >= 5 && Number(d.duration) <= 720)) return A.visit.invalid("durationMin");
@@ -44,6 +45,7 @@ function wrong(d: Draft): string | null {
 }
 
 export function ServicesEditor({ services }: { services: ServiceRow[] }) {
+  const A = useA();
   // which service the editor shows; a phone shows the editor only once a row is tapped
   const [sel, setSel] = useState<string>(services[0]?.id ?? NEW);
   const [shown, setShown] = useState(false);
@@ -78,14 +80,14 @@ export function ServicesEditor({ services }: { services: ServiceRow[] }) {
               <li key={s.id}>
                 <button type="button" className={`adm-item adm-svc${s.active ? "" : " is-off"}`} aria-current={sel === s.id ? "true" : undefined} onClick={() => pick(s.id)}>
                   <span className="txt">
-                    <span className="plain">{ru(s.name)}</span>
+                    <span className="plain">{A.pick(s.name)}</span>
                     <small>
-                      {mins(s.durationMin)} · {A.services.barbersN(s.barbers)}
+                      {A.mins(s.durationMin)} · {A.services.barbersN(s.barbers)}
                       {!s.active ? ` · ${A.services.inactive}` : !s.online ? ` · ${A.services.offline}` : ""}
                     </small>
                   </span>
                   <span className="c">
-                    {mins(s.durationMin)}
+                    {A.mins(s.durationMin)}
                     {s.bufferMin > 0 ? ` + ${s.bufferMin}` : ""}
                   </span>
                   <span className="c">{A.services.barbersN(s.barbers)}</span>
@@ -114,6 +116,7 @@ export function ServicesEditor({ services }: { services: ServiceRow[] }) {
 }
 
 function ServicePane({ service, open, onClose, onCreated }: { service?: ServiceRow; open: boolean; onClose: () => void; onCreated: (id: string) => void }) {
+  const A = useA();
   const [d, setD] = useState<Draft>(() => draftOf(service));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -130,7 +133,7 @@ function ServicePane({ service, open, onClose, onCreated }: { service?: ServiceR
       active: v.active,
       allBarbers: !id && v.allBarbers,
     });
-  const auto = useAutoSave<Draft>(d, setD, send, { off: !id, check: wrong, label: (service && ru(service.name)) || A.services.title });
+  const auto = useAutoSave<Draft>(d, setD, send, { off: !id, check: (v) => wrong(A, v), label: (service && A.pick(service.name)) || A.services.title });
 
   const create = async () => {
     setBusy(true);
@@ -151,7 +154,7 @@ function ServicePane({ service, open, onClose, onCreated }: { service?: ServiceR
 
   return (
     <Pane
-      title={id ? ru(d.name) || A.services.title : A.services.add}
+      title={id ? A.pick(d.name) || A.services.title : A.services.add}
       open={open}
       onClose={() => {
         auto.flush();

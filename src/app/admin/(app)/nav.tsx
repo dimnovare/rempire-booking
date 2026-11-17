@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { A } from "../copy";
+import { useA, useTitle } from "../lang";
 
 const ITEMS = [
-  { href: "/admin", label: A.nav.calendar, icon: "cal" },
-  { href: "/admin/staff", label: A.nav.staff, icon: "staff" },
-  { href: "/admin/services", label: A.nav.services, icon: "svc" },
-  { href: "/admin/account", label: A.nav.account, icon: "key" },
+  { href: "/admin", key: "calendar", icon: "cal" },
+  { href: "/admin/staff", key: "staff", icon: "staff" },
+  { href: "/admin/services", key: "services", icon: "svc" },
+  { href: "/admin/account", key: "account", icon: "key" },
 ] as const;
 
 function Icon({ name }: { name: string }) {
@@ -49,17 +49,19 @@ export function Nav() {
 }
 
 export function NavLinks({ path }: { path: string }) {
+  const A = useA();
+  const on = (href: string) => (href === "/admin" ? path === "/admin" : path.startsWith(href));
+  const here = ITEMS.find((it) => on(it.href));
+  // the browser tab says where you are, in the login's language
+  useTitle(here ? A.nav[here.key] : "");
   return (
-    <nav className="adm-nav" aria-label="Разделы">
-      {ITEMS.map((it) => {
-        const on = it.href === "/admin" ? path === "/admin" : path.startsWith(it.href);
-        return (
-          <Link key={it.href} href={it.href} aria-current={on ? "page" : undefined} prefetch={false}>
-            <Icon name={it.icon} />
-            <span>{it.label}</span>
-          </Link>
-        );
-      })}
+    <nav className="adm-nav" aria-label={A.sections}>
+      {ITEMS.map((it) => (
+        <Link key={it.href} href={it.href} aria-current={on(it.href) ? "page" : undefined} prefetch={false}>
+          <Icon name={it.icon} />
+          <span>{A.nav[it.key]}</span>
+        </Link>
+      ))}
     </nav>
   );
 }

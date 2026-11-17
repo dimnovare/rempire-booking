@@ -1,12 +1,22 @@
 "use server";
 
+import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { clientIp, startSession } from "@/lib/auth/current";
 import { safeAdminPath } from "@/lib/auth/cookie";
 import { loginWithCode, loginWithPassword, sendLoginCode } from "@/lib/auth/login";
 import { dbConfigured, query } from "@/lib/db";
+import { isLocale, type Locale } from "@/lib/i18n";
+import { rememberLang } from "../lang-server";
 
 export type LoginState = { error?: string; sent?: boolean; email?: string };
+
+/** The login page's language, before anyone is logged in: kept on this device. After the login, the login's own language rules. */
+export async function setLoginLang(lang: Locale): Promise<void> {
+  if (!isLocale(lang)) return;
+  await rememberLang(lang);
+  refresh();
+}
 
 /** E-mail + password → a session cookie → the admin (or where the login was asked from). */
 export async function passwordLogin(_prev: LoginState, form: FormData): Promise<LoginState> {

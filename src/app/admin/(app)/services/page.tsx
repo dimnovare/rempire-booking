@@ -2,17 +2,16 @@ import { Suspense } from "react";
 import { listServices } from "@/lib/admin/services";
 import { requireAdmin } from "@/lib/auth/current";
 import { dbConfigured, query } from "@/lib/db";
-import { A } from "../../copy";
+import { Wait } from "../../lang";
+import { getA } from "../../lang-server";
 import { ServicesEditor } from "./editor";
-
-export const metadata = { title: A.services.title };
 
 export default function ServicesPage() {
   return (
     <Suspense
       fallback={
         <main className="adm-page">
-          <p className="adm-wait">{A.loading}</p>
+          <Wait />
         </main>
       }
     >
@@ -25,7 +24,7 @@ async function Loaded() {
   if (!dbConfigured())
     return (
       <main className="adm-page">
-        <p className="adm-wait">{A.noDb}</p>
+        <p className="adm-wait">{(await getA()).noDb}</p>
       </main>
     );
   const { business } = await requireAdmin();

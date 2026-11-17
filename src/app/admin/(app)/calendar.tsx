@@ -18,15 +18,16 @@ import type { CalBlock, CalendarData, CalService, CalVisit } from "@/lib/admin/c
 import { gridBounds, hhmm, minutesInDay, momentAt, snap, weekStart } from "@/lib/admin/grid";
 import type { AdminOutcome } from "@/lib/admin/visits";
 import { addDays } from "@/lib/tz";
-import { A, eur, mins, ru } from "../copy";
+import { eur } from "../copy";
+import { useA } from "../lang";
 import { Ava, CaretIcon, NextIcon, PlusIcon, PrevIcon, TickIcon } from "../icons";
 import { addBlock, cancelVisit, createVisit, deleteBlock, findClients, setVisitStatus, updateVisit } from "./actions";
 import { Sheet } from "./sheet";
 
 const DAY_PX = 1.2; // pixels per minute in a day: an hour is 72 px
 const WEEK_PX = 0.8; // in a week: 48 px, so a working day fits a phone
-const fmt = (tz: string, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat("ru-RU", { timeZone: tz, ...o });
-const timeOf = (tz: string, ms: number) => fmt(tz, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(ms);
+const fmt = (intl: string, tz: string, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(intl, { timeZone: tz, ...o });
+const timeOf = (tz: string, ms: number) => fmt("ru-RU", tz, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(ms);
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const noon = (date: string) => Date.parse(`${date}T12:00:00Z`);
 const MIN = 60_000;
@@ -47,6 +48,7 @@ export type CalendarProps = {
 };
 
 export function Calendar({ data, view, date, today, staffId, now: serverNow, step }: CalendarProps) {
+  const A = useA();
   const router = useRouter();
   const tz = data.tz;
   const px = view === "week" ? WEEK_PX : DAY_PX;
@@ -221,8 +223,8 @@ export function Calendar({ data, view, date, today, staffId, now: serverNow, ste
 
   const title =
     view === "week"
-      ? `${fmt(tz, { day: "numeric", month: "short", timeZone: "UTC" }).format(noon(data.dates[0]))} – ${fmt(tz, { day: "numeric", month: "short", timeZone: "UTC" }).format(noon(data.dates[6]))}`
-      : cap(fmt(tz, { weekday: "short", day: "numeric", month: "long", timeZone: "UTC" }).format(noon(date)));
+      ? `${fmt(A.intl, tz, { day: "numeric", month: "short", timeZone: "UTC" }).format(noon(data.dates[0]))} – ${fmt(A.intl, tz, { day: "numeric", month: "short", timeZone: "UTC" }).format(noon(data.dates[6]))}`
+      : cap(fmt(A.intl, tz, { weekday: "short", day: "numeric", month: "long", timeZone: "UTC" }).format(noon(date)));
   const strip = Array.from({ length: 7 }, (_, i) => addDays(weekStart(date), i));
   const todayInView = cols.some((c) => c.date === today);
   const nowMin = minutesInDay(now, today, tz);
@@ -246,7 +248,7 @@ export function Calendar({ data, view, date, today, staffId, now: serverNow, ste
         {view === "day" ? (
           <nav className="cal-strip" aria-label={A.cal.days}>
             {strip.map((d, i) => (
-              <button key={d} type="button" className={d === today ? "is-today" : undefined} aria-pressed={d === date} aria-label={cap(fmt(tz, { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(noon(d)))} onClick={() => d !== date && go(d, "day")}>
+              <button key={d} type="button" className={d === today ? "is-today" : undefined} aria-pressed={d === date} aria-label={cap(fmt(A.intl, tz, { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(noon(d)))} onClick={() => d !== date && go(d, "day")}>
                 <span>{A.staff.weekdays[i]}</span>
                 <b>{Number(d.slice(8))}</b>
               </button>
@@ -315,7 +317,7 @@ export function Calendar({ data, view, date, today, staffId, now: serverNow, ste
               if (view === "week")
                 return (
                   <button key={c.key} type="button" className={`cal-head${c.date === today ? " is-today" : ""}`} onClick={() => go(c.date, "day")}>
-                    <b>{cap(fmt(tz, { weekday: "short", timeZone: "UTC" }).format(noon(c.date)))}</b>
+                    <b>{cap(fmt(A.intl, tz, { weekday: "short", timeZone: "UTC" }).format(noon(c.date)))}</b>
                     <small>{Number(c.date.slice(8))}</small>
                   </button>
                 );
@@ -425,7 +427,7 @@ export function Calendar({ data, view, date, today, staffId, now: serverNow, ste
                           {v.source === "online" && <i className="dot" title={A.visit.source.online} />}
                         </span>
                         <b>{v.clientName}</b>
-                        <span className="s">{v.services.map((s) => ru(s.name)).join(", ")}</span>
+                        <span className="s">{v.services.map((s) => A.pick(s.name)).join(", ")}</span>
                         {buf > 0 && <span className="buf" style={{ height: buf }} />}
                       </button>
                     );
@@ -526,6 +528,7 @@ export function Calendar({ data, view, date, today, staffId, now: serverNow, ste
 const offered = (services: CalService[], staffId: string) => services.filter((s) => s.active && s.offers[staffId]);
 
 function StaffPicker({ data, value, onChange }: { data: CalendarData; value: string; onChange: (id: string) => void }) {
+  const A = useA();
   return (
     <div className="adm-field">
       <span>{A.visit.barber}</span>
@@ -544,6 +547,7 @@ function StaffPicker({ data, value, onChange }: { data: CalendarData; value: str
 }
 
 function ServicePicker({ services, staffId, picked, onChange }: { services: CalService[]; staffId: string; picked: string[]; onChange: (ids: string[]) => void }) {
+  const A = useA();
   return (
     <div className="adm-svcs" role="group" aria-label={A.visit.services}>
       {offered(services, staffId).map((s) => {
@@ -554,9 +558,9 @@ function ServicePicker({ services, staffId, picked, onChange }: { services: CalS
             <span className="bx">
               <TickIcon />
             </span>
-            <span className="n">{ru(s.name)}</span>
+            <span className="n">{A.pick(s.name)}</span>
             <small>
-              {mins(minutes)} · {eur(price)}
+              {A.mins(minutes)} · {eur(price)}
             </small>
           </button>
         );
@@ -596,6 +600,7 @@ function BarNote({ problem, warn }: { problem: string | null; warn: string | nul
 }
 
 function NewSheet({ data, staffId, date, min, onClose, onDone }: { data: CalendarData; staffId: string; date: string; min: number; onClose: () => void; onDone: (t: string) => void }) {
+  const A = useA();
   const tz = data.tz;
   const [tab, setTab] = useState<"visit" | "block">("visit");
   const [sid, setSid] = useState(staffId);
@@ -704,7 +709,7 @@ function NewSheet({ data, staffId, date, min, onClose, onDone }: { data: Calenda
               <>
                 <b>{eur(total.cents)}</b>
                 <small>
-                  {mins(total.minutes)} · {hhmm(startMin)}–{hhmm(startMin + total.minutes)}
+                  {A.mins(total.minutes)} · {hhmm(startMin)}–{hhmm(startMin + total.minutes)}
                 </small>
               </>
             ) : (
@@ -865,13 +870,14 @@ function NewSheet({ data, staffId, date, min, onClose, onDone }: { data: Calenda
 }
 
 function VisitSheet({ v, data, onClose, onMove, onDone }: { v: CalVisit; data: CalendarData; onClose: () => void; onMove: () => void; onDone: (t: string) => void }) {
+  const A = useA();
   const tz = data.tz;
   const [mode, setMode] = useState<"view" | "edit" | "cancel">("view");
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [warn, setWarn] = useState<string | null>(null);
   const staff = data.staff.find((s) => s.id === v.staffId);
-  const date = fmt(tz, { weekday: "short", day: "numeric", month: "long" }).format(v.start);
+  const date = fmt(A.intl, tz, { weekday: "short", day: "numeric", month: "long" }).format(v.start);
 
   // edit
   const [sid, setSid] = useState(v.staffId);
@@ -1011,7 +1017,7 @@ function VisitSheet({ v, data, onClose, onMove, onDone }: { v: CalVisit; data: C
       <ul className="adm-lines">
         {v.services.map((s, i) => (
           <li key={i}>
-            <span>{ru(s.name)}</span>
+            <span>{A.pick(s.name)}</span>
             <span>{eur(s.priceCents)}</span>
           </li>
         ))}
@@ -1058,8 +1064,9 @@ function VisitSheet({ v, data, onClose, onMove, onDone }: { v: CalVisit; data: C
 }
 
 function BlockSheet({ b, tz, staffName, onClose, onDone }: { b: CalBlock; tz: string; staffName: string; onClose: () => void; onDone: (t: string) => void }) {
+  const A = useA();
   const [busy, setBusy] = useState(false);
-  const f = fmt(tz, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  const f = fmt(A.intl, tz, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   return (
     <Sheet
       title={A.block.kinds[b.kind] ?? b.kind}

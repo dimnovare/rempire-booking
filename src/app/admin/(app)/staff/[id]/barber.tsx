@@ -10,20 +10,21 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { StaffDetail } from "@/lib/admin/staff";
-import { A, eur, ru } from "../../../copy";
+import { eur, type Copy } from "../../../copy";
+import { useA } from "../../../lang";
 import { Ava, NextIcon, PlusIcon } from "../../../icons";
 import { Pane } from "../../sheet";
 import { DaysForm, HoursForm, OffersForm, ProfileForm, SpecialForm, TimeOffForm } from "./forms";
 
 type Part = "profile" | "offers" | "hours" | "days" | "off" | "special";
 
-const dOnly = (date: string) => new Intl.DateTimeFormat("ru-RU", { timeZone: "UTC", day: "numeric", month: "long" }).format(Date.parse(`${date}T12:00:00Z`));
+const dOnly = (A: Copy, date: string) => new Intl.DateTimeFormat(A.intl, { timeZone: "UTC", day: "numeric", month: "long" }).format(Date.parse(`${date}T12:00:00Z`));
 const short = (t: string) => t.replace(/:00$/, "");
-const spansText = (spans: [string, string][]) => (spans.length ? spans.map(([a, b]) => `${short(a)}–${short(b)}`).join(", ") : A.staff.dayOff);
+const spansText = (A: Copy, spans: [string, string][]) => (spans.length ? spans.map(([a, b]) => `${short(a)}–${short(b)}`).join(", ") : A.staff.dayOff);
 
 /** «Пн–Пт 10–20 · Сб 10–18 · Вс выходной»: neighbouring days with the same hours run together. */
-export function weekText(hours: StaffDetail["hours"]): string {
-  const by = new Map(hours.map((h) => [h.weekday, spansText(h.spans)]));
+export function weekText(A: Copy, hours: StaffDetail["hours"]): string {
+  const by = new Map(hours.map((h) => [h.weekday, spansText(A, h.spans)]));
   const day = (wd: number) => by.get(wd) ?? A.staff.dayOff;
   const out: string[] = [];
   let from = 1;
@@ -37,12 +38,13 @@ export function weekText(hours: StaffDetail["hours"]): string {
   return out.join(" · ");
 }
 
-const more = (n: number) => (n > 1 ? ` · ${A.staff.more(n - 1)}` : "");
+const more = (A: Copy, n: number) => (n > 1 ? ` · ${A.staff.more(n - 1)}` : "");
 
 export function BarberPage({ d, tz, today, back }: { d: StaffDetail; tz: string; today: string; back: React.ReactNode }) {
+  const A = useA();
   const [open, setOpen] = useState<Part | null>(null);
-  const dt = new Intl.DateTimeFormat("ru-RU", { timeZone: tz, day: "numeric", month: "short" });
-  const tm = new Intl.DateTimeFormat("ru-RU", { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  const dt = new Intl.DateTimeFormat(A.intl, { timeZone: tz, day: "numeric", month: "short" });
+  const tm = new Intl.DateTimeFormat(A.intl, { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
   const offered = d.offers.filter((o) => o.offered);
   const prices = offered.map((o) => o.priceCents ?? o.defaultCents);
@@ -53,16 +55,16 @@ export function BarberPage({ d, tz, today, back }: { d: StaffDetail; tz: string;
   const firstSp = d.special[0];
 
   const rows: { k: Part; title: string; value: string }[] = [
-    { k: "profile", title: A.staff.profile, value: [ru(d.role) || "—", d.active ? A.staff.active : A.staff.off].join(" · ") },
+    { k: "profile", title: A.staff.profile, value: [A.pick(d.role) || "—", d.active ? A.staff.active : A.staff.off].join(" · ") },
     { k: "offers", title: A.staff.offersRow, value: offered.length ? `${A.staff.servicesN(offered.length)} · ${lo === hi ? eur(lo) : `${eur(lo).replace(" €", "")}–${eur(hi)}`}` : A.staff.none },
-    { k: "hours", title: A.staff.hours, value: weekText(d.hours) },
-    { k: "days", title: A.staff.overrides, value: firstDay ? `${dOnly(firstDay.date)}: ${spansText(firstDay.spans)}${more(d.overrides.length)}` : A.staff.none },
+    { k: "hours", title: A.staff.hours, value: weekText(A, d.hours) },
+    { k: "days", title: A.staff.overrides, value: firstDay ? `${dOnly(A, firstDay.date)}: ${spansText(A, firstDay.spans)}${more(A, d.overrides.length)}` : A.staff.none },
     {
       k: "off",
       title: A.staff.timeOffRow,
-      value: firstOff ? `${A.block.kinds[firstOff.kind] ?? firstOff.kind}: ${dt.format(firstOff.from)} – ${dt.format(firstOff.to - 1)}${more(d.timeOff.length)}` : A.staff.none,
+      value: firstOff ? `${A.block.kinds[firstOff.kind] ?? firstOff.kind}: ${dt.format(firstOff.from)} – ${dt.format(firstOff.to - 1)}${more(A, d.timeOff.length)}` : A.staff.none,
     },
-    { k: "special", title: A.staff.special, value: firstSp ? `${dt.format(firstSp.from)}, ${tm.format(firstSp.from)}–${tm.format(firstSp.to)}, +${eur(firstSp.extraCents)}${more(d.special.length)}` : A.staff.none },
+    { k: "special", title: A.staff.special, value: firstSp ? `${dt.format(firstSp.from)}, ${tm.format(firstSp.from)}–${tm.format(firstSp.to)}, +${eur(firstSp.extraCents)}${more(A, d.special.length)}` : A.staff.none },
   ];
   // the first three save by themselves; on a phone their sheet ends with «Готово»
   const done = () => setOpen(null);
@@ -86,7 +88,7 @@ export function BarberPage({ d, tz, today, back }: { d: StaffDetail; tz: string;
         <div className="txt">
           <h1 className="adm-h1">{d.name}</h1>
           <span>
-            {ru(d.role) || A.visit.barber} · {d.active ? A.staff.active : A.staff.off} · {d.bookable ? A.staff.bookableOn : A.staff.bookableOff}
+            {A.pick(d.role) || A.visit.barber} · {d.active ? A.staff.active : A.staff.off} · {d.bookable ? A.staff.bookableOn : A.staff.bookableOff}
           </span>
         </div>
         <div className="adm-btns">

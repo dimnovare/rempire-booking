@@ -1,10 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { A } from "../../copy";
-import { addUser, changeMyPassword, toggleUser } from "./actions";
+import { LOCALES, type Locale } from "@/lib/i18n";
+import { LANG_NAMES } from "../../copy";
+import { LangSwitch, useA } from "../../lang";
+import { addUser, changeMyPassword, setMyLang, toggleUser } from "./actions";
+
+/** My login's language: Русский · Eesti · English. It follows the login to every device. */
+export function MyLang() {
+  return <LangSwitch pick={setMyLang} />;
+}
 
 export function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
+  const A = useA();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [busy, setBusy] = useState(false);
@@ -52,7 +60,9 @@ export function PasswordForm({ hasPassword }: { hasPassword: boolean }) {
 }
 
 export function AddUserForm({ staff }: { staff: { id: string; name: string }[] }) {
-  const [u, setU] = useState({ email: "", name: "", role: "staff", staffId: staff[0]?.id ?? "", password: "" });
+  const A = useA();
+  // a new login starts in the language of whoever adds it, unless another is picked for it
+  const [u, setU] = useState<{ email: string; name: string; role: string; staffId: string; password: string; locale: Locale }>({ email: "", name: "", role: "staff", staffId: staff[0]?.id ?? "", password: "", locale: A.lang });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   return (
@@ -100,6 +110,16 @@ export function AddUserForm({ staff }: { staff: { id: string; name: string }[] }
           </select>
         </label>
       )}
+      <div className="adm-field">
+        <span>{A.langLabel}</span>
+        <div className="adm-seg adm-seg-wide" role="group" aria-label={A.langLabel}>
+          {LOCALES.map((l) => (
+            <button key={l} type="button" lang={l} aria-pressed={u.locale === l} onClick={() => setU({ ...u, locale: l })}>
+              {LANG_NAMES[l]}
+            </button>
+          ))}
+        </div>
+      </div>
       <label className="adm-field">
         <span>{A.account.firstPassword}</span>
         <input type="password" autoComplete="new-password" minLength={8} maxLength={200} value={u.password} onChange={(e) => setU({ ...u, password: e.target.value })} />
@@ -113,6 +133,7 @@ export function AddUserForm({ staff }: { staff: { id: string; name: string }[] }
 }
 
 export function ToggleUser({ id, active }: { id: string; active: boolean }) {
+  const A = useA();
   const [busy, setBusy] = useState(false);
   return (
     <button

@@ -1,11 +1,12 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { A } from "../copy";
+import type { Copy } from "../copy";
 import { EyeIcon } from "../icons";
-import { codeLogin, passwordLogin, requestCode, type LoginState } from "./actions";
+import { LangSwitch, useA, useTitle } from "../lang";
+import { codeLogin, passwordLogin, requestCode, setLoginLang, type LoginState } from "./actions";
 
-const ERR: Record<string, string> = {
+const errors = (A: Copy): Record<string, string> => ({
   bad: A.login.bad,
   badCode: A.login.badCode,
   expired: A.login.expired,
@@ -18,9 +19,23 @@ const ERR: Record<string, string> = {
   google: A.login.googleFailed,
   googleUnknown: A.login.googleUnknown,
   googleOther: A.login.googleOther,
-};
+});
+
+/** «Вход», and the browser tab's title with it. */
+export function LoginTitle() {
+  const A = useA();
+  useTitle(A.login.title);
+  return <h1 className="adm-h1">{A.login.title}</h1>;
+}
+
+/** Русский · Eesti · English under the form: kept on this device until someone logs in. */
+export function LoginLang() {
+  return <LangSwitch pick={setLoginLang} />;
+}
 
 export function LoginForm({ next, initialError, google }: { next: string; initialError?: string; google: boolean }) {
+  const A = useA();
+  const ERR = errors(A);
   const [mode, setMode] = useState<"password" | "code">("password");
   const [pw, pwAction, pwBusy] = useActionState<LoginState, FormData>(passwordLogin, {});
   const [req, reqAction, reqBusy] = useActionState<LoginState, FormData>(requestCode, {});
