@@ -1,6 +1,7 @@
 # REMPIRE Booking
 
-Start with **`docs/kickoff.md`**. It records the decisions made so far, the
+Start with **`docs/kickoff.md`**. Logos, fonts and colours are in
+**`docs/brand.md`**. It records the decisions made so far, the
 accounts that already exist, what Altegio does today, the open questions and
 the proposed phases. The questions for Renat are in
 `docs/questions-for-renat.ru.md`, in Russian.

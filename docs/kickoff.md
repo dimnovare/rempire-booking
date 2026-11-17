@@ -400,4 +400,5 @@ No secrets are written here. The full registry for the shop is
     checks the goal: 4 taps for a first visit, 2 for a return.
   - It also shows the edge cases: a day with no free time, a barber booked
     for 60 days, a time taken while the client types.
-  - Waits for Dim's notes (its `feedback` collection).
+  - Dim approved the look the same day. Version 2 carries rempire.ee's own
+    logo. Logos, fonts and colours: `docs/brand.md`.
