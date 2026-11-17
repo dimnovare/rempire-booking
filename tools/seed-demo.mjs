@@ -146,6 +146,27 @@ export async function seedDemoSpecial(db, now = Date.now()) {
   return added;
 }
 
+/**
+ * Renat's questions page (src/lib/owner-qa.ts). Its link, /ru/q/<token>,
+ * went to Dim in chat on 17.11.2026; only the token's SHA-256 is here.
+ * DEMO_QA is /ru/q/demo, for the in-memory database only (src/lib/db.ts).
+ */
+export const OWNER_QA = [{ label: "renat-2026-11", tokenHash: "c618cc254cafdfe4f84eca6b4869199281a8572049133320da006e2c3b7214cd" }];
+export const DEMO_QA = { label: "demo", tokenHash: createHash("sha256").update("demo").digest("hex") };
+
+/** @param {{query: (sql: string, params?: unknown[]) => Promise<{rows: any[]}>}} db */
+export async function seedOwnerQa(db, forms = OWNER_QA) {
+  let added = 0;
+  for (const f of forms) {
+    const r = await db.query(
+      "insert into qa_forms (id, token_hash, label) values ($1, $2, $3) on conflict do nothing returning id",
+      [demoId("qa", f.label), f.tokenHash, f.label],
+    );
+    added += r.rows.length;
+  }
+  return added;
+}
+
 async function main() {
   if (process.argv.includes("--if-enabled") && process.env.SEED_DEMO !== "yes") {
     console.log("Demo seed skipped (SEED_DEMO is not yes).");
@@ -166,7 +187,8 @@ async function main() {
   try {
     await seedDemo(client);
     const special = await seedDemoSpecial(client);
-    console.log(`Demo seed done (${special} special-time windows added).`);
+    const qa = await seedOwnerQa(client);
+    console.log(`Demo seed done (${special} special-time windows, ${qa} question forms added).`);
   } finally {
     await client.end();
   }

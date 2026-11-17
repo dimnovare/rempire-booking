@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { indexingAllowed, NOINDEX_HEADER } from "@/lib/indexing";
+import { indexingAllowed, NOINDEX_HEADER, PREVIEW_BOTS } from "@/lib/indexing";
 
 describe("indexingAllowed", () => {
   it.each([undefined, "", "true", "1", "YES", " yes", "yes "])(
@@ -53,7 +53,11 @@ describe("signals", () => {
         headers: [{ key: "X-Robots-Tag", value: NOINDEX_HEADER }],
       },
     ]);
-    expect(robots).toEqual({ rules: { userAgent: "*", disallow: "/" } });
+    // search engines out; link-preview bots may read titles and pictures
+    expect(robots.rules).toContainEqual({ userAgent: "*", disallow: "/" });
+    const rules = [robots.rules].flat();
+    expect(rules.filter((r) => r.allow)).toEqual([{ userAgent: PREVIEW_BOTS, allow: "/" }]);
+    expect(PREVIEW_BOTS.some((b) => /google|bing|yandex|duckduck|baidu|applebot/i.test(b))).toBe(false);
     expect(metadata.robots).toMatchObject({ index: false, follow: false });
     expect(redirect.status).toBe(307);
     expect(redirect.headers.get("location")).toBe("http://localhost:3400/et");

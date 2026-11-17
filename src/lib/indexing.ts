@@ -24,3 +24,11 @@ export function robotsMeta(env: Env = process.env) {
   const on = indexingAllowed(env);
   return { index: on, follow: on, nocache: !on, googleBot: { index: on, follow: on } };
 }
+
+/**
+ * Messengers fetch a shared link to show its title and picture. They do not
+ * index anything, and some of them (Facebook's, so WhatsApp's; X's) skip a
+ * page robots.txt closes. Search engines stay out: `*` is still
+ * Disallow: /, and every page still says noindex (meta and header).
+ */
+export const PREVIEW_BOTS = ["facebookexternalhit", "WhatsApp", "TelegramBot", "Twitterbot", "Slackbot-LinkExpanding", "Discordbot"];

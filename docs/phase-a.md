@@ -59,17 +59,18 @@ Renat's request, settled with Dim (17.11.2026):
   - «Book» sends the extra the client saw. If it has changed, the answer is
     «taken» with the nearest times, never a higher price.
 - Screens: design v2 canvas, https://claude.ai/artifact/Dg7tYCfjpba275Q5GWatFA.
-- Open: Q16, whether the extra goes to the barber whole.
+- The extra goes to the barber whole (Dim, 17.11.2026).
 
 ## Answers that change the build
 
-| Renat's question | Changes | Until answered |
+| Question | Changes | Now |
 |---|---|---|
-| Q7 cancel cutoff | change-or-cancel page | 24 h placeholder, a business setting |
-| Q9 barbers' time off needs approval | `time_off.status` | approved on save |
-| Q10 barbers confirm bookings | `pending` status | booked at once |
-| Q6 deposits | a payment step | none |
-| Q16 special time: does the extra go to the barber whole | the barber's invoice (Phase C) | the extra is shown and stored apart from the service price |
+| Cancel cutoff | change-or-cancel page | 24 h placeholder, a business setting; **read from Altegio's settings** (not asked) |
+| What a barber may change himself (page Q2) | `time_off.status`, the barber app | approved on save |
+| Barbers confirm bookings | | **decided: no.** Booked at once; the barber can cancel in an emergency (Phase B) |
+| Deposits | | **decided: none for now** |
+| Special-time extra | the barber's invoice (Phase C) | **decided: all of it to the barber**; stored apart from the service price |
+| Telegram for barbers (page Q3) | the barber notifications (Phase B) | web push |
 
 Each one is a business setting or a status, so an answer is a switch, not
 a rebuild.
@@ -128,3 +129,20 @@ with the demo data, says so in a banner, and loses bookings on restart.
 **Not in A2 yet:** moving a visit in one step (now: book the new time, then
 cancel the old one); e-mail and SMS (A6); the salon phone (not in the demo
 data); a privacy policy page; rate limits on `/api/bookings`.
+
+## Renat's questions page (17.11)
+
+| Path | Does |
+|---|---|
+| `src/app/[locale]/q/[token]/` | the page, in Russian at any locale; each field saves as he types, waits in the browser when offline |
+| `src/app/api/qa/[token]` | `GET` the answers (`?log=1` adds every earlier value), `PUT` one field |
+| `src/lib/owner-qa-content.ts` | the questions, «Уже решено», «Это посмотрим сами» |
+| `db/migrations/005_owner_qa.sql` | forms (only the link token's SHA-256), answers, the log |
+| `tools/seed-demo.mjs` `seedOwnerQa` | adds Renat's form on staging; `/ru/q/demo` exists only in the in-memory database |
+| `src/app/api/og/[card]`, `src/lib/og.tsx` | link-preview pictures: booking per language, and the questions page |
+
+**Link previews and robots.txt:** `*` stays `Disallow: /` and every page
+still sends noindex (meta and header). Messenger preview bots
+(`PREVIEW_BOTS` in `src/lib/indexing.ts`) may fetch pages, so a shared link
+shows its title and picture. `SITE_URL` sets the absolute address in the
+previews; unset, it is staging.

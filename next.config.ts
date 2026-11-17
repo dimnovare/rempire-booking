@@ -16,6 +16,9 @@ const nextConfig: NextConfig = {
       "./node_modules/@electric-sql/pglite/dist/*.{js,cjs,wasm,data}",
       "./node_modules/@electric-sql/pglite/dist/btree_gist.tar.gz",
       "./node_modules/@electric-sql/pglite/dist/contrib/btree_gist.*",
+      // the link-preview card's font and logo (src/lib/og.tsx)
+      "./src/app/fonts/akrobat-extrabold.woff",
+      "./public/brand/rempire-logo-white.png",
     ],
   },
   turbopack: {

@@ -24,13 +24,18 @@ moved to rempire.ee.
 | 7 | Invoices | **Our own invoicing replaces Isolta**, with no integration. It needs: rent of the barber's chair, items, a choice of who the invoice is for, CRUD for invoice receivers, then print or e-mail. The reason is cost; it pays for itself over time. |
 | 8 | SMS | Renat uses **Messaggio** now. It must be cheap, simple and reliable. |
 | 9 | Reference | Altegio's logic and data, and Fresha's simplicity, in our look and with fewer clicks. Dim will get Altegio access. |
-| 10 | Universal? | **Open.** Dim is asking Renat whether this should work for any business (tattoo, other salons) or barbers only. |
+| 10 | Universal? | **Open.** Renat's questions page, question 5: REMPIRE only, or any service later (tattoo, a massage salon, others). |
 | 11 | Hosting plan | **Open.** Vercel Pro might stay because two services already run there. Think it through. |
 | 12 | Copying | Altegio's and Fresha's features and flows, logic and simplicity. Their look, no. |
 | 13 | Barber companies | Each barber has an FIE or OÜ. VAT applies or not depending on the invoice receiver, so each receiver needs its own setup. |
 | 14 | Languages | RU, ET, EN. |
-| 15 | Deposits / prepayment | **Open.** It needs explaining to Renat first (in the questions file). |
-| 16 | 17 % commission | **Open.** Dim is asking Renat how it is calculated. |
+| 15 | Deposits / prepayment | **None for now** (Dim, 17.11): REMPIRE takes none today, so neither do we. |
+| 16 | 17 % commission | **Open.** Renat's questions page, question 1: with or without VAT, and after a discount. A barber buying for himself pays the purchase price, no commission. |
+| 17 | Confirmations | **None** (Dim, 17.11): a booking is confirmed at once. Hours a barber opens are his promise to work them. He can still cancel a visit in an emergency. |
+| 18 | Altegio data | **Move everything we can** (Dim, 17.11): clients and phone numbers, visit history, reviews. |
+| 19 | Invoice format | **PDF by e-mail** is enough (Dim, 17.11). |
+| 20 | Special-time extra | **Goes to the barber whole** (Dim, 17.11). |
+| 21 | What we read ourselves | Altegio and Isolta access answer the rest (services, prices, hours, the cancel rule; the invoicing company, VAT, chair rent, invoice layout). Renat is not asked those. |
 
 ### Round 1 answers (Dim, decisions page, 17.11.2026)
 
@@ -286,18 +291,18 @@ No secrets are written here. The full registry for the shop is
 - Who owns the repo and the Vercel project?
 - A Railway database on the shop's account or a new one?
 
-**For Renat** (in Russian in `docs/questions-for-renat.ru.md`):
+**For Renat** (version 2, 17.11.2026: `docs/questions-for-renat.ru.md`; he answers on the questions page, `/ru/q/<token>`, which saves as he types):
 
-- Which company invoices the barbers?
 - The 17 % basis.
-- Chair rent amounts.
-- Deposits and prepayment.
-- The cancellation rule.
-- Who sets prices.
-- Whether barbers must confirm bookings.
-- SMS and Altegio costs today.
-- Tattoo in or out.
-- Moving the reviews.
+- What a barber may change himself.
+- Telegram notifications for barbers through a new bot.
+- Monthly costs today: Altegio, Messaggio, Isolta.
+- REMPIRE only, or any service.
+- Anything else.
+
+**From Altegio and Isolta, once Dim has access:** the cancellation rule,
+services, prices and hours; the invoicing company, VAT, chair rent, the
+invoice layout.
 
 **To verify before building invoices:**
 
