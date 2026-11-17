@@ -276,6 +276,8 @@ async function insertVisit(tx: Querier, business: Business, c: Clean, staffId: s
   // The form is open to anyone, so one address gets at most
   // CONFIRMATIONS_PER_DAY letters a day; the visit is booked either way.
   if (c.email) {
+    // parallel bookings to one address count one after another (held to commit)
+    await tx("select pg_advisory_xact_lock(hashtext('confirm:' || $1))", [c.email]);
     const [recent] = await tx<{ n: number }>(
       "select count(*)::int as n from notifications where kind = 'confirmation' and recipient = $1 and created_at > $2",
       [c.email, new Date(now - 24 * 3_600_000)],
