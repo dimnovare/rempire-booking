@@ -346,7 +346,8 @@ invoice layout.
   to clients and lets Renat add it in the admin.
 - Client notes.
 
-**C: Sales and money** (build plan: `docs/phase-c.md`)
+**C: Sales and money** (build plan: `docs/phase-c.md`; Renat's and the
+barbers' test run on staging: `docs/test-run.md`)
 
 - Scan or photograph → shop product.
 - Sell to a client at the shop price, with 17 % to the barber; or buy for
