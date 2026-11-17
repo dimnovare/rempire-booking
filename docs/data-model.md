@@ -77,6 +77,7 @@ Dim's. Env var names: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
 | `staff_hours` | `staff_id`, `weekday` 1–7, `starts time`, `ends time`, `valid_from`, `valid_to` | Several rows a day allowed. A break is the gap between two rows. |
 | `staff_day_overrides` | `staff_id`, `date`, `intervals jsonb` (empty = day off) | A swapped shift or a short day without touching the template. |
 | `time_off` | `staff_id`, `starts_at`, `ends_at`, `kind` (`vacation`/`sick`/`block`), `status` (`requested`/`approved`/`declined`), `note`, `created_by` | A barber blocking an hour is `kind = block`. **[open]** Renat Q9: whether barbers need approval. |
+| `extra_time` | `staff_id`, `starts_at`, `ends_at`, `weekly` (repeat on that weekday), `extra_cents` or `extra_pct`, `needs_confirm`, `created_by` | A barber's time outside his hours at a higher price, shown to clients as «After hours» (Renat via Dim, 17.11.2026). Free slots come from it as from `staff_hours`. A booking in it keeps the extra on the appointment (`extra_cents`) and, with `needs_confirm`, starts as a request the barber accepts. **[open]** Renat Q16–19. |
 
 ### Clients and appointments
 

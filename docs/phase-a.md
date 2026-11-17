@@ -35,6 +35,17 @@ Screens: `docs/client-flow.md` and the approved mock.*
 - **Not in A8:** memberships, gift cards and loyalty cards (Altegio's client
   area has them). They wait for Renat's answer on whether he wants them.
 
+### Extra time («After hours»)
+
+Renat's request (via Dim, 17.11.2026): a barber can open time outside his
+hours, at a higher price and with its own handling. In Phase A: the
+`extra_time` table, its slots in the client flow as a separate «After hours»
+group with the extra shown on each time, the bar and the details showing
+«60 € + 20 € after hours», and «Send request» instead of «Book» when the
+barber confirms each one. Renat adds it for a barber in the admin (A5); the
+barber adds it himself in Phase B. Screens: design v2 canvas
+(https://claude.ai/artifact/Dg7tYCfjpba275Q5GWatFA). Open: Q16–19.
+
 ## Answers that change the build
 
 | Renat's question | Changes | Until answered |
@@ -43,6 +54,7 @@ Screens: `docs/client-flow.md` and the approved mock.*
 | Q9 barbers' time off needs approval | `time_off.status` | approved on save |
 | Q10 barbers confirm bookings | `pending` status | booked at once |
 | Q6 deposits | a payment step | none |
+| Q16–19 extra time | `extra_time`, «After hours» slots, a request status | +20 € a visit, the barber confirms (design v2 placeholder) |
 
 Each one is a business setting or a status, so an answer is a switch, not
 a rebuild.

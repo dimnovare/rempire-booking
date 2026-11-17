@@ -336,6 +336,9 @@ No secrets are written here. The full registry for the shop is
 - Push for a new, moved or cancelled booking.
 - Confirm or decline, if Renat wants confirmations.
 - Block time; request vacation.
+- Add extra time outside his hours at a higher price («After hours»),
+  Renat's request via Dim, 17.11.2026. Phase A shows it to clients and
+  lets Renat add it in the admin.
 - Client notes.
 
 **C: Sales and money**
