@@ -12,6 +12,7 @@ import { loadAvailability, type Business } from "./availability";
 import { withTx, type Querier } from "./db";
 import { isLocale, type Locale } from "./i18n";
 import { normalizePhone } from "./phone";
+import { pushVisitChange } from "./push";
 import { localParts } from "./tz";
 
 export type BookingInput = {
@@ -272,6 +273,10 @@ async function insertVisit(tx: Querier, business: Business, c: Clean, staffId: s
   );
   // the route sends it right after the response
   if (c.email) await queueConfirmation(tx, business.id, row.id, c.email, c.locale, now);
+  // Phase B: the barber, and Renat if he wants it, hear of an online booking by push
+  if (c.source === "online") {
+    await pushVisitChange(tx, { businessId: business.id, appointmentId: row.id, staffIds: [staffId], kind: "visit_new", owners: { kind: "own_online" }, actor: null, now });
+  }
   return { visit: visitOf(row), token };
 }
 

@@ -55,14 +55,15 @@ export async function POST(request: Request) {
   const r = await book(query, business, input, { source: "online" });
 
   if (r.ok) {
-    if (!r.replay && input.email) {
+    // the confirmation letter and the barber's push (Phase B), right after the response
+    if (!r.replay) {
       const id = r.visit.id;
       after(async () => {
         try {
           await sendForVisit(query, id);
         } catch (err) {
           // the row stays queued for the cron; never log the address
-          console.error("confirmation send failed:", err instanceof Error ? err.message : err);
+          console.error("send after booking failed:", err instanceof Error ? err.message : err);
         }
       });
     }

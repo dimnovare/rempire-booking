@@ -12,10 +12,18 @@
  *     time gets that window's extra.
  * Every change takes the barber's staff row lock first (as src/lib/booking.ts)
  * and leaves an audit row with who did it.
+ *
+ * The barber app (Phase B) calls the same functions with a Scope: its
+ * barber's staff id. A visit in another column is «not found», checked
+ * under the row lock. A new, moved or cancelled visit is told by push to
+ * the barber whose column it is (never to the one who made the change);
+ * a barber's own move or cancel also to Renat (src/lib/push.ts).
  */
 import type { Business } from "../availability";
 import { queueChangeLetter, queueConfirmation } from "../booking";
 import { query, withTx, type Querier } from "../db";
+import { sendPushSoon } from "../outbox";
+import { pushVisitChange } from "../push";
 import { isLocale } from "../i18n";
 import { normalizePhone } from "../phone";
 import { pricedWindows, workWindows, type HoursRow, type Interval, type Special } from "../slots";
@@ -176,9 +184,17 @@ async function wrap(fn: () => Promise<AdminOutcome>): Promise<AdminOutcome> {
   }
 }
 
-/** A new visit from the admin. */
-export async function adminCreateVisit(business: Business, input: AdminVisitInput, actor: string): Promise<AdminOutcome> {
+/**
+ * What a change may touch. The barber app (Phase B) passes its barber's
+ * staff id: a visit in another column is «not found», checked under the
+ * row lock, whatever id the phone sent.
+ */
+export type Scope = { onlyStaffId?: string };
+
+/** A new visit from the admin (or a barber in his own column). */
+export async function adminCreateVisit(business: Business, input: AdminVisitInput, actor: string, scope: Scope = {}): Promise<AdminOutcome> {
   if (!isUuid(input.staffId)) return { ok: false, code: "invalid", field: "staff" };
+  if (scope.onlyStaffId && input.staffId !== scope.onlyStaffId) return { ok: false, code: "invalid", field: "staff" };
   if (!Number.isFinite(input.start)) return { ok: false, code: "invalid", field: "start" };
   const serviceIds = cleanIds(input.serviceIds);
   if (!serviceIds) return { ok: false, code: "invalid", field: "services" };
@@ -267,9 +283,10 @@ export async function adminCreateVisit(business: Business, input: AdminVisitInpu
           [cid, business.id],
         );
         if (mail) await queueConfirmation(tx, business.id, row.id, mail.recipient, isLocale(mail.locale) ? mail.locale : "ru");
+        await pushVisitChange(tx, { businessId: business.id, appointmentId: row.id, staffIds: [input.staffId], kind: "visit_new", actor });
         return { ok: true as const, id: row.id, start, end, totalCents: total, extraCents: extra };
       }),
-    );
+    ).then(pushed);
   } catch (err) {
     if (pgCode(err) === "23505") {
       const again = await replay();
@@ -289,7 +306,7 @@ export type VisitPatch = {
 };
 
 /** Move a visit (time, barber) or change its services or notes, in one step. */
-export async function adminUpdateVisit(business: Business, id: string, patch: VisitPatch, actor: string): Promise<AdminOutcome> {
+export async function adminUpdateVisit(business: Business, id: string, patch: VisitPatch, actor: string, scope: Scope = {}): Promise<AdminOutcome> {
   if (!isUuid(id)) return { ok: false, code: "not_found" };
   if (patch.staffId !== undefined && !isUuid(patch.staffId)) return { ok: false, code: "invalid", field: "staff" };
   if (patch.start !== undefined && !Number.isFinite(patch.start)) return { ok: false, code: "invalid", field: "start" };
@@ -304,6 +321,8 @@ export async function adminUpdateVisit(business: Business, id: string, patch: Vi
         [id, business.id],
       );
       if (!cur) throw new Problem("not_found");
+      if (scope.onlyStaffId && cur.staff_id !== scope.onlyStaffId) throw new Problem("not_found");
+      if (scope.onlyStaffId && patch.staffId !== undefined && patch.staffId !== scope.onlyStaffId) throw new Problem("invalid", "staff");
       if (cur.status === "cancelled") throw new Problem("cancelled");
       const staffId = patch.staffId ?? cur.staff_id;
       const start = patch.start !== undefined ? Math.round(patch.start / MIN) * MIN : new Date(cur.starts_at).getTime();
@@ -349,35 +368,71 @@ export async function adminUpdateVisit(business: Business, id: string, patch: Vi
       if (moved && LIVE_STATUSES.has(cur.status) && new Date(cur.starts_at).getTime() > now && start > now) {
         await queueChangeLetter(tx, business.id, id, "moved", { startsAt: new Date(cur.starts_at), staffId: cur.staff_id }, now);
       }
+      if (moved) {
+        await pushVisitChange(tx, {
+          businessId: business.id,
+          appointmentId: id,
+          staffIds: [cur.staff_id, staffId],
+          kind: "visit_moved",
+          owners: scope.onlyStaffId ? { kind: "own_barber", action: "moved" } : null,
+          actor,
+          extra: { fromStart: new Date(cur.starts_at).toISOString() },
+          now,
+        });
+      }
       return { ok: true as const, id, start, end, totalCents: total, extraCents: extra };
     }),
-  );
+  ).then(pushed);
 }
 
-export async function adminCancelVisit(business: Business, id: string, actor: string): Promise<"cancelled" | "already" | "not_found"> {
+/** After a change that may have queued a push: send it right after the response. */
+function pushed<T extends { ok: boolean }>(out: T): T {
+  if (out.ok) sendPushSoon();
+  return out;
+}
+
+/**
+ * Cancel a visit. From the barber app (scope set) it is an emergency
+ * cancel: the reason is kept in the audit row and goes to Renat by push.
+ */
+export async function adminCancelVisit(
+  business: Business,
+  id: string,
+  actor: string,
+  scope: Scope & { reason?: string | null } = {},
+): Promise<"cancelled" | "already" | "not_found"> {
   if (!isUuid(id)) return "not_found";
-  return withTx(async (tx) => {
-    const [cur] = await tx<{ status: string; starts_at: Date }>("select status, starts_at from appointments where id = $1 and business_id = $2 for update", [id, business.id]);
+  const reason = text(scope.reason, 300);
+  const out = await withTx(async (tx) => {
+    const [cur] = await tx<{ status: string; starts_at: Date; staff_id: string }>(
+      "select status, starts_at, staff_id from appointments where id = $1 and business_id = $2 for update",
+      [id, business.id],
+    );
     if (!cur) return "not_found";
+    if (scope.onlyStaffId && cur.staff_id !== scope.onlyStaffId) return "not_found";
     if (cur.status === "cancelled") return "already";
     await tx("update appointments set status = 'cancelled', cancelled_at = now(), cancelled_by = $2, updated_at = now() where id = $1", [id, actor]);
-    await audit(tx, actor, id, "cancel", { status: cur.status }, { status: "cancelled" });
+    await audit(tx, actor, id, "cancel", { status: cur.status }, reason ? { status: "cancelled", reason } : { status: "cancelled" });
     if (LIVE_STATUSES.has(cur.status) && new Date(cur.starts_at).getTime() > Date.now()) {
       await queueChangeLetter(tx, business.id, id, "cancelled", null);
     }
-    return "cancelled";
+    await pushVisitChange(tx, {
+      businessId: business.id,
+      appointmentId: id,
+      staffIds: [cur.staff_id],
+      kind: "visit_cancelled",
+      owners: scope.onlyStaffId ? { kind: "own_barber", action: "cancelled" } : null,
+      actor,
+      extra: reason ? { reason } : {},
+    });
+    return "cancelled" as const;
   });
+  if (out === "cancelled") sendPushSoon();
+  return out;
 }
 
 export const VISIT_STATUSES = ["booked", "arrived", "done", "no_show"] as const;
 export type VisitStatus = (typeof VISIT_STATUSES)[number];
-
-/**
- * What a change may touch. The barber app (Phase B) passes its barber's
- * staff id: a visit in another column is «not found», checked under the
- * row lock, whatever id the phone sent.
- */
-export type Scope = { onlyStaffId?: string };
 
 export async function adminSetStatus(business: Business, id: string, status: string, actor: string, scope: Scope = {}): Promise<boolean> {
   if (!isUuid(id) || !(VISIT_STATUSES as readonly string[]).includes(status)) return false;

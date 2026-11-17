@@ -24,14 +24,23 @@
  * one message twice; a claimed row whose run died is retried after
  * locked_until. A channel whose transport is «disabled» (production with no
  * provider yet) is not claimed at all: its rows wait, nothing is lost.
+ *
+ * Push (Phase B, B5): rows to one login each (user_id; src/lib/push.ts),
+ * claimed only when the VAPID keys are set. Their text is built at send time
+ * in that login's language (src/lib/push-kinds.ts); a push more than two
+ * hours late is dropped, not sent. From 20:00 the cron also queues each
+ * login's plan for tomorrow (planEveningPush), once per day.
  */
+import { after } from "next/server";
 import { getBusinessById } from "./availability";
-import type { Querier } from "./db";
+import { query, type Querier } from "./db";
 import { emailTransport, sendEmail, type LetterBody } from "./email";
 import { confirmationLetter, visitLetter } from "./letters";
+import { pushConfigured, sendPushToUser, type PushSendResult } from "./push";
+import { DEFAULT_ON, pushText, type PushText } from "./push-kinds";
 import { siteUrl } from "./site";
 import { sendSms, smsSegments, smsTransport } from "./sms";
-import { localParts } from "./tz";
+import { addDays, localParts, startOfDay } from "./tz";
 import { mintVisitLink, visitById } from "./visits";
 
 type Env = Record<string, string | undefined>;
@@ -49,6 +58,10 @@ export const OUTBOX = {
   planAheadHours: 48,
   /** a reminder is not sent closer to the visit than this */
   reminderMinLeadMin: 15,
+  /** a push this late is dropped: old news on a lock screen confuses */
+  pushStaleMin: 120,
+  /** the salon's local time from which tomorrow's plan goes out */
+  planAt: "20:00",
 };
 
 export type OutboxRow = {
@@ -149,6 +162,7 @@ function enabledChannels(env: Env): Channel[] {
   const channels: Channel[] = [];
   if (smsTransport(env) !== "disabled") channels.push("sms");
   if (emailTransport(env) !== "disabled") channels.push("email");
+  if (pushConfigured(env)) channels.push("push");
   return channels;
 }
 
@@ -189,16 +203,19 @@ export function messageText(row: Pick<OutboxRow, "kind" | "locale" | "payload">,
 export type Senders = {
   sms: typeof sendSms;
   email: typeof sendEmail;
+  /** optional: left out, the real one is used */
+  push?: (q: Querier, userId: string, msg: PushText, env: Env) => Promise<PushSendResult>;
 };
 
 export type OutboxResult = { planned: number; cancelled: number; sent: number; retry: number; failed: number; skipped: number; waiting: number };
 
-type Composed = { skip: string } | { subject: string; body: string | LetterBody };
+type Composed = { skip: string } | { subject: string; body: string | LetterBody } | { push: PushText };
 
 const LIVE = new Set(["booked", "pending"]);
 
 /** What a claimed row sends, built now; or why it is not sent at all. */
 async function compose(q: Querier, row: OutboxRow, now: number, env: Env): Promise<Composed> {
+  if (row.channel === "push") return composePush(q, row, now);
   const p = row.payload as { startsAt?: string; subject?: string };
   if (row.kind === "confirmation" && row.channel === "email") {
     const v = row.appointment_id ? await visitById(q, row.appointment_id) : null;
@@ -253,6 +270,7 @@ const emptyResult = (): OutboxResult => ({ planned: 0, cancelled: 0, sent: 0, re
 export async function runOutbox(q: Querier, now = Date.now(), env: Env = process.env, senders: Senders = { sms: sendSms, email: sendEmail }): Promise<OutboxResult> {
   const plan = await planReminders(q, now);
   const res: OutboxResult = { ...emptyResult(), planned: plan.added, cancelled: plan.cancelled };
+  if (pushConfigured(env)) res.planned += await planEveningPush(q, now);
   await deliver(q, await claimDue(q, enabledChannels(env), now), now, env, senders, res);
   const [w] = await q<{ n: number }>(`select count(*)::int as n from notifications where status = 'queued' and send_at <= $1`, [new Date(now)]);
   res.waiting = w.n;
@@ -278,13 +296,25 @@ async function deliver(q: Querier, rows: OutboxRow[], now: number, env: Env, sen
         res.skipped++;
         continue;
       }
-      if (row.channel === "sms") {
+      if (row.channel === "sms" && "body" in msg) {
         const r = await senders.sms(row.recipient, typeof msg.body === "string" ? msg.body : msg.body.text, env);
         await q(
           `update notifications set status = 'sent', sent_at = $2, provider = $3, provider_ref = $4, segments = $5, locked_until = null, last_error = null where id = $1`,
           [row.id, new Date(now), r.provider, r.ref, r.segments],
         );
-      } else if (row.channel === "email") {
+      } else if (row.channel === "push" && "push" in msg) {
+        const r = await (senders.push ?? sendPushToUser)(q, row.recipient, msg.push, env);
+        if (!r.devices) {
+          await q(`update notifications set status = 'skipped', locked_until = null, last_error = 'no phone' where id = $1`, [row.id]);
+          res.skipped++;
+          continue;
+        }
+        await q(`update notifications set status = 'sent', sent_at = $2, provider = 'webpush', provider_ref = $3, locked_until = null, last_error = null where id = $1`, [
+          row.id,
+          new Date(now),
+          `${r.sent}/${r.devices}`,
+        ]);
+      } else if (row.channel === "email" && "subject" in msg) {
         const r = await senders.email(row.recipient, msg.subject, msg.body, env);
         await q(`update notifications set status = 'sent', sent_at = $2, provider = $3, provider_ref = $4, locked_until = null, last_error = null where id = $1`, [
           row.id,
@@ -308,5 +338,104 @@ async function deliver(q: Querier, rows: OutboxRow[], now: number, env: Env, sen
         res.retry++;
       }
     }
+  }
+}
+
+/* ---------- push (Phase B, B5) ---------- */
+
+const VISIT_KINDS = new Set(["visit_new", "visit_moved", "own_online"]);
+
+/** A push row's words, built now; or why it is not sent. */
+async function composePush(q: Querier, row: OutboxRow, now: number): Promise<Composed> {
+  if (now - new Date(row.send_at).getTime() > OUTBOX.pushStaleMin * 60_000) return { skip: "stale" };
+  let payload = row.payload;
+  if (VISIT_KINDS.has(row.kind) && row.appointment_id) {
+    // a visit cancelled since: no «new visit» about it
+    const [a] = await q<{ status: string }>("select status from appointments where id = $1", [row.appointment_id]);
+    if (!a || a.status === "cancelled") return { skip: "visit cancelled" };
+  }
+  if (row.kind === "day_plan" || row.kind === "own_plan") {
+    // the plan as it is when it goes, not when it was queued
+    const p = row.payload as { date?: string; tz?: string; staffId?: string | null };
+    if (!p.date || !p.tz) return { skip: "no date" };
+    const from = new Date(startOfDay(p.date, p.tz));
+    const to = new Date(startOfDay(addDays(p.date, 1), p.tz));
+    if (row.kind === "day_plan") {
+      const [d] = await q<{ n: number; first: Date | null; total: number }>(
+        `select count(*)::int as n, min(starts_at) as first, coalesce(sum(total_cents), 0)::int as total
+           from appointments where staff_id = $1 and status in ('pending', 'booked') and starts_at >= $2 and starts_at < $3`,
+        [p.staffId, from, to],
+      );
+      payload = { ...p, count: d.n, firstAt: d.first ? new Date(d.first).toISOString() : null, totalCents: d.total };
+    } else {
+      const per = await q<{ name: string; n: number }>(
+        `select s.display_name as name, count(*)::int as n
+           from appointments a join staff s on s.id = a.staff_id
+          where a.business_id = $1 and a.status in ('pending', 'booked') and a.starts_at >= $2 and a.starts_at < $3
+          group by s.display_name, s.sort order by s.sort, s.display_name`,
+        [row.business_id, from, to],
+      );
+      payload = { ...p, count: per.reduce((n, s) => n + s.n, 0), perStaff: per };
+    }
+  }
+  const text = pushText(row.kind, payload, row.locale);
+  return text ? { push: text } : { skip: "no text" };
+}
+
+/**
+ * Tomorrow's plan, once a day from 20:00 on the salon's clock: each login
+ * with a column its own day, Renat and the front desk the salon's (Renat,
+ * who cuts too, may get both). Only logins with a live phone that want it;
+ * the unique index (008_push.sql) keeps each to one.
+ */
+export async function planEveningPush(q: Querier, now = Date.now()): Promise<number> {
+  let added = 0;
+  for (const b of await q<{ id: string; timezone: string }>("select id, timezone from businesses")) {
+    const local = localParts(now, b.timezone);
+    if (local.time < OUTBOX.planAt) continue;
+    const date = addDays(local.date, 1);
+    const rows = await q<{ id: string }>(
+      `insert into notifications (business_id, channel, kind, recipient, user_id, locale, payload, send_at)
+       select u.business_id, 'push', k.kind, u.id::text, u.id, u.locale,
+              jsonb_build_object('date', $2::text, 'tz', $3::text, 'staffId', u.staff_id), $4
+         from users u
+         cross join lateral (values ('day_plan', u.staff_id is not null), ('own_plan', u.role <> 'staff')) k(kind, fits)
+        where u.business_id = $1 and u.active and k.fits
+          and coalesce((u.notify ->> k.kind)::boolean, case when k.kind = 'day_plan' then $5::boolean else $6::boolean end)
+          and exists (select 1 from push_subscriptions p where p.user_id = u.id and p.retired_at is null)
+       on conflict (user_id, kind, (payload->>'date')) where kind in ('day_plan', 'own_plan') do nothing
+       returning id`,
+      [b.id, date, b.timezone, new Date(now), DEFAULT_ON.day_plan, DEFAULT_ON.own_plan],
+    );
+    added += rows.length;
+  }
+  return added;
+}
+
+/** Send the push rows that are due now. */
+export async function sendDuePush(q: Querier, now = Date.now(), env: Env = process.env, senders: Senders = { sms: sendSms, email: sendEmail }): Promise<OutboxResult> {
+  const res = emptyResult();
+  if (!pushConfigured(env)) return res;
+  await deliver(q, await claimDue(q, ["push"], now), now, env, senders, res);
+  return res;
+}
+
+/**
+ * After a change in the admin or the barber app: send its push right after
+ * the response instead of at the next cron run. Outside a request (tests,
+ * scripts) it does nothing; the cron sends it.
+ */
+export function sendPushSoon(): void {
+  if (!pushConfigured()) return;
+  try {
+    after(async () => {
+      try {
+        await sendDuePush(query);
+      } catch (err) {
+        console.error("[push] send after the change failed:", err instanceof Error ? err.message : err);
+      }
+    });
+  } catch {
+    /* not in a request: the cron sends it */
   }
 }

@@ -148,3 +148,12 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-wk-list b { font-variant-numeric: tabular-nums; }
 .bx-wk-list small { color: var(--dim); font-size: 13px; }
 .bx-wk-list .is-ns { text-decoration: line-through; color: var(--dim); }
+
+/* ---------- notifications (B5) ---------- */
+.bx-hint { margin: 0; padding: 10px 12px; border-left: 2px solid var(--warn); color: var(--fg); font-size: 14px; }
+.bx-hint a { color: var(--lime); }
+.bx-on { margin: 0; color: var(--lime); font-size: 15px; }
+.bx-kinds { margin: 4px 0 0; padding: 0; border: 0; display: flex; flex-direction: column; }
+.bx-kinds legend { margin-bottom: 6px; }
+.bx-kind { justify-content: space-between; border-top: 1px solid var(--line); padding: 4px 0; }
+.bx-kind span { flex: 1; min-width: 0; }
