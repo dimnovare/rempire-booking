@@ -44,7 +44,7 @@ export async function addUser(form: FormData): Promise<{ ok: true } | { ok: fals
 export async function toggleUser(id: string, active: boolean): Promise<boolean> {
   const { user, business } = await requireOwner();
   if (!isUuid(id) || id === user.id) return false;
-  await setUserActive(query, business.id, id, active === true);
+  if (!(await setUserActive(query, business.id, id, active === true))) return false;
   refresh();
   return true;
 }

@@ -164,9 +164,12 @@ export async function createUser(q: Querier, businessId: string, input: UserInpu
 }
 
 /** Switch a login on or off. Off ends its sessions. */
-export async function setUserActive(q: Querier, businessId: string, userId: string, active: boolean): Promise<void> {
-  await q("update users set active = $3, updated_at = now() where id = $1 and business_id = $2", [userId, businessId, active]);
+/** Switch a login of this business on or off; off ends its sessions. False if no such login here. */
+export async function setUserActive(q: Querier, businessId: string, userId: string, active: boolean): Promise<boolean> {
+  const hit = await q<{ id: string }>("update users set active = $3, updated_at = now() where id = $1 and business_id = $2 returning id", [userId, businessId, active]);
+  if (!hit.length) return false;
   if (!active) await revokeOtherSessions(q, userId, null);
+  return true;
 }
 
 export type UserListItem = { id: string; email: string; name: string; role: Role; staffId: string | null; active: boolean; hasPassword: boolean; lastLoginAt: string | null };

@@ -69,7 +69,10 @@ describe("password login", () => {
   it("a switched-off login cannot log in, and its sessions end", async () => {
     const id = await owner();
     const token = await createSession(query, id);
-    await setUserActive(query, demo.business.id, id, false);
+    // another business cannot touch it, not even its sessions
+    expect(await setUserActive(query, "00000000-0000-4000-8000-000000000000", id, false)).toBe(false);
+    expect(await readSession(query, token)).not.toBeNull();
+    expect(await setUserActive(query, demo.business.id, id, false)).toBe(true);
     expect(await readSession(query, token)).toBeNull();
     expect(await loginWithPassword(query, "owner@example.test", PW, IP)).toEqual({ ok: false, code: "bad" });
   });
