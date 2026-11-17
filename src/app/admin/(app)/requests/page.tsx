@@ -14,7 +14,7 @@ import { RequestsView } from "./requests-view";
 
 export default function RequestsPage() {
   return (
-    <main className="adm-page">
+    <main className="adm-page adm-wide">
       <Suspense fallback={<Wait />}>
         <Loaded />
       </Suspense>

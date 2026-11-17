@@ -286,7 +286,6 @@ export const et: typeof ru = {
     now: "Kohe",
     ask: "Minu loal",
     switchHint: "«Minu loal»: muudatus ootab siin, barber saab vastuse tõukega. Ootel puhkus on veebibroneeringule juba suletud.",
-    switched: "Salvestatud",
     open: "Ootavad vastust",
     none: "Uusi taotlusi pole.",
     recent: "14 päeva",

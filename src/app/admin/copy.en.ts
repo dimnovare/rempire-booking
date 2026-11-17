@@ -284,7 +284,6 @@ export const en: typeof ru = {
     now: "At once",
     ask: "With my OK",
     switchHint: "«With my OK»: the change waits here and the barber gets the answer by push. A vacation that waits is already closed to online booking.",
-    switched: "Saved",
     open: "Waiting",
     none: "No new requests.",
     recent: "Last 14 days",

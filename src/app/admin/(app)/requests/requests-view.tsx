@@ -5,6 +5,7 @@ import type { RequestRow } from "@/lib/barber/requests";
 import { requestWords } from "@/lib/barber/request-words";
 import type { SelfKey, SelfMode } from "@/lib/settings";
 import { useA } from "../../lang";
+import { SaveState, useAutoSave } from "../autosave";
 import { answer, setSelf } from "./actions";
 
 type Toast = { text: string; bad?: boolean };
@@ -28,7 +29,7 @@ export function RequestsView({ open, recent, owner, modes, tz }: { open: Request
 
   return (
     <div className="adm-cards">
-      {owner && <Switches modes={modes} onToast={setToast} />}
+      {owner && <Switches modes={modes} />}
 
       <section className="adm-card">
         <h2 className="adm-card-h">
@@ -114,7 +115,7 @@ function OpenRow({ r, tz, when, onToast }: { r: RequestRow; tz: string; when: st
           <button type="button" className="adm-btn adm-btn-lime adm-btn-auto" disabled={busy} onClick={() => void go("approved")}>
             {R.approve}
           </button>
-          <button type="button" className="adm-btn adm-btn-warn adm-btn-auto" disabled={busy} onClick={() => void go("declined")}>
+          <button type="button" className="adm-btn adm-btn-ghost adm-btn-auto" disabled={busy} onClick={() => void go("declined")}>
             {R.decline}
           </button>
         </div>
@@ -123,36 +124,20 @@ function OpenRow({ r, tz, when, onToast }: { r: RequestRow; tz: string; when: st
   );
 }
 
-function Switches({ modes, onToast }: { modes: Record<SelfKey, SelfMode>; onToast: (t: Toast) => void }) {
+/** Owner only: the two switches save by themselves, like the admin's other settings. */
+function Switches({ modes }: { modes: Record<SelfKey, SelfMode> }) {
   const A = useA();
   const R = A.req;
   const [now, setNow] = useState(modes);
-  const [busy, setBusy] = useState(false);
-  const flip = async (key: SelfKey, value: SelfMode) => {
-    if (now[key] === value) return;
-    const before = now;
-    setNow({ ...now, [key]: value });
-    setBusy(true);
-    try {
-      const ok = await setSelf(key, value);
-      if (ok) onToast({ text: R.switched });
-      else {
-        setNow(before);
-        onToast({ text: A.error, bad: true });
-      }
-    } catch {
-      setNow(before);
-      onToast({ text: A.error, bad: true });
-    } finally {
-      setBusy(false);
-    }
-  };
+  const auto = useAutoSave(now, setNow, async (v) => (await setSelf("barber_self_time", v.barber_self_time)) && (await setSelf("barber_self_price", v.barber_self_price)), {
+    label: R.switches,
+  });
   const row = (key: SelfKey, label: string) => (
     <div className="adm-field">
       <span>{label}</span>
       <div className="adm-seg adm-seg-wide" role="group" aria-label={label}>
         {(["now", "ask"] as const).map((v) => (
-          <button key={v} type="button" aria-pressed={now[key] === v} disabled={busy} onClick={() => void flip(key, v)}>
+          <button key={v} type="button" aria-pressed={now[key] === v} onClick={() => setNow({ ...now, [key]: v })}>
             {R[v]}
           </button>
         ))}
@@ -165,6 +150,7 @@ function Switches({ modes, onToast }: { modes: Record<SelfKey, SelfMode>; onToas
       {row("barber_self_time", R.time)}
       {row("barber_self_price", R.price)}
       <p className="adm-meta">{R.switchHint}</p>
+      <SaveState auto={auto} />
     </section>
   );
 }
