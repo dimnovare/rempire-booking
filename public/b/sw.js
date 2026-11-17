@@ -17,8 +17,12 @@
  *      page cache (src/app/b/(app)/more).
  *
  * Bump VERSION when this file changes in a way that needs the old caches gone.
+ *
+ * In `next dev` it is registered as sw.js?dev=1 and caches nothing: dev
+ * build files keep their names while their content changes.
  */
-var VERSION = "b1";
+var VERSION = "b2";
+var DEV = new URL(self.location.href).searchParams.get("dev") === "1";
 var PAGES = "rb-pages-" + VERSION;
 var STATIC = "rb-static-" + VERSION;
 var STATIC_MAX = 200;
@@ -47,7 +51,7 @@ self.addEventListener("activate", function (event) {
         return Promise.all(
           keys
             .filter(function (k) {
-              return k.indexOf("rb-") === 0 && k !== PAGES && k !== STATIC;
+              return k.indexOf("rb-") === 0 && (DEV || (k !== PAGES && k !== STATIC));
             })
             .map(function (k) {
               return caches.delete(k);
@@ -77,7 +81,7 @@ function trim(cache) {
 
 self.addEventListener("fetch", function (event) {
   var req = event.request;
-  if (req.method !== "GET") return;
+  if (DEV || req.method !== "GET") return;
   var url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 

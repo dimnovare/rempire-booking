@@ -1,15 +1,9 @@
 /**
- * The barber app's own account bits: the login's language and, for Renat
- * and the front desk, the barbers to look at. No Next.js here.
+ * The barber app's own account bits: for Renat and the front desk, the
+ * barbers to look at. No Next.js here. (The login's language:
+ * lib/auth/locale.ts.)
  */
 import type { Querier } from "../db";
-import { isLocale } from "../i18n";
-
-export async function setLoginLocale(q: Querier, businessId: string, userId: string, locale: string): Promise<boolean> {
-  if (!isLocale(locale)) return false;
-  const rows = await q<{ id: string }>("update users set locale = $3, updated_at = now() where id = $1 and business_id = $2 returning id", [userId, businessId, locale]);
-  return rows.length > 0;
-}
 
 export type PickStaff = { id: string; name: string; photoUrl: string | null; active: boolean };
 

@@ -49,3 +49,6 @@ export function dateWords(date: string, lang: Locale, o: Intl.DateTimeFormatOpti
 
 /** «17.11» */
 export const ddmm = (date: string) => `${date.slice(8, 10)}.${date.slice(5, 7)}`;
+
+/** «вт, 17 ноября» → «Вт, 17 ноября» */
+export const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

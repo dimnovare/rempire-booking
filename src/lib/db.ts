@@ -145,8 +145,13 @@ async function makePglite(): Promise<Raw> {
       await seedDemo(db);
       await seedDemoSpecial(db);
       await seedOwnerQa(db, [...OWNER_QA, DEMO_QA]);
-      // a local run: logins at example.test, by e-mail code (tools/seed-demo.mjs)
-      if (process.env.DEMO_LOGINS === "yes") await (await import("../../tools/seed-demo.mjs")).seedDemoLogins(db);
+      // a local run: logins at example.test, by e-mail code, and fake visits
+      // for today and tomorrow (tools/seed-demo.mjs)
+      if (process.env.DEMO_LOGINS === "yes") {
+        const local = await import("../../tools/seed-demo.mjs");
+        await local.seedDemoLogins(db);
+        await local.seedDemoVisits(db);
+      }
     }
     // the first owner login, from ADMIN_BOOTSTRAP_* (a local run)
     const { bootstrapOwner } = await import("../../tools/bootstrap-owner.mjs");

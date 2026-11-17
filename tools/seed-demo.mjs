@@ -175,6 +175,118 @@ export async function seedOwnerQa(db, forms = OWNER_QA) {
  * DEMO_LOGINS=yes); never a real one.
  * @param {{query: (sql: string, params?: unknown[]) => Promise<{rows: any[]}>}} db
  */
+/**
+ * Example visits for a LOCAL run only (DEMO_LOGINS=yes, src/lib/db.ts), so
+ * the barber app has a day to show: each barber, today and tomorrow, five
+ * visits and a lunch break, plus one client in 20 minutes. Fake clients («Demo client N», +372 5555 09xx),
+ * never staging and never tests.
+ */
+export const DEMO_VISITS = [
+  { at: "10:00", svc: "clip", src: "online", comment: "Покороче по бокам" },
+  { at: "11:00", svc: "cutbeard", src: "admin" },
+  { at: "14:30", svc: "buzz", src: "online" },
+  { at: "16:00", svc: "beard", src: "admin", noPhone: true },
+  { at: "17:30", svc: "kid", src: "online" },
+];
+
+/** @param {{query: (sql: string, params?: unknown[]) => Promise<{rows: any[]}>}} db */
+export async function seedDemoVisits(db, now = Date.now()) {
+  const tz = DEMO.business.timezone;
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  const [y, m, d] = today.split("-").map(Number);
+  const [biz] = (await db.query("select id from businesses where slug = $1", [DEMO.business.slug])).rows;
+  if (!biz) return 0;
+  let added = 0;
+  let k = 0;
+  for (let i = 0; i < 2; i++) {
+    const date = new Date(Date.UTC(y, m - 1, d + i)).toISOString().slice(0, 10);
+    for (const st of DEMO.staff) {
+      const staffId = demoId("staff", st.slug);
+      await db.query(
+        `insert into time_off (id, staff_id, starts_at, ends_at, kind, status, note)
+         values ($1, $2, ($3::date + '13:00'::time) at time zone $4, ($3::date + '14:00'::time) at time zone $4, 'block', 'approved', 'обед')
+         on conflict (id) do nothing`,
+        [demoId("block", `${st.slug}:${date}`), staffId, date, tz],
+      );
+      for (const v of DEMO_VISITS) {
+        k++;
+        const [line] = (
+          await db.query(
+            `select sv.id, sv.name, coalesce(ss.duration_min, sv.duration_min) as dur, coalesce(ss.price_cents, sv.price_cents) as price, sv.buffer_after_min as buf
+               from services sv join staff_services ss on ss.service_id = sv.id and ss.staff_id = $1 and ss.active
+              where sv.slug = $2`,
+            [staffId, v.svc],
+          )
+        ).rows;
+        if (!line) continue;
+        const phone = v.noPhone ? null : `+37255550${String(900 + (k % 100)).padStart(3, "0")}`;
+        const [client] = (
+          await db.query(
+            `insert into clients (id, business_id, name, phone_e164, source) values ($1, $2, $3, $4, 'admin')
+             on conflict (id) do update set updated_at = now() returning id`,
+            [demoId("client", String(k)), biz.id, `Demo client ${k}`, phone],
+          )
+        ).rows;
+        const id = demoId("visit", `${st.slug}:${date}:${v.at}`);
+        const r = await db.query(
+          `insert into appointments (id, business_id, location_id, staff_id, client_id, starts_at, ends_at, blocked_until, source, client_comment, reminder_min, total_cents)
+           select $1, $2, s.location_id, s.id, $3,
+                  ($4::date + $5::time) at time zone $6,
+                  ($4::date + $5::time) at time zone $6 + make_interval(mins => $7),
+                  ($4::date + $5::time) at time zone $6 + make_interval(mins => $7 + $8),
+                  $9, $10, $11, $12
+             from staff s where s.id = $13
+           on conflict (id) do nothing returning id`,
+          [id, biz.id, client.id, date, v.at, tz, line.dur, line.buf, v.src, v.comment ?? "", phone ? 120 : null, line.price, staffId],
+        );
+        if (!r.rows.length) continue;
+        await db.query(
+          "insert into appointment_services (appointment_id, position, service_id, name, duration_min, price_cents) values ($1, 0, $2, $3::jsonb, $4, $5)",
+          [id, line.id, JSON.stringify(line.name), line.dur, line.price],
+        );
+        added++;
+      }
+    }
+  }
+  // and one client in 20 minutes for each barber, so «Дальше» shows whenever the app starts
+  const soon = Math.ceil((now + 20 * 60_000) / 300_000) * 300_000;
+  for (const st of DEMO.staff) {
+    k++;
+    const staffId = demoId("staff", st.slug);
+    const [line] = (
+      await db.query(
+        `select sv.id, sv.name, coalesce(ss.duration_min, sv.duration_min) as dur, coalesce(ss.price_cents, sv.price_cents) as price, sv.buffer_after_min as buf
+           from services sv join staff_services ss on ss.service_id = sv.id and ss.staff_id = $1 and ss.active where sv.slug = 'buzz'`,
+        [staffId],
+      )
+    ).rows;
+    if (!line) continue;
+    const [client] = (
+      await db.query(
+        "insert into clients (business_id, name, phone_e164, source) values ($1, $2, $3, 'admin') on conflict (business_id, phone_e164) do update set updated_at = now() returning id",
+        [biz.id, `Demo client ${k}`, `+37255550${800 + k}`],
+      )
+    ).rows;
+    const from = new Date(soon);
+    const to = new Date(soon + line.dur * 60_000);
+    const r = await db.query(
+      `insert into appointments (business_id, location_id, staff_id, client_id, starts_at, ends_at, blocked_until, source, reminder_min, total_cents)
+       select $1, s.location_id, s.id, $2, $3, $4, $5, 'online', 120, $6 from staff s
+        where s.id = $7 and not exists (
+          select 1 from appointments a where a.staff_id = s.id and a.status <> 'cancelled' and tstzrange(a.starts_at, a.blocked_until) && tstzrange($3, $5))
+       returning id`,
+      [biz.id, client.id, from, to, new Date(to.getTime() + line.buf * 60_000), line.price, staffId],
+    );
+    if (!r.rows.length) continue;
+    await db.query(
+      "insert into appointment_services (appointment_id, position, service_id, name, duration_min, price_cents) values ($1, 0, $2, $3::jsonb, $4, $5)",
+      [r.rows[0].id, line.id, JSON.stringify(line.name), line.dur, line.price],
+    );
+    added++;
+  }
+  return added;
+}
+
 export async function seedDemoLogins(db) {
   const [biz] = (await db.query("select id from businesses where slug = $1", [DEMO.business.slug])).rows;
   if (!biz) return 0;

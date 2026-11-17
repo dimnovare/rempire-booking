@@ -1,0 +1,130 @@
+/**
+ * The barber's own day and week (B2): only his column leaves the database,
+ * the free time, the money, and a status change scoped to his own visits.
+ * Fake people only.
+ */
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { weekStart } from "@/lib/admin/grid";
+import { adminCreateVisit, adminSetStatus, addTimeOff, type AdminVisitInput } from "@/lib/admin/visits";
+import { loadBarberDays } from "@/lib/barber/day";
+import { coversDay, freeGaps, hoursText, nextVisit } from "@/lib/barber/gaps";
+import { closeDb, query } from "@/lib/db";
+import { zonedToUtc } from "@/lib/tz";
+import { freshDemo, type Demo } from "./helpers";
+
+const TZ = "Europe/Tallinn";
+const at = (date: string, time: string) => zonedToUtc(date, time, TZ);
+const TUE = "2026-11-17";
+const ACTOR = "test-admin";
+const MIN = 60_000;
+
+let demo: Demo;
+beforeEach(async () => {
+  demo = await freshDemo();
+});
+afterAll(closeDb);
+
+let n = 0;
+const visit = (staff: string, time: string, o: Partial<AdminVisitInput> = {}): AdminVisitInput => ({
+  staffId: demo.staff[staff],
+  start: at(TUE, time),
+  serviceIds: [demo.services.clip],
+  name: "Test Client",
+  phone: `+372 5555 0${300 + ++n}`,
+  smsReminder: true,
+  idempotencyKey: `barber-day-${n}-${Math.random()}`,
+  ...o,
+});
+
+async function book(staff: string, time: string, o: Partial<AdminVisitInput> = {}) {
+  const r = await adminCreateVisit(demo.business, visit(staff, time, o), ACTOR);
+  if (!r.ok) throw new Error(`booking failed: ${r.code}`);
+  return r;
+}
+
+describe("barber day: his own column only", () => {
+  it("loads his visits, blocks and hours, never another barber's", async () => {
+    const mine = await book("renat", "12:00");
+    await book("jevgeni", "12:00");
+    await book("jevgeni", "15:00");
+    await addTimeOff(demo.business, { staffId: demo.staff.jevgeni, from: at(TUE, "13:00"), to: at(TUE, "14:00"), kind: "block" }, ACTOR);
+    await addTimeOff(demo.business, { staffId: demo.staff.renat, from: at(TUE, "16:00"), to: at(TUE, "16:30"), kind: "block", note: "coffee" }, ACTOR);
+
+    const [day] = await loadBarberDays(query, demo.business, demo.staff.renat, TUE, 1);
+    expect(day.date).toBe(TUE);
+    expect(day.visits.map((v) => v.id)).toEqual([mine.id]);
+    expect(day.visits[0]).toMatchObject({ clientName: "Test Client", status: "booked", source: "admin", totalCents: mine.totalCents });
+    expect(day.visits[0].clientPhone).toMatch(/^\+3725555/);
+    expect(day.visits[0].services).toHaveLength(1);
+    expect(day.blocks).toEqual([expect.objectContaining({ kind: "block", note: "coffee" })]);
+    expect(hoursText(day.windows, TZ)).toBe("10:00–20:00");
+    expect(day.count).toBe(1);
+    expect(day.totalCents).toBe(mine.totalCents);
+  });
+
+  it("a week is seven days from Monday, a cancelled visit is left out, a no-show is not money", async () => {
+    const a = await book("renat", "10:00");
+    const b = await book("renat", "11:00");
+    const c = await book("renat", "12:00");
+    await query("update appointments set status = 'cancelled' where id = $1", [b.id]);
+    expect(await adminSetStatus(demo.business, c.id, "no_show", ACTOR)).toBe(true);
+    const days = await loadBarberDays(query, demo.business, demo.staff.renat, weekStart(TUE), 7);
+    expect(days.map((d) => d.date)).toEqual(["2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20", "2026-11-21", "2026-11-22"]);
+    const tue = days[1];
+    expect(tue.visits.map((v) => v.id)).toEqual([a.id, c.id]);
+    expect(tue.count).toBe(1);
+    expect(tue.totalCents).toBe(a.totalCents);
+    // Sunday: no hours in the demo
+    expect(days[6].windows).toEqual([]);
+  });
+
+  it("a vacation over the whole day shows as that, not as a block in the timeline", async () => {
+    await addTimeOff(demo.business, { staffId: demo.staff.renat, from: at("2026-11-16", "00:00"), to: at("2026-11-19", "00:00"), kind: "vacation" }, ACTOR);
+    const [day] = await loadBarberDays(query, demo.business, demo.staff.renat, TUE, 1);
+    expect(day.blocks).toHaveLength(1);
+    expect(coversDay(day.blocks[0], TUE, TZ)).toBe(true);
+    expect(freeGaps(day, { now: at("2026-11-01", "00:00"), stepMin: 15 })).toEqual([]);
+  });
+});
+
+describe("barber day: free time and the next client", () => {
+  it("is the hours minus visits (with their tidy-up) and blocks, from now on", async () => {
+    const v = await book("renat", "12:00");
+    await addTimeOff(demo.business, { staffId: demo.staff.renat, from: at(TUE, "14:00"), to: at(TUE, "15:00"), kind: "block" }, ACTOR);
+    const [day] = await loadBarberDays(query, demo.business, demo.staff.renat, TUE, 1);
+    const blockedUntil = day.visits[0].blockedUntil;
+    expect(blockedUntil).toBeGreaterThanOrEqual(v.end);
+
+    const early = freeGaps(day, { now: at(TUE, "08:00"), stepMin: 15 });
+    expect(early.map((g) => [g.from, g.to])).toEqual([
+      [at(TUE, "10:00"), at(TUE, "12:00")],
+      [blockedUntil, at(TUE, "14:00")],
+      [at(TUE, "15:00"), at(TUE, "20:00")],
+    ]);
+    // at 16:07 only what is still ahead, on the step grid
+    const late = freeGaps(day, { now: at(TUE, "16:07"), stepMin: 15 });
+    expect(late.map((g) => [g.from, g.to])).toEqual([[at(TUE, "16:15"), at(TUE, "20:00")]]);
+  });
+
+  it("puts the client in the chair first, then the next one", async () => {
+    const a = await book("renat", "12:00");
+    const b = await book("renat", "13:00");
+    const [day] = await loadBarberDays(query, demo.business, demo.staff.renat, TUE, 1);
+    expect(nextVisit(day.visits, at(TUE, "11:00"))?.id).toBe(a.id);
+    expect(nextVisit(day.visits, at(TUE, "12:30"))?.id).toBe(a.id);
+    expect(nextVisit(day.visits, a.end + MIN)?.id).toBe(b.id);
+    expect(nextVisit(day.visits, at(TUE, "19:00"))).toBeNull();
+  });
+});
+
+describe("status from the barber app", () => {
+  it("changes his own visit and refuses another barber's, whatever id the phone sends", async () => {
+    const mine = await book("renat", "12:00");
+    const theirs = await book("jevgeni", "12:00");
+    const scope = { onlyStaffId: demo.staff.renat };
+    expect(await adminSetStatus(demo.business, mine.id, "arrived", ACTOR, scope)).toBe(true);
+    expect(await adminSetStatus(demo.business, theirs.id, "arrived", ACTOR, scope)).toBe(false);
+    const rows = await query<{ id: string; status: string }>("select id, status from appointments where id = any($1::uuid[])", [[mine.id, theirs.id]]);
+    expect(Object.fromEntries(rows.map((r) => [r.id, r.status]))).toEqual({ [mine.id]: "arrived", [theirs.id]: "booked" });
+  });
+});

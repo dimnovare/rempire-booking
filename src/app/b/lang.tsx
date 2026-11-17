@@ -27,9 +27,18 @@ export function useLang(): Locale {
   return useContext(Lang);
 }
 
-/** The browser tab's title, in the app's language. */
+/**
+ * The browser tab's title, in the app's language. Set after every render:
+ * a refresh puts the layout's plain «REMPIRE» back.
+ */
 export function useTitle(title: string) {
   useEffect(() => {
-    if (title) document.title = `${title} · REMPIRE`;
-  }, [title]);
+    const want = `${title} · REMPIRE`;
+    if (title && document.title !== want) document.title = want;
+  });
+}
+
+/** «Загрузка…» while a page reads its data. */
+export function Wait() {
+  return <p className="adm-wait">{useB().loading}</p>;
 }

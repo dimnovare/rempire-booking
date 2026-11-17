@@ -9,7 +9,8 @@
  */
 import { useEffect } from "react";
 
-export const SW_URL = "/b/sw.js";
+// in `next dev` the worker caches nothing (public/b/sw.js)
+export const SW_URL = process.env.NODE_ENV === "production" ? "/b/sw.js" : "/b/sw.js?dev=1";
 export const SW_SCOPE = "/b";
 
 export function swRegistration(): Promise<ServiceWorkerRegistration | null> {

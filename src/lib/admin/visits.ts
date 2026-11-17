@@ -372,11 +372,19 @@ export async function adminCancelVisit(business: Business, id: string, actor: st
 export const VISIT_STATUSES = ["booked", "arrived", "done", "no_show"] as const;
 export type VisitStatus = (typeof VISIT_STATUSES)[number];
 
-export async function adminSetStatus(business: Business, id: string, status: string, actor: string): Promise<boolean> {
+/**
+ * What a change may touch. The barber app (Phase B) passes its barber's
+ * staff id: a visit in another column is «not found», checked under the
+ * row lock, whatever id the phone sent.
+ */
+export type Scope = { onlyStaffId?: string };
+
+export async function adminSetStatus(business: Business, id: string, status: string, actor: string, scope: Scope = {}): Promise<boolean> {
   if (!isUuid(id) || !(VISIT_STATUSES as readonly string[]).includes(status)) return false;
   return withTx(async (tx) => {
-    const [cur] = await tx<{ status: string }>("select status from appointments where id = $1 and business_id = $2 for update", [id, business.id]);
+    const [cur] = await tx<{ status: string; staff_id: string }>("select status, staff_id from appointments where id = $1 and business_id = $2 for update", [id, business.id]);
     if (!cur || cur.status === "cancelled") return false;
+    if (scope.onlyStaffId && cur.staff_id !== scope.onlyStaffId) return false;
     if (cur.status === status) return true;
     await tx("update appointments set status = $2, updated_at = now() where id = $1", [id, status]);
     await audit(tx, actor, id, "status", { status: cur.status }, { status });
