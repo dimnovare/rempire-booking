@@ -9,7 +9,7 @@ import { adminCancelVisit, adminCreateVisit, adminUpdateVisit, type AdminVisitIn
 import { book, type BookingInput } from "@/lib/booking";
 import { closeDb, query } from "@/lib/db";
 import { OUTBOX, planEveningPush, runOutbox, type Senders } from "@/lib/outbox";
-import { cleanSubscription, pushConfigured, queuePush, saveSubscription, setNotify } from "@/lib/push";
+import { cleanSubscription, pushConfigured, queuePush, removeSubscription, saveSubscription, sendPushToUser, setNotify } from "@/lib/push";
 import { DEFAULT_ON, kindsFor, OWNER_KINDS, pushText, safeClient, wants, type PushText } from "@/lib/push-kinds";
 import { sendEmail } from "@/lib/email";
 import { sendSms } from "@/lib/sms";
@@ -203,9 +203,38 @@ describe("push: subscriptions", () => {
     const keys = { p256dh: "BAbc", auth: "xyz" };
     expect(cleanSubscription({ endpoint: "https://web.push.apple.com/abcdef", keys })).toMatchObject({ endpoint: "https://web.push.apple.com/abcdef", ...keys, label: "" });
     expect(cleanSubscription({ endpoint: "https://fcm.googleapis.com/fcm/send/x", ...keys }, "Android")).toMatchObject({ label: "Android" });
+    expect(cleanSubscription({ endpoint: "https://updates.push.services.mozilla.com/wpush/v2/x", keys })).not.toBeNull();
+    expect(cleanSubscription({ endpoint: "https://wns2-par02p.notify.windows.com/w/?token=x", keys })).not.toBeNull();
     expect(cleanSubscription({ endpoint: "http://insecure.example.test/abcdefgh", keys })).toBeNull();
+    // the server POSTs to it: never another host, an IP, a port or a login in the address
+    for (const endpoint of [
+      "https://evil.example.test/fcm/send/abcdef",
+      "https://169.254.169.254/latest/meta-data",
+      "https://fcm.googleapis.com.evil.example.test/x",
+      "https://fcm.googleapis.com:8443/fcm/send/abcdef",
+      "https://user:pw@fcm.googleapis.com/fcm/send/abcdef",
+      "https://localhost/fcm/send/abcdefgh",
+    ]) {
+      expect(cleanSubscription({ endpoint, keys }), endpoint).toBeNull();
+    }
     expect(cleanSubscription({ endpoint: "https://x.test/1", keys: {} })).toBeNull();
     expect(cleanSubscription("nope")).toBeNull();
+  });
+
+  it("a saved row that is not a push service is retired, never called", async () => {
+    const r = await sendPushToUser(query, ids.valentin, { title: "t", body: "b", url: "/b", tag: "t" }, ENV);
+    expect(r).toEqual({ devices: 1, sent: 0, failed: 0, gone: 1 });
+    const [row] = await query<{ retired_reason: string }>("select retired_reason from push_subscriptions where user_id = $1", [ids.valentin]);
+    expect(row.retired_reason).toBe("gone");
+  });
+
+  it("a login switched off, or a phone logged out, gets nothing more", async () => {
+    await query("update users set active = false where id = $1", [ids.valentin]);
+    expect(await sendPushToUser(query, ids.valentin, { title: "t", body: "b", url: "/b", tag: "t" }, ENV)).toEqual({ devices: 0, sent: 0, failed: 0, gone: 0 });
+    expect(await removeSubscription(query, ids.jevgeni, "https://push.example.test/jevgeni@example.test", "logout")).toBe(true);
+    expect(await removeSubscription(query, ids.jevgeni, "https://push.example.test/jevgeni@example.test", "logout")).toBe(false);
+    const [row] = await query<{ retired_reason: string }>("select retired_reason from push_subscriptions where user_id = $1", [ids.jevgeni]);
+    expect(row.retired_reason).toBe("logout");
   });
 
   it("one phone, one login: subscribing again from another login moves it", async () => {

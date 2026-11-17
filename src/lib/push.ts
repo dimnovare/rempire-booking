@@ -49,7 +49,25 @@ const MAX_ENDPOINT = 2000;
 const MAX_KEY = 255;
 const MAX_LABEL = 100;
 
-/** A browser's PushSubscription (nested or flat keys) → a row, or null. https only. */
+/**
+ * The browsers' push services. The server POSTs to whatever endpoint a login
+ * saved, so only these hosts are taken: never an address of our own network
+ * or anyone else's (SSRF). Chrome, Edge (Chromium), Samsung, Opera: FCM;
+ * Safari and iPhone: Apple; Firefox: Mozilla; old Edge: Windows (WNS).
+ */
+const PUSH_HOSTS = [/^fcm\.googleapis\.com$/, /^(?:[a-z0-9-]+\.)*push\.apple\.com$/, /^(?:[a-z0-9-]+\.)*push\.services\.mozilla\.com$/, /^[a-z0-9-]+\.notify\.windows\.com$/];
+
+export function isPushEndpoint(endpoint: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  return u.protocol === "https:" && !u.port && !u.username && !u.password && PUSH_HOSTS.some((re) => re.test(u.hostname));
+}
+
+/** A browser's PushSubscription (nested or flat keys) → a row, or null. A known push service only. */
 export function cleanSubscription(raw: unknown, label?: unknown): PushSubscriptionInput | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const body = raw as { endpoint?: unknown; keys?: unknown; p256dh?: unknown; auth?: unknown };
@@ -59,11 +77,7 @@ export function cleanSubscription(raw: unknown, label?: unknown): PushSubscripti
   const auth = typeof keys.auth === "string" ? keys.auth.trim() : "";
   if (!endpoint || !p256dh || !auth) return null;
   if (endpoint.length < 20 || endpoint.length > MAX_ENDPOINT || p256dh.length > MAX_KEY || auth.length > MAX_KEY) return null;
-  try {
-    if (new URL(endpoint).protocol !== "https:") return null;
-  } catch {
-    return null;
-  }
+  if (!isPushEndpoint(endpoint)) return null;
   return { endpoint, p256dh, auth, label: typeof label === "string" ? label.trim().slice(0, MAX_LABEL) : "" };
 }
 
@@ -83,11 +97,15 @@ export async function saveSubscription(q: Querier, userId: string, s: PushSubscr
   );
 }
 
-/** Turn this phone off for this login. False when it was not on. */
-export async function removeSubscription(q: Querier, userId: string, endpoint: string): Promise<boolean> {
+/**
+ * Turn this phone off for this login: switched off in «Ещё», or logged out
+ * (a phone that left the app never gets a client's name again). False when
+ * it was not on.
+ */
+export async function removeSubscription(q: Querier, userId: string, endpoint: string, reason: "user" | "logout" = "user"): Promise<boolean> {
   const rows = await q<{ endpoint: string }>(
-    "update push_subscriptions set retired_at = now(), retired_reason = 'user' where endpoint = $1 and user_id = $2 and retired_at is null returning endpoint",
-    [String(endpoint).slice(0, MAX_ENDPOINT), userId],
+    "update push_subscriptions set retired_at = now(), retired_reason = $3 where endpoint = $1 and user_id = $2 and retired_at is null returning endpoint",
+    [String(endpoint).slice(0, MAX_ENDPOINT), userId, reason],
   );
   return rows.length > 0;
 }
@@ -228,8 +246,10 @@ export type PushSendResult = { devices: number; sent: number; failed: number; go
 export async function sendPushToUser(q: Querier, userId: string, msg: PushText, env: Env = process.env): Promise<PushSendResult> {
   const details = vapid(env);
   if (!details) throw new Error("push is not configured");
+  // a login switched off since the push was queued gets nothing
   const subs = await q<{ endpoint: string; p256dh: string; auth: string }>(
-    "select endpoint, p256dh, auth from push_subscriptions where user_id = $1 and retired_at is null order by created_at",
+    `select p.endpoint, p.p256dh, p.auth from push_subscriptions p join users u on u.id = p.user_id
+      where p.user_id = $1 and p.retired_at is null and u.active order by p.created_at`,
     [userId],
   );
   if (!subs.length) return { devices: 0, sent: 0, failed: 0, gone: 0 };
@@ -237,6 +257,8 @@ export async function sendPushToUser(q: Querier, userId: string, msg: PushText, 
   const payload = JSON.stringify({ title: msg.title.slice(0, 100), body: msg.body.slice(0, 300), url: msg.url.slice(0, 500), tag: msg.tag.slice(0, 100) });
   const outcomes = await Promise.all(
     subs.map(async (s): Promise<"sent" | "gone" | "failed"> => {
+      // a row that is not a push service is never called, only retired
+      if (!isPushEndpoint(s.endpoint)) return "gone";
       let timer: ReturnType<typeof setTimeout> | undefined;
       try {
         return await Promise.race([

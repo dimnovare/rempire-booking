@@ -8,12 +8,18 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { refresh } from "next/cache";
 import { VIEW_AS_COOKIE } from "@/lib/auth/cookie";
-import { endSession, requireStaffUser } from "@/lib/auth/current";
+import { currentStaffUser, endSession, requireStaffUser } from "@/lib/auth/current";
 import { setUserLocale } from "@/lib/auth/locale";
 import { isStaffOf } from "@/lib/barber/account";
 import { query } from "@/lib/db";
+import { removeSubscription } from "@/lib/push";
 
-export async function logout(): Promise<void> {
+/** Log out on this phone; `endpoint`, this phone's push, is switched off with it. */
+export async function logout(endpoint?: string | null): Promise<void> {
+  if (typeof endpoint === "string" && endpoint) {
+    const user = await currentStaffUser();
+    if (user) await removeSubscription(query, user.id, endpoint, "logout").catch(() => false);
+  }
   await endSession();
   (await cookies()).delete(VIEW_AS_COOKIE);
   redirect("/b/login");
