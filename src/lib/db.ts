@@ -141,9 +141,10 @@ async function makePglite(): Promise<Raw> {
     db = (await tools.newPglite(process.env.PGLITE_PATH || undefined)) as unknown as PgliteDb;
     await tools.migrate(db, { dir: path.join(process.cwd(), "db", "migrations") });
     if (process.env.SEED_DEMO === "yes") {
-      const { seedDemo, seedDemoSpecial, seedOwnerQa, OWNER_QA, DEMO_QA } = await import("../../tools/seed-demo.mjs");
+      const { seedDemo, seedDemoSpecial, seedDemoSales, seedOwnerQa, OWNER_QA, DEMO_QA } = await import("../../tools/seed-demo.mjs");
       await seedDemo(db);
       await seedDemoSpecial(db);
+      await seedDemoSales(db);
       await seedOwnerQa(db, [...OWNER_QA, DEMO_QA]);
       // a local run: logins at example.test, by e-mail code, and fake visits
       // for today and tomorrow (tools/seed-demo.mjs)

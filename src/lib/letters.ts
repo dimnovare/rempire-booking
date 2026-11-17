@@ -368,3 +368,81 @@ export function visitLetter(kind: VisitLetterKind, v: VisitView, o: VisitLetterO
   const method = v.status === "cancelled" ? "CANCEL" : "PUBLISH";
   return { subject, text, html, attachments: [{ filename: "rempire.ics", content: calendar, contentType: `text/calendar; charset=utf-8; method=${method}` }] };
 }
+
+// ---- an invoice to a barber's company (Phase C, C5) ---------------------
+
+type InvoiceCopy = {
+  subject: (n: string, credit: boolean) => string;
+  eyebrow: string;
+  heading: (credit: boolean) => string;
+  lead: (credit: boolean) => string;
+  number: string;
+  period: string;
+  total: (credit: boolean) => string;
+  due: string;
+  footer: string;
+};
+
+const INVOICE: Record<Locale, InvoiceCopy> = {
+  et: {
+    subject: (n, c) => `${c ? "Kreeditarve" : "Arve"} ${n} · REMPIRE`,
+    eyebrow: "REMPIRE",
+    heading: (c) => (c ? "Kreeditarve" : "Arve"),
+    lead: (c) => (c ? "Kreeditarve on lisatud PDF-failina." : "Arve on lisatud PDF-failina. Palume tasuda maksetähtajaks."),
+    number: "Arve nr",
+    period: "Periood",
+    total: (c) => (c ? "Tagastatav summa" : "Kokku tasuda"),
+    due: "Maksetähtaeg",
+    footer: "Kiri saadeti automaatselt. Küsimuste korral vasta sellele kirjale või kirjuta salongi.",
+  },
+  en: {
+    subject: (n, c) => `${c ? "Credit note" : "Invoice"} ${n} · REMPIRE`,
+    eyebrow: "REMPIRE",
+    heading: (c) => (c ? "Credit note" : "Invoice"),
+    lead: (c) => (c ? "The credit note is attached as a PDF." : "The invoice is attached as a PDF. Please pay by the due date."),
+    number: "Invoice no",
+    period: "Period",
+    total: (c) => (c ? "Amount credited" : "Total due"),
+    due: "Due date",
+    footer: "Sent automatically. With questions, reply to this letter or write to the salon.",
+  },
+  ru: {
+    subject: (n, c) => `${c ? "Кредит-счёт" : "Счёт"} ${n} · REMPIRE`,
+    eyebrow: "REMPIRE",
+    heading: (c) => (c ? "Кредит-счёт" : "Счёт"),
+    lead: (c) => (c ? "Кредит-счёт во вложении, в PDF." : "Счёт во вложении, в PDF. Просим оплатить до срока."),
+    number: "№ счёта",
+    period: "Период",
+    total: (c) => (c ? "Сумма к возврату" : "Итого к оплате"),
+    due: "Срок оплаты",
+    footer: "Письмо отправлено автоматически. С вопросами ответьте на него или напишите в салон.",
+  },
+};
+
+const dmy = (iso: string) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : iso;
+};
+const eurComma = (cents: number) => `${cents < 0 ? "-" : ""}${Math.floor(Math.abs(cents) / 100)},${String(Math.abs(cents) % 100).padStart(2, "0")} €`;
+
+/** The invoice letter: number, period, total and due date; the PDF goes along. */
+export function invoiceLetter(
+  inv: { kind: "invoice" | "credit"; number: string; periodFrom: string; periodTo: string; dueOn: string | null; grossCents: number; sellerName: string },
+  o: { locale: Locale; origin: string; pdf: { filename: string; content: Uint8Array } },
+): Letter & { attachments: Attachment[] } {
+  const L = o.locale;
+  const k = INVOICE[L] ?? INVOICE.et;
+  const credit = inv.kind === "credit";
+  const subject = k.subject(inv.number, credit);
+  const period = `${dmy(inv.periodFrom)}–${dmy(inv.periodTo)}`;
+  const rows: [string, string][] = [
+    [k.number, esc(inv.number)],
+    [k.period, esc(period)],
+    [k.total(credit), esc(eurComma(inv.grossCents))],
+    ...(!credit && inv.dueOn ? ([[k.due, esc(dmy(inv.dueOn))]] as [string, string][]) : []),
+  ];
+  const text = [`${k.heading(credit)} ${inv.number}`, "", k.lead(credit), "", ...rows.map(([a, b]) => `${a}: ${b.replace(/&[^;]+;/g, "")}`), "", inv.sellerName].join("\n");
+  const body = [eyebrow(k.eyebrow), heading(`${k.heading(credit)} ${inv.number}`), para(esc(k.lead(credit))), details(rows)].join("\n");
+  const html = layout({ lang: L, title: subject, preheader: `${period} · ${eurComma(inv.grossCents)}`, origin: o.origin, body, footer: [esc(inv.sellerName), esc(k.footer)] });
+  return { subject, text, html, attachments: [{ filename: o.pdf.filename, content: o.pdf.content, contentType: "application/pdf" }] };
+}

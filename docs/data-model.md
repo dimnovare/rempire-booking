@@ -138,6 +138,14 @@ Everything else in Phase B reads and writes the Phase A tables.
 
 ## Phase C: sales and invoices (outline)
 
+Built as `db/migrations/010_sales_invoices.sql` (17.11.2026). The columns
+there are the truth; the outline below was the plan. The main additions:
+`product_sales` keeps the shop's purchase and list price, its sync state
+and `reverses_id` (a minus row); `invoices` has `kind`
+(`invoice`/`credit`) and the two parties frozen at «Выставить» (`seller`, `buyer`); `invoice_lines` has
+`rent_month`; and the 17 %, its basis and the billing day live in
+`businesses.settings`.
+
 | Table | Key columns | Notes |
 |---|---|---|
 | `product_sales` | `ref` unique, `staff_id`, `mode` (`client`/`self`), `shop_product_id text`, `shop_variant text`, `name`, `qty`, `unit_cents`, `vat_bp`, `commission_bp` (1700), `commission_cents`, `shop_order_ref`, `sync_status`, `invoice_id` | `shop_product_id` + `shop_variant` match the shop's `stock_levels` key (`090_inventory.sql`). `ref` is the idempotency key sent to the shop's partner endpoint. **[open]** Renat Q2: the 17 % basis. |

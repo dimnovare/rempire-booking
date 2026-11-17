@@ -15,6 +15,7 @@ const ITEMS = [
   { href: "/admin/staff", key: "staff", icon: "staff" },
   { href: "/admin/services", key: "services", icon: "svc" },
   { href: "/admin/requests", key: "requests", icon: "req" },
+  { href: "/admin/invoices", key: "invoices", icon: "inv" },
 ] as const;
 
 /** «Доступ» is about the person, not the work: it sits in the corner beside «Выйти» (AccountLink). */
@@ -49,6 +50,13 @@ function Icon({ name }: { name: string }) {
     return (
       <svg viewBox="0 0 24 24" width="22" height="22" {...p}>
         <path d="M3.5 13.5l2.6-8h11.8l2.6 8v6h-17zM3.5 13.5h5l1.2 2.5h4.6l1.2-2.5h5" />
+      </svg>
+    );
+  // a sheet with lines and a total: the barbers' invoices (Phase C)
+  if (name === "inv")
+    return (
+      <svg viewBox="0 0 24 24" width="22" height="22" {...p}>
+        <path d="M5.5 3h13v18l-2.2-1.5-2.1 1.5-2.2-1.5-2.1 1.5-2.2-1.5-2.2 1.5zM9 8h6M9 12h6M9 16h3" />
       </svg>
     );
   return (

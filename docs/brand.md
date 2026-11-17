@@ -30,6 +30,7 @@ REMPIRE has three marks. Booking uses the first.
 | Questrial | rempire.ee and booking body text | Google Fonts | Open Font License. Self-host it, no Google CDN in production (as in the shop). |
 | Korolev Bold | the word REMPIRE in the hair-and-tattoo and tower marks | shop `public/fonts/KorolevBold.otf`; the same file is in Dropbox `assets/Fonts` | **Web use confirmed** (Dim, 17.11.2026). Self-host it as woff2 when booking needs it. |
 | Vodka Brush | the script lines on the tower marks («est 2018», the slogan) | Dropbox `assets/Fonts` only | Not needed for booking. |
+| Oswald Medium, Golos Text, PT Mono | the barbers' invoice PDF (Phase C): headings, text, numbers. All three have Cyrillic and the Estonian letters | `src/app/fonts/*.ttf`, embedded into each PDF | Open Font License. Used only inside PDFs, never loaded by the web pages. |
 
 ## Colours (from rempire.ee's CSS)
 

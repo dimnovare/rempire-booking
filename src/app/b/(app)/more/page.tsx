@@ -46,6 +46,14 @@ async function More() {
         )}
       </section>
 
+      {/* Phase C: his sales, 17 %, rent and invoices */}
+      <section className="adm-card">
+        <Link href="/b/money" className="adm-btn adm-btn-line" prefetch={false}>
+          {B.money.title}
+        </Link>
+        <p className="adm-meta">{B.money.lead}</p>
+      </section>
+
       <PushPanel configured={pushConfigured()} publicKey={pushPublicKey()} endpoints={devices.map((d) => d.endpoint)} kinds={kinds} owner={user.role !== "staff"} />
 
       <section className="adm-card">

@@ -234,3 +234,30 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-cv .txt b { font-weight: 700; font-size: 15px; }
 .bx-cv .txt small { color: var(--mute); font-size: 13px; overflow-wrap: anywhere; }
 .bx-cv .end { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-variant-numeric: tabular-nums; }
+
+/* ---------- «Продать» and «Мои расчёты» (Phase C) ---------- */
+.bx-sell-find { display: flex; flex-direction: column; gap: 14px; }
+.bx-sell-find .adm-btns .adm-btn { min-height: 56px; }
+.bx-sell-msg { padding: 10px 12px; border: 1px solid currentColor; }
+.bx-thumb { flex: none; width: 48px; height: 48px; object-fit: contain; background: var(--raise); border: 1px solid var(--line); }
+.bx-pick { gap: 14px; }
+.bx-pick-head { display: flex; align-items: center; gap: 12px; }
+.bx-pick-head .bx-thumb { width: 72px; height: 72px; }
+.bx-pick-head .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.bx-pick-head .txt b { font: 800 20px/1.1 var(--display); text-transform: uppercase; letter-spacing: .03em; overflow-wrap: anywhere; }
+.bx-pick-head .txt small { color: var(--mute); font-size: 13px; }
+.bx-pick .adm-btn-ghost.adm-btn-sm { align-self: flex-start; }
+.bx-sell-go { min-height: 60px; font-size: 17px; }
+.bx-sale { display: flex; align-items: center; gap: 10px; padding: 10px 2px; }
+.bx-sale .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.bx-sale .txt .plain { font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
+.bx-sale .txt small { color: var(--mute); font-size: 13px; }
+.bx-sale .end { flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bx-sale.is-off .txt, .bx-sale.is-off .end { opacity: .5; text-decoration: line-through; }
+.bx-scan { position: fixed; inset: 0; z-index: 60; background: #000; display: flex; flex-direction: column; }
+.bx-scan-video { flex: 1; min-height: 0; width: 100%; object-fit: cover; }
+.bx-scan-frame { position: absolute; left: 12%; right: 12%; top: 34%; height: 22%; border: 2px solid var(--lime); pointer-events: none; }
+.bx-scan-bar { display: flex; align-items: center; gap: 12px; padding: 14px max(16px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); background: var(--raise); }
+.bx-scan-bar p { flex: 1; margin: 0; font-size: 15px; }
+/* five sections in the bottom bar */
+.bx-nav:has(a:nth-child(5)) a { font-size: 10px; letter-spacing: .04em; }

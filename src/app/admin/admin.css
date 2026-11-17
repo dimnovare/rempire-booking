@@ -539,3 +539,58 @@ button.cal-head:hover b { color: var(--lime); }
 .adm-req-row .tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .adm-req-row .adm-btns { margin-top: 4px; }
 .adm-req-n { margin-left: 8px; }
+
+/* ---------- «Счета»: sales, invoices, receivers, the company (Phase C) ---------- */
+.adm-inv-tabs { display: flex; align-self: flex-start; }
+.adm-inv-tabs a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; font: 800 12px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--mute); text-decoration: none; }
+.adm-inv-tabs a[aria-current="page"] { background: var(--lime); color: var(--on-lime); }
+.adm-inv-month { display: flex; align-items: center; gap: 8px; }
+.adm-inv-month h2 { margin: 0; min-width: 0; font: 800 20px/1 var(--display); text-transform: uppercase; letter-spacing: .04em; }
+.adm-inv-month .adm-ibtn { border-color: transparent !important; color: var(--mute); }
+.adm-inv-month .adm-ibtn:hover { color: var(--fg); }
+.adm-inv-drafts { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; }
+.adm-inv-drafts p { flex: 1 1 220px; }
+.adm-page-head .tags, .adm-inv .tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.adm-inv-scroll { overflow-x: auto; border-top: 1px solid var(--line-2); }
+.adm-inv-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.adm-inv-table th { padding: 10px 8px; font: 800 11px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; color: var(--mute); text-align: right; white-space: nowrap; }
+.adm-inv-table td { padding: 10px 8px; border-top: 1px solid var(--line); text-align: right; white-space: nowrap; }
+.adm-inv-table th:first-child, .adm-inv-table td:first-child { text-align: left; white-space: normal; }
+.adm-inv-table td:first-child a { display: block; font: 800 18px/1.1 var(--display); text-transform: uppercase; letter-spacing: .03em; color: var(--fg); text-decoration: none; }
+.adm-inv-table td:first-child a:hover { color: var(--lime); }
+.adm-inv-table td small { color: var(--mute); font-size: 12px; }
+.adm-inv-table td.b { font-weight: 700; }
+.adm-inv-table tfoot td { border-top: 1px solid var(--line-2); color: var(--mute); font-weight: 700; }
+.adm-inv-meta { margin: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.adm-inv-meta dt { font-size: 13px; color: var(--mute); }
+.adm-inv-meta dd { margin: 4px 0 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.adm-inv-meta dd small { color: var(--mute); font-size: 13px; }
+.adm-inv-meta a { color: var(--fg); }
+.adm-inv-calc { display: block; color: var(--mute); font-size: 12px; font-variant-numeric: tabular-nums; }
+.adm-inv-totals { border-top-color: var(--line-2); }
+.adm-inv-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.adm-inv-line { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--line-2); }
+.adm-inv-line-head { display: flex; align-items: center; gap: 6px; }
+.adm-inv-line-head b { margin-left: auto; font-variant-numeric: tabular-nums; }
+.adm-inv-line-head .adm-ibtn { width: 36px; height: 36px; font-size: 20px; border-color: transparent !important; color: var(--mute); }
+.adm-inv-line-head .adm-ibtn:hover { color: var(--warn); }
+.adm-inv-line .adm-row > .adm-field { flex: 1 1 70px; }
+.adm-inv-add { padding: 10px; border: 1px dashed var(--line-2); }
+.adm-inv-acts { gap: 10px; }
+.adm-inv-acts .adm-btn-sm { align-self: flex-start; }
+.adm-inv-failed, .adm-inv-sales > li { display: flex; align-items: center; gap: 12px; padding: 10px 2px; }
+.adm-inv-failed .txt, .adm-inv-sales .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.adm-inv-failed small, .adm-inv-sales small { color: var(--mute); font-size: 13px; overflow-wrap: anywhere; }
+.adm-inv-sales .end { flex: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.adm-inv-sales > li.is-off .txt, .adm-inv-sales > li.is-off .end { opacity: .5; text-decoration: line-through; }
+.adm-inv-rent { display: flex; flex-direction: column; gap: 10px; padding: 14px max(16px, env(safe-area-inset-right, 0px)) 18px max(16px, env(safe-area-inset-left, 0px)); border-top: 1px solid var(--line); }
+.adm-inv-rent p { margin: 0; }
+.adm-inv-rent .adm-btn-sm { align-self: flex-start; }
+.adm-inv-fs { margin: 0; padding: 0; border: 0; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.adm-inv-fs:disabled { opacity: .6; }
+@media (min-width: 900px) {
+  .adm-two-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) minmax(220px, .8fr); gap: 16px; align-items: start; }
+}
+@media (max-width: 899px) {
+  .adm-two-cols { display: flex; flex-direction: column; gap: 14px; }
+}

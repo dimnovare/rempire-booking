@@ -253,6 +253,11 @@ async function compose(q: Querier, row: OutboxRow, now: number, env: Env): Promi
     });
     return { subject: letter.subject, body: letter };
   }
+  if (row.kind === "invoice" && row.channel === "email") {
+    // Phase C: the issued invoice with its PDF (src/lib/billing/send.ts); loaded only when one is due
+    const { invoiceMessage } = await import("./billing/send");
+    return invoiceMessage(q, row, env);
+  }
   let link = "";
   if (row.kind === "reminder") {
     if (Date.parse(String(p.startsAt)) <= now) return { skip: "visit already started" };
@@ -322,6 +327,8 @@ async function deliver(q: Querier, rows: OutboxRow[], now: number, env: Env, sen
           r.provider,
           r.ref,
         ]);
+        const invoiceId = row.kind === "invoice" ? row.payload.invoiceId : null;
+        if (typeof invoiceId === "string" && /^[0-9a-f-]{36}$/i.test(invoiceId)) await q("update invoices set sent_at = coalesce(sent_at, $2) where id = $1", [invoiceId, new Date(now)]);
       } else {
         throw new Error(`no sender for ${row.channel}`);
       }

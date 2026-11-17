@@ -19,6 +19,9 @@ const nextConfig: NextConfig = {
       // the link-preview card's font and logo (src/lib/og.tsx)
       "./src/app/fonts/akrobat-extrabold.woff",
       "./public/brand/rempire-logo-white.png",
+      // the invoice PDF's faces and the tower (src/lib/billing/pdf.ts)
+      "./src/app/fonts/*.ttf",
+      "./public/brand/rempire-tower.svg",
     ],
   },
   turbopack: {

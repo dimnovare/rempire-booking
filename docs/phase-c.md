@@ -4,13 +4,33 @@
 §7 (the shop link). Phase B is on main and staging (`docs/phase-b.md`); its
 real-phone test comes later (`docs/phase-b-phone-test.md`). Dim's answers to
 the open choices are on the Phase C decisions page (round 6, see
-`booking-decisions-page` in Claude's memory). Until he answers, the
-recommended option there is the plan.*
+`booking-decisions-page` in Claude's memory); the table below records
+them.*
 
 **Done when** one real barber's month closes in the app: every product he
 sold or took is on his statement, the shop's stock went down for each one,
 and Renat issues one numbered invoice PDF (rent, items, the 17 %) that goes
 to the barber by e-mail and matches what Isolta would have sent.
+
+## Dim's answers (17.11.2026, decisions page round 6)
+
+None of the 11 had been tapped when the build started, so each is the
+page's recommended option. Each one that Renat or Isolta may still change
+is a setting, not code.
+
+| Question | Answer |
+|---|---|
+| Start now | **Yes**, on demo data. Only C5's first real invoice waits for Isolta and the accountant |
+| Who takes the client's money | **The barber.** REMPIRE sells him the product at the shop price, and his 17 % comes off the same invoice as a minus line. So no Renat question is needed |
+| Purchase prices | **In the shop**, an admin-only field on the variant |
+| Shop side now | **Yes, on a branch.** The push waits for Dim's OK |
+| The 17 % basis until Renat Q1 | **Price paid, without VAT.** A switch in «Счета» → «Компания» (net paid, gross paid, list price) |
+| Photo match | **In the shop, with its own OpenAI key** |
+| How often | **Monthly**, drafts from the 1st (the billing day is a setting, 1–28) |
+| Renat checks | **Drafts**, Renat taps «Выставить» |
+| Numbers | **Continue Isolta's series.** «Компания» → «Последний номер» takes Isolta's last number once |
+| Barber sees his balance | **Yes, live**, in «Ещё» → «Мои расчёты» |
+| E-invoices | **PDF now**, an e-invoice if a barber's company asks |
 
 ## What it is
 
@@ -52,23 +72,73 @@ to the barber by e-mail and matches what Isolta would have sent.
 
 | # | What | Needs from outside | Status |
 |---|---|---|---|
-| C1 | **Receivers, issuer, rent.** In the admin, «Счета» → «Получатели»: a person, FIE or OÜ, with the legal name, registry code, KMKR number, address, e-mail, payment terms, VAT on or off, and the barber it belongs to. REMPIRE's own company details go in the admin settings. Each barber's chair rent has a valid-from date, so a change never rewrites old months. | The real details from Isolta. Demo data until then | |
-| C2 | **Shop link (shop branch).** The purchase price field and the three partner endpoints in `rempire-web`, on a branch, with tests, against the shop's own test database only. Booking calls them through one small client (`src/lib/shop.ts`). With no `SHOP_API_URL` it falls back to a **fake shop** of demo products, as push does without its keys. | Dim's OK to push the shop branch; `SHOP_API_URL` and `SHOP_API_SECRET` (booking), the same secret in the shop as `BOOKING_API_SECRET`; Renat's purchase prices | |
-| C3 | **Selling in the app.** The camera scan (`BarcodeDetector` where the phone has it, otherwise a small JS reader), the name search, client or self, the quantity, the price shown before the tap, and an undo within a few minutes. Each sale gets a `ref` first and is sent to the shop with retries through the outbox, so a bad connection never sells twice or loses a sale. | | |
-| C4 | **Statement.** The running ledger for each barber, in the app and in the admin, from `product_sales`, `chair_rents` and `invoices`. The 17 % basis is a setting (Renat Q1); until he answers, it is Dim's pick on the decisions page. | Renat Q1 | |
-| C5 | **Invoices.** On the 1st, a draft for every receiver with something to bill. Renat checks it, changes lines if needed and taps «Выставить». That gives the number (`invoice_counters`, the shop's `141_invoices.sql` pattern), the PDF (`pdf-lib`, after the shop's `src/lib/invoice-pdf.ts`: the legal minimum of VAT Act §37, the tower, Estonian with an English line) and the e-mail through Resend with the PDF attached. Then «оплачен» when the money arrives, and a credit invoice for a correction. | From Isolta: the issuer, VAT, the layout and the last invoice number; the accountant's view on the 17 % (below) | |
-| C6 | **Overview.** Renat's month across all barbers, and a CSV export for the accountant. | | |
-| C7 | **Photo match.** The camera or a screenshot goes to the shop's identify endpoint, which shows 3 candidates, and the barber taps one. Barcode scanning comes first. This is the backup while few barcodes are bound (kickoff §7.1). | The shop's OpenAI account, already there | |
+| C1 | **Receivers, issuer, rent.** In the admin, «Счета» → «Получатели»: a person, FIE or OÜ, with the legal name, registry code, KMKR number, address, e-mail, payment terms, VAT on or off, and the barber it belongs to. REMPIRE's own company details go in the admin settings. Each barber's chair rent has a valid-from date, so a change never rewrites old months. | The real details from Isolta. Demo data until then | **built**; real data waits on Isolta |
+| C2 | **Shop link (shop branch).** The purchase price field and the three partner endpoints in `rempire-web`, on a branch, with tests, against the shop's own test database only. Booking calls them through one small client (`src/lib/shop.ts`). With no `SHOP_API_URL` it falls back to a **fake shop** of demo products, as push does without its keys. | Dim's OK to push the shop branch; `SHOP_API_URL` and `SHOP_API_SECRET` (booking), the same secret in the shop as `BOOKING_API_SECRET`; Renat's purchase prices | **on the shop branch `booking-partner-api`, not pushed**; booking's client and fake shop built |
+| C3 | **Selling in the app.** The camera scan (`BarcodeDetector` where the phone has it, otherwise a small JS reader), the name search, client or self, the quantity, the price shown before the tap, and an undo within a few minutes. Each sale gets a `ref` first and is sent to the shop with retries through the outbox, so a bad connection never sells twice or loses a sale. | | **built**; staging sells from the fake shop |
+| C4 | **Statement.** The running ledger for each barber, in the app and in the admin, from `product_sales`, `chair_rents` and `invoices`. The 17 % basis is a setting (Renat Q1); until he answers, it is Dim's pick on the decisions page. | Renat Q1 | **built**; the basis starts as net paid |
+| C5 | **Invoices.** On the 1st, a draft for every receiver with something to bill. Renat checks it, changes lines if needed and taps «Выставить». That gives the number (`invoice_counters`, the shop's `141_invoices.sql` pattern), the PDF (`pdf-lib`, after the shop's `src/lib/invoice-pdf.ts`: the legal minimum of VAT Act §37, the tower, Estonian with an English line) and the e-mail through Resend with the PDF attached. Then «оплачен» when the money arrives, and a credit invoice for a correction. | From Isolta: the issuer, VAT, the layout and the last invoice number; the accountant's view on the 17 % (below) | **built**; the first real invoice waits on Isolta and the accountant |
+| C6 | **Overview.** Renat's month across all barbers, and a CSV export for the accountant. | | **built** |
+| C7 | **Photo match.** The camera or a screenshot goes to the shop's identify endpoint, which shows 3 candidates, and the barber taps one. Barcode scanning comes first. This is the backup while few barcodes are bound (kickoff §7.1). | The shop's OpenAI account, already there | **built** in booking (the fake shop returns 3 demo products for any photo); real matching comes with C2 |
 
 C1 and C2 can start at once and side by side: C1 lives in booking's admin,
 C2 in the shop. C3 needs C2's client, even if only its fake shop. C4
 follows C3, C5 follows C1 and C4, and C6 comes last. C7 can come any time
 after C3.
 
+## As built (17.11.2026)
+
+Everything below runs on staging with demo barbers, demo companies
+(made-up registry codes, e-mail `delivered@resend.dev`) and the fake shop.
+
+- **«Продать»** (`/b/sell`, the barber app's fourth tab):
+  - a barcode by camera (`BarcodeDetector`, else `@zxing/browser`), a name
+    search, or a photo (C7);
+  - «Клиенту» or «Себе», up to 20 pieces, the price and his share shown
+    before the tap.
+  - The phone makes the sale's `ref`. A sale that can't reach the server
+    waits on the phone and is sent again (the same `ref` is the same sale).
+  - **Undo** for 5 minutes. The shop hears of a sale only after that, so
+    an undone sale never touches its stock. After 5 minutes Renat reverses
+    it with a minus row («Сторно» in the admin) and puts the stock back in
+    the shop by hand (the shop has no return endpoint).
+  - The shop sync retries from the cron. A sale the shop refuses for good
+    shows in the admin's month with «Повторить».
+- **Money rules:**
+  - All amounts are gross (VAT inside), in cents.
+  - The 17 % is stored on each sale when it is made, so a later change of
+    the basis or the share never rewrites old sales.
+  - «Себе» = the shop's purchase price (without VAT) × 1.24, no
+    commission. A product with no purchase price can't be taken «себе».
+- **«Счета» in the admin** (the fifth tab):
+  - **Месяц:** per barber: sold, 17 %, self, rent, billed, paid, open.
+    «Собрать черновики», the month's invoices, and two CSVs for the
+    accountant (invoices, lines). It opens on the month before.
+  - **Счёт:**
+    - A draft's lines save as you type.
+    - «Выставить» takes the next number from `invoice_counters`, freezes
+      the PDF data and e-mails the PDF through the outbox.
+    - Then «Оплачен», «Отправить ещё раз», or «Кредитовать». A credit
+      invoice is a full credit, issued at once, with its own number.
+  - **Получатели:** person, FIE or OÜ, VAT on or off, the barber it
+    belongs to.
+    - Chair rent with a valid-from month. A rent can't start in a month
+      that is already invoiced.
+  - **Компания:** REMPIRE's company (the owner only), the number format,
+    «Последний номер» (it only goes up), the 17 %, its basis and the
+    billing day.
+- **«Мои расчёты»** (`/b/money`, from «Ещё»): his month, his invoices with
+  the PDF, and his sales. A draft shows as «готовится». It opens on the
+  current month.
+- **The cron** (`/api/cron/outbox`) also makes the month's drafts from the
+  billing day on, and sends the waiting sales to the shop.
+- **The PDF** (`src/lib/billing/pdf.ts`) carries the minimum of VAT Act §37,
+  in Estonian with English under it. Fonts: Oswald, Golos Text and PT Mono,
+  all under the Open Font License, in `src/app/fonts/`.
+
 ## Data
 
-The next free migration number when the work starts (010 today). The
-outline is `docs/data-model.md` § Phase C: `product_sales`,
+Built as `db/migrations/010_sales_invoices.sql`, after the outline in
+`docs/data-model.md` § Phase C: `product_sales`,
 `invoice_issuers`, `invoice_receivers`, `chair_rents`, `invoices`,
 `invoice_lines`, `invoice_counters`. Also:
 
@@ -126,7 +196,6 @@ Check the current Raamatupidamise seadus wording before the move.
 
 | What | For |
 |---|---|
-| Dim's answers on the Phase C decisions page | C1–C7 details |
 | Isolta access: issuer, VAT, rents, receivers, layout, last number | C1 real data, C5 |
 | Renat Q1: the 17 % basis | C4 setting |
 | The accountant: the two points above | C5's first real invoice |

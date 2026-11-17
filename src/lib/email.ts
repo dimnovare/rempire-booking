@@ -24,8 +24,8 @@ export class EmailDisabled extends Error {
 
 export type EmailTransport = "resend" | "console" | "disabled";
 
-/** A small text file sent along, such as the visit's .ics. */
-export type Attachment = { filename: string; content: string; contentType: string };
+/** A file sent along: a text one such as the visit's .ics, or bytes such as an invoice PDF (Phase C). */
+export type Attachment = { filename: string; content: string | Uint8Array; contentType: string };
 export type LetterBody = { text: string; html?: string; attachments?: Attachment[] };
 
 type Env = Record<string, string | undefined>;
@@ -72,7 +72,7 @@ export async function sendEmail(
         ? {
             attachments: letter.attachments.map((a) => ({
               filename: a.filename,
-              content: Buffer.from(a.content, "utf8").toString("base64"),
+              content: (typeof a.content === "string" ? Buffer.from(a.content, "utf8") : Buffer.from(a.content)).toString("base64"),
               content_type: a.contentType,
             })),
           }

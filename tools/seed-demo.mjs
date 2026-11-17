@@ -102,7 +102,142 @@ export async function seedDemo(db) {
       }
     }
   }
+  await seedDemoMoney(db, biz.id);
   return { businessId: biz.id, locationId: loc.id, services: svc };
+}
+
+/**
+ * Phase C demo money (docs/phase-c.md): a made-up issuing company, a
+ * made-up FIE or OÜ for four barbers and their chair rent. Every name,
+ * registry code, VAT number and IBAN here is fake (codes starting 0000 are
+ * never issued); the invoices go to Resend's test inbox. The real details
+ * come from Isolta. Only added where missing; nothing Renat edited is
+ * touched.
+ */
+export const DEMO_MONEY = {
+  issuer: {
+    legal_name: "Näidis Salong OÜ",
+    reg_code: "00000001",
+    vat_number: "EE000000001",
+    address: "Mardi 1, 10145 Tallinn",
+    email: "arved@example.test",
+    iban: "EE000000000000000000",
+    bank_name: "Demo Pank",
+    prefix: "DEMO-",
+    digits: 4,
+    yearly: true,
+  },
+  receivers: [
+    { staff: "valentin", kind: "fie", name: "Näidis FIE (Valentin)", reg: "00000002", vat: "", rent: 40000 },
+    { staff: "jevgeni", kind: "ou", name: "Näidis Juuksur OÜ (Jevgeni)", reg: "00000003", vat: "EE000000003", rent: 40000 },
+    { staff: "slava", kind: "fie", name: "Näidis FIE (Slava)", reg: "00000004", vat: "", rent: 38000 },
+    { staff: "milena", kind: "fie", name: "Näidis FIE (Milena)", reg: "00000005", vat: "", rent: 35000 },
+  ],
+  rentFrom: "2026-01-01",
+  // Resend's test address: «delivered», and nothing reaches anyone
+  email: "delivered@resend.dev",
+};
+
+/** @param {{query: (sql: string, params?: unknown[]) => Promise<{rows: any[]}>}} db */
+export async function seedDemoMoney(db, businessId) {
+  const I = DEMO_MONEY.issuer;
+  const issuerId = demoId("issuer", "demo");
+  await db.query(
+    `insert into invoice_issuers (id, business_id, legal_name, reg_code, vat_number, address, email, iban, bank_name, prefix, digits, yearly, is_default)
+     select $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, not exists (select 1 from invoice_issuers where business_id = $2 and is_default)
+     on conflict (id) do nothing`,
+    [issuerId, businessId, I.legal_name, I.reg_code, I.vat_number, I.address, I.email, I.iban, I.bank_name, I.prefix, I.digits, I.yearly],
+  );
+  for (const r of DEMO_MONEY.receivers) {
+    const staffId = demoId("staff", r.staff);
+    const [st] = (await db.query("select 1 from staff where id = $1", [staffId])).rows;
+    if (!st) continue;
+    await db.query(
+      `insert into invoice_receivers (id, business_id, staff_id, kind, legal_name, reg_code, vat_number, address, email, locale)
+       select $1, $2, $3, $4, $5, $6, $7, 'Tallinn', $8, 'et'
+        where not exists (select 1 from invoice_receivers where staff_id = $3 and active)
+       on conflict (id) do nothing`,
+      [demoId("receiver", r.staff), businessId, staffId, r.kind, r.name, r.reg, r.vat, DEMO_MONEY.email],
+    );
+    await db.query(
+      `insert into chair_rents (business_id, staff_id, amount_cents, valid_from) select $1, $2, $3, $4::date
+        where not exists (select 1 from chair_rents where staff_id = $2)`,
+      [businessId, staffId, r.rent, DEMO_MONEY.rentFrom],
+    );
+  }
+}
+
+/** Demo products for the demo sales: the fake shop's (src/lib/shop.ts FAKE_PRODUCTS). */
+const DEMO_SALE_ITEMS = [
+  { id: "demo-matte-paste", variant: "100ml", name: "Demo Grooming Matte Paste 100 ml", price: 2490, purchase: 1150, barcode: "2000000000017" },
+  { id: "demo-beard-oil", variant: "30ml", name: "Demo Beard Co Beard Oil Cedar 30 ml", price: 2190, purchase: 900, barcode: "2000000000031" },
+  { id: "demo-sea-salt", variant: "200ml", name: "Demo Grooming Sea Salt Spray 200 ml", price: 1990, purchase: 840, barcode: "2000000000024" },
+];
+
+/**
+ * A few demo sales last month and this month, so staging's statements,
+ * drafts and overview are not empty. Marked as already in the (fake) shop:
+ * they never go anywhere, whatever SHOP_API_URL is later.
+ * 17 % of the price without VAT (24 %), as settings.ts starts.
+ */
+export async function seedDemoSales(db, now = Date.now()) {
+  const [biz] = (await db.query("select id from businesses where slug = $1", [DEMO.business.slug])).rows;
+  if (!biz) return 0;
+  const tz = DEMO.business.timezone;
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
+  const [y, m] = today.split("-").map(Number);
+  const months = [
+    [m === 1 ? y - 1 : y, m === 1 ? 12 : m - 1],
+    [y, m],
+  ];
+  const plan = [
+    { staff: "valentin", day: 3, item: 0, qty: 2, mode: "client" },
+    { staff: "valentin", day: 9, item: 1, qty: 1, mode: "client" },
+    { staff: "valentin", day: 12, item: 2, qty: 1, mode: "self" },
+    { staff: "slava", day: 5, item: 1, qty: 1, mode: "client" },
+    { staff: "slava", day: 6, item: 0, qty: 1, mode: "client" },
+  ];
+  let added = 0;
+  for (const [yy, mm] of months) {
+    const tag = `${yy}${String(mm).padStart(2, "0")}`;
+    for (const [n, p] of plan.entries()) {
+      const at = new Date(Date.UTC(yy, mm - 1, p.day, 12, 0));
+      if (at.getTime() > now) continue;
+      const it = DEMO_SALE_ITEMS[p.item];
+      const unit = p.mode === "self" ? Math.round((it.purchase * 12400) / 10000) : it.price;
+      const commission = p.mode === "self" ? 0 : Math.round((p.qty * unit * 10000 * 1700) / 12400 / 10000);
+      const r = await db.query(
+        `insert into product_sales (business_id, ref, staff_id, mode, shop_product_id, shop_variant, name, barcode, qty, unit_cents, list_cents,
+                                    purchase_cents, vat_bp, commission_bp, commission_basis, commission_cents, total_cents,
+                                    sync_status, sync_after, shop_order_ref, synced_at, created_at)
+         select $1, $2, s.id, $4, $5, $6, $7, $8, $9, $10, $11, $12, 2400, $13, $14, $15, $16, 'synced', $17, $18, $17, $17
+           from staff s where s.id = $3
+         on conflict (ref) do nothing returning id`,
+        [
+          biz.id,
+          `demo-sale-${p.staff}-${n}-${tag}`,
+          demoId("staff", p.staff),
+          p.mode,
+          it.id,
+          it.variant,
+          it.name,
+          it.barcode,
+          p.qty,
+          unit,
+          it.price,
+          p.mode === "self" ? it.purchase : null,
+          p.mode === "self" ? 0 : 1700,
+          p.mode === "self" ? null : "net-paid",
+          commission,
+          p.qty * unit,
+          at,
+          `DEMO-${tag}-${n}`,
+        ],
+      );
+      added += r.rows.length;
+    }
+  }
+  return added;
 }
 
 /**
@@ -324,7 +459,8 @@ async function main() {
     await seedDemo(client);
     const special = await seedDemoSpecial(client);
     const qa = await seedOwnerQa(client);
-    console.log(`Demo seed done (${special} special-time windows, ${qa} question forms added).`);
+    const sales = await seedDemoSales(client);
+    console.log(`Demo seed done (${special} special-time windows, ${qa} question forms, ${sales} demo sales added).`);
   } finally {
     await client.end();
   }

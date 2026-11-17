@@ -2,6 +2,7 @@
  * Business settings: businesses.settings (jsonb) over these defaults.
  * Renat's open answers are switches here, not code (docs/phase-a.md).
  */
+import { isBasis, type Basis } from "./money";
 export type BusinessSettings = {
   /** Start times are on this grid, counted from local midnight. */
   slot_step_min: number;
@@ -21,6 +22,15 @@ export type BusinessSettings = {
    */
   barber_self_time: SelfMode;
   barber_self_price: SelfMode;
+  /**
+   * Phase C (docs/phase-c.md). The barber's share of a client sale, in
+   * basis points (1700 = 17 %), and what it is taken from (Renat Q1; until
+   * he answers, Dim's pick: the price paid without VAT). The day of the
+   * month the drafts for the month before are made.
+   */
+  commission_bp: number;
+  commission_basis: Basis;
+  billing_day: number;
 };
 
 export type SelfMode = "now" | "ask";
@@ -36,14 +46,19 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   reminder_min: 120,
   barber_self_time: "now",
   barber_self_price: "ask",
+  commission_bp: 1700,
+  commission_basis: "net-paid",
+  billing_day: 1,
 };
 
-const LIMITS: Record<Exclude<keyof BusinessSettings, SelfKey>, [number, number]> = {
+const LIMITS: Record<Exclude<keyof BusinessSettings, SelfKey | "commission_basis">, [number, number]> = {
   slot_step_min: [5, 120],
   horizon_days: [1, 366],
   min_notice_min: [0, 7 * 24 * 60],
   cancel_cutoff_min: [0, 7 * 24 * 60],
   reminder_min: [15, 48 * 60],
+  commission_bp: [0, 5000],
+  billing_day: [1, 28],
 };
 
 /** Defaults, overridden by every valid whole number in `raw`. */
@@ -59,5 +74,7 @@ export function readSettings(raw: unknown): BusinessSettings {
     const v = (raw as Record<string, unknown>)[key];
     if (isSelfMode(v)) out[key] = v;
   }
+  const basis = (raw as Record<string, unknown>).commission_basis;
+  if (isBasis(basis)) out.commission_basis = basis;
   return out;
 }

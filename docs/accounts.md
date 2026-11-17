@@ -57,6 +57,7 @@ Read from the Vercel dashboard on 17.11.2026, names only.
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | yes | Dim | 17.11; client `rempire-booking` in Google Cloud. Mark the secret Sensitive (Vercel shows «Needs Attention») |
 | `CRON_SECRET` | yes | Dim | 17.11; Sensitive |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | yes | Dim | 17.11; one pair, never the shop's; the private key Sensitive. Staging's «Ещё» shows push as ready |
+| `SHOP_API_URL`, `SHOP_API_SECRET` | no | Dim | Phase C shop link. Unset = the fake shop. Set only after the shop branch `booking-partner-api` is live; the shop gets the same secret as `BOOKING_API_SECRET`. Mark the secret Sensitive |
 | `SITE_URL`, `ALLOW_INDEXING` | no | — | only at the move |
 | SMS names | no | — | with the provider |
 
