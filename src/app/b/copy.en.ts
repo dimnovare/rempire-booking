@@ -113,6 +113,11 @@ export const en: Copy = {
     requested: "waiting for Renat",
   },
 
+  time: {
+    title: "My time",
+    soon: "Coming here: a break, vacation or sick leave, special time, my hours.",
+  },
+
   week: { title: "Week", total: "Week total", off: "day off" },
 
   visit: {

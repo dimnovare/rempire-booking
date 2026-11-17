@@ -113,6 +113,11 @@ export const et: Copy = {
     requested: "ootab Renati vastust",
   },
 
+  time: {
+    title: "Minu aeg",
+    soon: "Varsti siin: paus, puhkus või haigusleht, eriaeg, minu tunnid.",
+  },
+
   week: { title: "Nädal", total: "Nädal kokku", off: "puhkepäev" },
 
   visit: {
