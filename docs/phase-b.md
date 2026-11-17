@@ -1,6 +1,6 @@
 # Phase B: the barber app, the build plan
 
-*Draft, 17.11.2026. Scope is kickoff §10 B. Phase A's parts that need no
+*17.11.2026. Scope is kickoff §10 B. Phase A's parts that need no
 outside account are done (`docs/phase-a.md`). A7 waits on the Altegio login,
 and A6's SMS and A8 wait on the SMS provider, so Phase B can start now.
 Dim's answers to the open choices are on the Phase B decisions page (see
@@ -27,6 +27,21 @@ a day off. Renat sees all of it in the admin.
 - **Phone first**, in the admin's look (`admin.css`, black and lime, square
   edges).
 
+## Dim's answers (17.11.2026, decisions page round 5)
+
+| Question | Answer |
+|---|---|
+| Start now | **Yes**, while A7 and A8 wait on outside accounts |
+| Client phone | **Shown, tap to call**, for his own visits only |
+| Money | **Prices and his day's total** |
+| Other barbers | **Only his own column** |
+| Client notes | **One shared note** per client; all barbers and Renat see it |
+| Barber books visits | **Yes**, in his own column |
+| What he changes without Renat | **Ask Renat** (his question 2 on the questions page). Until he answers: time applies at once and prices wait for Renat's OK, as a switch |
+| Barber notifications | **Push now**; Telegram only if Renat wants it (his question 3) |
+| Day's plan | **20:00 the evening before** |
+| Renat's notifications | **Ask Renat** (question 4 «Уведомления тебе», added 17.11). Each kind is a **toggle in Renat's settings** (Dim's idea); his answer sets the defaults. Until then: requests and barber cancels on |
+
 ## Milestones
 
 | # | What | Needs from outside | Status |
@@ -35,7 +50,7 @@ a day off. Renat sees all of it in the admin.
 | B2 | **My day and my week:** today as a timeline of visits (time, client, services, price, the client's note), the next visit on top, free gaps shown; a week strip; arrived / done / no-show; pull to refresh. Only his own column, unless Dim decides otherwise. | | |
 | B3 | **Book and change:** a walk-in or the client's next visit, in his own column, with the same rules as the admin (no double booking, special-time price); move; **emergency cancel** with a reason. The client gets the «moved» or «cancelled» letter A6 already sends, and later the SMS. Renat gets a push. | | |
 | B4 | **His time:** block an hour; ask for a vacation or sick day; add special time with its own extra; his weekly hours. Whatever needs Renat's OK (Renat Q2) goes to a new **«Запросы»** list in the admin as `time_off.status = requested`. Renat taps approve or decline, and the barber gets a push. Until Renat answers, the starting setting is Dim's pick on the decisions page (recommended: time applies at once, prices wait for Renat). | Renat Q2 | |
-| B5 | **Push:** new VAPID keys, never the shop's; `push_subscriptions` copied from the shop's `200_push_subscriptions.sql`; `channel = 'push'` in the outbox, so the cron and the retries are shared. Events: a new, moved or cancelled booking; the day's plan (recommended: 20:00 the evening before); a request answered. Renat gets his own (an online booking, a barber's cancel, a new request). iPhone needs iOS 16.4 or later and the app installed to the home screen; the app says so where push can't work. | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` in Vercel | |
+| B5 | **Push:** new VAPID keys, never the shop's; `push_subscriptions` copied from the shop's `200_push_subscriptions.sql`; `channel = 'push'` in the outbox, so the cron and the retries are shared. Events: a new, moved or cancelled booking; the day's plan (recommended: 20:00 the evening before); a request answered. Renat gets his own, each kind a toggle in his settings (online booking, client's move or cancel, barber's cancel, request, the salon's plan for tomorrow); defaults from his answer to question 4. iPhone needs iOS 16.4 or later and the app installed to the home screen; the app says so where push can't work. | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` in Vercel | |
 | B6 | **Clients:** the client's card from a visit, with the shared note (`clients.staff_note`), the visit's own note, past visits with this barber, «book again», and a tap to call if allowed. | | |
 | B7 | **Telegram** (only if Renat wants it, Q3): a new bot of REMPIRE's own, never `@rempireshop_bot`; each barber links his chat once from the app; the same events as push. | Renat Q3; a bot token from Renat | waits |
 
