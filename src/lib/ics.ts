@@ -2,6 +2,9 @@
  * A one-visit calendar file (RFC 5545). Times in UTC, so every calendar
  * app shows the right local time.
  */
+import { COPY, pick, type Locale } from "./i18n";
+import type { VisitView } from "./visits";
+
 const esc = (s: string) => s.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
 const stamp = (ms: number) => new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 
@@ -62,4 +65,29 @@ export function visitIcs(v: {
     "END:VCALENDAR",
   ];
   return lines.map(fold).join("\r\n") + "\r\n";
+}
+
+/**
+ * The calendar file for one visit, the same from /api/ics/<token> and as
+ * the confirmation letter's attachment. `origin` is the app's address;
+ * the change link inside uses the token the reader already has.
+ */
+export function visitIcsFor(
+  v: Pick<VisitView, "id" | "status" | "startsAt" | "endsAt" | "staffName" | "services" | "location">,
+  o: { businessName: string; origin: string; token: string; locale: Locale; now?: number },
+): string {
+  const c = COPY[o.locale];
+  const services = v.services.map((s) => pick(s.name, o.locale)).join(" + ");
+  const manage = `${o.origin}/${o.locale}/visit/${o.token}`;
+  return visitIcs({
+    uid: `${v.id}@rempire-booking`,
+    start: Date.parse(v.startsAt),
+    end: Date.parse(v.endsAt),
+    summary: `${o.businessName}: ${services}`,
+    location: [v.location.name, v.location.address].filter(Boolean).join(", "),
+    description: `${c.barberK}: ${v.staffName}\n${c.changeCancel}: ${manage}`,
+    url: manage,
+    cancelled: v.status === "cancelled",
+    now: o.now,
+  });
 }

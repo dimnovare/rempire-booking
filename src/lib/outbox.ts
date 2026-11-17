@@ -9,15 +9,25 @@
  *   - a visit that moved, was cancelled or lost its reminder gets its queued
  *     row cancelled (and, if still booked, a new one at the new time).
  *
+ * The e-mail confirmation is queued by the booking itself (src/lib/booking.ts)
+ * and sent by sendForVisit right after the response; the cron picks it up if
+ * that try fails. Its letter is built at send time from the visit as it is
+ * then (a visit cancelled meanwhile gets no letter), with a change link of
+ * its own (visit_links, 006) and the .ics attached.
+ *
  * Sending claims rows with `for update skip locked`, so two runs never send
  * one message twice; a claimed row whose run died is retried after
  * locked_until. A channel whose transport is «disabled» (production with no
  * provider yet) is not claimed at all: its rows wait, nothing is lost.
  */
+import { getBusinessById } from "./availability";
 import type { Querier } from "./db";
-import { emailTransport, sendEmail } from "./email";
+import { emailTransport, sendEmail, type LetterBody } from "./email";
+import { confirmationLetter } from "./letters";
+import { siteUrl } from "./site";
 import { sendSms, smsTransport } from "./sms";
 import { localParts } from "./tz";
+import { mintVisitLink, visitById } from "./visits";
 
 type Env = Record<string, string | undefined>;
 export type Channel = "sms" | "email" | "push";
@@ -107,20 +117,34 @@ export async function planReminders(q: Querier, now = Date.now()): Promise<{ add
   return { added: added.length, cancelled: cancelled.length };
 }
 
-/** Claim due rows of the given channels for this run. */
-export async function claimDue(q: Querier, channels: Channel[], now = Date.now(), limit = OUTBOX.batch): Promise<OutboxRow[]> {
+/** Claim due rows of the given channels for this run, or for one visit only. */
+export async function claimDue(
+  q: Querier,
+  channels: Channel[],
+  now = Date.now(),
+  limit = OUTBOX.batch,
+  appointmentId: string | null = null,
+): Promise<OutboxRow[]> {
   if (!channels.length) return [];
   return q<OutboxRow>(
     `update notifications set status = 'sending', locked_until = $2, attempts = attempts + 1
       where id in (select id from notifications
                     where channel = any($3::text[]) and send_at <= $1
                       and (status = 'queued' or (status = 'sending' and locked_until < $1))
+                      and ($5::uuid is null or appointment_id = $5::uuid)
                     order by send_at
                     limit $4
                     for update skip locked)
       returning id, business_id, appointment_id, channel, kind, recipient, locale, payload, send_at, attempts`,
-    [new Date(now), new Date(now + OUTBOX.lockMin * 60_000), channels, limit],
+    [new Date(now), new Date(now + OUTBOX.lockMin * 60_000), channels, limit, appointmentId],
   );
+}
+
+function enabledChannels(env: Env): Channel[] {
+  const channels: Channel[] = [];
+  if (smsTransport(env) !== "disabled") channels.push("sms");
+  if (emailTransport(env) !== "disabled") channels.push("email");
+  return channels;
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -150,32 +174,70 @@ export type Senders = {
 
 export type OutboxResult = { planned: number; cancelled: number; sent: number; retry: number; failed: number; skipped: number; waiting: number };
 
+type Composed = { skip: string } | { subject: string; body: string | LetterBody };
+
+const LIVE = new Set(["booked", "pending"]);
+
+/** What a claimed row sends, built now; or why it is not sent at all. */
+async function compose(q: Querier, row: OutboxRow, now: number, env: Env): Promise<Composed> {
+  const p = row.payload as { startsAt?: string; subject?: string };
+  if (row.kind === "confirmation" && row.channel === "email") {
+    const v = row.appointment_id ? await visitById(q, row.appointment_id) : null;
+    if (!v) return { skip: "visit gone" };
+    if (!LIVE.has(v.status)) return { skip: `visit ${v.status}` };
+    if (Date.parse(v.startsAt) <= now) return { skip: "visit already started" };
+    const business = await getBusinessById(q, row.business_id);
+    if (!business) return { skip: "business gone" };
+    // a link of this letter's own: only its hash is kept (006_visit_links.sql)
+    const token = await mintVisitLink(q, v.id, "email");
+    const letter = confirmationLetter(v, { business, origin: siteUrl(env).origin, token, locale: row.locale, now });
+    return { subject: letter.subject, body: letter };
+  }
+  if (row.kind === "reminder" && Date.parse(String(p.startsAt)) <= now) return { skip: "visit already started" };
+  const text = messageText(row);
+  if (!text) return { skip: "no text" };
+  return { subject: String(p.subject || "REMPIRE"), body: text };
+}
+
+const emptyResult = (): OutboxResult => ({ planned: 0, cancelled: 0, sent: 0, retry: 0, failed: 0, skipped: 0, waiting: 0 });
+
 /** One cron run: plan reminders, then send what is due on the channels that are set up. */
 export async function runOutbox(q: Querier, now = Date.now(), env: Env = process.env, senders: Senders = { sms: sendSms, email: sendEmail }): Promise<OutboxResult> {
   const plan = await planReminders(q, now);
-  const channels: Channel[] = [];
-  if (smsTransport(env) !== "disabled") channels.push("sms");
-  if (emailTransport(env) !== "disabled") channels.push("email");
-  const res: OutboxResult = { planned: plan.added, cancelled: plan.cancelled, sent: 0, retry: 0, failed: 0, skipped: 0, waiting: 0 };
+  const res: OutboxResult = { ...emptyResult(), planned: plan.added, cancelled: plan.cancelled };
+  await deliver(q, await claimDue(q, enabledChannels(env), now), now, env, senders, res);
+  const [w] = await q<{ n: number }>(`select count(*)::int as n from notifications where status = 'queued' and send_at <= $1`, [new Date(now)]);
+  res.waiting = w.n;
+  return res;
+}
 
-  for (const row of await claimDue(q, channels, now)) {
-    const text = messageText(row);
-    const late = row.kind === "reminder" && Date.parse(String((row.payload as { startsAt?: string }).startsAt)) <= now;
-    if (!text || late) {
-      await q(`update notifications set status = 'skipped', locked_until = null, last_error = $2 where id = $1`, [row.id, late ? "visit already started" : "no text"]);
-      res.skipped++;
-      continue;
-    }
+/**
+ * Send what is due for one visit now: the confirmation, right after the
+ * booking's response. Whatever this misses, the next cron run sends.
+ */
+export async function sendForVisit(q: Querier, appointmentId: string, now = Date.now(), env: Env = process.env, senders: Senders = { sms: sendSms, email: sendEmail }): Promise<OutboxResult> {
+  const res = emptyResult();
+  await deliver(q, await claimDue(q, enabledChannels(env), now, OUTBOX.batch, appointmentId), now, env, senders, res);
+  return res;
+}
+
+async function deliver(q: Querier, rows: OutboxRow[], now: number, env: Env, senders: Senders, res: OutboxResult) {
+  for (const row of rows) {
     try {
+      const msg = await compose(q, row, now, env);
+      if ("skip" in msg) {
+        await q(`update notifications set status = 'skipped', locked_until = null, last_error = $2 where id = $1`, [row.id, msg.skip]);
+        res.skipped++;
+        continue;
+      }
       if (row.channel === "sms") {
-        const r = await senders.sms(row.recipient, text, env);
+        const r = await senders.sms(row.recipient, typeof msg.body === "string" ? msg.body : msg.body.text, env);
         await q(
           `update notifications set status = 'sent', sent_at = $2, provider = $3, provider_ref = $4, segments = $5, locked_until = null, last_error = null where id = $1`,
           [row.id, new Date(now), r.provider, r.ref, r.segments],
         );
       } else if (row.channel === "email") {
-        const subject = String((row.payload as { subject?: string }).subject || "REMPIRE");
-        const r = await senders.email(row.recipient, subject, text, env);
+        const r = await senders.email(row.recipient, msg.subject, msg.body, env);
         await q(`update notifications set status = 'sent', sent_at = $2, provider = $3, provider_ref = $4, locked_until = null, last_error = null where id = $1`, [
           row.id,
           new Date(now),
@@ -199,8 +261,4 @@ export async function runOutbox(q: Querier, now = Date.now(), env: Env = process
       }
     }
   }
-
-  const [w] = await q<{ n: number }>(`select count(*)::int as n from notifications where status = 'queued' and send_at <= $1`, [new Date(now)]);
-  res.waiting = w.n;
-  return res;
 }

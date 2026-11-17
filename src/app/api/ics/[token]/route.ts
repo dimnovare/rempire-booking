@@ -1,8 +1,8 @@
 /** GET /api/ics/<token>?lang=ru → the visit as a calendar file. */
 import { currentBusiness } from "@/lib/business";
 import { dbConfigured, query } from "@/lib/db";
-import { COPY, isLocale, pick } from "@/lib/i18n";
-import { visitIcs } from "@/lib/ics";
+import { isLocale } from "@/lib/i18n";
+import { visitIcsFor } from "@/lib/ics";
 import { findVisit } from "@/lib/visits";
 
 export async function GET(request: Request, ctx: RouteContext<"/api/ics/[token]">) {
@@ -14,18 +14,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/ics/[token]"
   const url = new URL(request.url);
   const lang = url.searchParams.get("lang");
   const locale = isLocale(lang) ? lang : isLocale(v.locale) ? v.locale : "ru";
-  const c = COPY[locale];
-  const services = v.services.map((s) => pick(s.name, locale)).join(" + ");
-  const ics = visitIcs({
-    uid: `${v.id}@rempire-booking`,
-    start: Date.parse(v.startsAt),
-    end: Date.parse(v.endsAt),
-    summary: `${business.name}: ${services}`,
-    location: [v.location.name, v.location.address].filter(Boolean).join(", "),
-    description: `${c.barberK}: ${v.staffName}\n${c.changeCancel}: ${url.origin}/${locale}/visit/${token}`,
-    url: `${url.origin}/${locale}/visit/${token}`,
-    cancelled: v.status === "cancelled",
-  });
+  const ics = visitIcsFor(v, { businessName: business.name, origin: url.origin, token, locale });
   return new Response(ics, {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",

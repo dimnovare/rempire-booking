@@ -1,7 +1,10 @@
 /**
  * The client's change-or-cancel link: /{locale}/visit/{token}. The token is
- * a secret only the client has; the database keeps its sha-256.
+ * a secret only the client has; the database keeps its sha-256: the booking
+ * screen's in appointments.manage_token_hash, each letter's or SMS's own in
+ * visit_links (006). Either one opens the visit.
  */
+import { randomBytes } from "node:crypto";
 import type { Business } from "./availability";
 import { hashToken } from "./booking";
 import { withTx, type Querier } from "./db";
@@ -27,8 +30,33 @@ export type VisitView = {
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{20,100}$/;
 
+// the visit a token opens: the booking screen's link or a message's own
+const BY_TOKEN = `(select id from appointments where manage_token_hash = $1
+                   union all
+                   select appointment_id from visit_links where token_hash = $1
+                   limit 1)`;
+
 export async function findVisit(q: Querier, businessId: string, token: string): Promise<VisitView | null> {
   if (!TOKEN_RE.test(token)) return null;
+  return loadVisit(q, `a.id = ${BY_TOKEN} and a.business_id = $2`, [hashToken(token), businessId]);
+}
+
+/** The same view by id, for messages built at send time. */
+export async function visitById(q: Querier, id: string): Promise<VisitView | null> {
+  return loadVisit(q, "a.id = $1", [id]);
+}
+
+/**
+ * A new change-or-cancel link for a visit, for one message. Only its hash
+ * is stored; the token goes out in the message and nowhere else.
+ */
+export async function mintVisitLink(q: Querier, appointmentId: string, purpose: string): Promise<string> {
+  const token = randomBytes(24).toString("base64url");
+  await q("insert into visit_links (token_hash, appointment_id, purpose) values ($1, $2, $3)", [hashToken(token), appointmentId, purpose]);
+  return token;
+}
+
+async function loadVisit(q: Querier, where: string, params: unknown[]): Promise<VisitView | null> {
   const [row] = await q<{
     id: string;
     status: string;
@@ -53,8 +81,8 @@ export async function findVisit(q: Querier, businessId: string, token: string): 
        join staff s on s.id = a.staff_id
        join clients c on c.id = a.client_id
        join locations l on l.id = a.location_id
-      where a.manage_token_hash = $1 and a.business_id = $2`,
-    [hashToken(token), businessId],
+      where ${where}`,
+    params,
   );
   if (!row) return null;
   const services = await q<{ service_id: string; name: L10n; duration_min: number; price_cents: number }>(
@@ -91,7 +119,7 @@ export async function cancelByClient(business: Business, token: string, now = Da
   return withTx(async (tx) => {
     const [row] = await tx<{ id: string; status: string; starts_at: Date; staff_id: string }>(
       `select id, status, starts_at, staff_id from appointments
-        where manage_token_hash = $1 and business_id = $2 for update`,
+        where id = ${BY_TOKEN} and business_id = $2 for update`,
       [hashToken(token), business.id],
     );
     if (!row) return "not_found";

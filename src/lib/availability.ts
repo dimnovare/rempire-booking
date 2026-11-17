@@ -27,6 +27,14 @@ export async function getBusiness(q: Querier, slug: string): Promise<Business | 
   return row ? { ...row, settings: readSettings(row.settings) } : null;
 }
 
+export async function getBusinessById(q: Querier, id: string): Promise<Business | null> {
+  const [row] = await q<Omit<Business, "settings"> & { settings: unknown }>(
+    "select id, slug, name, timezone, default_locale, settings from businesses where id = $1",
+    [id],
+  );
+  return row ? { ...row, settings: readSettings(row.settings) } : null;
+}
+
 /** One barber's terms for the chosen services. */
 export type StaffQuote = {
   staffId: string;

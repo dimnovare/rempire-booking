@@ -14,6 +14,8 @@ import { createHash, randomInt } from "node:crypto";
 import { hashPassword, passwordProblem, verifyPassword } from "../../../tools/password.mjs";
 import type { Querier } from "../db";
 import { EmailDisabled, sendEmail } from "../email";
+import { loginCodeLetter } from "../letters";
+import { siteUrl } from "../site";
 import { revokeOtherSessions, type Role } from "./sessions";
 
 const MIN = 60_000;
@@ -83,7 +85,8 @@ export async function sendLoginCode(q: Querier, emailRaw: string, ip: string, no
   await q("update login_codes set used_at = $2 where email = $1 and used_at is null", [email, new Date(now)]);
   await q("insert into login_codes (email, code_hash, expires_at, created_at) values ($1, $2, $3, $4)", [email, codeHash(email, code), new Date(now + LIMITS.codeTtlMin * MIN), new Date(now)]);
   try {
-    await send(email, `REMPIRE: ${code}`, `Код для входа: ${code}\nLogin code: ${code}\n\nДействует ${LIMITS.codeTtlMin} минут. Valid for ${LIMITS.codeTtlMin} minutes.\nЕсли вы не входили, просто удалите это письмо.`);
+    const letter = loginCodeLetter(code, LIMITS.codeTtlMin, siteUrl().origin);
+    await send(email, letter.subject, letter);
   } catch (err) {
     if (err instanceof EmailDisabled) return "disabled";
     // the provider refused (unverified sender, a bad key, an outage): say so, never the address

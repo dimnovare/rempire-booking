@@ -267,5 +267,15 @@ async function insertVisit(tx: Querier, business: Business, c: Clean, staffId: s
      values ($1, 'appointment', $2, 'create', $3::jsonb)`,
     [c.source === "admin" ? "admin" : "client", row.id, JSON.stringify({ staff_id: staffId, starts_at: new Date(c.start).toISOString(), any_staff: anyStaff, extra_cents: extra })],
   );
+  // A6: the confirmation letter, queued with the visit so neither is ever
+  // without the other. Its text, link and .ics are built at send time
+  // (src/lib/outbox.ts); the route sends it right after the response.
+  if (c.email) {
+    await tx(
+      `insert into notifications (business_id, appointment_id, channel, kind, recipient, locale, send_at)
+       values ($1, $2, 'email', 'confirmation', $3, $4, $5)`,
+      [business.id, row.id, c.email, c.locale, new Date(now)],
+    );
+  }
   return { visit: visitOf(row), token };
 }

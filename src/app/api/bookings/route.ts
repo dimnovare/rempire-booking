@@ -6,12 +6,17 @@
  * 201 { visit, manageUrl }    booked (or the same tap again: manageUrl null)
  * 409 { error: "slot_taken", alternatives: [[startMs, staffId, extraCents], …] }
  * 422 { error: "invalid", field }
+ *
+ * With an e-mail, the booking queued its confirmation; it goes out right
+ * after this response (the cron retries it if that fails).
  */
+import { after } from "next/server";
 import { loadAvailability } from "@/lib/availability";
 import { book, type BookingInput } from "@/lib/booking";
 import { currentBusiness } from "@/lib/business";
 import { dbConfigured, query } from "@/lib/db";
 import { isLocale } from "@/lib/i18n";
+import { sendForVisit } from "@/lib/outbox";
 import { localParts } from "@/lib/tz";
 
 const NO_STORE = { "Cache-Control": "no-store" };
@@ -50,6 +55,17 @@ export async function POST(request: Request) {
   const r = await book(query, business, input, { source: "online" });
 
   if (r.ok) {
+    if (!r.replay && input.email) {
+      const id = r.visit.id;
+      after(async () => {
+        try {
+          await sendForVisit(query, id);
+        } catch (err) {
+          // the row stays queued for the cron; never log the address
+          console.error("confirmation send failed:", err instanceof Error ? err.message : err);
+        }
+      });
+    }
     return Response.json(
       { visit: r.visit, replay: r.replay, manageUrl: r.manageToken ? `/${locale}/visit/${r.manageToken}` : null },
       { status: r.replay ? 200 : 201, headers: NO_STORE },
