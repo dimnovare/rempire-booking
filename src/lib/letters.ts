@@ -138,7 +138,7 @@ export function loginCodeLetter(code: string, ttlMin: number, origin: string): L
 type ConfirmCopy = {
   subject: (day: string, time: string) => string;
   eyebrow: string;
-  hello: (name: string) => string;
+  hello: string;
   services: string;
   cutoff: (span: string) => string;
   call: (phone: string) => string;
@@ -151,7 +151,7 @@ const CONFIRM: Record<Locale, ConfirmCopy> = {
   ru: {
     subject: (d, t) => `Вы записаны в REMPIRE: ${d}, ${t}`,
     eyebrow: "Подтверждение записи",
-    hello: (n) => (n ? `${n}, ждём вас!` : "Ждём вас!"),
+    hello: "Ждём вас!",
     services: "Услуги",
     cutoff: (s) => `Перенести или отменить онлайн можно не позже чем за ${s} до визита.`,
     call: (p) => `Позже — по телефону ${p}.`,
@@ -162,7 +162,7 @@ const CONFIRM: Record<Locale, ConfirmCopy> = {
   et: {
     subject: (d, t) => `Aeg on broneeritud: REMPIRE ${d} kell ${t}`,
     eyebrow: "Broneeringu kinnitus",
-    hello: (n) => (n ? `${n}, ootame sind!` : "Ootame sind!"),
+    hello: "Ootame sind!",
     services: "Teenused",
     cutoff: (s) => `Veebis saab aega muuta või tühistada kuni ${s} enne külastust.`,
     call: (p) => `Hiljem helista: ${p}.`,
@@ -173,7 +173,7 @@ const CONFIRM: Record<Locale, ConfirmCopy> = {
   en: {
     subject: (d, t) => `You're booked at REMPIRE: ${d}, ${t}`,
     eyebrow: "Booking confirmation",
-    hello: (n) => (n ? `${n}, see you soon!` : "See you soon!"),
+    hello: "See you soon!",
     services: "Services",
     cutoff: (s) => `You can change or cancel online up to ${s} before your visit.`,
     call: (p) => `After that, please call ${p}.`,
@@ -235,7 +235,10 @@ export function confirmationLetter(
     eyebrow(k.eyebrow),
     heading(c.booked),
     keyLine(`${esc(dayLong)}<br><span style="font-size:28px;line-height:36px;letter-spacing:1px;">${esc(s.time)}–${esc(e.time)}</span>`),
-    para(esc(k.hello(v.clientName))),
+    // No client name: the stored one belongs to the phone, and anyone can
+    // book with any phone and any e-mail, so it would tell a stranger whose
+    // number it is. Nothing the booker typed goes into the letter either.
+    para(esc(k.hello)),
     details([
       [c.barberK, esc(v.staffName)],
       [k.services, services.map(esc).join("<br>")],

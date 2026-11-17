@@ -50,6 +50,9 @@ export type BookingOutcome =
 
 export type BookingErrorCode = "invalid" | "slot_taken" | "not_offered";
 
+/** Confirmation letters to one e-mail address in 24 hours, at most. */
+export const CONFIRMATIONS_PER_DAY = 5;
+
 export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
@@ -270,12 +273,20 @@ async function insertVisit(tx: Querier, business: Business, c: Clean, staffId: s
   // A6: the confirmation letter, queued with the visit so neither is ever
   // without the other. Its text, link and .ics are built at send time
   // (src/lib/outbox.ts); the route sends it right after the response.
+  // The form is open to anyone, so one address gets at most
+  // CONFIRMATIONS_PER_DAY letters a day; the visit is booked either way.
   if (c.email) {
-    await tx(
-      `insert into notifications (business_id, appointment_id, channel, kind, recipient, locale, send_at)
-       values ($1, $2, 'email', 'confirmation', $3, $4, $5)`,
-      [business.id, row.id, c.email, c.locale, new Date(now)],
+    const [recent] = await tx<{ n: number }>(
+      "select count(*)::int as n from notifications where kind = 'confirmation' and recipient = $1 and created_at > $2",
+      [c.email, new Date(now - 24 * 3_600_000)],
     );
+    if (recent.n < CONFIRMATIONS_PER_DAY) {
+      await tx(
+        `insert into notifications (business_id, appointment_id, channel, kind, recipient, locale, send_at, created_at)
+         values ($1, $2, 'email', 'confirmation', $3, $4, $5, $5)`,
+        [business.id, row.id, c.email, c.locale, new Date(now)],
+      );
+    }
   }
   return { visit: visitOf(row), token };
 }

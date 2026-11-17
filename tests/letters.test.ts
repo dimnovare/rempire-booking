@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { book, type BookingInput } from "@/lib/booking";
+import { book, CONFIRMATIONS_PER_DAY, type BookingInput } from "@/lib/booking";
 import { closeDb, query } from "@/lib/db";
 import { sentToConsole } from "@/lib/email";
 import { confirmationLetter, loginCodeLetter } from "@/lib/letters";
@@ -74,7 +74,7 @@ describe("letters", () => {
   });
 
   it("confirmation: escapes what came from the database, links with the letter's token, attaches the .ics", () => {
-    const l = confirmationLetter(visit({ clientName: '<img src=x onerror="alert(1)">', staffName: "A&B" }), {
+    const l = confirmationLetter(visit({ clientName: "Stored Name", staffName: '<img src=x onerror="alert(1)">' }), {
       business,
       origin: ORIGIN,
       token: "tok_abcdefghijklmnopqrstuvwx",
@@ -83,7 +83,9 @@ describe("letters", () => {
     });
     expect(l.html).not.toContain("<img src=x");
     expect(l.html).toContain("&lt;img src=x onerror=&quot;alert(1)&quot;&gt;");
-    expect(l.html).toContain("A&amp;B");
+    // the stored name belongs to the phone; anyone may book with any phone
+    expect(l.html).not.toContain("Stored Name");
+    expect(l.text).not.toContain("Stored Name");
     expect(l.html).toContain(`href="${ORIGIN}/ru/visit/tok_abcdefghijklmnopqrstuvwx"`);
     expect(l.html).toContain(`${ORIGIN}/api/ics/tok_abcdefghijklmnopqrstuvwx?lang=ru`);
     expect(l.html).toContain('href="tel:+37255550000"');
@@ -116,6 +118,24 @@ describe("booking confirmation (A6)", () => {
     const again = await book(query, demo.business, i, { now: NOW });
     expect(again.ok && again.replay).toBe(true);
     expect(await confirmations(r.visit.id)).toHaveLength(1);
+  });
+
+  it(`one address gets at most ${CONFIRMATIONS_PER_DAY} letters a day; the visits are booked anyway`, async () => {
+    const times = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00"];
+    const ids: string[] = [];
+    for (const time of times) {
+      const r = await book(query, demo.business, input({ time }), { now: NOW });
+      if (!r.ok) throw new Error(`${time}: ${r.code}`);
+      ids.push(r.visit.id);
+    }
+    const [q] = await query<{ n: number }>("select count(*)::int as n from notifications where kind = 'confirmation' and recipient = 'client@example.test'");
+    expect(ids).toHaveLength(times.length);
+    expect(q.n).toBe(CONFIRMATIONS_PER_DAY);
+    expect(await confirmations(ids[times.length - 1])).toEqual([]);
+    // a day later the address gets letters again
+    const later = await book(query, demo.business, input({ time: "16:00" }), { now: NOW + 25 * 3_600_000 });
+    if (!later.ok) throw new Error(later.code);
+    expect(await confirmations(later.visit.id)).toHaveLength(1);
   });
 
   it("no e-mail, no letter", async () => {
