@@ -57,6 +57,9 @@ a day off. Renat sees all of it in the admin.
 B1 comes first. B2 and B5 can then run side by side, and B3, B4 and B6
 build on B2.
 
+**Real-phone test:** `docs/phase-b-phone-test.md` (one barber, one iPhone,
+one Android, about an hour). It needs the VAPID keys in Vercel first.
+
 ## Data
 
 Migrations start at **008**: the admin redesign uses 007
