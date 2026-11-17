@@ -59,13 +59,17 @@ export async function migrate(db, opts = {}) {
   return applied;
 }
 
-/** Same rule as src/lib/db.ts sslFor(); keep the two in step. */
+/**
+ * Same rule as src/lib/db.ts sslFor(); keep the two in step. With
+ * DATABASE_SSL_CA the chain must end in that CA and the host name is not
+ * compared (Railway's certificate never names the public proxy host).
+ */
 export function sslFor(url, env = process.env) {
   if (/localhost|127\.0\.0\.1|\[::1\]/.test(url)) return undefined;
   if (/[?&]sslmode=disable/.test(url)) return undefined;
   const ca = (env.DATABASE_SSL_CA ?? "").trim();
   if (env.DATABASE_SSL_NO_VERIFY === "1") return { rejectUnauthorized: false };
-  return ca ? { rejectUnauthorized: true, ca } : { rejectUnauthorized: true };
+  return ca ? { rejectUnauthorized: true, ca, checkServerIdentity: () => undefined } : { rejectUnauthorized: true };
 }
 
 /** A PGlite with the extensions the migrations need. */

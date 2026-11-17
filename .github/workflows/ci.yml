@@ -60,25 +60,17 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - if: env.VERCEL_TOKEN != ''
-        run: npm ci
 
-      # postbuild migrates the staging database and loads the demo data when
-      # DATABASE_URL is set in Vercel; until then it skips both.
-      - name: Build
-        if: env.VERCEL_TOKEN != ''
-        env:
-          SEED_DEMO: "yes"
-        run: |
-          npx --yes $VERCEL_CLI pull --yes --environment=production --token "$VERCEL_TOKEN"
-          npx --yes $VERCEL_CLI build --prod --token "$VERCEL_TOKEN"
-
-      # Staging only: DB_DRIVER=auto uses DATABASE_URL once Vercel has it, and
-      # an in-memory demo database (src/lib/db.ts) until then.
+      # Vercel builds it, not this runner: DATABASE_URL is a Secret in Vercel,
+      # and Secrets are readable only inside Vercel's own build (`vercel pull`
+      # hands them back empty). postbuild then migrates the staging database
+      # and loads the demo data; if either fails, the build fails and the
+      # previous deployment stays live.
+      # Runtime: DB_DRIVER=auto uses DATABASE_URL when Vercel has it, and an
+      # in-memory demo database (src/lib/db.ts) when it does not.
       - name: Deploy
         if: env.VERCEL_TOKEN != ''
-        run: npx --yes $VERCEL_CLI deploy --prebuilt --prod --env DB_DRIVER=auto --env SEED_DEMO=yes --token "$VERCEL_TOKEN"
+        run: npx --yes $VERCEL_CLI deploy --prod --build-env SEED_DEMO=yes --env DB_DRIVER=auto --env SEED_DEMO=yes --token "$VERCEL_TOKEN"
 
       - name: noindex on staging
         if: env.VERCEL_TOKEN != ''

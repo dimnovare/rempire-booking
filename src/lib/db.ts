@@ -54,8 +54,14 @@ function cleanParams(params?: unknown[]): unknown[] | undefined {
 /**
  * TLS to the database, decided by env only (the shop's rule):
  *   a local host or ?sslmode=disable ⇒ no TLS;
- *   DATABASE_SSL_CA (PEM)            ⇒ verified against that CA (Railway signs its own);
+ *   DATABASE_SSL_CA (PEM)            ⇒ the chain must end in that CA;
  *   DATABASE_SSL_NO_VERIFY=1         ⇒ encrypted, not verified.
+ *
+ * With DATABASE_SSL_CA the host name is not compared. Railway's Postgres makes
+ * its own CA on first start (root.key never leaves the volume) and names its
+ * certificate only localhost and postgres.railway.internal, never the public
+ * proxy host Vercel dials. A CA that signs this one database and nothing else
+ * already proves which server answered; the name check would only fail.
  * Same words as tools/migrate.mjs sslFor().
  */
 export function sslFor(url: string, env: Record<string, string | undefined> = process.env) {
@@ -63,7 +69,7 @@ export function sslFor(url: string, env: Record<string, string | undefined> = pr
   if (/[?&]sslmode=disable/.test(url)) return undefined;
   const ca = (env.DATABASE_SSL_CA ?? "").trim();
   if (env.DATABASE_SSL_NO_VERIFY === "1") return { rejectUnauthorized: false };
-  return ca ? { rejectUnauthorized: true, ca } : { rejectUnauthorized: true };
+  return ca ? { rejectUnauthorized: true, ca, checkServerIdentity: () => undefined } : { rejectUnauthorized: true };
 }
 
 async function makePg(): Promise<Raw> {

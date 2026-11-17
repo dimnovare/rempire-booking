@@ -10,7 +10,7 @@ Screens: `docs/client-flow.md` and the approved mock.*
 |---|---|---|---|
 | A1 | **Data core:** migrations, `db.ts`, migrate on deploy, Tallinn time maths, free slots, booking with no double booking, demo seed. Tests on PGlite. | nothing | done 17.11 |
 | A2 | **Client flow on real data:** the 4 screens, `/api/slots`, `/api/bookings`, the change-or-cancel page, «book again». | nothing | done 17.11; staging runs it on an in-memory demo database until A3 |
-| A3 | **Staging database:** a Postgres for staging; migrations and the demo seed run on every deploy (`postbuild`). | Dim: where it lives, then `DATABASE_URL` into Vercel | waiting |
+| A3 | **Staging database:** a Postgres for staging; migrations and the demo seed run on every deploy (`postbuild`). | Dim: `DATABASE_URL` into Vercel | 17.11: Postgres `rempire-booking-staging` on the shop's Railway, `DATABASE_SSL_CA` in Vercel, Vercel now builds (docs/staging-setup.md). Waiting for `DATABASE_URL` |
 | A4 | **Staff login:** password, 6-digit e-mail code, Google. | Resend account; Google OAuth client (whose account?) | |
 | A5 | **Renat's admin:** day and week calendar, one column per barber; add, move, cancel; barbers; services with each barber's price and time; hours, breaks, vacations. | | |
 | A6 | **Messages:** e-mail confirmation with `.ics` and the change link; the 2-hour SMS behind `sendSms(to, text)`; a cron for the outbox. | Resend; SMS provider account | |
@@ -76,7 +76,8 @@ A double tap with one `Idempotency-Key` returns the first booking.
 **Staging database until A3:** CI deploys with `DB_DRIVER=auto`. With no
 `DATABASE_URL` the app runs an in-memory Postgres (PGlite) with the demo
 data, and says so in a banner. Bookings there vanish when the server
-restarts. As soon as `DATABASE_URL` is in Vercel, the same deploy uses it.
+restarts. As soon as `DATABASE_URL` is in Vercel, the next deploy migrates
+the Railway database, loads the demo data and uses it.
 
 **Not in A2 yet:** moving a visit in one step (now: book the new time, then
 cancel the old one); e-mail and SMS (A6); the salon phone (not in the demo
