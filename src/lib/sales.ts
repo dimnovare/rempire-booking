@@ -38,6 +38,8 @@ export const SALES = {
   lockMin: 5,
   /** tries before a sale is «failed» (2, 4 … 128 min apart: about 4 hours) */
   maxAttempts: 8,
+  /** a cron run starts no new shop call after this long, so a slow shop never eats the run */
+  budgetMs: 40_000,
 };
 
 export type Sale = {
@@ -316,11 +318,17 @@ export async function failedSales(q: Querier, businessId: string): Promise<(Sale
 
 /* ---------- to the shop ---------- */
 
-export type SyncResult = { sent: number; retry: number; failed: number };
+/** `left`: claimed sales this run had no time for; they wait for the next one, their try not counted. */
+export type SyncResult = { sent: number; retry: number; failed: number; left?: number };
 
-/** One run: send the sales whose undo window is over. Called by the cron. */
-export async function syncShopSales(q: Querier, now = Date.now(), env: Env = process.env, send = sendBarberSale): Promise<SyncResult> {
+/**
+ * One run: send the sales whose undo window is over. Called by the cron,
+ * after the messages. Starts no new shop call once `budgetMs` (wall clock)
+ * is spent; each call has its own timeout (src/lib/shop.ts).
+ */
+export async function syncShopSales(q: Querier, now = Date.now(), env: Env = process.env, send = sendBarberSale, budgetMs = SALES.budgetMs): Promise<SyncResult> {
   const res: SyncResult = { sent: 0, retry: 0, failed: 0 };
+  const stopAt = Date.now() + budgetMs;
   const rows = await q<SaleRow & { staff_name: string; sync_attempts: number }>(
     `update product_sales p set sync_status = 'sending', sync_locked = $2, sync_attempts = p.sync_attempts + 1
        from staff s
@@ -331,7 +339,13 @@ export async function syncShopSales(q: Querier, now = Date.now(), env: Env = pro
       returning p.*, s.display_name as staff_name`,
     [new Date(now), new Date(now + SALES.lockMin * 60_000), SALES.batch],
   );
-  for (const r of rows) {
+  for (const [i, r] of rows.entries()) {
+    if (Date.now() >= stopAt) {
+      const ids = rows.slice(i).map((x) => x.id);
+      await q(`update product_sales set sync_status = 'queued', sync_locked = null, sync_attempts = greatest(sync_attempts - 1, 0) where id = any($1::uuid[])`, [ids]);
+      res.left = ids.length;
+      break;
+    }
     try {
       const out = await send(
         {

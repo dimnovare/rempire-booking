@@ -25,7 +25,7 @@ import {
 } from "@/lib/billing/invoices";
 import { formatNumber, listIssuers, listReceivers, receiverForStaff, rentOn, saveIssuer, saveReceiver, setLastNumber, setRent, type IssuerInput } from "@/lib/billing/parties";
 import { invoicePdf, invoiceMessage } from "@/lib/billing/send";
-import { monthCsv, monthOverview, monthStatement } from "@/lib/billing/statement";
+import { csvCell, monthCsv, monthOverview, monthStatement } from "@/lib/billing/statement";
 import { getBusiness, type Business } from "@/lib/availability";
 import { closeDb, query } from "@/lib/db";
 import { sentToConsole } from "@/lib/email";
@@ -169,6 +169,19 @@ describe("selling (C3)", () => {
     expect(await syncShopSales(query, later + 11 * 60_000, FAKE)).toEqual({ sent: 1, retry: 0, failed: 0 });
     const [row] = await query<{ shop_order_ref: string }>("select shop_order_ref from product_sales where id = $1", [a.sale.id]);
     expect(row.shop_order_ref).toMatch(/^DEMO-/);
+  });
+  it("starts no shop call once the run's time is spent, and the sale waits without losing a try", async () => {
+    const t = Date.now();
+    const a = await sell("valentin", paste, "client", 1, t);
+    if (!a.ok) throw new Error("sell failed");
+    const later = t + (SALES.undoMin + 1) * 60_000;
+    const never = async (): Promise<{ orderNumber: string; repeat: boolean }> => {
+      throw new Error("should not be called");
+    };
+    expect(await syncShopSales(query, later, FAKE, never, 0)).toEqual({ sent: 0, retry: 0, failed: 0, left: 1 });
+    const [row] = await query<{ sync_status: string; sync_attempts: number; sync_locked: Date | null }>("select sync_status, sync_attempts, sync_locked from product_sales where id = $1", [a.sale.id]);
+    expect(row).toEqual({ sync_status: "queued", sync_attempts: 0, sync_locked: null });
+    expect(await syncShopSales(query, later, FAKE)).toEqual({ sent: 1, retry: 0, failed: 0 });
   });
   it("reverses a sale with a minus row, once", async () => {
     const a = await sell("valentin", paste, "client", 2);
@@ -418,5 +431,16 @@ describe("statement and overview (C4, C6)", () => {
     expect(csvLines.trim().split("\r\n")).toHaveLength(3);
     expect(monthRange("2026-02")).toEqual({ from: "2026-02-01", to: "2026-02-28" });
     expect(shiftMonth("2026-01", -1)).toBe("2025-12");
+  });
+  it("never lets a typed text become a spreadsheet formula", () => {
+    expect(csvCell('=HYPERLINK("http://x","y")')).toBe(`"'=HYPERLINK(""http://x"",""y"")"`);
+    expect(csvCell("+372 5555")).toBe("'+372 5555");
+    expect(csvCell("@SUM(A1)")).toBe("'@SUM(A1)");
+    expect(csvCell("-cmd")).toBe("'-cmd");
+    expect(csvCell("\tx")).toBe("'\tx");
+    expect(csvCell("-9,83")).toBe("-9,83");
+    expect(csvCell(-3)).toBe("-3");
+    expect(csvCell("Rent; October")).toBe('"Rent; October"');
+    expect(csvCell("OÜ Demo")).toBe("OÜ Demo");
   });
 });

@@ -26,11 +26,12 @@ export async function GET(request: Request) {
   }
   if (!dbConfigured()) return Response.json({ error: "unavailable" }, { status: 503, headers: NO_STORE });
   const now = Date.now();
-  // Phase C: barbers' sales to the shop (src/lib/sales.ts) and, from the
-  // billing day, last month's invoice drafts (src/lib/billing/invoices.ts).
-  // Each on its own: one failing never holds up the messages.
+  // The messages first: reminders and confirmations never wait on the shop.
+  const result = await runOutbox(query, now);
+  // Phase C, after them and each on its own: barbers' sales to the shop
+  // (src/lib/sales.ts, capped at SALES.budgetMs) and, from the billing day,
+  // last month's invoice drafts (src/lib/billing/invoices.ts).
   const sales = await syncShopSales(query, now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
   const drafts = await planInvoiceDrafts(query, now).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
-  const result = await runOutbox(query, now);
   return Response.json({ ...result, sales, drafts }, { headers: NO_STORE });
 }

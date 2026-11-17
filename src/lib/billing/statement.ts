@@ -136,10 +136,18 @@ export async function monthOverview(q: Querier, business: Business, month: strin
 
 /* ---------- the accountant's CSV ---------- */
 
-const cell = (v: string | number) => {
-  const s = String(v ?? "");
+/**
+ * One CSV cell. Text that a spreadsheet would read as a formula (= + - @,
+ * a tab or a return first: a receiver's name, a line's text) gets a «'» in
+ * front, so the accountant's Excel shows it and never runs it. Our own
+ * amounts («-9,83») stay numbers.
+ */
+export const csvCell = (v: string | number) => {
+  let s = String(v ?? "");
+  if (typeof v === "string" && /^[=+\-@\t\r]/.test(s) && !/^-\d+(,\d+)?$/.test(s)) s = `'${s}`;
   return /[";\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };
+const cell = csvCell;
 const csv = (rows: (string | number)[][]) => "﻿" + rows.map((r) => r.map(cell).join(";")).join("\r\n") + "\r\n";
 const dmy = (iso: string | null) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? "");
