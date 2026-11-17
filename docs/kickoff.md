@@ -391,3 +391,6 @@ No secrets are written here. The full registry for the shop is
       dashboard.
     - CI deploys with a token scoped to that project only.
     - Details: `docs/staging-setup.md`.
+- **Step 1 done, the same day:** <https://rempire-booking.diipsolutions.eu>
+  is live, deployed by CI, and passes `check:noindex` (header, meta,
+  robots.txt, 404).

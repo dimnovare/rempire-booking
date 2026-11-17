@@ -29,7 +29,7 @@ IDs are not secrets. The token is.
 - **Name:** `rempire-booking-ci`.
 - **Scope:** the `rempire-booking` project only, not the whole team. It
   cannot touch the shop's `rempire-web`.
-- **Expires:** 17.11.2027.
+- **Created:** 17.11.2026. **Expires:** 17.11.2027.
 - **Created by Dim:** Vercel → Account Settings → Tokens → Create. Vercel
   shows it only once.
 - **Stored by Dim:** GitHub → this repo → Settings → Secrets and variables
@@ -44,6 +44,8 @@ IDs are not secrets. The token is.
 
 ## DNS (Cloudflare, zone `diipsolutions.eu`)
 
+Both records were added on 17.11.2026, in Dim's Cloudflare account.
+
 | Type | Name | Value | Proxy |
 |---|---|---|---|
 | CNAME | `rempire-booking` | `55332b869503f557.vercel-dns-016.com` | DNS only |
@@ -53,6 +55,9 @@ IDs are not secrets. The token is.
   Dim's own Vercel account.
 - If `_vercel` already has TXT records (for `rempireshop.diipsolutions.eu`),
   **add** this one beside them. Never replace them.
+- After the records exist, Vercel → project → Settings → Domains →
+  **Refresh** on the domain. It turns «Valid Configuration», and the TLS
+  certificate follows within a minute.
 
 ## Deploying
 
