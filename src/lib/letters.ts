@@ -183,12 +183,96 @@ const CONFIRM: Record<Locale, ConfirmCopy> = {
   },
 };
 
+// ---- a visit changed by the salon: moved or cancelled (A6) ----------------
+
+type ChangeCopy = {
+  subject: (day: string, time: string) => string;
+  eyebrow: string;
+  heading: string;
+  lead: string;
+};
+
+const MOVED: Record<Locale, ChangeCopy & { was: (when: string) => string }> = {
+  ru: {
+    subject: (d, t) => `Запись перенесена: ${d}, ${t}`,
+    eyebrow: "Запись изменена",
+    heading: "Новое время",
+    lead: "Мы изменили вашу запись. Вот как она выглядит теперь.",
+    was: (w) => `Было: ${w}`,
+  },
+  et: {
+    subject: (d, t) => `Aeg on muudetud: REMPIRE ${d} kell ${t}`,
+    eyebrow: "Broneering muudetud",
+    heading: "Uus aeg",
+    lead: "Muutsime sinu broneeringut. Nii see nüüd välja näeb.",
+    was: (w) => `Enne: ${w}`,
+  },
+  en: {
+    subject: (d, t) => `Your REMPIRE booking has moved: ${d}, ${t}`,
+    eyebrow: "Booking changed",
+    heading: "New time",
+    lead: "We have changed your booking. Here is how it looks now.",
+    was: (w) => `Was: ${w}`,
+  },
+};
+
+const CANCELLED: Record<Locale, ChangeCopy & { call: (phone: string) => string; why: string }> = {
+  ru: {
+    subject: (d, t) => `Запись отменена: ${d}, ${t}`,
+    eyebrow: "Отмена записи",
+    heading: "Запись отменена",
+    lead: "Мы отменили вашу запись. Если хотите другое время, запишитесь снова.",
+    call: (p) => `Вопросы — по телефону ${p}.`,
+    why: "Письмо пришло, потому что у вас была запись в REMPIRE.",
+  },
+  et: {
+    subject: (d, t) => `Aeg on tühistatud: REMPIRE ${d} kell ${t}`,
+    eyebrow: "Tühistamine",
+    heading: "Aeg on tühistatud",
+    lead: "Tühistasime sinu aja. Kui soovid uut aega, broneeri uuesti.",
+    call: (p) => `Küsimuste korral helista: ${p}.`,
+    why: "Said selle kirja, sest sul oli aeg REMPIRE'is.",
+  },
+  en: {
+    subject: (d, t) => `Your REMPIRE booking is cancelled: ${d}, ${t}`,
+    eyebrow: "Cancellation",
+    heading: "Booking cancelled",
+    lead: "We have cancelled your booking. If you would like another time, book again.",
+    call: (p) => `Questions? Call ${p}.`,
+    why: "You get this e-mail because you had a booking at REMPIRE.",
+  },
+};
+
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
-export function confirmationLetter(
-  v: VisitView,
-  o: { business: Pick<Business, "name" | "timezone" | "settings">; origin: string; token: string; locale: Locale; now?: number },
-): Letter & { attachments: Attachment[] } {
+export type VisitLetterKind = "confirmation" | "moved" | "cancelled";
+
+type VisitLetterOptions = {
+  business: Pick<Business, "name" | "timezone" | "settings">;
+  origin: string;
+  token: string;
+  locale: Locale;
+  now?: number;
+  /** moved: where the visit was before, for the «Было» line */
+  from?: { startsAt: string; staffName?: string };
+};
+
+/** «Вторник, 25 ноября» in the visit's timezone. */
+function longDay(ms: number, L: Locale, tz: string) {
+  const long = new Intl.DateTimeFormat(INTL[L], { weekday: "long", day: "numeric", month: "long", timeZone: tz }).format(ms);
+  return long.charAt(0).toUpperCase() + long.slice(1);
+}
+
+export function confirmationLetter(v: VisitView, o: VisitLetterOptions): Letter & { attachments: Attachment[] } {
+  return visitLetter("confirmation", v, o);
+}
+
+/**
+ * The letter about one visit: its confirmation, or that the salon moved or
+ * cancelled it. All three show the visit as it is now; none carries the
+ * client's name (see below).
+ */
+export function visitLetter(kind: VisitLetterKind, v: VisitView, o: VisitLetterOptions): Letter & { attachments: Attachment[] } {
   const L = o.locale;
   const c = COPY[L];
   const k = CONFIRM[L];
@@ -198,12 +282,12 @@ export function confirmationLetter(
   const e = localParts(Date.parse(v.endsAt), tz);
   const [, mm, dd] = s.date.split("-").map(Number);
   const short = `${pad2(dd)}.${pad2(mm)}`;
-  const long = new Intl.DateTimeFormat(INTL[L], { weekday: "long", day: "numeric", month: "long", timeZone: tz }).format(start);
-  const dayLong = long.charAt(0).toUpperCase() + long.slice(1);
+  const dayLong = longDay(start, L, tz);
   const when = `${dayLong}, ${s.time}–${e.time}`;
 
   const manage = `${o.origin}/${L}/visit/${o.token}`;
   const ics = `${o.origin}/api/ics/${o.token}?lang=${L}`;
+  const again = `${o.origin}/${L}`;
   const services = v.services.map((x) => pick(x.name, L));
   const place = [v.location.name, v.location.address].filter(Boolean).join(", ");
   const maps = v.location.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.location.address)}` : "";
@@ -211,54 +295,76 @@ export function confirmationLetter(
   const extra = v.extraCents > 0 ? c.plusSpecial(eur(v.totalCents - v.extraCents), eur(v.extraCents)) : "";
   const cut = o.business.settings.cancel_cutoff_min;
   const span = cut >= 60 && cut % 60 === 0 ? k.hours(cut / 60) : k.minutes(cut);
-  const rules = [cut > 0 ? k.cutoff(span) : "", v.location.phone ? k.call(v.location.phone) : ""].filter(Boolean);
-  const subject = k.subject(short, s.time);
+  const phone = v.location.phone;
+  // the phone as a tap-to-call link inside a sentence of escaped copy
+  const tel = phone ? `<a href="tel:${esc(phone.replace(/[^\d+]/g, ""))}" style="color:${SOFT};white-space:nowrap;">${esc(phone)}</a>` : "";
+  const withTel = (sentence: (p: string) => string) => esc(sentence("\u0000")).replace("\u0000", tel);
+
+  let wasLine = "";
+  if (kind === "moved" && o.from) {
+    const f = Date.parse(o.from.startsAt);
+    const fromWhen = `${longDay(f, L, tz)}, ${localParts(f, tz).time}`;
+    wasLine = MOVED[L].was(o.from.staffName && o.from.staffName !== v.staffName ? `${fromWhen} · ${o.from.staffName}` : fromWhen);
+  }
+
+  const copy = kind === "moved" ? MOVED[L] : kind === "cancelled" ? CANCELLED[L] : null;
+  const subject = copy ? copy.subject(short, s.time) : k.subject(short, s.time);
+  const title = copy ? copy.heading : c.booked;
+  const rules = kind === "cancelled" ? [phone ? CANCELLED[L].call(phone) : ""].filter(Boolean) : [cut > 0 ? k.cutoff(span) : "", phone ? k.call(phone) : ""].filter(Boolean);
+  const rulesHtml = (kind === "cancelled" ? [tel ? withTel(CANCELLED[L].call) : ""] : [cut > 0 ? esc(k.cutoff(span)) : "", tel ? withTel(k.call) : ""])
+    .filter(Boolean)
+    .join(" ");
 
   const text = [
-    c.booked,
+    title,
+    ...(copy ? ["", copy.lead] : []),
     "",
     when,
+    ...(wasLine ? [wasLine] : []),
     `${c.barberK}: ${v.staffName}`,
     `${k.services}: ${services.join(" + ")}`,
-    `${c.total}: ${total}${extra ? ` (${extra})` : ""}`,
+    ...(kind === "cancelled" ? [] : [`${c.total}: ${total}${extra ? ` (${extra})` : ""}`]),
     `${c.whereK}: ${place}`,
     "",
-    `${c.changeCancel}: ${manage}`,
-    `${c.addCal}: ${ics}`,
+    ...(kind === "cancelled" ? [`${c.again}: ${again}`] : [`${c.changeCancel}: ${manage}`, `${c.addCal}: ${ics}`]),
     ...(rules.length ? ["", rules.join(" ")] : []),
   ].join("\n");
 
-  // the same rules as the text part, with the phone as a tap-to-call link
-  const tel = v.location.phone ? `<a href="tel:${esc(v.location.phone.replace(/[^\d+]/g, ""))}" style="color:${SOFT};white-space:nowrap;">${esc(v.location.phone)}</a>` : "";
-  const rulesHtml = [cut > 0 ? esc(k.cutoff(span)) : "", tel ? esc(k.call("\u0000")).replace("\u0000", tel) : ""].filter(Boolean).join(" ");
+  const time =
+    kind === "cancelled"
+      ? `<span style="color:${SOFT};text-decoration:line-through;">${esc(dayLong)}<br><span style="font-size:28px;line-height:36px;letter-spacing:1px;">${esc(s.time)}–${esc(e.time)}</span></span>`
+      : `${esc(dayLong)}<br><span style="font-size:28px;line-height:36px;letter-spacing:1px;">${esc(s.time)}–${esc(e.time)}</span>`;
+  const rows: [string, string][] = [
+    [c.barberK, esc(v.staffName)],
+    [k.services, services.map(esc).join("<br>")],
+    ...(kind === "cancelled" ? [] : [[c.total, `${esc(total)}${extra ? `<div style="font:13px/20px ${FONT};color:${SOFT};">${esc(extra)}</div>` : ""}`] as [string, string]]),
+    [c.whereK, maps ? `<a href="${esc(maps)}" style="color:${FG};text-decoration:underline;">${esc(place)}</a>` : esc(place)],
+  ];
   const body = [
-    eyebrow(k.eyebrow),
-    heading(c.booked),
-    keyLine(`${esc(dayLong)}<br><span style="font-size:28px;line-height:36px;letter-spacing:1px;">${esc(s.time)}–${esc(e.time)}</span>`),
+    eyebrow(copy ? copy.eyebrow : k.eyebrow),
+    heading(title),
+    keyLine(time),
+    ...(wasLine ? [para(esc(wasLine), SOFT, 14)] : []),
     // No client name: the stored one belongs to the phone, and anyone can
     // book with any phone and any e-mail, so it would tell a stranger whose
     // number it is. Nothing the booker typed goes into the letter either.
-    para(esc(k.hello)),
-    details([
-      [c.barberK, esc(v.staffName)],
-      [k.services, services.map(esc).join("<br>")],
-      [c.total, `${esc(total)}${extra ? `<div style="font:13px/20px ${FONT};color:${SOFT};">${esc(extra)}</div>` : ""}`],
-      [c.whereK, maps ? `<a href="${esc(maps)}" style="color:${FG};text-decoration:underline;">${esc(place)}</a>` : esc(place)],
-    ]),
-    button(manage, c.changeCancel, true),
-    button(ics, c.addCal, false),
+    para(esc(copy ? copy.lead : k.hello)),
+    details(rows),
+    ...(kind === "cancelled" ? [button(again, c.again, true)] : [button(manage, c.changeCancel, true), button(ics, c.addCal, false)]),
     ...(rulesHtml ? [`<tr><td style="height:10px;font-size:0;line-height:0;">&nbsp;</td></tr>`, para(rulesHtml, SOFT, 14)] : []),
   ];
 
   const html = layout({
     lang: L,
     title: subject,
-    preheader: `${when} · ${v.staffName}`,
+    preheader: kind === "moved" && wasLine ? `${when} · ${wasLine}` : `${when} · ${v.staffName}`,
     origin: o.origin,
     body: body.join("\n"),
-    footer: [esc([o.business.name, v.location.address].filter(Boolean).join(" · ")), esc(k.why)],
+    footer: [esc([o.business.name, v.location.address].filter(Boolean).join(" · ")), esc(kind === "cancelled" ? CANCELLED[L].why : k.why)],
   });
 
+  // a cancelled visit's file says METHOD:CANCEL, so a calendar app can drop it
   const calendar = visitIcsFor(v, { businessName: o.business.name, origin: o.origin, token: o.token, locale: L, now: o.now });
-  return { subject, text, html, attachments: [{ filename: "rempire.ics", content: calendar, contentType: "text/calendar; charset=utf-8; method=PUBLISH" }] };
+  const method = v.status === "cancelled" ? "CANCEL" : "PUBLISH";
+  return { subject, text, html, attachments: [{ filename: "rempire.ics", content: calendar, contentType: `text/calendar; charset=utf-8; method=${method}` }] };
 }

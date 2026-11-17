@@ -297,3 +297,52 @@ export async function queueConfirmation(tx: Querier, businessId: string, appoint
   );
   return true;
 }
+
+/** A moved letter waits this long, so a few quick moves send one letter. */
+export const CHANGE_LETTER_DELAY_MS = 2 * 60_000;
+
+/**
+ * A6: tell the client the salon moved or cancelled their visit (Dim,
+ * 17.11.2026). Call it in the change's own transaction, with the visit row
+ * locked. The letter goes only to the address this visit's confirmation
+ * went to, in its language: no address learns about a visit it was not
+ * already told about. If the confirmation is still queued, it is built at
+ * send time and already shows the change (or is skipped when cancelled),
+ * so nothing more is queued. Like the confirmation, the letter is built at
+ * send time from the visit as it is then (src/lib/outbox.ts).
+ */
+export async function queueChangeLetter(
+  tx: Querier,
+  businessId: string,
+  appointmentId: string,
+  kind: "moved" | "cancelled",
+  from: { startsAt: Date; staffId: string } | null,
+  now = Date.now(),
+): Promise<boolean> {
+  const [conf] = await tx<{ recipient: string; locale: string; status: string }>(
+    `select recipient, locale, status from notifications
+      where appointment_id = $1 and kind = 'confirmation' and channel = 'email'
+      order by created_at limit 1`,
+    [appointmentId],
+  );
+  if (!conf || (conf.status !== "sent" && conf.status !== "sending")) return false;
+  if (kind === "moved") {
+    // one still waiting is built from the visit as it is when it goes, and
+    // keeps the time the client was told first
+    const [waiting] = await tx<{ id: string }>(
+      "select id from notifications where appointment_id = $1 and kind = 'moved' and status = 'queued' limit 1",
+      [appointmentId],
+    );
+    if (waiting) return false;
+  } else {
+    await tx("update notifications set status = 'cancelled', locked_until = null where appointment_id = $1 and kind = 'moved' and status = 'queued'", [appointmentId]);
+  }
+  const [staff] = from ? await tx<{ display_name: string }>("select display_name from staff where id = $1", [from.staffId]) : [];
+  const payload = from ? { fromStart: from.startsAt.toISOString(), fromStaffId: from.staffId, fromStaff: staff?.display_name ?? "" } : {};
+  await tx(
+    `insert into notifications (business_id, appointment_id, channel, kind, recipient, locale, payload, send_at, created_at)
+     values ($1, $2, 'email', $3, $4, $5, $6::jsonb, $7, $8)`,
+    [businessId, appointmentId, kind, conf.recipient, conf.locale, JSON.stringify(payload), new Date(now + (kind === "moved" ? CHANGE_LETTER_DELAY_MS : 0)), new Date(now)],
+  );
+  return true;
+}

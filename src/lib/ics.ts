@@ -48,6 +48,9 @@ export function visitIcs(v: {
     `METHOD:${v.cancelled ? "CANCEL" : "PUBLISH"}`,
     "BEGIN:VEVENT",
     `UID:${v.uid}`,
+    // minutes since 2026: a file built later (a moved or cancelled visit)
+    // always outranks an earlier one, wherever it came from
+    `SEQUENCE:${Math.max(0, Math.floor(((v.now ?? Date.now()) - Date.UTC(2026, 0, 1)) / 60_000))}`,
     `DTSTAMP:${stamp(v.now ?? Date.now())}`,
     `DTSTART:${stamp(v.start)}`,
     `DTEND:${stamp(v.end)}`,

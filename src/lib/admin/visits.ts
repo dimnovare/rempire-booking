@@ -14,7 +14,7 @@
  * and leaves an audit row with who did it.
  */
 import type { Business } from "../availability";
-import { queueConfirmation } from "../booking";
+import { queueChangeLetter, queueConfirmation } from "../booking";
 import { query, withTx, type Querier } from "../db";
 import { isLocale } from "../i18n";
 import { normalizePhone } from "../phone";
@@ -46,6 +46,8 @@ export type AdminVisitInput = {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isUuid = (s: unknown): s is string => typeof s === "string" && UUID_RE.test(s);
 const MIN = 60_000;
+// visits still to come; only these get a moved or cancelled letter
+const LIVE_STATUSES = new Set(["pending", "booked"]);
 
 class Problem extends Error {
   constructor(
@@ -341,6 +343,12 @@ export async function adminUpdateVisit(business: Business, id: string, patch: Vi
         { staff_id: cur.staff_id, starts_at: new Date(cur.starts_at).toISOString(), total_cents: cur.total_cents },
         { staff_id: staffId, starts_at: new Date(start).toISOString(), total_cents: total, forced: !!patch.force },
       );
+      // a new time or barber for a visit still ahead: the client hears of it
+      // (only at the address its confirmation went to; src/lib/booking.ts)
+      const now = Date.now();
+      if (moved && LIVE_STATUSES.has(cur.status) && new Date(cur.starts_at).getTime() > now && start > now) {
+        await queueChangeLetter(tx, business.id, id, "moved", { startsAt: new Date(cur.starts_at), staffId: cur.staff_id }, now);
+      }
       return { ok: true as const, id, start, end, totalCents: total, extraCents: extra };
     }),
   );
@@ -349,11 +357,14 @@ export async function adminUpdateVisit(business: Business, id: string, patch: Vi
 export async function adminCancelVisit(business: Business, id: string, actor: string): Promise<"cancelled" | "already" | "not_found"> {
   if (!isUuid(id)) return "not_found";
   return withTx(async (tx) => {
-    const [cur] = await tx<{ status: string }>("select status from appointments where id = $1 and business_id = $2 for update", [id, business.id]);
+    const [cur] = await tx<{ status: string; starts_at: Date }>("select status, starts_at from appointments where id = $1 and business_id = $2 for update", [id, business.id]);
     if (!cur) return "not_found";
     if (cur.status === "cancelled") return "already";
     await tx("update appointments set status = 'cancelled', cancelled_at = now(), cancelled_by = $2, updated_at = now() where id = $1", [id, actor]);
     await audit(tx, actor, id, "cancel", { status: cur.status }, { status: "cancelled" });
+    if (LIVE_STATUSES.has(cur.status) && new Date(cur.starts_at).getTime() > Date.now()) {
+      await queueChangeLetter(tx, business.id, id, "cancelled", null);
+    }
     return "cancelled";
   });
 }

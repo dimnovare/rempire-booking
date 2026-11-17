@@ -13,7 +13,7 @@ Screens: `docs/client-flow.md` and the approved mock.*
 | A3 | **Staging database:** a Postgres for staging; migrations and the demo seed run on every deploy (`postbuild`). | nothing | done 17.11: Postgres `rempire-booking-staging` on the shop's Railway (docs/staging-setup.md). First deploy applied `001_core.sql` and the demo seed; on staging a booking, the same tap again, a taken slot (409), the change link, the calendar file and a cancel all work |
 | A4 | **Staff login:** password, 6-digit e-mail code, Google. | Resend API key; Google OAuth client in the shop's Google account (Dim, 17.11); `ADMIN_BOOTSTRAP_*` in Vercel | done 17.11 except the outside parts: `003_staff_auth.sql`, password login, sessions (httpOnly cookie, only the token's hash stored, 90 days idle), roles owner / admin / barber, `/admin` locked, rate limits. The e-mail code works with the console transport; in production it says «not set up» until `RESEND_API_KEY`. Google login is built (code + PKCE; links the first Google login to the login with that e-mail, never creates one) and shows once `GOOGLE_CLIENT_*` are set. The first owner login comes from `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` on deploy |
 | A5 | **Renat's admin:** day and week calendar, one column per barber; add, move, cancel; barbers; services with each barber's price and time; hours, breaks, vacations. | | done 17.11: `/admin` in Russian, phone first. Day view (a column per barber) and week view (one barber); tap a free time to add a visit or a block; open a visit to mark arrived / done / no-show, move (tap the new time, or drag with a mouse), edit or cancel. Barbers: profile, prices and times per service, weekly hours with breaks, single days, vacation and sick days, special time. Services: list and edit. Access: password, logins for barbers and the front desk |
-| A6 | **Messages:** e-mail confirmation with `.ics` and the change link; the 2-hour SMS behind `sendSms(to, text)`; a cron for the outbox. | Resend; SMS provider account; `CRON_SECRET` and a cron schedule | groundwork done 17.11: `004_notifications.sql` outbox, `sendSms` with a console transport and SMS part counting, reminders planned from the visits, `/api/cron/outbox` (locked rows, retries with backoff). No provider is called; in production SMS rows wait until one is wired. E-mail confirmation done 17.11: a branded letter (`src/lib/letters.ts`) with its own change link (`006_visit_links.sql`) and the `.ics` attached, queued with the booking and sent right after it; the staff login code uses the same layout. Admin bookings get it too (only clients who came to an online booking), and SMS reminders carry a short change link (`/v/…`). Cron runs since 17.11. Waits on: the SMS provider |
+| A6 | **Messages:** e-mail confirmation with `.ics` and the change link; the 2-hour SMS behind `sendSms(to, text)`; a cron for the outbox. | Resend; SMS provider account; `CRON_SECRET` and a cron schedule | groundwork done 17.11: `004_notifications.sql` outbox, `sendSms` with a console transport and SMS part counting, reminders planned from the visits, `/api/cron/outbox` (locked rows, retries with backoff). No provider is called; in production SMS rows wait until one is wired. E-mail confirmation done 17.11: a branded letter (`src/lib/letters.ts`) with its own change link (`006_visit_links.sql`) and the `.ics` attached, queued with the booking and sent right after it; the staff login code uses the same layout. Admin bookings get it too (only clients who came to an online booking); a move or cancel in the admin sends a «moved» / «cancelled» letter; and SMS reminders carry a short change link (`/v/…`). Cron runs since 17.11. Waits on: the SMS provider |
 | A7 | **Altegio import:** staff, services, clients, future visits. | Altegio login | |
 | A8 | **My visits (client area):** an account icon top right; log in with a 6-digit SMS code to the phone used for booking, no password; upcoming and past visits; cancel or move until the cutoff; «book again» from any visit. Added by Dim, 17.11.2026. | A6's SMS provider | |
 | A9 | **Special time + design v2:** barbers' own higher-priced hours, booked at once; the client flow with one bottom bar at every width. | nothing | done 17.11: `002_special_time.sql`, slots and «Book» with the extra, the bottom bar at every width, «My visits» to the latest visit on the device; demo special time on staging for the next 14 days |
@@ -111,8 +111,18 @@ done), in that booking's language; the 5-minute cron sends it. The stored
 `clients.email` is not enough: anyone can book online with someone's phone
 and their own address. When SMS can prove the phone (A8), this can loosen.
 The letter is built at send time, so a
-visit cancelled meanwhile gets none, and it carries no client name. Moving
-or cancelling a visit in the admin sends nothing yet.
+visit cancelled meanwhile gets none, and it carries no client name.
+
+**Moved or cancelled by the admin** (`queueChangeLetter` in
+`src/lib/booking.ts`, Dim 17.11): a new time or barber for a visit still
+ahead sends a «Запись перенесена» letter (new time, «Было: …», change link,
+updated `.ics`); a cancel sends «Запись отменена» (old time struck out,
+«Записаться снова», a `METHOD:CANCEL` `.ics`). Only to the address this
+visit's confirmation went to, in its language; if the confirmation has not
+gone yet, it already shows the change, so nothing more is sent. A moved
+letter waits 2 minutes, so quick moves make one letter, and moving back
+sends none. The client's own cancel on the visit page sends nothing; SMS
+for these comes with the provider.
 
 ### Waiting on outside accounts
 

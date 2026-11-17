@@ -16,6 +16,10 @@
  * then (a visit cancelled meanwhile gets no letter), with a change link of
  * its own (visit_links, 006) and the .ics attached.
  *
+ * When the admin moves or cancels a visit, a «moved» or «cancelled» letter
+ * goes to the address the confirmation went to (queueChangeLetter); the cron
+ * sends it, a moved one 2 minutes later, so quick moves make one letter.
+ *
  * Sending claims rows with `for update skip locked`, so two runs never send
  * one message twice; a claimed row whose run died is retried after
  * locked_until. A channel whose transport is «disabled» (production with no
@@ -24,7 +28,7 @@
 import { getBusinessById } from "./availability";
 import type { Querier } from "./db";
 import { emailTransport, sendEmail, type LetterBody } from "./email";
-import { confirmationLetter } from "./letters";
+import { confirmationLetter, visitLetter } from "./letters";
 import { siteUrl } from "./site";
 import { sendSms, smsSegments, smsTransport } from "./sms";
 import { localParts } from "./tz";
@@ -206,6 +210,30 @@ async function compose(q: Querier, row: OutboxRow, now: number, env: Env): Promi
     // a link of this letter's own: only its hash is kept (006_visit_links.sql)
     const token = await mintVisitLink(q, v.id, "email");
     const letter = confirmationLetter(v, { business, origin: siteUrl(env).origin, token, locale: row.locale, now });
+    return { subject: letter.subject, body: letter };
+  }
+  if ((row.kind === "moved" || row.kind === "cancelled") && row.channel === "email") {
+    // queued by src/lib/booking.ts queueChangeLetter; built from the visit as it is now
+    const v = row.appointment_id ? await visitById(q, row.appointment_id) : null;
+    if (!v) return { skip: "visit gone" };
+    if (Date.parse(v.startsAt) <= now) return { skip: "visit already started" };
+    const from = row.payload as { fromStart?: string; fromStaffId?: string; fromStaff?: string };
+    if (row.kind === "moved") {
+      if (!LIVE.has(v.status)) return { skip: `visit ${v.status}` };
+      // moved and moved back before the letter went
+      if (from.fromStart && Date.parse(from.fromStart) === Date.parse(v.startsAt) && from.fromStaffId === v.staffId) return { skip: "back where it was" };
+    } else if (v.status !== "cancelled") return { skip: `visit ${v.status}` };
+    const business = await getBusinessById(q, row.business_id);
+    if (!business) return { skip: "business gone" };
+    const token = await mintVisitLink(q, v.id, "email");
+    const letter = visitLetter(row.kind, v, {
+      business,
+      origin: siteUrl(env).origin,
+      token,
+      locale: row.locale,
+      now,
+      from: from.fromStart ? { startsAt: from.fromStart, staffName: from.fromStaff } : undefined,
+    });
     return { subject: letter.subject, body: letter };
   }
   let link = "";
