@@ -437,6 +437,13 @@ button.cal-head:hover b { color: var(--lime); }
 }
 
 /* ---------- the barber page ---------- */
+/* the portrait in the profile: what clients see, and one button to pick a file */
+.adm-photo { display: flex; align-items: flex-start; gap: 14px; }
+.adm-photo .adm-ava { width: 72px; height: 92px; font-size: 28px; }
+.adm-photo .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.adm-photo label.adm-btn { cursor: pointer; min-height: 44px; }
+.adm-photo label.adm-btn:focus-within { outline: 2px solid var(--lime); outline-offset: 2px; }
+.adm-photo .adm-txt { min-height: 40px; font-size: 14px; }
 .adm-hero { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; }
 .adm-hero .adm-ava { width: 72px; height: 92px; font-size: 30px; }
 .adm-hero .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }

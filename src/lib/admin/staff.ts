@@ -290,3 +290,47 @@ export async function removeSpecialTime(business: Business, id: string, actor: s
 
 /** The dates of the next `n` days from `today`, for pickers. */
 export const nextDates = (today: string, n: number) => Array.from({ length: n }, (_, i) => addDays(today, i));
+
+/* ---------- the portrait ---------- */
+
+export const PHOTO_MAX_BYTES = 600_000;
+
+/** image/jpeg, image/png or image/webp by the first bytes; null for anything else. */
+export function imageMime(b: Uint8Array): string | null {
+  if (b.length > 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
+  if (b.length > 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47 && b[4] === 0x0d && b[5] === 0x0a && b[6] === 0x1a && b[7] === 0x0a) return "image/png";
+  if (b.length > 12 && b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return "image/webp";
+  return null;
+}
+
+/**
+ * Keep a barber's uploaded portrait and point staff.photo_url at it. The
+ * browser has already shrunk it; here only the kind (by its first bytes, not
+ * by what the upload calls itself) and the size are checked. The link carries
+ * a version, so a new photo is never served from an old cache.
+ */
+export async function saveStaffPhoto(business: Business, staffId: string, bytes: Uint8Array, actor: string): Promise<{ ok: true; url: string } | { ok: false; field: string }> {
+  if (!isUuid(staffId)) return { ok: false, field: "staff" };
+  const mime = imageMime(bytes);
+  if (!mime || bytes.length > PHOTO_MAX_BYTES) return { ok: false, field: "photo" };
+  return withTx(async (tx) => {
+    const [st] = await tx<{ id: string }>("select id from staff where id = $1 and business_id = $2 for update", [staffId, business.id]);
+    if (!st) return { ok: false as const, field: "staff" };
+    await tx(
+      `insert into staff_photo (staff_id, mime, bytes) values ($1, $2, $3)
+       on conflict (staff_id) do update set mime = excluded.mime, bytes = excluded.bytes, updated_at = now()`,
+      [staffId, mime, Buffer.from(bytes)],
+    );
+    const url = `/api/staff-photo/${staffId}?v=${Date.now().toString(36)}`;
+    await tx("update staff set photo_url = $2 where id = $1", [staffId, url]);
+    await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'staff', $2, 'photo', $3::jsonb)`, [actor, staffId, JSON.stringify({ mime, bytes: bytes.length })]);
+    return { ok: true as const, url };
+  });
+}
+
+/** The uploaded portrait, for /api/staff-photo/<id>. Public: clients see it when they book. */
+export async function staffPhoto(q: Querier, staffId: string): Promise<{ mime: string; bytes: Uint8Array } | null> {
+  if (!isUuid(staffId)) return null;
+  const [row] = await q<{ mime: string; bytes: Uint8Array }>("select mime, bytes from staff_photo where staff_id = $1", [staffId]);
+  return row ? { mime: row.mime, bytes: new Uint8Array(row.bytes) } : null;
+}

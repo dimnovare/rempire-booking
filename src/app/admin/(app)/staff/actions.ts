@@ -2,7 +2,7 @@
 
 /** The barber pages' changes. Each checks the login itself and copies its arguments by name. */
 import { refresh } from "next/cache";
-import { addSpecialTime, removeSpecialTime, saveStaffOffers, saveStaffProfile, saveWeeklyHours, setDayOverride, type OfferInput } from "@/lib/admin/staff";
+import { PHOTO_MAX_BYTES, addSpecialTime, removeSpecialTime, saveStaffOffers, saveStaffPhoto, saveStaffProfile, saveWeeklyHours, setDayOverride, type OfferInput } from "@/lib/admin/staff";
 import { addTimeOff, removeTimeOff } from "@/lib/admin/visits";
 import { requireAdmin } from "@/lib/auth/current";
 
@@ -21,6 +21,16 @@ export async function saveProfile(id: string | null, p: { name: string; role: { 
     { name: str(p?.name), role: l10n(p?.role), photoUrl: str(p?.photoUrl), bookable: p?.bookable === true, active: p?.active === true },
     user.id,
   );
+  if (r.ok) refresh();
+  return r;
+}
+
+/** A barber's portrait: one image in the form's «photo» field, already shrunk by the browser. Returns the link to show. */
+export async function uploadPhoto(staffId: string, form: FormData): Promise<{ ok: true; url: string } | { ok: false; field: string }> {
+  const { user, business } = await requireAdmin();
+  const file = form?.get?.("photo");
+  if (!(file instanceof Blob) || file.size < 1 || file.size > PHOTO_MAX_BYTES) return { ok: false, field: "photo" };
+  const r = await saveStaffPhoto(business, String(staffId), new Uint8Array(await file.arrayBuffer()), user.id);
   if (r.ok) refresh();
   return r;
 }

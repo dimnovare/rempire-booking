@@ -3,7 +3,7 @@ import { loadAvailability } from "@/lib/availability";
 import { loadCalendar, searchClients } from "@/lib/admin/calendar";
 import { gridBounds, hhmm, momentAt, snap, weekStart } from "@/lib/admin/grid";
 import { listServices, saveService } from "@/lib/admin/services";
-import { addSpecialTime, cleanSpans, listStaff, saveStaffOffers, saveStaffProfile, saveWeeklyHours, setDayOverride, slugify, staffDetail } from "@/lib/admin/staff";
+import { PHOTO_MAX_BYTES, addSpecialTime, cleanSpans, imageMime, listStaff, saveStaffOffers, saveStaffPhoto, saveStaffProfile, saveWeeklyHours, setDayOverride, slugify, staffDetail, staffPhoto } from "@/lib/admin/staff";
 import { adminCancelVisit, adminCreateVisit, adminSetStatus, adminUpdateVisit, addTimeOff, removeTimeOff, type AdminVisitInput } from "@/lib/admin/visits";
 import { closeDb, query } from "@/lib/db";
 import { zonedToUtc } from "@/lib/tz";
@@ -302,6 +302,34 @@ describe("admin: grid maths", () => {
     expect(cleanSpans([["9:00", "10:00"]])).toBeNull();
     expect(cleanSpans("x")).toBeNull();
   });
+  it("keeps an uploaded portrait and points the barber's photo at it", async () => {
+    const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 0, 16, 74, 70, 73, 70, 0, 1, 2, 3]);
+    const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
+    expect(imageMime(jpeg)).toBe("image/jpeg");
+    expect(imageMime(png)).toBe("image/png");
+    expect(imageMime(new TextEncoder().encode("<svg onload=alert(1)>"))).toBeNull();
+
+    const first = await saveStaffPhoto(demo.business, demo.staff.renat, jpeg, ACTOR);
+    if (!first.ok) throw new Error("not saved");
+    expect(first.url).toMatch(new RegExp(`^/api/staff-photo/${demo.staff.renat}\\?v=[0-9a-z]+$`));
+    expect((await staffDetail(query, demo.business, demo.staff.renat, TUE))?.photoUrl).toBe(first.url);
+    expect(await staffPhoto(query, demo.staff.renat)).toEqual({ mime: "image/jpeg", bytes: jpeg });
+
+    // a second upload replaces the first; the profile form can still save that link
+    const second = await saveStaffPhoto(demo.business, demo.staff.renat, png, ACTOR);
+    if (!second.ok) throw new Error("not saved");
+    expect((await staffPhoto(query, demo.staff.renat))?.mime).toBe("image/png");
+    expect((await saveStaffProfile(demo.business, demo.staff.renat, { name: "Renat", photoUrl: second.url, bookable: true, active: true }, ACTOR)).ok).toBe(true);
+
+    // not a picture, too big, not a barber here
+    expect(await saveStaffPhoto(demo.business, demo.staff.renat, new TextEncoder().encode("hello"), ACTOR)).toEqual({ ok: false, field: "photo" });
+    const big = new Uint8Array(PHOTO_MAX_BYTES + 1);
+    big.set(jpeg);
+    expect(await saveStaffPhoto(demo.business, demo.staff.renat, big, ACTOR)).toEqual({ ok: false, field: "photo" });
+    expect(await saveStaffPhoto(demo.business, "00000000-0000-4000-8000-000000000000", jpeg, ACTOR)).toEqual({ ok: false, field: "staff" });
+    expect(await staffPhoto(query, demo.staff.valentin)).toBeNull();
+  });
+
   it("transliterates names into slugs", () => {
     expect(slugify("Слава Красытель")).toBe("slava-krasytel");
     expect(slugify("Jõgi Ülo")).toBe("jogi-ulo");

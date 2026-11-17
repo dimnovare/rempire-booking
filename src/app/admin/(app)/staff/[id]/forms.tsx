@@ -11,9 +11,9 @@ import { hhmm, momentAt } from "@/lib/admin/grid";
 import type { DayOverride, HoursDay, Offer, SpecialRow, TimeOffRow } from "@/lib/admin/staff";
 import { addDays } from "@/lib/tz";
 import { A, eur, mins, ru } from "../../../copy";
-import { XIcon } from "../../../icons";
+import { Ava, XIcon } from "../../../icons";
 import { SaveState, useAutoSave } from "../../autosave";
-import { addOff, addSpecial, removeOff, removeSpecial, saveDay, saveHours, saveOffers, saveProfile } from "../actions";
+import { addOff, addSpecial, removeOff, removeSpecial, saveDay, saveHours, saveOffers, saveProfile, uploadPhoto } from "../actions";
 
 type Msg = { ok: boolean; text: string } | null;
 
@@ -65,12 +65,52 @@ function Remove({ onClick, disabled }: { onClick: () => void; disabled: boolean 
 
 type Profile = { name: string; role: { ru: string; et: string; en: string }; photoUrl: string; bookable: boolean; active: boolean };
 
+/**
+ * A photo straight from a phone is several MB. The browser makes it a JPEG
+ * that fits 800×1000 (about 100 KB) before it is sent, turned the right way
+ * up. Throws when the file is not a picture the browser can read.
+ */
+async function shrinkPhoto(file: File): Promise<Blob> {
+  const img = await createImageBitmap(file, { imageOrientation: "from-image" });
+  const k = Math.min(1, 800 / img.width, 1000 / img.height);
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(img.width * k));
+  canvas.height = Math.max(1, Math.round(img.height * k));
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("no canvas");
+  // a see-through PNG gets the page's black behind it, not JPEG's default
+  ctx.fillStyle = "#000";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  img.close();
+  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("no blob"))), "image/jpeg", 0.86));
+}
+
 /** A barber who exists saves by itself; a new one is made with the one button. */
 export function ProfileForm({ id, initial, onDone }: { id: string | null; initial: Profile; onDone?: () => void }) {
   const [p, setP] = useState(initial);
   const s = useSaver();
   const router = useRouter();
   const auto = useAutoSave<Profile>(p, setP, (v) => saveProfile(id, v), { off: !id, label: A.staff.profile, check: (v) => (v.name.trim() ? null : A.auto.needName) });
+  const [up, setUp] = useState<{ busy: boolean; err: string | null }>({ busy: false, err: null });
+
+  const pickPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // so the same file can be picked again
+    if (!file || !id) return;
+    setUp({ busy: true, err: null });
+    try {
+      const form = new FormData();
+      form.set("photo", await shrinkPhoto(file), "photo.jpg");
+      const r = await uploadPhoto(id, form);
+      if (!r.ok) return setUp({ busy: false, err: A.staff.photoBad });
+      // the new link goes into the profile, which then says «Сохранено» (and can put the old photo back)
+      setP((cur) => ({ ...cur, photoUrl: r.url }));
+      setUp({ busy: false, err: null });
+    } catch {
+      setUp({ busy: false, err: A.staff.photoBad });
+    }
+  };
   return (
     <form
       className="adm-form"
@@ -97,10 +137,35 @@ export function ProfileForm({ id, initial, onDone }: { id: string | null; initia
           ))}
         </div>
       </div>
-      <label className="adm-field">
-        <span>{A.staff.photo}</span>
-        <input inputMode="url" placeholder="/barbers/name.webp" value={p.photoUrl} onChange={(e) => setP({ ...p, photoUrl: e.target.value })} />
-      </label>
+      {/* the photo is picked from the phone or the computer; it is sent at once, on its own */}
+      <div className="adm-field">
+        <span>{A.staff.photoLabel}</span>
+        {id ? (
+          <div className="adm-photo">
+            <Ava src={p.photoUrl || null} name={p.name} />
+            <div className="txt">
+              <label className="adm-btn adm-btn-ghost adm-btn-sm">
+                <input type="file" accept="image/*" className="sr" disabled={up.busy} onChange={pickPhoto} />
+                {up.busy ? A.staff.photoBusy : p.photoUrl ? A.staff.photoChange : A.staff.photoAdd}
+              </label>
+              {p.photoUrl && !up.busy && (
+                <button type="button" className="adm-txt" onClick={() => setP({ ...p, photoUrl: "" })}>
+                  {A.staff.photoRemove}
+                </button>
+              )}
+              {up.err ? (
+                <p className="adm-err" role="alert">
+                  {up.err}
+                </p>
+              ) : (
+                <small className="adm-meta">{A.staff.photoHint}</small>
+              )}
+            </div>
+          </div>
+        ) : (
+          <small className="adm-meta">{A.staff.photoLater}</small>
+        )}
+      </div>
       <div>
         <label className="adm-toggle">
           <span>{A.staff.active}</span>

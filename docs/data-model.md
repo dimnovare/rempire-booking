@@ -41,6 +41,7 @@ erDiagram
   staff ||--o{ staff_hours : "weekly template"
   staff ||--o{ staff_day_overrides : "one-off days"
   staff ||--o{ time_off : "vacation, block"
+  staff ||--o| staff_photo : "uploaded portrait"
   clients ||--o{ appointments : books
   staff ||--o{ appointments : serves
   appointments ||--|{ appointment_services : lines
@@ -57,6 +58,7 @@ erDiagram
 | `businesses` | `slug`, `name`, `timezone`, `default_locale`, `settings jsonb` | `settings` holds the cancellation window, slot grid (15 min, as Altegio), the default reminder (120 min). |
 | `locations` | `business_id`, `name`, `address`, `timezone`, `phone` | One today (Mardi 1). Altegio shows a location switcher, so keep it. |
 | `staff` | `business_id`, `location_id`, `slug`, `display_name`, `role jsonb`, `photo_url`, `bio jsonb`, `bookable`, `sort`, `active` | `role` is the label: «Барбер» / «Tattoo artist». `slug` gives each rempire.ee card its own link with the barber pre-selected (kickoff §3, the free win). |
+| `staff_photo` | PK `staff_id`; `mime`, `bytes bytea` (≤ 600 KB), `updated_at` | A portrait uploaded in the admin (Dim, 17.11.2026; migration 007). The browser shrinks it to a JPEG that fits 800×1000, about 100 KB. Kept in the database: a handful of barbers, no storage service, no keys. An upload sets `staff.photo_url` to `/api/staff-photo/<id>?v=<when>`; old links to files in `/public` keep working. Move to a bucket only if photos grow (galleries). |
 | `users` | `email` unique, `password_hash`, `google_sub` unique, `role` (`owner`/`admin`/`staff`), `staff_id`, `locale`, `active` | Logins for Renat and barbers. Clients are not users. Dim's choice: a password, or Google, with an e-mail code as the backup. `password_hash` is scrypt (built into Node, no native module). `google_sub` is Google's stable user id, never the e-mail. |
 | `login_codes` | `email`, `code_hash`, `expires_at`, `attempts`, `used_at` | The 6-digit backup code by e-mail: a forgotten password, or Google not working. 10 minutes, 5 tries. |
 | `sessions` | `token_hash`, `user_id`, `expires_at`, `device` | Long-lived for the barber PWA. |
