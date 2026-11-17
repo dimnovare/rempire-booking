@@ -129,11 +129,46 @@ Everything below runs on staging with demo barbers, demo companies
 - **«Мои расчёты»** (`/b/money`, from «Ещё»): his month, his invoices with
   the PDF, and his sales. A draft shows as «готовится». It opens on the
   current month.
-- **The cron** (`/api/cron/outbox`) also makes the month's drafts from the
-  billing day on, and sends the waiting sales to the shop.
+- **The cron** (`/api/cron/outbox`) sends the messages first. Then it
+  sends the waiting sales to the shop (at most 40 s a run) and, from the
+  billing day on, makes the month's drafts.
 - **The PDF** (`src/lib/billing/pdf.ts`) carries the minimum of VAT Act §37,
   in Estonian with English under it. Fonts: Oswald, Golos Text and PT Mono,
   all under the Open Font License, in `src/app/fonts/`.
+
+## The shop branch (C2), waiting for Dim's OK
+
+`rempire-web`, local branch `booking-partner-api`, 3 commits up to
+`ec90982c`, **not pushed**. All 8204 shop tests and its typecheck pass. The
+contract is the shop's `docs/partner-api.md`; booking's `src/lib/shop.ts`
+already speaks it.
+
+What the push changes on the live shop:
+
+- **Migration `230_partner_api.sql`**, run once at deploy:
+  - a new table `purchase_prices`;
+  - `orders.partner_ref` (unique) and `orders.barber`;
+  - two check constraints widened: the channel `barber` and the stock reason
+    `sale_barber`.
+- **Three routes** under `/api/partner/`. They answer 503 until
+  `BOOKING_API_SECRET` is set.
+- **Admin:**
+  - «Склад» gets «Закупка без НДС».
+  - «Заказы» shows a «Барбер» badge; barber sales show under «Салон».
+- **A barber sale** is a paid order with no letter, no loyalty points and no
+  ping. It counts in «Аналитика», and stock goes down with `sale_barber`.
+  Web checkout is unchanged.
+- **Photo match** uses the shop's `OPENAI_API_KEY`, about a cent a photo.
+
+Watch for:
+
+- Whoever holds the secret can create paid orders at any price, so it stays
+  only in the two Vercel projects, marked Sensitive.
+- The shop's `go-live-reset --clear` deletes barber orders along with test
+  orders. Don't run it once real barber sales exist.
+
+Then set `SHOP_API_URL` and `SHOP_API_SECRET` in booking's Vercel. Until
+then staging stays on the fake shop.
 
 ## Data
 
