@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "next dev --port 3400",
     "build": "next build",
-    "postbuild": "node tools/migrate.mjs --if-configured && node tools/seed-demo.mjs --if-enabled",
+    "postbuild": "node tools/migrate.mjs --if-configured && node tools/seed-demo.mjs --if-enabled && node tools/bootstrap-owner.mjs --if-configured",
     "start": "next start --port 3400",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",

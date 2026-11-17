@@ -20,6 +20,8 @@ import { hashPassword, passwordProblem } from "./password.mjs";
 
 /**
  * @param {{query: (sql: string, params?: unknown[]) => Promise<{rows: any[]}>}} db
+ * @param {Record<string, string | undefined>} [env]
+ * @param {(msg: string) => void} [log]
  * @returns {Promise<"created" | "password_set" | "kept" | "skipped">}
  */
 export async function bootstrapOwner(db, env = process.env, log = () => {}) {

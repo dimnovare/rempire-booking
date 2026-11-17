@@ -146,6 +146,9 @@ async function makePglite(): Promise<Raw> {
       await seedDemoSpecial(db);
       await seedOwnerQa(db, [...OWNER_QA, DEMO_QA]);
     }
+    // the first owner login, from ADMIN_BOOTSTRAP_* (a local run)
+    const { bootstrapOwner } = await import("../../tools/bootstrap-owner.mjs");
+    await bootstrapOwner(db);
   }
   return {
     kind: "pglite",

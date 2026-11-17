@@ -69,7 +69,7 @@ describe("signals", () => {
     const { headers, robots, metadata, redirect } = await load();
 
     expect(headers).toEqual([]);
-    expect(robots).toEqual({ rules: { userAgent: "*", allow: "/" } });
+    expect(robots).toEqual({ rules: { userAgent: "*", allow: "/", disallow: ["/admin", "/api/"] } });
     expect(metadata.robots).toMatchObject({ index: true, follow: true });
     expect(redirect.headers.get("x-robots-tag")).toBeNull();
   });

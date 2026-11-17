@@ -1,0 +1,17 @@
+/**
+ * The staff session cookie. `__Host-` in production: HTTPS only, this host
+ * only, path "/", so no other subdomain of diipsolutions.eu or rempire.ee
+ * can set or read it. Plain name on http://localhost.
+ * Read by src/proxy.ts (is there one at all?) and src/lib/auth/current.ts
+ * (is it valid?).
+ */
+export const SESSION_COOKIE = process.env.NODE_ENV === "production" ? "__Host-rb_staff" : "rb_staff";
+
+/** Browsers cap a cookie at 400 days; the database decides when it really ends. */
+export const SESSION_COOKIE_MAX_AGE = 400 * 86_400;
+
+/** Only a path inside the admin may be a «next» after login: never another site. */
+export function safeAdminPath(next: unknown): string {
+  const s = typeof next === "string" ? next : "";
+  return /^\/admin(\/[A-Za-z0-9/_\-.?=&%]*)?$/.test(s) && !s.startsWith("/admin/login") && !s.includes("//") ? s : "/admin";
+}

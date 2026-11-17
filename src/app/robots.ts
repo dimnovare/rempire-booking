@@ -10,5 +10,6 @@ export default function robots(): MetadataRoute.Robots {
       ],
     };
   }
-  return { rules: { userAgent: "*", allow: "/" } };
+  // the admin and the API stay out even on rempire.ee
+  return { rules: { userAgent: "*", allow: "/", disallow: ["/admin", "/api/"] } };
 }
