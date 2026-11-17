@@ -519,3 +519,13 @@ button.cal-head:hover b { color: var(--lime); }
 .adm-users .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .adm-users .tx > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .adm-users li.is-off { opacity: .55; }
+
+/* ---------- «Запросы»: the barbers' requests (Phase B, B4) ---------- */
+.adm-req > li { padding: 12px 0; }
+.adm-req-row { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.adm-req-row > b { font: 800 18px/1.1 var(--display); text-transform: uppercase; letter-spacing: .03em; }
+.adm-req-row .plain { font-size: 16px; line-height: 1.35; overflow-wrap: anywhere; }
+.adm-req-row small { color: var(--mute); font-size: 13px; overflow-wrap: anywhere; }
+.adm-req-row .tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.adm-req-row .adm-btns { margin-top: 4px; }
+.adm-req-n { margin-left: 8px; }

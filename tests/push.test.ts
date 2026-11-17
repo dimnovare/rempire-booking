@@ -169,7 +169,7 @@ describe("push: the words", () => {
     expect(pushText("visit_new", payload, "ru")).toEqual({ title: "Новая запись", body: "вт 01.12, 14:30 · Test Client · Стрижка", url: "/b?d=2026-12-01", tag: "visit-v1" });
     expect(pushText("visit_new", payload, "en")?.body).toBe("Tue 01.12, 14:30 · Test Client · Haircut");
     expect(pushText("visit_moved", { ...payload, fromStart: new Date(at(DAY, "12:00")).toISOString() }, "ru")?.body).toBe("Test Client: вт 01.12, 12:00 → вт 01.12, 14:30");
-    expect(pushText("own_barber", { ...payload, action: "cancelled", reason: "заболел" }, "ru")).toMatchObject({ title: "Valentin отменил запись", url: "/admin?d=2026-12-01" });
+    expect(pushText("own_barber", { ...payload, action: "cancelled", reason: "заболел" }, "ru")).toMatchObject({ title: "Valentin: отмена записи", url: "/admin?d=2026-12-01" });
     expect(pushText("own_barber", { ...payload, action: "cancelled", reason: "заболел" }, "ru")?.body).toContain("«заболел»");
   });
 

@@ -7,6 +7,7 @@
  * client «name» with three digits in a row (a phone typed as the name) is
  * left out.
  */
+import { requestWords, isRequestWhat, type RequestWhat } from "./barber/request-words";
 import { INTL, type Locale } from "./i18n";
 import { localParts } from "./tz";
 
@@ -83,7 +84,10 @@ export type PlanPayload = {
   perStaff?: { name: string; n: number }[];
 };
 
-export type AnswerPayload = { answer: "approved" | "declined"; what: string };
+/** own_request: a barber's change, waiting for Renat or applied at once (B4). */
+export type RequestPayload = { requestId: string; staff: string; status: "requested" | "applied"; tz: string; what: RequestWhat; visitsInside?: number };
+/** request_answer: Renat's yes or no to the barber. */
+export type AnswerPayload = { requestId: string; answer: "approved" | "declined"; tz: string; what: RequestWhat; note?: string };
 
 const W = {
   ru: {
@@ -93,16 +97,18 @@ const W = {
     online: "Онлайн-запись",
     clientMoved: "Клиент перенёс запись",
     clientCancelled: "Клиент отменил запись",
-    barberMoved: (s: string) => `${s} перенёс запись`,
-    barberCancelled: (s: string) => `${s} отменил запись`,
+    barberMoved: (s: string) => `${s}: перенос записи`,
+    barberCancelled: (s: string) => `${s}: отмена записи`,
     plan: "План на завтра",
     salonPlan: "Завтра в салоне",
     visits: (n: number) => `${n} ${ruPlural(n, "запись", "записи", "записей")}`,
     first: (t: string) => `первая в ${t}`,
     none: "Записей нет.",
-    approved: "Ренат согласовал",
-    declined: "Ренат отклонил",
+    approved: "Запрос согласован",
+    declined: "Запрос отклонён",
     client: "Клиент",
+    requestFrom: (s: string) => `Запрос: ${s}`,
+    changed: (s: string) => `${s}: изменение`,
   },
   et: {
     new: "Uus broneering",
@@ -118,9 +124,11 @@ const W = {
     visits: (n: number) => `${n} ${n === 1 ? "broneering" : "broneeringut"}`,
     first: (t: string) => `esimene kell ${t}`,
     none: "Broneeringuid pole.",
-    approved: "Renat kinnitas",
-    declined: "Renat keeldus",
+    approved: "Taotlus kinnitatud",
+    declined: "Taotlus tagasi lükatud",
     client: "Klient",
+    requestFrom: (s: string) => `Taotlus: ${s}`,
+    changed: (s: string) => `${s}: muudatus`,
   },
   en: {
     new: "New visit",
@@ -129,16 +137,18 @@ const W = {
     online: "Online booking",
     clientMoved: "A client moved a visit",
     clientCancelled: "A client cancelled",
-    barberMoved: (s: string) => `${s} moved a visit`,
-    barberCancelled: (s: string) => `${s} cancelled a visit`,
+    barberMoved: (s: string) => `${s}: a visit moved`,
+    barberCancelled: (s: string) => `${s}: a visit cancelled`,
     plan: "Tomorrow",
     salonPlan: "Tomorrow at the salon",
     visits: (n: number) => `${n} ${n === 1 ? "visit" : "visits"}`,
     first: (t: string) => `first at ${t}`,
     none: "No visits.",
-    approved: "Renat approved",
-    declined: "Renat declined",
+    approved: "Request approved",
+    declined: "Request declined",
     client: "Client",
+    requestFrom: (s: string) => `Request: ${s}`,
+    changed: (s: string) => `${s}: a change`,
   },
 } satisfies Record<Locale, unknown>;
 
@@ -199,9 +209,19 @@ export function pushText(kind: string, payload: Record<string, unknown>, locale:
     const per = (p.perStaff ?? []).map((s) => `${s.name} ${s.n}`).join(", ");
     return { title: w.salonPlan, body: `${w.visits(p.count)}${per ? `: ${per}` : ""}`, url: "/admin", tag };
   }
+  if (kind === "own_request") {
+    const p = payload as RequestPayload;
+    if (!isRequestWhat(p.what) || !p.requestId) return null;
+    const title = p.status === "applied" ? w.changed(String(p.staff ?? "")) : w.requestFrom(String(p.staff ?? ""));
+    const inside = Number.isInteger(p.visitsInside) && p.visitsInside! > 0 ? ` · ${w.visits(p.visitsInside!)}` : "";
+    return { title, body: `${requestWords(p.what, p.tz || "Europe/Tallinn", locale)}${inside}`.slice(0, 200), url: "/admin/requests", tag: `req-${p.requestId}` };
+  }
   if (kind === "request_answer") {
     const p = payload as AnswerPayload;
-    return { title: p.answer === "approved" ? w.approved : w.declined, body: String(p.what ?? "").slice(0, 200), url: "/b/time", tag: `answer-${Date.now()}` };
+    if (!isRequestWhat(p.what) || !p.requestId) return null;
+    const note = p.note ? safeText(p.note) : "";
+    const body = `${requestWords(p.what, p.tz || "Europe/Tallinn", locale)}${note ? ` · «${note}»` : ""}`;
+    return { title: p.answer === "approved" ? w.approved : w.declined, body: body.slice(0, 200), url: "/b/time", tag: `req-${p.requestId}` };
   }
   const p = payload as VisitPayload;
   if (!p.startsAt || !p.visitId) return null;
