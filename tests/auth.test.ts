@@ -149,6 +149,17 @@ describe("the 6-digit e-mail code", () => {
     expect(await loginWithCode(query, "owner@example.test", lastCode(), IP, now + 11 * 60_000)).toEqual({ ok: false, code: "expired" });
   });
 
+  it("parallel tries each use up a try", async () => {
+    await owner();
+    await sendLoginCode(query, "owner@example.test", IP);
+    const code = lastCode();
+    const wrong = code === "000000" ? "111111" : "000000";
+    await Promise.all(Array.from({ length: LIMITS.codeTries + 1 }, () => loginWithCode(query, "owner@example.test", wrong, IP)));
+    const [row] = await query<{ attempts: number }>("select attempts from login_codes order by created_at desc limit 1");
+    expect(row.attempts).toBe(LIMITS.codeTries);
+    expect(await loginWithCode(query, "owner@example.test", code, IP)).toEqual({ ok: false, code: "expired" });
+  });
+
   it("three letters an hour per address", async () => {
     await owner();
     const now = Date.now();

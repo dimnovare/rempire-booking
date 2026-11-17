@@ -96,29 +96,34 @@ export type CodeLoginResult = { ok: true; userId: string } | { ok: false; code: 
 export async function loginWithCode(q: Querier, emailRaw: string, codeRaw: string, ip: string, now = Date.now()): Promise<CodeLoginResult> {
   const email = normalizeEmail(emailRaw);
   const code = String(codeRaw ?? "").replace(/\s/g, "");
-  if ((await failures(q, "code", "ip", ip, now - LIMITS.passwordWindowMin * MIN)) >= LIMITS.passwordPerIp) return { ok: false, code: "wait" };
-  const [c] = await q<{ id: string; code_hash: string; expires_at: Date; attempts: number }>(
-    "select id, code_hash, expires_at, attempts from login_codes where email = $1 and used_at is null order by created_at desc limit 1",
-    [email],
+  const since = now - LIMITS.passwordWindowMin * MIN;
+  if ((await failures(q, "code", "ip", ip, since)) >= LIMITS.passwordPerIp || (await failures(q, "code", "email", email, since)) >= LIMITS.passwordPerEmail) {
+    return { ok: false, code: "wait" };
+  }
+  // Claim one try in one statement: parallel requests each take their own
+  // try, so a code never gets more than codeTries comparisons.
+  const [c] = await q<{ id: string; code_hash: string; attempts: number }>(
+    `update login_codes set attempts = attempts + 1
+      where id = (select id from login_codes where email = $1 and used_at is null order by created_at desc limit 1 for update)
+        and expires_at > $2 and attempts < $3
+      returning id, code_hash, attempts`,
+    [email, new Date(now), LIMITS.codeTries],
   );
   if (!c) {
-    await record(q, "code", email, ip, false, now);
-    return { ok: false, code: "expired" };
-  }
-  if (new Date(c.expires_at).getTime() <= now || c.attempts >= LIMITS.codeTries) {
-    await q("update login_codes set used_at = $2 where id = $1", [c.id, new Date(now)]);
+    // none, expired, or out of tries: that code is done
+    await q("update login_codes set used_at = $2 where email = $1 and used_at is null", [email, new Date(now)]);
     await record(q, "code", email, ip, false, now);
     return { ok: false, code: "expired" };
   }
   if (!/^\d{6}$/.test(code) || codeHash(email, code) !== c.code_hash) {
-    await q("update login_codes set attempts = attempts + 1 where id = $1", [c.id]);
     await record(q, "code", email, ip, false, now);
-    return { ok: false, code: c.attempts + 1 >= LIMITS.codeTries ? "expired" : "bad" };
+    return { ok: false, code: c.attempts >= LIMITS.codeTries ? "expired" : "bad" };
   }
-  const [u] = await q<UserRow>("select id, password_hash, active from users where email = $1", [email]);
-  await q("update login_codes set used_at = $2 where id = $1", [c.id, new Date(now)]);
+  // single use: of two parallel right answers, only one gets the row
+  const [used] = await q<{ id: string }>("update login_codes set used_at = $2 where id = $1 and used_at is null returning id", [c.id, new Date(now)]);
+  const [u] = used ? await q<UserRow>("select id, password_hash, active from users where email = $1", [email]) : [];
   await record(q, "code", email, ip, !!u?.active, now);
-  return u?.active ? { ok: true, userId: u.id } : { ok: false, code: "bad" };
+  return u?.active ? { ok: true, userId: u.id } : { ok: false, code: used ? "bad" : "expired" };
 }
 
 /** A new password for a logged-in user; their other devices are logged out. */
