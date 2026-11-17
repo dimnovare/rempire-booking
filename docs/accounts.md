@@ -29,7 +29,7 @@ switch at the move to rempire.ee. The shop's own registry is
 | **Cloudflare**, Dim's account, zone `diipsolutions.eu` | Staging DNS: CNAME `rempire-booking` → Vercel, TXT `_vercel` (`docs/staging-setup.md`). Resend, added 17.11: CNAME `send.rempire-booking` → `send.forge.rmta.net`, CNAME `rsend.rempire-booking` → `rsend-euw1.forge.rmta.net` (both DNS only), TXT `resend._domainkey.rempire-booking` (DKIM). No MX: inbound mail is not needed, and an MX on `rempire-booking` would clash with its CNAME | Dim's browser | — | free | The records stay while staging lives. The `send.`/`rsend.` records of the zone itself belong to Dim's own Resend; leave them alone |
 | **Cloudflare**, zone `rempire.ee` | DNS of Renat's site (nameservers `vicky` / `ligia`; mail MX at zone.ee) | **Unknown account, no access yet.** Not the shop's Cloudflare, not Dim's (checked 17.11) | — | ? | Needed for the booking CNAME (`broneeri.` or `book.`) and for Resend on rempire.ee. Find out who holds it first |
 | **Resend**, booking account (free) | Staff login codes; later the booking confirmations | rempireshopinfo+booking@gmail.com, made 17.11 | `RESEND_API_KEY`, `EMAIL_FROM` (`booking@rempire-booking.diipsolutions.eu`, Dim, 17.11) | free: 1 domain, 100 a day, 3 000 a month | Domain `rempire-booking.diipsolutions.eu` added 17.11 (region Ireland, eu-west-1, no click or open tracking); DNS in Dim's Cloudflare, see the row above. The free plan has one domain: at the move, remove the staging domain, add rempire.ee and change `EMAIL_FROM` (or pay for more). The shop's own Resend (`@rempireshop.com`) is a separate account and stays untouched |
-| **Google Cloud**, in the shop's Google account | Staff «Войти через Google» | rempireshopinfo@gmail.com (2FA on Renat's phone) | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | free | **Not created yet.** Planned as its own project «REMPIRE Booking», not inside the shop's `rempire-shop` project, which runs the shop's live customer login. At the move: add the redirect URI `https://<booking host>/api/auth/google/callback` and `rempire.ee` as an authorized domain |
+| **Google Cloud**, project «REMPIRE Booking» (ID `rempire-booking`) | Staff «Войти через Google» | rempireshopinfo@gmail.com (2FA on Renat's phone), the project's only Owner; made 17.11 in Rempire's browser | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | free, no billing account | Details and hand-over below (§ Google Cloud). Its own project, not inside the shop's `rempire-shop` project, which runs the shop's live customer login |
 | **Vercel cron** | Runs `/api/cron/outbox` every 5 minutes | — | `CRON_SECRET` (**not set yet**: each run answers 503) | — | Stays as it is |
 | **Staff logins** (the app's own) | Owner logins to `/admin` | — | `ADMIN_BOOTSTRAP_EMAIL` (5 addresses, set by Dim), `ADMIN_BOOTSTRAP_PASSWORD` (Sensitive) | — | On staging all 5 have the shared password since 17.11. A fresh production database gets them again on its first deploy. Delete both vars once everyone is in |
 | **SMS provider** | 2-hour reminders (A6), client login codes (A8) | **Not chosen yet** (round-2 decisions page) | names added with the provider | prepaid | The sender name «REMPIRE» stays the same |
@@ -54,12 +54,68 @@ Read from the Vercel dashboard on 17.11.2026, names only.
 | `RESEND_API_KEY` | yes | Dim | Sensitive |
 | `EMAIL_FROM` | yes | Dim | `booking@rempire-booking.diipsolutions.eu`; its domain is in Resend since 17.11 |
 | `DB_DRIVER`, `SEED_DEMO` | per deploy | CI | `auto`, `yes`; `SEED_DEMO` must go at the move |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | no | Dim | after the Google client exists |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | yes | Dim | 17.11; client `rempire-booking` in Google Cloud. Mark the secret Sensitive (Vercel shows «Needs Attention») |
 | `CRON_SECRET` | no | Dim | any random 32+ characters |
 | `SITE_URL`, `ALLOW_INDEXING` | no | — | only at the move |
 | SMS names | no | — | with the provider |
 
 The full list with comments is `.env.example`.
+
+## Google Cloud (staff Google login)
+
+Set up 17.11.2026 by Dim, with Claude filling the forms in Rempire's
+browser.
+
+- **Account:** the shop's Google account rempireshopinfo@gmail.com. It is
+  the only principal (Owner) in IAM. No organization, no billing account
+  (OAuth login is free).
+- **Project:** «REMPIRE Booking», ID `rempire-booking`.
+- **Google Auth Platform → Branding:** app name «REMPIRE»; support and
+  developer contact rempireshopinfo@gmail.com. No logo (a logo would require
+  Google's verification). Home page, privacy policy and authorized domains
+  are empty.
+- **Audience:** External, publishing status **Testing**.
+  - Only test users can sign in with Google; the cap is 100.
+  - Today there are 3: Dim's, Renat's and the shop's Google accounts. The
+    addresses are in the console, not here.
+  - Every new staff member who wants the Google button has to be added
+    under Audience → Test users until the app is published.
+  - Google accepts only addresses that are Google accounts. Staff without
+    one log in with the password or the e-mail code.
+- **Exact addresses:** the app compares the address from Google exactly,
+  dots included. Renat's Google account has no dot, so `ADMIN_BOOTSTRAP_EMAIL`
+  lists it that way (Dim, 17.11). An owner made earlier from the dotted
+  spelling may still exist on staging: switch it off under «Доступ».
+- **Clients:** one, «rempire-booking», Web application, created 17.11. Its
+  redirect URIs:
+  - `https://rempire-booking.diipsolutions.eu/api/auth/google/callback`
+  - `http://localhost:3400/api/auth/google/callback`
+- **Secret:** Google showed the client secret once, at creation. It is only
+  in Vercel. If it is lost, add a new secret on the client in Google Cloud,
+  put it in Vercel and redeploy, then delete the old one.
+
+**To hand it over** to another Google account (Renat's company account, or
+someone else):
+
+1. IAM → Grant access → the new account as **Owner**.
+2. The new owner accepts the invitation from the e-mail.
+3. Change the support and contact e-mails under Branding.
+4. Remove rempireshopinfo@gmail.com from IAM, if wanted.
+
+The client ID and the secret stay the same, so Vercel needs no change.
+
+**At the move to rempire.ee:**
+
+1. Add the redirect URI `https://<booking host>/api/auth/google/callback`.
+2. Under Branding:
+   - Home page: the booking host.
+   - Privacy policy: a page on rempire.ee.
+   - Authorized domain: `rempire.ee`.
+3. Audience → **Publish app**. With the scopes `openid email` alone, no
+   review by Google is needed. After that, any staff Google account can
+   sign in without being a test user. The app still lets in only users who
+   exist under «Доступ».
+4. Remove the staging and localhost URIs once staging is gone.
 
 ## The move to rempire.ee, in order
 
@@ -71,8 +127,8 @@ The full list with comments is `.env.example`.
 4. **Vercel domain:** add the booking host (`broneeri.rempire.ee` or
    `book.rempire.ee`) and its CNAME on rempire.ee. Set `SITE_URL`.
 5. **Resend:** add rempire.ee and its 3 DNS records, then change `EMAIL_FROM`.
-6. **Google:** add the new redirect URI and `rempire.ee` as an authorized
-   domain.
+6. **Google:** add the new redirect URI, the home page, the privacy policy
+   and `rempire.ee`, then publish the app (§ Google Cloud).
 7. **SMS:** check that the sender name is approved for the live account.
 8. **Altegio import (A7);** no changes in Altegio while it runs.
 9. **The rempire.ee «book» buttons** point to the booking host.
