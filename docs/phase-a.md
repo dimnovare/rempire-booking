@@ -16,6 +16,7 @@ Screens: `docs/client-flow.md` and the approved mock.*
 | A6 | **Messages:** e-mail confirmation with `.ics` and the change link; the 2-hour SMS behind `sendSms(to, text)`; a cron for the outbox. | Resend; SMS provider account | |
 | A7 | **Altegio import:** staff, services, clients, future visits. | Altegio login | |
 | A8 | **My visits (client area):** an account icon top right; log in with a 6-digit SMS code to the phone used for booking, no password; upcoming and past visits; cancel or move until the cutoff; «book again» from any visit. Added by Dim, 17.11.2026. | A6's SMS provider | |
+| A9 | **Special time + design v2:** barbers' own higher-priced hours, booked at once; the client flow with one bottom bar at every width. | nothing | done 17.11: `002_special_time.sql`, slots and «Book» with the extra, the bottom bar at every width, «My visits» to the latest visit on the device; demo special time on staging for the next 14 days |
 
 ### A8 in detail
 
@@ -35,16 +36,30 @@ Screens: `docs/client-flow.md` and the approved mock.*
 - **Not in A8:** memberships, gift cards and loyalty cards (Altegio's client
   area has them). They wait for Renat's answer on whether he wants them.
 
-### Extra time («After hours»)
+### Special time
 
-Renat's request (via Dim, 17.11.2026): a barber can open time outside his
-hours, at a higher price and with its own handling. In Phase A: the
-`extra_time` table, its slots in the client flow as a separate «After hours»
-group with the extra shown on each time, the bar and the details showing
-«60 € + 20 € after hours», and «Send request» instead of «Book» when the
-barber confirms each one. Renat adds it for a barber in the admin (A5); the
-barber adds it himself in Phase B. Screens: design v2 canvas
-(https://claude.ai/artifact/Dg7tYCfjpba275Q5GWatFA). Open: Q16–19.
+Renat's request, settled with Dim (17.11.2026):
+
+- **The barber sets it himself**, any time of day: after hours, a Sunday,
+  or a lunch hour inside his normal hours.
+- **Each window has its own price** on top of the usual one (+20 €, +25 €…).
+- **Clients book it at once.** Adding the time is the barber's promise to
+  work it, so there is no request and no confirmation.
+- **For the client** it sits among the normal times, with a dashed lime
+  frame and the full price on the time itself (e.g. «20:00 · 80 €»). The bar
+  and the details show «60 € + 20 € special time»; the button is «Book».
+- **Build:** `special_time` table, slots with `extraCents`, the booking
+  total includes it (A9, done with design v2). Renat adds it for a barber in
+  the admin (A5); the barber adds it himself in the barber app (Phase B).
+- **Rules in code** (`src/lib/slots.ts`):
+  - A visit fits inside one priced window. It never runs from normal time
+    into special time.
+  - Where two special windows overlap, the earlier one wins.
+  - «Anyone» takes a barber at the usual price before a special one.
+  - «Book» sends the extra the client saw. If it has changed, the answer is
+    «taken» with the nearest times, never a higher price.
+- Screens: design v2 canvas, https://claude.ai/artifact/Dg7tYCfjpba275Q5GWatFA.
+- Open: Q16, whether the extra goes to the barber whole.
 
 ## Answers that change the build
 
@@ -54,7 +69,7 @@ barber adds it himself in Phase B. Screens: design v2 canvas
 | Q9 barbers' time off needs approval | `time_off.status` | approved on save |
 | Q10 barbers confirm bookings | `pending` status | booked at once |
 | Q6 deposits | a payment step | none |
-| Q16–19 extra time | `extra_time`, «After hours» slots, a request status | +20 € a visit, the barber confirms (design v2 placeholder) |
+| Q16 special time: does the extra go to the barber whole | the barber's invoice (Phase C) | the extra is shown and stored apart from the service price |
 
 Each one is a business setting or a status, so an answer is a switch, not
 a rebuild.
@@ -89,7 +104,8 @@ a rebuild.
 Slot rules: starts on a 15-minute grid from local midnight; the visit fits
 inside one working window; the chair (visit plus the services' largest
 tidy-up buffer) touches no visit and no time off; 30 minutes' notice;
-60 days ahead. «Anyone» goes to the barber with fewer visits that day.
+60 days ahead. «Anyone» goes to the barber at the usual price (not special
+time), then the one with fewer visits that day.
 A double tap with one `Idempotency-Key` returns the first booking.
 
 ## Where the code is (A2)

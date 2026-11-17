@@ -1,12 +1,13 @@
 /**
  * Rows → free slots. Loads one business's barbers, hours, day overrides,
- * visits and time off for a range of local days, then runs src/lib/slots.ts.
+ * visits, time off and special time for a range of local days, then runs
+ * src/lib/slots.ts.
  * Takes a Querier, so the booking transaction can run the same check
  * inside its lock.
  */
 import type { Querier } from "./db";
 import { readSettings, type BusinessSettings } from "./settings";
-import { mergeSlots, workWindows, type HoursRow, type Interval, type Slot, type StaffDay } from "./slots";
+import { mergeSlots, workWindows, type HoursRow, type Interval, type Slot, type Special, type StaffDay } from "./slots";
 import { addDays, localParts, startOfDay } from "./tz";
 
 export type Business = {
@@ -102,7 +103,7 @@ export async function loadAvailability(q: Querier, a: AvailabilityQuery): Promis
   const staffIds = quotes.map((x) => x.staffId);
   const fromMs = startOfDay(dates[0], tz);
   const toMs = startOfDay(addDays(dates[dates.length - 1], 1), tz);
-  const [hours, overrides, visits, off] = await Promise.all([
+  const [hours, overrides, visits, off, special] = await Promise.all([
     q<HoursRow & { staff_id: string }>(
       `select staff_id, weekday, to_char(starts, 'HH24:MI') as starts, to_char(ends, 'HH24:MI') as ends,
               valid_from::text as valid_from, valid_to::text as valid_to
@@ -126,6 +127,13 @@ export async function loadAvailability(q: Querier, a: AvailabilityQuery): Promis
           and starts_at < $3 and ends_at > $2`,
       [staffIds, new Date(fromMs), new Date(toMs)],
     ),
+    q<{ staff_id: string; starts_at: Date; ends_at: Date; extra_cents: number }>(
+      `select staff_id, starts_at, ends_at, extra_cents from special_time
+        where staff_id = any($1::uuid[]) and business_id = $4
+          and starts_at < $3 and ends_at > $2
+        order by starts_at, created_at`,
+      [staffIds, new Date(fromMs), new Date(toMs), business.id],
+    ),
   ]);
 
   const opts = { tz, stepMin: s.slot_step_min, notBefore: now + s.min_notice_min * 60_000 };
@@ -143,18 +151,27 @@ export async function loadAvailability(q: Querier, a: AvailabilityQuery): Promis
         if (iv[0] >= dayFrom && iv[0] < dayTo) bookings++;
       }
       for (const t of off) if (t.staff_id === qt.staffId) busy.push([ms(t.starts_at), ms(t.ends_at)]);
+      // special time, cut to this day: a visit never runs past midnight
+      const sp: Special[] = [];
+      for (const x of special) {
+        if (x.staff_id !== qt.staffId) continue;
+        const from = Math.max(ms(x.starts_at), dayFrom);
+        const to = Math.min(ms(x.ends_at), dayTo);
+        if (to > from) sp.push({ from, to, extraCents: x.extra_cents });
+      }
       return {
         staffId: qt.staffId,
         date,
         windows: workWindows(date, tz, hours.filter((h) => h.staff_id === qt.staffId), ov ? ov.intervals : null),
         busy,
+        special: sp,
         durationMin: qt.durationMin,
         bufferMin: qt.bufferMin,
         bookings,
         sort: qt.sort,
       };
     });
-    return { date, open: staffDays.some((d) => d.windows.length > 0), slots: mergeSlots(staffDays, opts) };
+    return { date, open: staffDays.some((d) => d.windows.length > 0 || (d.special?.length ?? 0) > 0), slots: mergeSlots(staffDays, opts) };
   });
   return { quotes, days };
 }

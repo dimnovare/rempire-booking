@@ -1,9 +1,10 @@
 /**
  * POST /api/bookings   (Idempotency-Key: <uuid>)
- * { serviceIds, staffId|null, startsAt, name, phone, email?, comment?, locale, smsReminder }
+ * { serviceIds, staffId|null, startsAt, extraCents?, name, phone, email?, comment?, locale, smsReminder }
+ * extraCents: the special-time extra the client was shown; a different one is slot_taken.
  *
  * 201 { visit, manageUrl }    booked (or the same tap again: manageUrl null)
- * 409 { error: "slot_taken", alternatives: [[startMs, staffId], …] }
+ * 409 { error: "slot_taken", alternatives: [[startMs, staffId, extraCents], …] }
  * 422 { error: "invalid", field }
  */
 import { loadAvailability } from "@/lib/availability";
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
     serviceIds: Array.isArray(body.serviceIds) ? body.serviceIds.map(String) : [],
     staffId: body.staffId == null || body.staffId === "any" ? null : String(body.staffId),
     startsAt: String(body.startsAt ?? ""),
+    extraCents: typeof body.extraCents === "number" ? body.extraCents : body.extraCents == null ? null : NaN,
     name: String(body.name ?? ""),
     phone: String(body.phone ?? ""),
     email: body.email == null ? null : String(body.email),
@@ -62,7 +64,7 @@ export async function POST(request: Request) {
       .sort((a, b) => Math.abs(a.start - start) - Math.abs(b.start - start))
       .slice(0, 3)
       .sort((a, b) => a.start - b.start)
-      .map((s) => [s.start, s.staffIds[0]]);
+      .map((s) => [s.start, s.staffIds[0], s.extraCents]);
     return Response.json({ error: "slot_taken", alternatives }, { status: 409, headers: NO_STORE });
   }
   return Response.json({ error: r.code, field: r.field }, { status: r.code === "not_offered" ? 409 : 422, headers: NO_STORE });

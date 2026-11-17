@@ -26,6 +26,8 @@ export type BookingInput = {
   locale: Locale;
   smsReminder: boolean;
   idempotencyKey: string;
+  /** the special-time extra the client was shown; the booking fails rather than charge another */
+  extraCents?: number | null;
 };
 
 /** Set by the server route, never read from the request body. */
@@ -37,6 +39,8 @@ export type BookedVisit = {
   startsAt: string;
   endsAt: string;
   totalCents: number;
+  /** special-time extra, included in totalCents */
+  extraCents: number;
   status: string;
 };
 
@@ -64,6 +68,7 @@ type Clean = {
   locale: Locale;
   smsReminder: boolean;
   idempotencyKey: string;
+  extraCents: number | null;
   source: "online" | "admin";
 };
 
@@ -85,6 +90,8 @@ export function validateBooking(input: BookingInput): { ok: true; value: Omit<Cl
   if (!isLocale(input.locale)) return { ok: false, field: "locale" };
   const key = String(input.idempotencyKey ?? "");
   if (key.length < 16 || key.length > 200) return { ok: false, field: "idempotencyKey" };
+  const extra = input.extraCents ?? null;
+  if (extra !== null && !(Number.isInteger(extra) && extra >= 0 && extra <= 100_000)) return { ok: false, field: "extraCents" };
   return {
     ok: true,
     value: {
@@ -98,24 +105,26 @@ export function validateBooking(input: BookingInput): { ok: true; value: Omit<Cl
       locale: input.locale,
       smsReminder: input.smsReminder === true,
       idempotencyKey: key,
+      extraCents: extra,
     },
   };
 }
 
-type VisitRow = { id: string; staff_id: string; starts_at: Date; ends_at: Date; total_cents: number; status: string };
+type VisitRow = { id: string; staff_id: string; starts_at: Date; ends_at: Date; total_cents: number; extra_cents: number; status: string };
 const visitOf = (r: VisitRow): BookedVisit => ({
   id: r.id,
   staffId: r.staff_id,
   startsAt: new Date(r.starts_at).toISOString(),
   endsAt: new Date(r.ends_at).toISOString(),
   totalCents: r.total_cents,
+  extraCents: r.extra_cents,
   status: r.status,
 });
 
 /** The visit booked with this key, but only for the same phone: a key is no way to read someone else's visit. */
 async function findByKey(q: Querier, businessId: string, key: string, phone: string): Promise<BookedVisit | null> {
   const [row] = await q<VisitRow & { phone_e164: string }>(
-    `select a.id, a.staff_id, a.starts_at, a.ends_at, a.total_cents, a.status, c.phone_e164
+    `select a.id, a.staff_id, a.starts_at, a.ends_at, a.total_cents, a.extra_cents, a.status, c.phone_e164
        from appointments a join clients c on c.id = a.client_id
       where a.idempotency_key = $1 and a.business_id = $2`,
     [key, businessId],
@@ -165,10 +174,15 @@ async function bookClean(q: Querier, business: Business, c: Clean, now: number):
   const slot = look.days[0]?.slots.find((s) => s.start === c.start);
   if (!slot) return (await replay()) ?? { ok: false, code: "slot_taken" };
 
+  // The price the client saw stays the price: «anyone» only tries barbers
+  // at the same special-time extra.
+  const extra = c.extraCents ?? slot.extraCents;
+  const candidates = slot.staffIds.filter((_, i) => slot.extras[i] === extra);
+
   // «Anyone»: the best barber first, the next one if that chair went in between.
-  for (const staffId of slot.staffIds) {
+  for (const staffId of candidates) {
     try {
-      const out = await withTx((tx) => insertVisit(tx, business, c, staffId, c.staffId === null, now));
+      const out = await withTx((tx) => insertVisit(tx, business, c, staffId, c.staffId === null, now, extra));
       return { ok: true, visit: out.visit, manageToken: out.token, replay: false };
     } catch (err) {
       if (err instanceof SlotGone || pgCode(err) === "23P01") continue;
@@ -183,13 +197,14 @@ async function bookClean(q: Querier, business: Business, c: Clean, now: number):
   return (await replay()) ?? { ok: false, code: "slot_taken" };
 }
 
-async function insertVisit(tx: Querier, business: Business, c: Clean, staffId: string, anyStaff: boolean, now: number) {
+async function insertVisit(tx: Querier, business: Business, c: Clean, staffId: string, anyStaff: boolean, now: number, extra: number) {
   // One booking at a time per barber: the check below and the insert see the same chair.
   await tx("select id from staff where id = $1 and business_id = $2 for update", [staffId, business.id]);
   const date = localParts(c.start, business.timezone).date;
   const look = await loadAvailability(tx, { business, serviceIds: c.serviceIds, staffId, from: date, days: 1, now });
   const quote = look.quotes[0];
-  if (!quote || !look.days[0]?.slots.some((s) => s.start === c.start)) throw new SlotGone();
+  const slot = look.days[0]?.slots.find((s) => s.start === c.start);
+  if (!quote || !slot || slot.extraCents !== extra) throw new SlotGone();
 
   const services = await tx<{ id: string; name: unknown; duration_min: number; price_cents: number }>(
     `select sv.id, sv.name,
@@ -218,9 +233,9 @@ async function insertVisit(tx: Querier, business: Business, c: Clean, staffId: s
   const [row] = await tx<VisitRow>(
     `insert into appointments
        (business_id, location_id, staff_id, client_id, starts_at, ends_at, blocked_until, source, any_staff,
-        client_comment, reminder_min, total_cents, locale, manage_token_hash, idempotency_key)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-     returning id, staff_id, starts_at, ends_at, total_cents, status`,
+        client_comment, reminder_min, total_cents, extra_cents, locale, manage_token_hash, idempotency_key)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $16, $13, $14, $15)
+     returning id, staff_id, starts_at, ends_at, total_cents, extra_cents, status`,
     [
       business.id,
       quote.locationId,
@@ -233,10 +248,11 @@ async function insertVisit(tx: Querier, business: Business, c: Clean, staffId: s
       anyStaff,
       c.comment,
       c.smsReminder ? business.settings.reminder_min : null,
-      quote.priceCents,
+      quote.priceCents + extra,
       c.locale,
       hashToken(token),
       c.idempotencyKey,
+      extra,
     ],
   );
   for (const [position, s] of ordered.entries()) {
@@ -249,7 +265,7 @@ async function insertVisit(tx: Querier, business: Business, c: Clean, staffId: s
   await tx(
     `insert into audit (actor, entity, entity_id, action, after)
      values ($1, 'appointment', $2, 'create', $3::jsonb)`,
-    [c.source === "admin" ? "admin" : "client", row.id, JSON.stringify({ staff_id: staffId, starts_at: new Date(c.start).toISOString(), any_staff: anyStaff })],
+    [c.source === "admin" ? "admin" : "client", row.id, JSON.stringify({ staff_id: staffId, starts_at: new Date(c.start).toISOString(), any_staff: anyStaff, extra_cents: extra })],
   );
   return { visit: visitOf(row), token };
 }

@@ -107,6 +107,12 @@ async function Visit({ params }: { params: PageProps<"/[locale]/visit/[token]">[
               <span className="v">{eur(s.priceCents)}</span>
             </div>
           ))}
+          {v.extraCents > 0 && (
+            <div className="kv sp">
+              <span className="k">{c.special}</span>
+              <span className="v">+{eur(v.extraCents)}</span>
+            </div>
+          )}
           <div className="kv">
             <span className="k">{c.whereK}</span>
             <span className="v">{v.location.address}</span>

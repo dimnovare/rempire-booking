@@ -141,8 +141,9 @@ async function makePglite(): Promise<Raw> {
     db = (await tools.newPglite(process.env.PGLITE_PATH || undefined)) as unknown as PgliteDb;
     await tools.migrate(db, { dir: path.join(process.cwd(), "db", "migrations") });
     if (process.env.SEED_DEMO === "yes") {
-      const { seedDemo } = await import("../../tools/seed-demo.mjs");
+      const { seedDemo, seedDemoSpecial } = await import("../../tools/seed-demo.mjs");
       await seedDemo(db);
+      await seedDemoSpecial(db);
     }
   }
   return {

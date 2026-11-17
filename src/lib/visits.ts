@@ -13,6 +13,8 @@ export type VisitView = {
   startsAt: string;
   endsAt: string;
   totalCents: number;
+  /** special-time extra, included in totalCents */
+  extraCents: number;
   staffId: string;
   staffName: string;
   anyStaff: boolean;
@@ -33,6 +35,7 @@ export async function findVisit(q: Querier, businessId: string, token: string): 
     starts_at: Date;
     ends_at: Date;
     total_cents: number;
+    extra_cents: number;
     staff_id: string;
     staff_name: string;
     any_staff: boolean;
@@ -43,7 +46,7 @@ export async function findVisit(q: Querier, businessId: string, token: string): 
     address: string;
     phone: string;
   }>(
-    `select a.id, a.status, a.starts_at, a.ends_at, a.total_cents, a.staff_id, s.display_name as staff_name,
+    `select a.id, a.status, a.starts_at, a.ends_at, a.total_cents, a.extra_cents, a.staff_id, s.display_name as staff_name,
             a.any_staff, c.name as client_name, a.locale, a.reminder_min,
             l.name as loc_name, l.address, l.phone
        from appointments a
@@ -64,6 +67,7 @@ export async function findVisit(q: Querier, businessId: string, token: string): 
     startsAt: new Date(row.starts_at).toISOString(),
     endsAt: new Date(row.ends_at).toISOString(),
     totalCents: row.total_cents,
+    extraCents: row.extra_cents,
     staffId: row.staff_id,
     staffName: row.staff_name,
     anyStaff: row.any_staff,

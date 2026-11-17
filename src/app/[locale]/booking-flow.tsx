@@ -1,15 +1,20 @@
 "use client";
 
 /**
- * The client booking flow: 1 who + what, 2 when, 3 details, 4 done.
- * The approved mock, on real data (docs/client-flow.md). Free times come
- * from /api/slots; «Book» posts to /api/bookings with an Idempotency-Key.
+ * The client booking flow, design v2 (Dim, 17.11.2026): 1 barber and
+ * service, 2 time, 3 details, then done. One bar at the bottom, at every
+ * width, holds the summary, the price and the one next step: «Choose a
+ * time», «Same as last time», «Earliest», «Book». Tapping a time still goes
+ * straight to the details. Free times come from /api/slots, special time
+ * included; «Book» posts to /api/bookings with an Idempotency-Key.
+ * Screens: docs/client-flow.md and the design v2 canvas
+ * (https://claude.ai/artifact/Dg7tYCfjpba275Q5GWatFA).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BackIcon, CheckIcon, Logo, PlusIcon, TowerMark } from "@/components/brand";
+import { BackIcon, CalendarIcon, CheckIcon, Logo, PersonIcon, PlusIcon, TowerMark } from "@/components/brand";
 import type { Catalog, CatalogStaff } from "@/lib/catalog";
 import { COPY, duration, eur, euroRange, INTL, LOCALES, pick, type Locale } from "@/lib/i18n";
-import { localParts } from "@/lib/tz";
+import { addDays, localParts } from "@/lib/tz";
 
 type Props = {
   locale: Locale;
@@ -20,14 +25,34 @@ type Props = {
   demo: boolean;
 };
 
-type Day = { d: string; open: boolean; s: [number, string][] };
+/** [start ms, the barber «anyone» gets, his special-time extra in cents] */
+type Tuple = [number, string, number?];
+type Day = { d: string; open: boolean; s: Tuple[] };
 type Avail = { key: string; offered: boolean; days: Day[] };
-type Slot = { t: number; staffId: string };
-type Done = { visitId: string; start: number; end: number; staffId: string; manageUrl: string | null };
+type Slot = { t: number; staffId: string; extra: number };
+type Done = { start: number; end: number; staffId: string; totalCents: number; extraCents: number; manageUrl: string | null };
+
+/** What the bottom bar shows: who and what, the price, and the one next step. */
+type Bar = {
+  back?: () => void;
+  face?: CatalogStaff | "any" | null;
+  kicker?: string;
+  /** body text instead of the display face: a hint or a «same as last time» line */
+  plain?: boolean;
+  title: string;
+  sub?: string;
+  /** phones: title and sub when they differ (the price leads there) */
+  mTitle?: string;
+  mSub?: string;
+  price?: string;
+  go: { label: React.ReactNode; mLabel?: React.ReactNode; onClick?: () => void; disabled?: boolean; form?: string };
+};
 
 const STORE = "rempire-booking:client";
 // the last barber + services booked on this device: «Same as last time» is one tap
 const LAST = "rempire-booking:last";
+// the latest visit booked on this device: «My visits» opens its link until A8
+const VISIT = "rempire-booking:visit";
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const dateOf = (d: string) => {
   const [y, m, dd] = d.split("-").map(Number);
@@ -49,12 +74,14 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
   const [sms, setSms] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState("");
-  const [taken, setTaken] = useState<[number, string][] | null>(null);
+  const [taken, setTaken] = useState<Tuple[] | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState<Done | null>(null);
   const [remembered, setRemembered] = useState(false);
   const [last, setLast] = useState<{ barber: string; services: string[] } | null>(null);
+  const [mine, setMine] = useState<string | null>(null); // the latest visit's own link
   const [calMonth, setCalMonth] = useState<string | null>(null); // "YYYY-MM" the calendar shows
+  const [calOpen, setCalOpen] = useState(false); // phones: the month instead of the strip
   const key = useRef("");
   const strip = useRef<HTMLDivElement>(null);
 
@@ -81,6 +108,11 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
         const b = l.barber === "any" ? null : staffById.get(l.barber);
         const ok = ids.length === l.services.length && (l.barber === "any" ? capable(ids).length > 0 : !!b && can(b, ids));
         if (ok) setLast({ barber: l.barber, services: ids });
+      }
+      // until the visit is over
+      const v = JSON.parse(localStorage.getItem(VISIT) || "null");
+      if (v && typeof v.url === "string" && /^\/(ru|et|en)\/visit\/[A-Za-z0-9_-]+$/.test(v.url) && typeof v.end === "number" && v.end > Date.now()) {
+        setMine(v.url);
       }
     } catch {
       /* private mode: nothing remembered */
@@ -112,7 +144,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
   const ready = avail && avail.key === availKey ? avail : null;
   const earliest = useMemo(() => {
     if (!ready) return null;
-    for (const d of ready.days) if (d.s.length) return { d: d.d, t: d.s[0][0], staffId: d.s[0][1] };
+    for (const d of ready.days) if (d.s.length) return { d: d.d, t: d.s[0][0], staffId: d.s[0][1], extra: d.s[0][2] ?? 0 };
     return null;
   }, [ready]);
   const shownDay = day ?? earliest?.d ?? ready?.days[0]?.d ?? null;
@@ -121,7 +153,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
     const el = strip.current?.querySelector<HTMLElement>('.day[aria-pressed="true"]');
     const box = strip.current;
     if (el && box) box.scrollLeft = Math.max(0, el.offsetLeft - box.offsetLeft - (box.clientWidth - el.offsetWidth) / 2);
-  }, [shownDay, screen, ready]);
+  }, [shownDay, screen, ready, calOpen]);
 
   /* ---------- formatting ---------- */
   const fmtTime = (ms: number) =>
@@ -131,16 +163,29 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
   const dShort = (d: string) => `${cap(wd(d))} ${dd(d)}`;
   const dLong = (d: string) =>
     new Intl.DateTimeFormat(INTL[lang], { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }).format(dateOf(d));
+  // «today», «tomorrow», else «Wed 18.11»; only on screens that ran in the browser
+  const rel = (d: string) => {
+    const today = localParts(Date.now(), tz).date;
+    return d === today ? c.today : d === addDays(today, 1) ? c.tomorrow : dShort(d);
+  };
 
   /* ---------- who and how much ---------- */
   const assigned = slot ? staffById.get(slot.staffId) ?? null : barber && barber !== "any" ? staffById.get(barber) ?? null : null;
+  const extra = slot?.extra ?? 0;
+  const base = assigned ? priceOf(assigned, services) : 0;
   const who = () => {
     if (slot && barber === "any" && assigned) return `${assigned.name} (${c.firstFree})`;
     if (barber === "any") return c.anyone;
     return assigned?.name ?? "";
   };
-  const priceNow = () => (assigned ? eur(priceOf(assigned, services)) : euroRange(capable(services).map((b) => priceOf(b, services))));
+  const priceNow = () => (assigned ? eur(base + extra) : euroRange(capable(services).map((b) => priceOf(b, services))));
   const durNow = () => durOf(assigned, services);
+  const names = (ids: string[]) => ids.map((id) => pick(svcById.get(id)?.name, lang)).join(" + ");
+  /** the full price at one free time: that barber's price plus the time's extra */
+  const priceAt = (staffId: string, x: number) => {
+    const b = staffById.get(staffId);
+    return b ? eur(priceOf(b, services) + x) : "";
+  };
 
   /* ---------- actions ---------- */
   const go = (n: 1 | 2 | 3 | 4) => setScreen(n);
@@ -149,6 +194,11 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
     setSlot(null);
     setTaken(null);
     setCalMonth(null);
+    setCalOpen(false);
+  };
+  const toTimes = () => {
+    resetTime();
+    go(2);
   };
 
   const switchLang = (l: Locale) => {
@@ -171,6 +221,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
     if (ids.length && next) go(2);
   };
 
+  // the service row: with a barber chosen it goes on to the times; «+» only adds
   const tapService = (id: string) => {
     if (barber) {
       resetTime();
@@ -186,9 +237,17 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
     setServices((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   };
 
-  const pickSlot = (d: string, t: number, staffId: string) => {
+  const sameAgain = () => {
+    if (!last) return;
+    resetTime();
+    setBarber(last.barber);
+    setServices(last.services);
+    go(2);
+  };
+
+  const pickSlot = (d: string, t: number, staffId: string, x: number) => {
     setDay(d);
-    setSlot({ t, staffId });
+    setSlot({ t, staffId, extra: x });
     setTaken(null);
     setFormError("");
     key.current = newKey();
@@ -197,7 +256,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
 
   const submit = async (ev: React.FormEvent) => {
     ev.preventDefault();
-    if (submitting || !slot) return;
+    if (submitting || !slot || taken) return;
     const errs: Record<string, string> = {};
     if (!form.name.trim()) errs.name = c.errName;
     if (form.phone.replace(/\D/g, "").length < 7) errs.phone = c.errPhone;
@@ -217,6 +276,8 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
           serviceIds: services,
           staffId: barber === "any" ? null : barber,
           startsAt: new Date(slot.t).toISOString(),
+          // the price the client saw: the server books it or says the time is gone
+          extraCents: slot.extra,
           name: form.name,
           phone: form.phone,
           email: form.email || null,
@@ -227,20 +288,18 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
       });
       const j = await res.json().catch(() => ({}));
       if (res.ok && j.visit) {
+        const start = Date.parse(j.visit.startsAt);
+        const end = Date.parse(j.visit.endsAt);
         try {
           localStorage.setItem(STORE, JSON.stringify({ name: form.name.trim(), phone: form.phone.trim(), email: form.email.trim() }));
           if (barber) localStorage.setItem(LAST, JSON.stringify({ barber, services }));
+          if (j.manageUrl) localStorage.setItem(VISIT, JSON.stringify({ url: j.manageUrl, end }));
         } catch {
           /* not remembered: fine */
         }
-        setDone({
-          visitId: j.visit.id,
-          start: Date.parse(j.visit.startsAt),
-          end: Date.parse(j.visit.endsAt),
-          staffId: j.visit.staffId,
-          manageUrl: j.manageUrl,
-        });
-        setSlot({ t: Date.parse(j.visit.startsAt), staffId: j.visit.staffId });
+        if (j.manageUrl) setMine(j.manageUrl);
+        setDone({ start, end, staffId: j.visit.staffId, totalCents: j.visit.totalCents, extraCents: j.visit.extraCents ?? 0, manageUrl: j.manageUrl });
+        setSlot({ t: start, staffId: j.visit.staffId, extra: j.visit.extraCents ?? 0 });
         setAvail(null); // the chair is taken now
         go(4);
       } else if (res.status === 409 && j.error === "slot_taken") {
@@ -268,42 +327,66 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
   /* ---------- pieces ---------- */
   // eslint-disable-next-line @next/next/no-img-element
   const face = (s: CatalogStaff) => (s.photoUrl ? <img src={s.photoUrl} alt="" width={480} height={640} decoding="async" /> : s.name.slice(0, 2).toUpperCase());
+  const ava = (f: CatalogStaff | "any" | null | undefined, cls: string) =>
+    f ? <span className={`ava ${cls}${f === "any" ? " any" : ""}`}>{f === "any" ? <TowerMark /> : face(f)}</span> : null;
+  const myLink = mine ? mine.replace(/^\/(ru|et|en)\//, `/${lang}/`) : null;
+
+  // 1 barber and service · 2 time · 3 details; a step behind you is a way back
+  const steps = () => {
+    const labels = [
+      screen > 1 && barber ? `${barber === "any" ? c.anyone : staffById.get(barber)?.name ?? ""}, ${names(services)}` : c.step1,
+      screen > 2 && slot ? `${dShort(localParts(slot.t, tz).date)}, ${fmtTime(slot.t)}` : c.step2,
+      c.step3,
+    ];
+    return (
+      <ol className="steps">
+        {labels.map((label, i) => {
+          const n = (i + 1) as 1 | 2 | 3;
+          const inner = (
+            <>
+              <span className="n">{n}</span>
+              <span className="lbl">{label}</span>
+            </>
+          );
+          return (
+            <li key={n} className={n <= screen ? "on" : ""} aria-current={n === screen ? "step" : undefined}>
+              {n < screen && screen < 4 ? (
+                <button type="button" onClick={() => go(n)}>
+                  {inner}
+                </button>
+              ) : (
+                <span>{inner}</span>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    );
+  };
 
   const header = (
     <>
       <header className="top">
         <Logo />
-        <div className="langs" role="group" aria-label="Language">
-          {LOCALES.map((l) => (
-            <button key={l} type="button" aria-pressed={lang === l} onClick={() => switchLang(l)}>
-              {l.toUpperCase()}
-            </button>
-          ))}
+        <div className="top-r">
+          <div className="langs" role="group" aria-label="Language">
+            {LOCALES.map((l) => (
+              <button key={l} type="button" aria-pressed={lang === l} onClick={() => switchLang(l)}>
+                {l.toUpperCase()}
+              </button>
+            ))}
+          </div>
+          {myLink && (
+            <a className="mine" href={myLink} aria-label={c.myVisits}>
+              <PersonIcon />
+              <span className="w-only">{c.myVisits}</span>
+            </a>
+          )}
         </div>
       </header>
-      <div className="prog" aria-hidden="true">
-        {[1, 2, 3, 4].map((n) => (
-          <i key={n} className={n <= screen ? "on" : ""} />
-        ))}
-      </div>
+      {steps()}
       {demo && <p className="demo">{c.demo}</p>}
     </>
-  );
-
-  // phones get this line; wide screens the summary panel instead
-  const summaryLine = (
-    <div className="sumrow m-only">
-      <button type="button" className="iconbtn" onClick={() => go(1)} aria-label={c.back}>
-        <BackIcon />
-      </button>
-      <div className="sumtxt">
-        <strong>{who()}</strong>
-        {services.map((id) => pick(svcById.get(id)?.name, lang)).join(" + ")} · {duration(durNow(), c)} · {priceNow()} ·{" "}
-        <button type="button" className="link" onClick={() => go(1)}>
-          {c.change}
-        </button>
-      </div>
-    </div>
   );
 
   const card = () => {
@@ -311,6 +394,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
     const start = done?.start ?? slot.t;
     const end = done?.end ?? start + durOf(assigned, services) * 60_000;
     const date = localParts(start, tz).date;
+    const x = done?.extraCents ?? extra;
     return (
       <div className="card">
         <div className="kv">
@@ -333,6 +417,12 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
             <span className="v">{eur(assigned.offers[id]?.[0] ?? 0)}</span>
           </div>
         ))}
+        {x > 0 && (
+          <div className="kv sp">
+            <span className="k">{c.special}</span>
+            <span className="v">+{eur(x)}</span>
+          </div>
+        )}
         <div className="kv">
           <span className="k">{c.whereK}</span>
           <span className="v">{catalog.location.address}</span>
@@ -341,11 +431,25 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
           <span className="k">
             {c.total} · {duration(Math.round((end - start) / 60_000), c)}
           </span>
-          <span className="v">{eur(priceOf(assigned, services))}</span>
+          <span className="v">{eur(done?.totalCents ?? base + x)}</span>
         </div>
       </div>
     );
   };
+
+  // one free time: the full price on it when it is special time
+  const slotBtn = (d: string, [t, sid, x = 0]: Tuple, onPick?: () => void) => (
+    <button
+      key={t}
+      type="button"
+      className={`slot${x > 0 ? " sp" : ""}`}
+      aria-label={x > 0 ? `${fmtTime(t)}, ${c.special}, ${priceAt(sid, x)}` : undefined}
+      onClick={onPick ?? (() => pickSlot(d, t, sid, x))}
+    >
+      <span className="st">{fmtTime(t)}</span>
+      {x > 0 && <span className="sp-p">{priceAt(sid, x)}</span>}
+    </button>
+  );
 
   /* ---------- screens ---------- */
   const screen1 = () => {
@@ -358,30 +462,6 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
           <div className="eyebrow">{c.loc}</div>
           <h1 className="h1">{c.title}</h1>
         </div>
-        {last && !barber && !ids.length && (
-          <button
-            type="button"
-            className="again"
-            onClick={() => {
-              resetTime();
-              setBarber(last.barber);
-              setServices(last.services);
-              go(2);
-            }}
-          >
-            <span className={`ava${last.barber === "any" ? " any" : ""}`}>
-              {last.barber === "any" ? <TowerMark /> : face(staffById.get(last.barber)!)}
-            </span>
-            <span className="again-txt">
-              <small>{c.sameAgain}</small>
-              <strong>{last.barber === "any" ? c.anyone : staffById.get(last.barber)!.name}</strong>
-              <span>{last.services.map((id) => pick(svcById.get(id)?.name, lang)).join(" + ")}</span>
-            </span>
-            <span className="again-go" aria-hidden="true">
-              <BackIcon />
-            </span>
-          </button>
-        )}
         <section>
           <h2 className="label">{c.barber}</h2>
           <div className="bleed">
@@ -422,7 +502,6 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
             </div>
           </div>
         </section>
-        {ids.length > 0 && !barber && <p className="note m-only">{c.pickBarber}</p>}
         <section>
           <h2 className="label">{c.service}</h2>
           <div className="svcs">
@@ -452,10 +531,20 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
   };
 
   const screen2 = () => {
+    const head = (
+      <div className="when-head">
+        <h1 className="h1">{c.when}</h1>
+        {ready && earliest && (
+          <button type="button" className="iconbtn cal-toggle" aria-pressed={calOpen} aria-label={c.monthCal} onClick={() => setCalOpen((v) => !v)}>
+            <CalendarIcon />
+          </button>
+        )}
+      </div>
+    );
     if (availError) {
       return (
         <div className="stack">
-          {summaryLine}
+          {head}
           <p className="alert">{c.errGeneric}</p>
         </div>
       );
@@ -463,8 +552,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
     if (!ready) {
       return (
         <div className="stack">
-          {summaryLine}
-          <h1 className="h1">{c.when}</h1>
+          {head}
           <p className="wait" role="status">
             {c.loading}
           </p>
@@ -475,8 +563,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
       const name = barber && barber !== "any" ? staffById.get(barber)?.name ?? "" : catalog.business.name;
       return (
         <div className="stack">
-          {summaryLine}
-          <h1 className="h1">{c.when}</h1>
+          {head}
           <div className="empty note">
             <p className="big">{c.noneAhead(name, horizonDays)}</p>
             {barber !== "any" && (
@@ -494,6 +581,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
       );
     }
     const current = ready.days.find((d) => d.d === shownDay) ?? ready.days[0];
+    const today = localParts(Date.now(), tz).date;
     let body: React.ReactNode;
     if (!current.s.length) {
       const next = ready.days.find((d) => d.d > current.d && d.s.length);
@@ -523,17 +611,17 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
             if (!xs.length) return null;
             return (
               <div className="group" key={name}>
-                <h2 className="label">{name}</h2>
-                <div className="slots">
-                  {xs.map(([t, sid]) => (
-                    <button key={t} type="button" className="slot" onClick={() => pickSlot(current.d, t, sid)}>
-                      {fmtTime(t)}
-                    </button>
-                  ))}
-                </div>
+                <h3 className="label">{name}</h3>
+                <div className="slots">{xs.map((x) => slotBtn(current.d, x))}</div>
               </div>
             );
           })}
+          {current.s.some((x) => (x[2] ?? 0) > 0) && (
+            <p className="legend">
+              <i aria-hidden="true" />
+              {c.specialLegend}
+            </p>
+          )}
         </div>
       );
     }
@@ -556,7 +644,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
                 aria-label={dLong(d.d)}
                 onClick={() => setDay(d.d)}
               >
-                <span className="wd">{wd(d.d)}</span>
+                <span className="wd">{d.d === today ? c.today : wd(d.d)}</span>
                 <span className="dn">{Number(d.d.slice(8, 10))}</span>
               </button>
             ))}
@@ -568,7 +656,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
       </div>
     );
 
-    // wide screens: a month calendar instead of the strip; only days with a free time can be tapped
+    // wide screens (and phones on request): a month calendar; only days with a free time can be tapped
     const months = [...new Set(ready.days.map((d) => d.d.slice(0, 7)))];
     const month = calMonth && months.includes(calMonth) ? calMonth : current.d.slice(0, 7);
     const mi = months.indexOf(month);
@@ -600,7 +688,18 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
             if (!d) return <span key={`_${i}`} />;
             const free = !!byDate.get(d)?.s.length;
             return (
-              <button key={d} type="button" className={`cal-d${free ? " free" : ""}`} disabled={!free} aria-pressed={d === current.d} aria-label={dLong(d)} onClick={() => setDay(d)}>
+              <button
+                key={d}
+                type="button"
+                className={`cal-d${free ? " free" : ""}`}
+                disabled={!free}
+                aria-pressed={d === current.d}
+                aria-label={dLong(d)}
+                onClick={() => {
+                  setDay(d);
+                  setCalOpen(false);
+                }}
+              >
                 {Number(d.slice(8, 10))}
               </button>
             );
@@ -610,20 +709,19 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
     );
     return (
       <div className="stack">
-        {summaryLine}
-        <h1 className="h1">{c.when}</h1>
-        <button type="button" className="earliest" onClick={() => pickSlot(earliest.d, earliest.t, earliest.staffId)}>
-          <small>{c.earliestFree}</small>
-          <span>
-            {dShort(earliest.d)} · {fmtTime(earliest.t)}
-          </span>
-        </button>
-        <div className="when">
+        {head}
+        <div className={`when${calOpen ? " cal-open" : ""}`}>
           <div className="when-days">
             {dayStrip}
             {calendar}
           </div>
-          <div className="when-times">{body}</div>
+          <div className="when-times">
+            <div className="day-head">
+              <h2>{cap(dLong(current.d))}</h2>
+              {current.s.length > 0 && <span>{c.nFree(current.s.length)}</span>}
+            </div>
+            {body}
+          </div>
         </div>
       </div>
     );
@@ -645,74 +743,76 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
     if (errors[id]) setErrors(({ [id]: _drop, ...rest }) => rest);
   };
 
-  const screen3 = () => (
-    <div className="stack">
-      <div className="sumrow">
-        <button type="button" className="iconbtn" onClick={() => go(2)} aria-label={c.back}>
-          <BackIcon />
-        </button>
-        <h1 className="h1" style={{ margin: "4px 0 0" }}>
-          {c.details}
-        </h1>
-      </div>
-      <div className="m-only">{card()}</div>
-      {taken && (
-        <div className="taken" role="alert">
-          <h3>{c.taken}</h3>
-          <p>{c.takenSub}</p>
-          {taken.length > 0 && (
-            <div className="slots">
-              {taken.map(([t, sid]) => (
-                <button
-                  key={t}
-                  type="button"
-                  className="slot"
-                  onClick={() => {
-                    setSlot({ t, staffId: sid });
-                    setTaken(null);
-                    key.current = newKey();
-                  }}
-                >
-                  {fmtTime(t)}
-                </button>
-              ))}
+  const screen3 = () => {
+    if (!slot) return null;
+    return (
+      <div className="details">
+        <div className="stack">
+          <button type="button" className="vline" onClick={() => go(2)}>
+            {ava(barber === "any" && !assigned ? "any" : assigned, "")}
+            <span className="vline-txt">
+              <strong>
+                {dShort(localParts(slot.t, tz).date)}, {fmtTime(slot.t)}
+              </strong>
+              <span>
+                {who()}, {names(services)}
+              </span>
+              {extra > 0 && <em className="tag">{c.special}</em>}
+            </span>
+            <span className="link">{c.change}</span>
+          </button>
+          <h1 className="h1">{c.details}</h1>
+          {taken && (
+            <div className="taken" role="alert">
+              <h3>{c.taken}</h3>
+              <p>{c.takenSub}</p>
+              {taken.length > 0 && (
+                <div className="slots">
+                  {taken.map((x) =>
+                    slotBtn(localParts(x[0], tz).date, x, () => {
+                      setSlot({ t: x[0], staffId: x[1], extra: x[2] ?? 0 });
+                      setTaken(null);
+                      key.current = newKey();
+                    }),
+                  )}
+                </div>
+              )}
             </div>
           )}
+          {remembered && <p className="welcome">{c.welcome}</p>}
+          {/* «Book» is in the bottom bar, tied to this form */}
+          <form id="bf" className="fields" noValidate onSubmit={submit}>
+            {field("name", c.name, false, <input className="input" id="f-name" name="name" autoComplete="name" value={form.name} onChange={onField("name")} maxLength={120} />)}
+            {field(
+              "phone",
+              c.phone,
+              false,
+              <input className="input" id="f-phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" value={form.phone} onChange={onField("phone")} maxLength={30} />,
+            )}
+            {field(
+              "email",
+              c.email,
+              true,
+              <input className="input" id="f-email" name="email" type="email" inputMode="email" autoComplete="email" value={form.email} onChange={onField("email")} maxLength={254} />,
+              c.emailHint,
+            )}
+            {field("comment", c.comment, true, <textarea className="input" id="f-comment" name="comment" rows={2} value={form.comment} onChange={onField("comment")} maxLength={1000} />)}
+            <div className="switchrow">
+              <span id="smsl">{c.sms}</span>
+              <button type="button" className="switch" role="switch" aria-labelledby="smsl" aria-checked={sms} onClick={() => setSms((v) => !v)} />
+            </div>
+            {formError && (
+              <p className="alert" role="alert">
+                {formError}
+              </p>
+            )}
+            <p className="small">{c.privacy}</p>
+          </form>
         </div>
-      )}
-      {remembered && <p className="welcome">{c.welcome}</p>}
-      <form className="fields" noValidate onSubmit={submit}>
-        {field("name", c.name, false, <input className="input" id="f-name" name="name" autoComplete="name" value={form.name} onChange={onField("name")} maxLength={120} />)}
-        {field(
-          "phone",
-          c.phone,
-          false,
-          <input className="input" id="f-phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" value={form.phone} onChange={onField("phone")} maxLength={30} />,
-        )}
-        {field(
-          "email",
-          c.email,
-          true,
-          <input className="input" id="f-email" name="email" type="email" inputMode="email" autoComplete="email" value={form.email} onChange={onField("email")} maxLength={254} />,
-          c.emailHint,
-        )}
-        {field("comment", c.comment, true, <textarea className="input" id="f-comment" name="comment" rows={2} value={form.comment} onChange={onField("comment")} maxLength={1000} />)}
-        <div className="switchrow">
-          <span id="smsl">{c.sms}</span>
-          <button type="button" className="switch" role="switch" aria-labelledby="smsl" aria-checked={sms} onClick={() => setSms((v) => !v)} />
-        </div>
-        {formError && (
-          <p className="alert" role="alert">
-            {formError}
-          </p>
-        )}
-        <button type="submit" className="btn btn-lime" disabled={submitting || !!taken}>
-          {submitting ? c.booking : c.book}
-        </button>
-        <p className="small">{c.privacy}</p>
-      </form>
-    </div>
-  );
+        <aside className="details-card">{card()}</aside>
+      </div>
+    );
+  };
 
   const screen4 = () => {
     if (!done) return null;
@@ -749,99 +849,107 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
     );
   };
 
-  /* ---------- the summary panel (wide screens; hidden on phones) ---------- */
-  const side = () => {
-    if (screen === 4) return null;
-    if (screen === 3) return <aside className="side">{card()}</aside>;
-    const ready1 = services.length > 0 && !!barber;
-    const b = barber && barber !== "any" ? staffById.get(barber) ?? null : null;
-    return (
-      <aside className="side" aria-label={c.yourVisit}>
-        <div className="side-in">
-          <h2 className="label">{c.yourVisit}</h2>
-          {barber && (
-            <div className="side-who">
-              <span className={`ava${barber === "any" ? " any" : ""}`}>{barber === "any" ? <TowerMark /> : b ? face(b) : null}</span>
-              <strong>{who()}</strong>
-            </div>
-          )}
-          {services.length > 0 && (
-            <div className="side-list">
-              {services.map((id) => (
-                <div className="kv" key={id}>
-                  <span className="k">{pick(svcById.get(id)?.name, lang)}</span>
-                  <span className="v">{b ? eur(b.offers[id]?.[0] ?? 0) : euroRange(capable([id]).map((x) => x.offers[id][0]))}</span>
-                </div>
-              ))}
-              <div className="kv tot">
-                <span className="k">
-                  {c.total} · {duration(durNow(), c)}
+  /* ---------- the bottom bar: the same place for the next step on every screen ---------- */
+  const barSpec = (): Bar | null => {
+    const f: CatalogStaff | "any" | null = barber === "any" && !assigned ? "any" : assigned;
+    const whoLine = { title: who(), sub: `${names(services)} · ${duration(durNow(), c)}`, mTitle: priceNow(), mSub: `${who()}, ${duration(durNow(), c)}`, price: priceNow() };
+    if (screen === 1) {
+      if (barber && services.length) return { face: f, ...whoLine, go: { label: c.choose, onClick: toTimes } };
+      if (last && !barber && !services.length) {
+        const lb = last.barber === "any" ? "any" : staffById.get(last.barber) ?? null;
+        const lname = lb === "any" ? c.anyone : lb?.name ?? "";
+        return {
+          face: lb,
+          kicker: c.sameAgain,
+          plain: true,
+          title: `${lname}, ${names(last.services)}`,
+          price: lb && lb !== "any" ? eur(priceOf(lb, last.services)) : undefined,
+          go: { label: c.choose, onClick: sameAgain },
+        };
+      }
+      return { plain: true, title: services.length && !barber ? c.pickBarber : barber ? c.pickService : c.pickFirst, go: { label: c.choose, disabled: true } };
+    }
+    if (screen === 2) {
+      const e = earliest;
+      const at = e ? `${rel(e.d)} ${fmtTime(e.t)}${e.extra ? ` · ${priceAt(e.staffId, e.extra)}` : ""}` : "";
+      return {
+        back: () => go(1),
+        face: f,
+        ...whoLine,
+        go: e
+          ? {
+              label: c.earliestAt(at),
+              mLabel: (
+                <span className="two">
+                  <small>{c.earliest}</small>
+                  <span>{cap(at)}</span>
                 </span>
-                <span className="v">{priceNow()}</span>
-              </div>
-            </div>
-          )}
-          {screen === 1 &&
-            (ready1 ? (
-              <button
-                type="button"
-                className="btn btn-lime"
-                onClick={() => {
-                  resetTime();
-                  go(2);
-                }}
-              >
-                {c.choose}
-              </button>
-            ) : (
-              <p className="note">{services.length && !barber ? c.pickBarber : c.pickFirst}</p>
-            ))}
-          {screen === 2 && (
-            <button type="button" className="btn btn-ghost" onClick={() => go(1)}>
-              {c.change}
-            </button>
-          )}
-        </div>
-      </aside>
-    );
+              ),
+              onClick: () => pickSlot(e.d, e.t, e.staffId, e.extra),
+            }
+          : { label: c.earliest, disabled: true },
+      };
+    }
+    if (screen === 3 && slot) {
+      const split = extra > 0 ? c.plusSpecial(eur(base), eur(extra)) : null;
+      return {
+        back: () => go(2),
+        face: f,
+        title: who(),
+        sub: split ?? `${names(services)} · ${duration(durNow(), c)}`,
+        mTitle: eur(base + extra),
+        mSub: split ?? `${who()}, ${duration(durNow(), c)}`,
+        price: eur(base + extra),
+        go: { label: submitting ? c.booking : c.book, form: "bf", disabled: submitting || !!taken },
+      };
+    }
+    return null;
   };
 
-  const showCta = screen === 1 && services.length > 0 && !!barber;
-  const aside = side();
+  const bar = (b: Bar) => (
+    <div className="bar">
+      <div className="bar-in gut">
+        {b.back && (
+          <button type="button" className="iconbtn bar-back" onClick={b.back} aria-label={c.back}>
+            <BackIcon />
+          </button>
+        )}
+        {ava(b.face, `bar-ava${b.back ? " w-only" : ""}`)}
+        <div className="bar-txt">
+          {b.kicker && <small>{b.kicker}</small>}
+          <b className={[b.plain ? "plain" : "", b.mTitle ? "w-only" : ""].join(" ").trim() || undefined}>{b.title}</b>
+          {b.mTitle && <b className="p-only">{b.mTitle}</b>}
+          {b.sub && <span className={b.mSub ? "w-only" : undefined}>{b.sub}</span>}
+          {b.mSub && <span className="p-only">{b.mSub}</span>}
+        </div>
+        {b.price && <div className="bar-price w-only">{b.price}</div>}
+        <button type={b.go.form ? "submit" : "button"} form={b.go.form} className="btn btn-lime bar-go" disabled={b.go.disabled} onClick={b.go.onClick}>
+          {b.go.mLabel ? (
+            <>
+              <span className="w-only">{b.go.label}</span>
+              <span className="p-only">{b.go.mLabel}</span>
+            </>
+          ) : (
+            b.go.label
+          )}
+        </button>
+      </div>
+    </div>
+  );
+
+  const spec = barSpec();
   return (
     <>
-      <main className={`app gut${showCta ? " has-cta" : ""}`} aria-live="polite">
+      <main className={`app gut${spec ? " has-bar" : ""}`} aria-live="polite">
         {header}
-        <div className={`flow${aside ? " has-side" : ""}`}>
-          <div className="flow-main">
-            {screen === 1 && screen1()}
-            {screen === 2 && screen2()}
-            {screen === 3 && screen3()}
-            {screen === 4 && screen4()}
-          </div>
-          {aside}
+        <div className={`flow${screen === 4 ? " narrow" : ""}`}>
+          {screen === 1 && screen1()}
+          {screen === 2 && screen2()}
+          {screen === 3 && screen3()}
+          {screen === 4 && screen4()}
         </div>
       </main>
-      {showCta && (
-        <div className="cta m-only">
-          <div className="cta-in gut">
-            <div className="cta-sum">
-              <b>{priceNow()}</b>
-              <span>{duration(durNow(), c)}</span>
-            </div>
-            <button
-              type="button"
-              className="btn btn-lime"
-              onClick={() => {
-                resetTime();
-                go(2);
-              }}
-            >
-              {c.choose}
-            </button>
-          </div>
-        </div>
-      )}
+      {spec && bar(spec)}
     </>
   );
 }

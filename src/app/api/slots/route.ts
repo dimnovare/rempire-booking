@@ -1,7 +1,8 @@
 /**
  * GET /api/slots?services=<id,id>&staff=<id|any>&from=YYYY-MM-DD&days=60
- * → { tz, days: [{ d, open, s: [[startMs, staffId], …] }] }
- * staffId in each pair is the barber «anyone» would get.
+ * → { tz, days: [{ d, open, s: [[startMs, staffId, extraCents], …] }] }
+ * staffId is the barber «anyone» would get; extraCents is his special-time
+ * extra at that start (0 = the usual price).
  */
 import { loadAvailability } from "@/lib/availability";
 import { currentBusiness } from "@/lib/business";
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
     {
       tz: business.timezone,
       offered: r.quotes.length > 0,
-      days: r.days.map((d) => ({ d: d.date, open: d.open, s: d.slots.map((s) => [s.start, s.staffIds[0]]) })),
+      days: r.days.map((d) => ({ d: d.date, open: d.open, s: d.slots.map((s) => [s.start, s.staffIds[0], s.extraCents]) })),
     },
     { headers: NO_STORE },
   );

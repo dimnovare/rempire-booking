@@ -7,6 +7,27 @@ draft keeps its logic and cuts its taps.*
 in rempire.ee's look (Dim's `look` answer). Dim's notes per screen are in
 its `feedback` collection.
 
+**Design v2 (Dim, 17.11.2026), built:**
+<https://claude.ai/artifact/Dg7tYCfjpba275Q5GWatFA>.
+
+- **One bar at the bottom, at every width**, as Altegio does it. It holds who
+  and what, the price, and the one next step. There is no side panel.
+
+  | Screen | The bar's button |
+  |---|---|
+  | 1 | «Choose a time». A returning client with nothing picked gets «Same as last time». |
+  | 2 | «Earliest: today 16:45». Tapping a time still goes straight to the details. |
+  | 3 | «Book». |
+
+- **Steps line:** 1 Barber and service, 2 Time, 3 Details. A step behind you
+  is a way back.
+- **Special time** sits among the normal times, with a dashed lime frame and
+  the full price on the time. The bar shows «60 € + 20 € special time».
+- **«My visits»** in the header opens the latest visit booked on this device,
+  until A8 adds the SMS login.
+- Phones get a calendar button on the time screen. From 1024px the month
+  calendar sits beside the times.
+
 ## Target
 
 | Visit | Altegio today | Ours |
@@ -49,8 +70,8 @@ came from. A switcher sits in the header.
 
 ### 2. When
 
-- On top, **the earliest free slot** as one big button, for example «Thu
-  26.11 · 11:15».
+- **The earliest free slot** is the bottom bar's button, for example
+  «Earliest: Thu 26.11 11:15» (design v2; it was a big button on top).
 - Below it, a strip of the next 14 days. Days with no free time are greyed
   out.
 - Under that, the chosen day's slots, grouped Morning / Day / Evening.
