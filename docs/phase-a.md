@@ -13,7 +13,7 @@ Screens: `docs/client-flow.md` and the approved mock.*
 | A3 | **Staging database:** a Postgres for staging; migrations and the demo seed run on every deploy (`postbuild`). | nothing | done 17.11: Postgres `rempire-booking-staging` on the shop's Railway (docs/staging-setup.md). First deploy applied `001_core.sql` and the demo seed; on staging a booking, the same tap again, a taken slot (409), the change link, the calendar file and a cancel all work |
 | A4 | **Staff login:** password, 6-digit e-mail code, Google. | Resend API key; Google OAuth client in the shop's Google account (Dim, 17.11); `ADMIN_BOOTSTRAP_*` in Vercel | done 17.11 except the outside parts: `003_staff_auth.sql`, password login, sessions (httpOnly cookie, only the token's hash stored, 90 days idle), roles owner / admin / barber, `/admin` locked, rate limits. The e-mail code works with the console transport; in production it says «not set up» until `RESEND_API_KEY`. Google login is built (code + PKCE; links the first Google login to the login with that e-mail, never creates one) and shows once `GOOGLE_CLIENT_*` are set. The first owner login comes from `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` on deploy |
 | A5 | **Renat's admin:** day and week calendar, one column per barber; add, move, cancel; barbers; services with each barber's price and time; hours, breaks, vacations. | | done 17.11: `/admin` in Russian, phone first. Day view (a column per barber) and week view (one barber); tap a free time to add a visit or a block; open a visit to mark arrived / done / no-show, move (tap the new time, or drag with a mouse), edit or cancel. Barbers: profile, prices and times per service, weekly hours with breaks, single days, vacation and sick days, special time. Services: list and edit. Access: password, logins for barbers and the front desk |
-| A6 | **Messages:** e-mail confirmation with `.ics` and the change link; the 2-hour SMS behind `sendSms(to, text)`; a cron for the outbox. | Resend; SMS provider account; `CRON_SECRET` and a cron schedule | groundwork done 17.11: `004_notifications.sql` outbox, `sendSms` with a console transport and SMS part counting, reminders planned from the visits, `/api/cron/outbox` (locked rows, retries with backoff). No provider is called; in production SMS rows wait until one is wired. Not yet: the e-mail confirmation with `.ics` |
+| A6 | **Messages:** e-mail confirmation with `.ics` and the change link; the 2-hour SMS behind `sendSms(to, text)`; a cron for the outbox. | Resend; SMS provider account; `CRON_SECRET` and a cron schedule | groundwork done 17.11: `004_notifications.sql` outbox, `sendSms` with a console transport and SMS part counting, reminders planned from the visits, `/api/cron/outbox` (locked rows, retries with backoff). No provider is called; in production SMS rows wait until one is wired. E-mail confirmation done 17.11: a branded letter (`src/lib/letters.ts`) with its own change link (`006_visit_links.sql`) and the `.ics` attached, queued with the booking and sent right after it; the staff login code uses the same layout. Waits on: the SMS provider, `CRON_SECRET` |
 | A7 | **Altegio import:** staff, services, clients, future visits. | Altegio login | |
 | A8 | **My visits (client area):** an account icon top right; log in with a 6-digit SMS code to the phone used for booking, no password; upcoming and past visits; cancel or move until the cutoff; «book again» from any visit. Added by Dim, 17.11.2026. | A6's SMS provider | |
 | A9 | **Special time + design v2:** barbers' own higher-priced hours, booked at once; the client flow with one bottom bar at every width. | nothing | done 17.11: `002_special_time.sql`, slots and «Book» with the extra, the bottom bar at every width, «My visits» to the latest visit on the device; demo special time on staging for the next 14 days |
@@ -67,6 +67,7 @@ Renat's request, settled with Dim (17.11.2026):
 |---|---|
 | `db/migrations/003_staff_auth.sql` | `users`, `sessions`, `login_codes`, `auth_attempts`; walk-ins without a phone |
 | `db/migrations/004_notifications.sql` | the message outbox |
+| `db/migrations/006_visit_links.sql` | a change link per message; only its hash is stored, and the booking screen's link keeps working |
 | `src/lib/auth/` | passwords (`tools/password.mjs`), sessions, login, the cookie, `requireAdmin()` |
 | `tools/bootstrap-owner.mjs` | owner logins from `ADMIN_BOOTSTRAP_*`: one e-mail or a list; every listed address becomes an owner with that password (one shared admin password, Dim, 17.11); a password already set is never overwritten |
 | `src/proxy.ts` | `/admin` without a cookie → `/admin/login`; admin pages always noindex |
@@ -74,8 +75,9 @@ Renat's request, settled with Dim (17.11.2026):
 | `src/app/admin/(app)/` | calendar, barbers, services, access |
 | `src/app/admin/admin.css` | the admin's own styles (the client flow's are untouched) |
 | `src/lib/admin/` | calendar data, visit changes, barbers, services |
-| `src/lib/email.ts`, `src/lib/sms.ts` | `sendEmail` / `sendSms`: one door each, console transport locally |
-| `src/lib/outbox.ts` | plans reminders, claims due rows (`for update skip locked`), sends, retries |
+| `src/lib/email.ts`, `src/lib/sms.ts` | `sendEmail` (text, HTML, attachments) / `sendSms`: one door each, console transport locally |
+| `src/lib/letters.ts` | the letters in REMPIRE's look: login code, booking confirmation (RU/ET/EN). Tables and inline styles for mail clients; every value escaped |
+| `src/lib/outbox.ts` | plans reminders, claims due rows (`for update skip locked`), builds each message at send time, sends, retries; `sendForVisit` sends a new booking's confirmation at once |
 | `src/app/api/cron/outbox` | the cron entry, `Authorization: Bearer $CRON_SECRET` |
 
 **Admin booking rules** (`src/lib/admin/visits.ts`): two visits never share a
@@ -93,8 +95,15 @@ other devices' sessions.
 **Reminders** (`src/lib/outbox.ts`): planned on every cron run from
 `appointments.reminder_min`, up to 48 hours ahead; a moved visit gets a new
 one, a cancelled one loses it; none closer than 15 minutes to the visit.
-They carry no change link yet: admin bookings have no token, and the
-client's is stored only as a hash.
+They carry no change link yet. A link is now cheap to add (each message
+mints its own, `visit_links`), but in Russian it makes the SMS 3 parts
+instead of 2: Dim decides.
+
+**Confirmation** (`src/lib/booking.ts`, `src/lib/outbox.ts`): an online
+booking with an e-mail queues one in its own transaction; a double tap adds
+none. It is sent right after the response, else by the cron. It is built
+at send time, so a visit cancelled meanwhile gets no letter. Admin bookings
+send none yet.
 
 ### Waiting on outside accounts
 
