@@ -38,7 +38,7 @@ switch at the move to rempire.ee. The shop's own registry is
 | **Isolta** (Finago) | Invoices to the barbers | Renat's login | — | Renat | Replaced by the app. Export the receivers and the invoice history first |
 | **rempire.ee website** | Renat's React site; its «book» buttons go to Altegio | whoever runs it (unknown, like the DNS) | GA4 `G-FZ84GVRXZ4`, GTM `GTM-T43NKNP` | ? | Point the buttons at the booking host |
 | **Telegram** | `@rempireshop_bot` is the shop's order pings: **never touch**. Renat is making a new bot for tattoo booking | Renat (BotFather) | — | free | An optional channel later |
-| **Web Push** (VAPID) | The barber PWA (Phase B) | not yet | keys of its own, never the shop's | free | — |
+| **Web Push** (VAPID) | The barber PWA (Phase B): pushes to barbers' and Renat's phones | no account: a key pair Dim made on 17.11 with `npx web-push generate-vapid-keys`; it lives only in Vercel | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (`mailto:booking@rempire-booking.diipsolutions.eu`) | free | Keep the same two keys: new keys cut off every subscribed phone. Change only `VAPID_SUBJECT` to a rempire.ee address |
 | **Montonio** | Only if deposits or prepayments are wanted (decision 15) | Renat's contract | — | Renat | — |
 
 ## Env vars in Vercel (`rempire-booking`, Production)
@@ -56,6 +56,7 @@ Read from the Vercel dashboard on 17.11.2026, names only.
 | `DB_DRIVER`, `SEED_DEMO` | per deploy | CI | `auto`, `yes`; `SEED_DEMO` must go at the move |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | yes | Dim | 17.11; client `rempire-booking` in Google Cloud. Mark the secret Sensitive (Vercel shows «Needs Attention») |
 | `CRON_SECRET` | yes | Dim | 17.11; Sensitive |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | yes | Dim | 17.11; one pair, never the shop's; the private key Sensitive. Staging's «Ещё» shows push as ready |
 | `SITE_URL`, `ALLOW_INDEXING` | no | — | only at the move |
 | SMS names | no | — | with the provider |
 
@@ -127,6 +128,7 @@ The client ID and the secret stay the same, so Vercel needs no change.
 4. **Vercel domain:** add the booking host (`broneeri.rempire.ee` or
    `book.rempire.ee`) and its CNAME on rempire.ee. Set `SITE_URL`.
 5. **Resend:** add rempire.ee and its 3 DNS records, then change `EMAIL_FROM`.
+   Change `VAPID_SUBJECT` to the same rempire.ee address; keep both VAPID keys.
 6. **Google:** add the new redirect URI, the home page, the privacy policy
    and `rempire.ee`, then publish the app (§ Google Cloud).
 7. **SMS:** check that the sender name is approved for the live account.
