@@ -20,8 +20,10 @@ a day off. Renat sees all of it in the admin.
 - **For barbers**, the `staff` role with a `staff_id`. Renat already
   creates these logins under «Доступ». An owner or admin who opens `/b`
   picks a barber, so Renat can see what a barber sees.
-- **Russian first.** Each login has its own `users.locale`, and ET/EN come
-  from the same text tables as the admin.
+- **Russian first.** Each login has its own `users.locale`. Whether ET/EN
+  come too follows Dim's answer on the admin's languages (asked by the admin
+  redesign session, about 270 strings): the barber app uses the same text
+  tables, so the two are decided together.
 - **Phone first**, in the admin's look (`admin.css`, black and lime, square
   edges).
 
@@ -42,7 +44,8 @@ build on B2.
 
 ## Data
 
-Mostly Phase A's tables. New:
+Migrations start at **008**: the admin redesign uses 007
+(`007_staff_photo.sql`). Mostly Phase A's tables. New:
 
 - `push_subscriptions` (`user_id`, `endpoint` unique, `keys jsonb`,
   `last_ok_at`), as in the shop.
