@@ -82,6 +82,8 @@ export function DayView({ days, date, today, now: serverNow, tz, step, offers }:
   const visitOf = (id: string) => days.flatMap((d) => d.visits).find((v) => v.id === id) ?? null;
   const open = sheet && sheet.kind !== "new" ? visitOf(sheet.id) : null;
   const openVisit = (id: string) => setSheet({ kind: "visit", id });
+  // the server lists a start only where the visit and its tidy-up fit (startsIn)
+  const shortest = offers.length ? Math.min(...offers.map((o) => o.durationMin + o.bufferMin)) * MIN : Infinity;
   const book = (prefill: Partial<NewPrefill>) => setSheet({ kind: "new", prefill: { date: sel < today ? today : sel, ...prefill } });
   /** «Записать снова»: the usual four weeks on from that visit, the same client and services. */
   const again = (v: BVisit) => {
@@ -177,7 +179,7 @@ export function DayView({ days, date, today, now: serverNow, tz, step, offers }:
 
       {next && <NextCard v={next} now={now} tz={tz} busy={busy} onOpen={() => openVisit(next.id)} onStatus={status} />}
 
-      <Timeline day={day} now={now} tz={tz} step={step} onOpen={openVisit} onFree={(start) => book({ start })} />
+      <Timeline day={day} now={now} tz={tz} step={step} shortest={shortest} onOpen={openVisit} onFree={(start) => book({ start })} />
 
       {offers.length > 0 && (
         <button type="button" className="bx-fab" aria-label={B.book.new} onClick={() => book({})}>
@@ -262,7 +264,24 @@ function NextCard({ v, now, tz, busy, onOpen, onStatus }: { v: BVisit; now: numb
 
 type Item = { at: number; order: number; key: string } & ({ kind: "visit"; v: BVisit } | { kind: "gap"; g: Gap } | { kind: "block"; b: BBlock });
 
-function Timeline({ day, now, tz, step, onOpen, onFree }: { day: BDay; now: number; tz: string; step: number; onOpen: (id: string) => void; onFree: (start: number) => void }) {
+function Timeline({
+  day,
+  now,
+  tz,
+  step,
+  shortest,
+  onOpen,
+  onFree,
+}: {
+  day: BDay;
+  now: number;
+  tz: string;
+  step: number;
+  /** his shortest service with its tidy-up, in ms: a gap shorter than that books nothing */
+  shortest: number;
+  onOpen: (id: string) => void;
+  onFree: (start: number) => void;
+}) {
   const B = useB();
   const d0 = startOfDay(day.date, tz);
   const d1 = startOfDay(addDays(day.date, 1), tz);
@@ -303,21 +322,32 @@ function Timeline({ day, now, tz, step, onOpen, onFree }: { day: BDay; now: numb
           }
           if (it.kind === "gap") {
             const g = it.g;
+            const free = B.day.gap(minsText(Math.round((g.to - g.from) / MIN), B.h, B.min));
+            const inner = (
+              <>
+                <span className="bx-t">
+                  <b>{hm(g.from, tz)}</b>
+                  <small>{hm(g.to, tz)}</small>
+                </span>
+                <span className="bx-gap-main">
+                  {free}
+                  {g.extraCents > 0 && <small> · +{eur(g.extraCents)}</small>}
+                </span>
+              </>
+            );
             return (
               <li key={it.key} className={`bx-gap${g.extraCents ? " is-sp" : ""}`}>
-                <button type="button" aria-label={`${B.book.addAt(hm(g.from, tz))}. ${B.day.gap(minsText(Math.round((g.to - g.from) / MIN), B.h, B.min))}`} onClick={() => onFree(g.from)}>
-                  <span className="bx-t">
-                    <b>{hm(g.from, tz)}</b>
-                    <small>{hm(g.to, tz)}</small>
-                  </span>
-                  <span className="bx-gap-main">
-                    {B.day.gap(minsText(Math.round((g.to - g.from) / MIN), B.h, B.min))}
-                    {g.extraCents > 0 && <small> · +{eur(g.extraCents)}</small>}
-                  </span>
-                  <span className="bx-gap-add" aria-hidden="true">
-                    <PlusIcon />
-                  </span>
-                </button>
+                {g.to - g.from >= shortest ? (
+                  <button type="button" aria-label={`${B.book.addAt(hm(g.from, tz))}. ${free}`} onClick={() => onFree(g.from)}>
+                    {inner}
+                    <span className="bx-gap-add" aria-hidden="true">
+                      <PlusIcon />
+                    </span>
+                  </button>
+                ) : (
+                  // too short for any of his services: free time to see, nothing to book
+                  <div>{inner}</div>
+                )}
               </li>
             );
           }

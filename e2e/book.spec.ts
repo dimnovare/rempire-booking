@@ -77,6 +77,25 @@ test.describe("booking from the phone", () => {
     await expect(page.locator(".bx-v", { hasText: who }).locator(".bx-t b")).toHaveText(at);
   });
 
+  test("free time too short for any of his services shows, with no «+»", async ({ page }) => {
+    await page.goto(`/b?d=${day}`);
+    await hydrated(page);
+    const minutes = (t: string) => Number(/(\d+)\s*ч/.exec(t)?.[1] ?? 0) * 60 + Number(/(\d+)\s*мин/.exec(t)?.[1] ?? 0);
+    // his shortest service, from the «+» sheet
+    await page.getByRole("button", { name: B.book.new }).click();
+    const svcs = sheet(page).getByRole("group", { name: B.book.services }).getByRole("button");
+    await svcs.first().waitFor();
+    const shortest = Math.min(...(await svcs.locator("small").allInnerTexts()).map((t) => minutes(t.split("·")[0])));
+    await sheet(page).getByRole("button", { name: B.close }).click();
+
+    // the demo day has a 15-minute gap: seen, not tappable
+    const short = page.locator(".bx-gap > div");
+    await expect(short.first()).toBeVisible();
+    await expect(page.locator(".bx-gap > div .bx-gap-add")).toHaveCount(0);
+    // every gap with a «+» holds at least his shortest service
+    for (const t of await page.locator(".bx-gap > button .bx-gap-main").allInnerTexts()) expect(minutes(t)).toBeGreaterThanOrEqual(shortest);
+  });
+
   test("a taken time is refused; outside his hours asks first", async ({ page }) => {
     await page.goto(`/b?d=${day}`);
     await hydrated(page);

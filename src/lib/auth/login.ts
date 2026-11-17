@@ -4,13 +4,15 @@
  * (src/lib/auth/google.ts).
  *
  * Every answer to a stranger is the same: a wrong e-mail and a wrong
- * password both say «wrong e-mail or password», and «send me a code» always
- * says «sent if the address is known». Tries are counted in auth_attempts:
+ * password both say «wrong e-mail or password», «send me a code» always
+ * says «sent if the address is known», and the code form then says «wrong
+ * code» and «code expired» to every address alike (a stranger's address
+ * gets a code nobody can type). Tries are counted in auth_attempts:
  *   - password: 8 failures per e-mail or 30 per IP in 15 minutes ⇒ wait;
  *   - code: 5 tries per code, 10 minutes per code;
  *   - sending codes: 3 per e-mail and 10 per IP an hour.
  */
-import { createHash, randomInt } from "node:crypto";
+import { createHash, randomBytes, randomInt } from "node:crypto";
 import { hashPassword, passwordProblem, verifyPassword } from "../../../tools/password.mjs";
 import type { Querier } from "../db";
 import { EmailDisabled, sendEmail } from "../email";
@@ -79,11 +81,15 @@ export async function sendLoginCode(q: Querier, emailRaw: string, ip: string, no
   if (byEmail.n >= LIMITS.codeSendsPerEmail || byIp.n >= LIMITS.codeSendsPerIp) return "wait";
   await record(q, "code_send", email, ip, true, now);
   const [u] = await q<UserRow>("select id, password_hash, active from users where email = $1", [email]);
-  if (!u || !u.active) return "sent";
-  const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+  const known = !!u && u.active;
+  // A stranger's address gets a code too, one that is never sent and never
+  // six digits: the code form then says «wrong code» and «code expired»
+  // to every address alike, and never tells which ones have a login.
+  const code = known ? String(randomInt(0, 1_000_000)).padStart(6, "0") : randomBytes(16).toString("hex");
   // one live code per address: a new one replaces the old
   await q("update login_codes set used_at = $2 where email = $1 and used_at is null", [email, new Date(now)]);
   await q("insert into login_codes (email, code_hash, expires_at, created_at) values ($1, $2, $3, $4)", [email, codeHash(email, code), new Date(now + LIMITS.codeTtlMin * MIN), new Date(now)]);
+  if (!known) return "sent";
   try {
     const letter = loginCodeLetter(code, LIMITS.codeTtlMin, siteUrl().origin);
     await send(email, letter.subject, letter);

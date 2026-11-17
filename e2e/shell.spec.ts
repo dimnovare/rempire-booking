@@ -1,5 +1,5 @@
 import { authFile } from "./env";
-import { B, expect, expectNoSideScroll, smallTargets, test } from "./helpers";
+import { B, expect, expectNoSideScroll, hydrated, smallTargets, test } from "./helpers";
 
 /** B1: the app's shell, before and around the login. */
 test.describe("shell, logged out", () => {
@@ -13,16 +13,26 @@ test.describe("shell, logged out", () => {
     expect(await smallTargets(page)).toEqual([]);
   });
 
-  test("a wrong code is refused, and says so", async ({ page }) => {
-    await page.goto("/b/login");
-    await page.getByRole("button", { name: B.login.byCode }).click();
-    await page.locator('input[name="email"]').fill("milena@example.test");
-    await page.getByRole("button", { name: B.login.sendCode }).click();
-    await expect(page.getByText(B.login.codeSent)).toBeVisible();
-    await page.locator('input[name="code"]').fill("000000");
-    await page.locator('input[name="code"]').press("Enter");
-    await expect(page.getByText(B.login.badCode)).toBeVisible();
-    expect(new URL(page.url()).pathname).toBe("/b/login");
+  test.describe(() => {
+    // its own address (TEST-NET), so the code letters it asks for leave the
+    // other tests' hourly limit alone; on Vercel x-real-ip is Vercel's own
+    test.use({ extraHTTPHeaders: { "x-real-ip": "203.0.113.7" } });
+
+    // a known address and a stranger's: the same answer, never «no such login»
+    for (const email of ["milena@example.test", "stranger@example.test"]) {
+      test(`a wrong code is refused, and says so (${email.split("@")[0]})`, async ({ page }) => {
+        await page.goto("/b/login");
+        await hydrated(page);
+        await page.getByRole("button", { name: B.login.byCode }).click();
+        await page.locator('input[name="email"]').fill(email);
+        await page.getByRole("button", { name: B.login.sendCode }).click();
+        await expect(page.getByText(B.login.codeSent)).toBeVisible();
+        await page.locator('input[name="code"]').fill("000000");
+        await page.locator('input[name="code"]').press("Enter");
+        await expect(page.getByText(B.login.badCode)).toBeVisible();
+        expect(new URL(page.url()).pathname).toBe("/b/login");
+      });
+    }
   });
 
   test("the manifest: scoped to /b, standalone, with icons that load", async ({ page, request }) => {

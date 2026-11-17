@@ -174,6 +174,27 @@ describe("the 6-digit e-mail code", () => {
     expect(row.code_hash).not.toContain(lastCode());
   });
 
+  it("the code form answers a stranger's address as it answers a known one", async () => {
+    await owner();
+    const now = Date.now();
+    await sendLoginCode(query, "owner@example.test", IP, now);
+    const wrong = lastCode() === "000000" ? "111111" : "000000";
+    await sendLoginCode(query, "nobody@example.test", IP, now);
+    const tries = async (email: string) => {
+      const out: string[] = [];
+      for (let i = 0; i < LIMITS.codeTries; i++) {
+        const r = await loginWithCode(query, email, wrong, IP, now);
+        out.push(r.ok ? "ok" : r.code);
+      }
+      return out;
+    };
+    // «bad» four times, then «expired»: nothing tells which address has a login
+    expect(await tries("nobody@example.test")).toEqual(await tries("owner@example.test"));
+    // and a stranger's code is never one that can be typed
+    const [row] = await query<{ attempts: number }>("select attempts from login_codes where email = 'nobody@example.test'");
+    expect(row.attempts).toBe(LIMITS.codeTries);
+  });
+
   it("logs in once, and is gone after use", async () => {
     const id = await owner("coded@example.test", null);
     await sendLoginCode(query, "coded@example.test", IP);
