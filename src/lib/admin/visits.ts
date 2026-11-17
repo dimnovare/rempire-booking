@@ -250,11 +250,21 @@ export async function adminCreateVisit(business: Business, input: AdminVisitInpu
         );
         await insertLines(tx, row.id, lines);
         await audit(tx, actor, row.id, "create", null, { staff_id: input.staffId, starts_at: new Date(start).toISOString(), forced: !!input.force });
-        // The confirmation letter, if the client left an e-mail on an earlier
-        // online booking (Dim, 17.11.2026). The 5-minute cron sends it, in the
-        // language the client booked in before.
-        const [mail] = await tx<{ email: string | null; locale: string | null }>("select email, locale from clients where id = $1", [cid]);
-        if (mail?.email) await queueConfirmation(tx, business.id, row.id, mail.email, isLocale(mail.locale) ? mail.locale : "ru");
+        // The confirmation letter (Dim, 17.11.2026), only to an e-mail from an
+        // online booking this client then came to. Anyone can book online with
+        // any phone and their own e-mail, and clients.email keeps the first one,
+        // so the stored address proves nothing; until SMS proves the phone (A8),
+        // a visit the client turned up to is the proof. The 5-minute cron sends
+        // it, in the language of that booking.
+        const [mail] = await tx<{ recipient: string; locale: string }>(
+          `select n.recipient, n.locale
+             from notifications n join appointments a on a.id = n.appointment_id
+            where a.client_id = $1 and a.business_id = $2 and a.status in ('arrived', 'done')
+              and n.kind = 'confirmation' and n.channel = 'email'
+            order by a.starts_at desc limit 1`,
+          [cid, business.id],
+        );
+        if (mail) await queueConfirmation(tx, business.id, row.id, mail.recipient, isLocale(mail.locale) ? mail.locale : "ru");
         return { ok: true as const, id: row.id, start, end, totalCents: total, extraCents: extra };
       }),
     );

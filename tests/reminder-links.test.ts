@@ -103,9 +103,10 @@ describe("admin bookings get the confirmation letter too (Dim, 17.11.2026)", () 
       "test",
     );
 
-  it("a client with an e-mail on file gets it, in the language of their earlier booking; the cron sends it", async () => {
+  it("a client who came to an online booking gets it at that e-mail, in that language; the cron sends it", async () => {
     const first = await book(query, demo.business, input({ phone: "+372 5555 0202", email: "known@example.test", locale: "et" }), { now: NOW });
     if (!first.ok) throw new Error(first.code);
+    await query("update appointments set status = 'done' where id = $1", [first.visit.id]);
     const r = await adminBook("+372 5555 0202", "15:00");
     if (!r.ok) throw new Error(r.code);
     const rows = await query<{ recipient: string; locale: string; status: string }>(
@@ -118,6 +119,22 @@ describe("admin bookings get the confirmation letter too (Dim, 17.11.2026)", () 
     const letter = sentToConsole.find((l) => l.subject.includes("kell 15:00"));
     expect(letter?.subject).toMatch(/^Aeg on broneeritud: REMPIRE \d\d\.\d\d kell 15:00$/);
     expect(letter?.html).toContain("sest sul on aeg REMPIRE");
+  });
+
+  it("an e-mail someone left with this phone but never came: no letter (security review, 17.11.2026)", async () => {
+    // a stranger books online with the client's phone and their own address
+    const squat = await book(query, demo.business, input({ phone: "+372 5555 0204", email: "stranger@example.test", time: "13:00" }), { now: NOW });
+    if (!squat.ok) throw new Error(squat.code);
+    const noShow = await book(query, demo.business, input({ phone: "+372 5555 0204", email: "stranger@example.test", time: "14:00" }), { now: NOW });
+    if (!noShow.ok) throw new Error(noShow.code);
+    await query("update appointments set status = 'no_show' where id = $1", [noShow.visit.id]);
+    const [stored] = await query<{ email: string }>("select c.email from clients c join appointments a on a.client_id = c.id where a.id = $1", [squat.visit.id]);
+    expect(stored.email).toBe("stranger@example.test");
+
+    const r = await adminBook("+372 5555 0204", "17:00");
+    if (!r.ok) throw new Error(r.code);
+    const [q] = await query<{ n: number }>("select count(*)::int as n from notifications where appointment_id = $1 and kind = 'confirmation'", [r.id]);
+    expect(q.n).toBe(0);
   });
 
   it("no e-mail on file, no letter", async () => {
