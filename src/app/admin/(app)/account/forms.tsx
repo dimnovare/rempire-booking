@@ -58,7 +58,6 @@ export function AddUserForm({ staff }: { staff: { id: string; name: string }[] }
   return (
     <form
       className="adm-form"
-      style={{ marginTop: 16 }}
       onSubmit={async (e) => {
         e.preventDefault();
         setBusy(true);
@@ -78,9 +77,6 @@ export function AddUserForm({ staff }: { staff: { id: string; name: string }[] }
         }
       }}
     >
-      <h3 className="adm-h2" style={{ margin: 0 }}>
-        {A.account.addUser}
-      </h3>
       <label className="adm-field">
         <span>{A.login.email}</span>
         <input type="email" required value={u.email} onChange={(e) => setU({ ...u, email: e.target.value })} />
@@ -109,7 +105,7 @@ export function AddUserForm({ staff }: { staff: { id: string; name: string }[] }
         <input type="password" autoComplete="new-password" minLength={8} maxLength={200} value={u.password} onChange={(e) => setU({ ...u, password: e.target.value })} />
       </label>
       {msg && <p className={msg.ok ? "adm-ok" : "adm-err"}>{msg.text}</p>}
-      <button className="adm-btn adm-btn-line" disabled={busy}>
+      <button className="adm-btn adm-btn-lime" disabled={busy}>
         {A.account.addUser}
       </button>
     </form>
@@ -121,7 +117,7 @@ export function ToggleUser({ id, active }: { id: string; active: boolean }) {
   return (
     <button
       type="button"
-      className="adm-link"
+      className={`adm-txt ${active ? "warn" : "lime"}`}
       disabled={busy}
       onClick={async () => {
         setBusy(true);

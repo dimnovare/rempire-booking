@@ -3,14 +3,17 @@
 import { useState } from "react";
 import type { ServiceRow } from "@/lib/admin/services";
 import { A, eur, mins, ru } from "../../copy";
+import { PlusIcon } from "../../icons";
+import { Sheet } from "../sheet";
 import { saveServiceAction } from "./actions";
 
-type Draft = { name: { ru: string; et: string; en: string }; duration: string; price: string; priceMax: string; buffer: string; online: boolean; active: boolean; allBarbers: boolean };
+type Draft = { name: { ru: string; et: string; en: string }; duration: string; price: string; range: boolean; priceMax: string; buffer: string; online: boolean; active: boolean; allBarbers: boolean };
 
 const draftOf = (s?: ServiceRow): Draft => ({
   name: { ru: s?.name.ru ?? "", et: s?.name.et ?? "", en: s?.name.en ?? "" },
   duration: String(s?.durationMin ?? 30),
   price: s ? String(s.priceCents / 100) : "",
+  range: s?.priceMaxCents != null,
   priceMax: s?.priceMaxCents != null ? String(s.priceMaxCents / 100) : "",
   buffer: String(s?.bufferMin ?? 0),
   online: s?.online ?? true,
@@ -19,6 +22,7 @@ const draftOf = (s?: ServiceRow): Draft => ({
 });
 
 const cents = (s: string) => Math.round(Number(s.replace(",", ".")) * 100);
+const BUFFERS = ["0", "5", "10", "15"];
 
 export function ServicesEditor({ services }: { services: ServiceRow[] }) {
   const [open, setOpen] = useState<string | "new" | null>(null);
@@ -40,7 +44,7 @@ export function ServicesEditor({ services }: { services: ServiceRow[] }) {
         name: d.name,
         durationMin: Number(d.duration),
         priceCents: cents(d.price),
-        priceMaxCents: d.priceMax.trim() ? cents(d.priceMax) : null,
+        priceMaxCents: d.range && d.priceMax.trim() ? cents(d.priceMax) : null,
         bufferMin: Number(d.buffer || 0),
         online: d.online,
         active: d.active,
@@ -55,30 +59,31 @@ export function ServicesEditor({ services }: { services: ServiceRow[] }) {
     }
   };
 
+  // a buffer set before the four choices existed stays a choice
+  const buffers = BUFFERS.includes(d.buffer) ? BUFFERS : [...BUFFERS, d.buffer];
+
   return (
-    <>
+    <main className={`adm-page${open ? " has-panel" : ""}`}>
       <div className="adm-page-head">
         <h1 className="adm-h1">{A.services.title}</h1>
         <button type="button" className="adm-btn adm-btn-line adm-btn-sm" onClick={() => edit("new")}>
-          + {A.add}
+          <PlusIcon size={14} />
+          {A.add}
         </button>
       </div>
       <ul className="adm-list">
         {services.map((s) => (
           <li key={s.id}>
-            <button type="button" className={`adm-item${s.active ? "" : " is-off"}`} onClick={() => edit(s.id)}>
+            <button type="button" className={`adm-item${s.active ? "" : " is-off"}`} aria-expanded={open === s.id} onClick={() => edit(s.id)}>
               <span className="txt">
-                <b style={{ fontFamily: "var(--body)", fontWeight: 400, textTransform: "none", letterSpacing: 0, fontSize: 16 }}>
-                  {ru(s.name)}
-                  {!s.active ? <span className="adm-tag">{A.services.inactive}</span> : !s.online ? <span className="adm-tag">{A.services.offline}</span> : null}
-                </b>
+                <span className="plain">{ru(s.name)}</span>
                 <small>
                   {mins(s.durationMin)} · {A.services.barbersN(s.barbers)}
+                  {!s.active ? ` · ${A.services.inactive}` : !s.online ? ` · ${A.services.offline}` : ""}
                 </small>
               </span>
-              <span className="end">
-                {eur(s.priceCents)}
-                {s.priceMaxCents ? `–${eur(s.priceMaxCents)}` : ""}
+              <span className="end price">
+                {s.priceMaxCents ? `${eur(s.priceCents).replace(" €", "")}–${eur(s.priceMaxCents)}` : eur(s.priceCents)}
               </span>
             </button>
           </li>
@@ -86,67 +91,101 @@ export function ServicesEditor({ services }: { services: ServiceRow[] }) {
       </ul>
 
       {open && (
-        <div className="adm-sheet-wrap" onClick={() => setOpen(null)}>
-          <div className="adm-sheet" role="dialog" aria-label={A.services.title} onClick={(e) => e.stopPropagation()}>
-            <div className="adm-sheet-head">
-              <h2>{open === "new" ? A.services.add : ru(d.name) || A.services.title}</h2>
-              <button type="button" className="adm-icon" aria-label={A.close} onClick={() => setOpen(null)}>
-                ×
-              </button>
+        <Sheet
+          title={open === "new" ? A.services.add : ru(d.name) || A.services.title}
+          onClose={() => setOpen(null)}
+          bar={
+            <>
+              {err && (
+                <p className="adm-err" role="alert">
+                  {err}
+                </p>
+              )}
+              <div className="adm-bar-row">
+                <div className="sum">
+                  <small>{A.services.perBarber}</small>
+                </div>
+                <button type="submit" form="svc-form" className="adm-btn adm-btn-lime" disabled={busy}>
+                  {A.save}
+                </button>
+              </div>
+            </>
+          }
+        >
+          <form
+            id="svc-form"
+            className="adm-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void save();
+            }}
+          >
+            <label className="adm-field">
+              <span>{A.services.nameRu}</span>
+              <input required maxLength={120} value={d.name.ru} onChange={(e) => setD({ ...d, name: { ...d.name, ru: e.target.value } })} />
+            </label>
+            <div className="adm-row">
+              <label className="adm-field">
+                <span>{A.services.price}</span>
+                <input type="number" inputMode="decimal" required min={0} step="0.5" value={d.price} onChange={(e) => setD({ ...d, price: e.target.value })} />
+              </label>
+              <label className="adm-field">
+                <span>{A.services.duration}</span>
+                <input type="number" inputMode="numeric" required min={5} max={720} step={5} value={d.duration} onChange={(e) => setD({ ...d, duration: e.target.value })} />
+              </label>
             </div>
-            <form
-              className="adm-form"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void save();
-              }}
-            >
-              {(["ru", "et", "en"] as const).map((k) => (
-                <label key={k} className="adm-field">
-                  <span>{k === "ru" ? A.services.nameRu : k === "et" ? A.services.nameEt : A.services.nameEn}</span>
-                  <input required={k === "ru"} maxLength={120} value={d.name[k]} onChange={(e) => setD({ ...d, name: { ...d.name, [k]: e.target.value } })} />
-                </label>
-              ))}
-              <div className="adm-grid2">
-                <label className="adm-field">
-                  <span>{A.services.duration}</span>
-                  <input type="number" inputMode="numeric" required min={5} max={720} step={5} value={d.duration} onChange={(e) => setD({ ...d, duration: e.target.value })} />
-                </label>
-                <label className="adm-field">
-                  <span>{A.services.price}</span>
-                  <input type="number" inputMode="decimal" required min={0} step="0.5" value={d.price} onChange={(e) => setD({ ...d, price: e.target.value })} />
-                </label>
-                <label className="adm-field">
-                  <span>{A.services.priceMax}</span>
+            <div className="adm-field">
+              <span>{A.services.bufferLabel}</span>
+              <div className="adm-seg adm-seg-wide" role="group" aria-label={A.services.buffer}>
+                {buffers.map((b) => (
+                  <button key={b} type="button" aria-pressed={d.buffer === b} onClick={() => setD({ ...d, buffer: b })}>
+                    {b === "0" ? "0" : `${b} ${A.min}`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="adm-toggle">
+                <span>{A.services.range}</span>
+                <input type="checkbox" role="switch" className="adm-sw" checked={d.range} onChange={(e) => setD({ ...d, range: e.target.checked })} />
+              </label>
+              {d.range && (
+                <label className="adm-field" style={{ paddingBottom: 8 }}>
+                  <span>{A.services.priceTo}</span>
                   <input type="number" inputMode="decimal" min={0} step="0.5" value={d.priceMax} onChange={(e) => setD({ ...d, priceMax: e.target.value })} />
                 </label>
-                <label className="adm-field">
-                  <span>{A.services.buffer}</span>
-                  <input type="number" inputMode="numeric" min={0} max={120} step={5} value={d.buffer} onChange={(e) => setD({ ...d, buffer: e.target.value })} />
-                </label>
-              </div>
-              <label className="adm-check">
-                <input type="checkbox" checked={d.online} onChange={(e) => setD({ ...d, online: e.target.checked })} />
+              )}
+              <label className="adm-toggle">
                 <span>{A.services.online}</span>
+                <input type="checkbox" role="switch" className="adm-sw" checked={d.online} onChange={(e) => setD({ ...d, online: e.target.checked })} />
               </label>
-              <label className="adm-check">
-                <input type="checkbox" checked={d.active} onChange={(e) => setD({ ...d, active: e.target.checked })} />
+              <label className="adm-toggle">
                 <span>{A.services.active}</span>
+                <input type="checkbox" role="switch" className="adm-sw" checked={d.active} onChange={(e) => setD({ ...d, active: e.target.checked })} />
               </label>
               {open === "new" && (
-                <label className="adm-check">
-                  <input type="checkbox" checked={d.allBarbers} onChange={(e) => setD({ ...d, allBarbers: e.target.checked })} />
+                <label className="adm-toggle">
                   <span>{A.services.allBarbers}</span>
+                  <input type="checkbox" role="switch" className="adm-sw" checked={d.allBarbers} onChange={(e) => setD({ ...d, allBarbers: e.target.checked })} />
                 </label>
               )}
-              {err && <p className="adm-err">{err}</p>}
-              <button className="adm-btn adm-btn-lime" disabled={busy}>
-                {A.save}
-              </button>
-            </form>
-          </div>
-        </div>
+            </div>
+            <details className="adm-fold" open={open === "new" || undefined}>
+              <summary>{A.services.otherNames}</summary>
+              <div className="adm-form">
+                <label className="adm-field">
+                  <span>{A.services.nameEt}</span>
+                  <input maxLength={120} value={d.name.et} onChange={(e) => setD({ ...d, name: { ...d.name, et: e.target.value } })} />
+                </label>
+                <label className="adm-field">
+                  <span>{A.services.nameEn}</span>
+                  <input maxLength={120} value={d.name.en} onChange={(e) => setD({ ...d, name: { ...d.name, en: e.target.value } })} />
+                </label>
+              </div>
+            </details>
+          </form>
+        </Sheet>
       )}
-    </>
+    </main>
   );
 }

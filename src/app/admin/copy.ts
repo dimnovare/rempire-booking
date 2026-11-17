@@ -9,6 +9,7 @@ export const A = {
   loading: "Загрузка…",
   noDb: "База данных не подключена.",
   demo: "Демо-данные. Записи здесь не настоящие.",
+  demoTag: "Демо",
   save: "Сохранить",
   saved: "Сохранено",
   cancel: "Отмена",
@@ -32,6 +33,8 @@ export const A = {
     code: "Код из письма",
     codeSent: "Если такой адрес есть, мы отправили на него код. Он действует 10 минут.",
     google: "Войти через Google",
+    or: "или",
+    show: "Показать пароль",
     googleFailed: "Не получилось войти через Google. Попробуйте ещё раз или войдите по паролю.",
     googleUnknown: "Для этого Google-аккаунта нет входа. Попросите владельца добавить ваш e-mail в разделе «Доступ».",
     googleOther: "Этот вход уже связан с другим Google-аккаунтом.",
@@ -63,6 +66,9 @@ export const A = {
     blocked: "Время заблокировано",
     unblocked: "Блок снят",
     refresh: "Обновить",
+    add: "Запись",
+    days: "Дни недели",
+    view: "Вид",
   },
 
   visit: {
@@ -155,6 +161,20 @@ export const A = {
     noSpecial: "Нет особого времени.",
     weekdays: ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"],
     login: "Вход в приложение",
+    inCalendar: "Неделя в календаре",
+    vacation: "Отпуск",
+    today: (hours: string) => `Сегодня ${hours}`,
+    todayOff: "Сегодня выходной",
+    offersRow: "Услуги и цены",
+    timeOffRow: "Отпуск и больничные",
+    none: "Нет",
+    more: (n: number) => `ещё ${n}`,
+    changed: (n: number) => `Изменено: ${n}`,
+    service: "Услуга",
+    min: "Мин",
+    workday: (wd: string) => `${wd}: рабочий день`,
+    bookableOn: "онлайн-запись включена",
+    bookableOff: "онлайн-запись выключена",
   },
 
   services: {
@@ -173,6 +193,11 @@ export const A = {
     barbersN: (n: number) => `${n} ${plural(n, "барбер", "барбера", "барберов")}`,
     offline: "только в салоне",
     inactive: "выключена",
+    range: "Цена «от–до»",
+    priceTo: "Цена до, €",
+    otherNames: "Названия для клиентов: ET и EN",
+    bufferLabel: "Уборка после визита",
+    perBarber: "Цены барберов меняются на их страницах.",
   },
 
   account: {
@@ -200,6 +225,8 @@ export const A = {
     enable: "Включить",
     disabled: "отключён",
     taken: "Такой e-mail уже есть.",
+    logoutHere: "Выйти на этом устройстве",
+    you: "это вы",
   },
 };
 

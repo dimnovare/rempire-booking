@@ -9,16 +9,25 @@ export const metadata = { title: A.services.title };
 
 export default function ServicesPage() {
   return (
-    <main className="adm-page">
-      <Suspense fallback={<p className="adm-wait">{A.loading}</p>}>
-        <Loaded />
-      </Suspense>
-    </main>
+    <Suspense
+      fallback={
+        <main className="adm-page">
+          <p className="adm-wait">{A.loading}</p>
+        </main>
+      }
+    >
+      <Loaded />
+    </Suspense>
   );
 }
 
 async function Loaded() {
-  if (!dbConfigured()) return <p className="adm-wait">{A.noDb}</p>;
+  if (!dbConfigured())
+    return (
+      <main className="adm-page">
+        <p className="adm-wait">{A.noDb}</p>
+      </main>
+    );
   const { business } = await requireAdmin();
   return <ServicesEditor services={await listServices(query, business.id)} />;
 }

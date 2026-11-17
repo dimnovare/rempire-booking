@@ -7,7 +7,7 @@ import { Suspense } from "react";
 import { loadCalendar } from "@/lib/admin/calendar";
 import { weekStart } from "@/lib/admin/grid";
 import { requireAdmin } from "@/lib/auth/current";
-import { dbConfigured, dbKind, query } from "@/lib/db";
+import { dbConfigured, query } from "@/lib/db";
 import { isLocalDate, todayIn } from "@/lib/tz";
 import { A } from "../copy";
 import { Calendar } from "./calendar";
@@ -45,7 +45,6 @@ async function Loaded({ searchParams }: { searchParams: PageProps<"/admin">["sea
       staffId={staffId}
       now={now}
       step={business.settings.slot_step_min}
-      demo={dbKind() === "pglite"}
     />
   );
 }

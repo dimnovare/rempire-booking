@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { A } from "../copy";
+import { EyeIcon } from "../icons";
 import { codeLogin, passwordLogin, requestCode, type LoginState } from "./actions";
 
 const ERR: Record<string, string> = {
@@ -25,6 +26,7 @@ export function LoginForm({ next, initialError, google }: { next: string; initia
   const [req, reqAction, reqBusy] = useActionState<LoginState, FormData>(requestCode, {});
   const [code, codeAction, codeBusy] = useActionState<LoginState, FormData>(codeLogin, {});
   const [email, setEmail] = useState("");
+  const [show, setShow] = useState(false);
 
   const sent = (req.sent && !code.error) || code.sent;
   const error = mode === "password" ? (pw.error ?? initialError) : (code.error ?? req.error);
@@ -43,14 +45,20 @@ export function LoginForm({ next, initialError, google }: { next: string; initia
             <span>{A.login.email}</span>
             <input name="email" type="email" autoComplete="username" inputMode="email" required defaultValue={pw.email ?? email} onChange={(e) => setEmail(e.target.value)} />
           </label>
-          <label className="adm-field">
-            <span>{A.login.password}</span>
-            <input name="password" type="password" autoComplete="current-password" required />
-          </label>
+          <div className="adm-field">
+            <label htmlFor="adm-password">{A.login.password}</label>
+            <div className="adm-pw">
+              <input id="adm-password" name="password" type={show ? "text" : "password"} autoComplete="current-password" required />
+              <button type="button" aria-label={A.login.show} aria-pressed={show} onClick={() => setShow(!show)}>
+                <EyeIcon />
+              </button>
+            </div>
+          </div>
           <button className="adm-btn adm-btn-lime" disabled={pwBusy}>
             {A.login.enter}
           </button>
-          <button type="button" className="adm-link" onClick={() => setMode("code")}>
+          <p className="adm-or">{A.login.or}</p>
+          <button type="button" className="adm-btn adm-btn-ghost" onClick={() => setMode("code")}>
             {A.login.byCode}
           </button>
         </form>
@@ -81,7 +89,7 @@ export function LoginForm({ next, initialError, google }: { next: string; initia
               </button>
             </form>
           )}
-          <button type="button" className="adm-link" onClick={() => setMode("password")}>
+          <button type="button" className="adm-txt lime" style={{ alignSelf: "flex-start" }} onClick={() => setMode("password")}>
             {A.login.byPassword}
           </button>
         </>
