@@ -3,7 +3,7 @@ import { changePassword, createUser, LIMITS, listUsers, loginWithCode, loginWith
 import { canUseAdmin, createSession, readSession, revokeSession, SESSION_IDLE_DAYS } from "@/lib/auth/sessions";
 import { closeDb, query } from "@/lib/db";
 import { EmailDisabled, emailTransport, sendEmail, sentToConsole } from "@/lib/email";
-import { bootstrapOwner } from "../tools/bootstrap-owner.mjs";
+import { bootstrapEmails, bootstrapOwner } from "../tools/bootstrap-owner.mjs";
 import { hashPassword, verifyPassword } from "../tools/password.mjs";
 import { freshDemo, type Demo } from "./helpers";
 
@@ -46,6 +46,29 @@ describe("the first owner from env", () => {
     expect(u.role).toBe("owner");
     expect(await bootstrapOwner(db, { ADMIN_BOOTSTRAP_EMAIL: "a@b.test", ADMIN_BOOTSTRAP_PASSWORD: "short" })).toBe("skipped");
     expect(await bootstrapOwner(db, {})).toBe("skipped");
+  });
+
+  it("takes a list: the first gets the password, the rest are owners without one", async () => {
+    await owner("second@example.test", "their-own-password");
+    const env = { ADMIN_BOOTSTRAP_EMAIL: "First@Example.test; second@example.test,third@example.test not-an-email ;", ADMIN_BOOTSTRAP_PASSWORD: PW };
+    expect(bootstrapEmails(env.ADMIN_BOOTSTRAP_EMAIL)).toEqual(["first@example.test", "second@example.test", "third@example.test", "not-an-email"]);
+    const log: string[] = [];
+    expect(await bootstrapOwner(db, env, (m) => log.push(m))).toBe("created");
+    const rows = await query<{ email: string; role: string; has_pw: boolean }>(
+      "select email, role, password_hash is not null as has_pw from users order by email",
+    );
+    expect(rows).toEqual([
+      { email: "first@example.test", role: "owner", has_pw: true },
+      { email: "second@example.test", role: "owner", has_pw: true },
+      { email: "third@example.test", role: "owner", has_pw: false },
+    ]);
+    // the existing login keeps its own password; the shared one opens only the first
+    expect((await loginWithPassword(query, "second@example.test", "their-own-password", IP)).ok).toBe(true);
+    expect((await loginWithPassword(query, "third@example.test", PW, IP)).ok).toBe(false);
+    expect(log.join("\n")).not.toContain("@");
+    // a second deploy changes nothing
+    expect(await bootstrapOwner(db, env)).toBe("kept");
+    expect((await query("select 1 from users")).length).toBe(3);
   });
 });
 

@@ -7,6 +7,9 @@ import { LoginForm } from "./login-form";
 
 export const metadata = { title: A.login.title };
 
+/** Reasons other pages send here as ?e=… (requireAdmin, the Google callback). */
+const LINK_ERRORS = ["role", "bad", "google", "googleUnknown", "googleOther"];
+
 export default function LoginPage({ searchParams }: PageProps<"/admin/login">) {
   return (
     <main className="adm-login">
@@ -22,5 +25,6 @@ export default function LoginPage({ searchParams }: PageProps<"/admin/login">) {
 async function Form({ searchParams }: { searchParams: PageProps<"/admin/login">["searchParams"] }) {
   const sp = await searchParams;
   const next = safeAdminPath(typeof sp.next === "string" ? sp.next : "");
-  return <LoginForm next={next} initialError={sp.e === "role" ? "role" : undefined} google={googleLoginConfigured()} />;
+  const e = typeof sp.e === "string" && LINK_ERRORS.includes(sp.e) ? sp.e : undefined;
+  return <LoginForm next={next} initialError={e} google={googleLoginConfigured()} />;
 }

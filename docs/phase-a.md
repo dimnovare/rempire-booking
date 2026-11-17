@@ -11,7 +11,7 @@ Screens: `docs/client-flow.md` and the approved mock.*
 | A1 | **Data core:** migrations, `db.ts`, migrate on deploy, Tallinn time maths, free slots, booking with no double booking, demo seed. Tests on PGlite. | nothing | done 17.11 |
 | A2 | **Client flow on real data:** the 4 screens, `/api/slots`, `/api/bookings`, the change-or-cancel page, «book again». | nothing | done 17.11; staging runs it on an in-memory demo database until A3 |
 | A3 | **Staging database:** a Postgres for staging; migrations and the demo seed run on every deploy (`postbuild`). | nothing | done 17.11: Postgres `rempire-booking-staging` on the shop's Railway (docs/staging-setup.md). First deploy applied `001_core.sql` and the demo seed; on staging a booking, the same tap again, a taken slot (409), the change link, the calendar file and a cancel all work |
-| A4 | **Staff login:** password, 6-digit e-mail code, Google. | Resend account; Google OAuth client (whose account?); `ADMIN_BOOTSTRAP_*` in Vercel | done 17.11 except the outside parts: `003_staff_auth.sql`, password login, sessions (httpOnly cookie, only the token's hash stored, 90 days idle), roles owner / admin / barber, `/admin` locked, rate limits. The e-mail code works with the console transport; in production it says «not set up» until `RESEND_API_KEY`. Google is a stub (`src/lib/auth/google.ts` has the plan). The first owner login comes from `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` on deploy |
+| A4 | **Staff login:** password, 6-digit e-mail code, Google. | Resend API key; Google OAuth client in the shop's Google account (Dim, 17.11); `ADMIN_BOOTSTRAP_*` in Vercel | done 17.11 except the outside parts: `003_staff_auth.sql`, password login, sessions (httpOnly cookie, only the token's hash stored, 90 days idle), roles owner / admin / barber, `/admin` locked, rate limits. The e-mail code works with the console transport; in production it says «not set up» until `RESEND_API_KEY`. Google login is built (code + PKCE; links the first Google login to the login with that e-mail, never creates one) and shows once `GOOGLE_CLIENT_*` are set. The first owner login comes from `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` on deploy |
 | A5 | **Renat's admin:** day and week calendar, one column per barber; add, move, cancel; barbers; services with each barber's price and time; hours, breaks, vacations. | | done 17.11: `/admin` in Russian, phone first. Day view (a column per barber) and week view (one barber); tap a free time to add a visit or a block; open a visit to mark arrived / done / no-show, move (tap the new time, or drag with a mouse), edit or cancel. Barbers: profile, prices and times per service, weekly hours with breaks, single days, vacation and sick days, special time. Services: list and edit. Access: password, logins for barbers and the front desk |
 | A6 | **Messages:** e-mail confirmation with `.ics` and the change link; the 2-hour SMS behind `sendSms(to, text)`; a cron for the outbox. | Resend; SMS provider account; `CRON_SECRET` and a cron schedule | groundwork done 17.11: `004_notifications.sql` outbox, `sendSms` with a console transport and SMS part counting, reminders planned from the visits, `/api/cron/outbox` (locked rows, retries with backoff). No provider is called; in production SMS rows wait until one is wired. Not yet: the e-mail confirmation with `.ics` |
 | A7 | **Altegio import:** staff, services, clients, future visits. | Altegio login | |
@@ -68,7 +68,7 @@ Renat's request, settled with Dim (17.11.2026):
 | `db/migrations/003_staff_auth.sql` | `users`, `sessions`, `login_codes`, `auth_attempts`; walk-ins without a phone |
 | `db/migrations/004_notifications.sql` | the message outbox |
 | `src/lib/auth/` | passwords (`tools/password.mjs`), sessions, login, the cookie, `requireAdmin()` |
-| `tools/bootstrap-owner.mjs` | the first owner login from `ADMIN_BOOTSTRAP_*`; never overwrites a password |
+| `tools/bootstrap-owner.mjs` | owner logins from `ADMIN_BOOTSTRAP_*`: one e-mail or a list, the first gets the password, the rest none (code or Google); never overwrites a password |
 | `src/proxy.ts` | `/admin` without a cookie → `/admin/login`; admin pages always noindex |
 | `src/app/admin/login/` | password or e-mail code |
 | `src/app/admin/(app)/` | calendar, barbers, services, access |
@@ -101,10 +101,10 @@ client's is stored only as a hash.
 | What | For | Env var names |
 |---|---|---|
 | First owner login on staging | A4 | `ADMIN_BOOTSTRAP_EMAIL`, `ADMIN_BOOTSTRAP_PASSWORD` (sensitive), then redeploy |
-| Resend account and a sending domain | A4 codes, A6 e-mail | `RESEND_API_KEY`, `EMAIL_FROM` |
-| Google OAuth client (whose account?) | A4 Google login | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` |
-| SMS provider | A6 reminders, A8 codes | added with the provider |
-| Cron secret and schedule | A6 | `CRON_SECRET`; a schedule in `vercel.ts` once the plan allows it |
+| Resend: account made 17.11 (new free account, as decided); a sending domain and an API key | A4 codes, A6 e-mail | `RESEND_API_KEY` (sensitive), `EMAIL_FROM` |
+| Google OAuth client in the shop's Google account (Web application; redirect URIs in `src/lib/auth/google.ts`) | A4 Google login | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (sensitive) |
+| SMS provider: Dim asked for a price comparison first (17.11) | A6 reminders, A8 codes | added with the provider |
+| Cron secret (the schedule, every 5 minutes, is in `vercel.json`; Dim, 17.11) | A6 | `CRON_SECRET` (sensitive); until set, each run answers 503 and does nothing |
 | Altegio login | A7 import | |
 
 ## Answers that change the build

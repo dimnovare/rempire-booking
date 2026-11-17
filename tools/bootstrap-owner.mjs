@@ -2,8 +2,12 @@
 /**
  * The first owner login (Renat, or Dim while building), from two env vars:
  *
- *   ADMIN_BOOTSTRAP_EMAIL     the owner's e-mail (Config)
- *   ADMIN_BOOTSTRAP_PASSWORD  their first password (Secret), 8+ characters
+ *   ADMIN_BOOTSTRAP_EMAIL     the owner's e-mail (Config); or a list split
+ *                             by «;», «,» or spaces: the first address gets
+ *                             the password, the others become owners with no
+ *                             password (they sign in with the e-mail code or
+ *                             Google), so no password is shared
+ *   ADMIN_BOOTSTRAP_PASSWORD  the first owner's first password (Secret), 8+ characters
  *
  * Dim puts the values into Vercel; they never go into git or chat.
  * postbuild runs this after the migrations and the demo seed:
@@ -18,20 +22,35 @@ import { pathToFileURL } from "node:url";
 import { sslFor } from "./migrate.mjs";
 import { hashPassword, passwordProblem } from "./password.mjs";
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** The addresses in ADMIN_BOOTSTRAP_EMAIL, lower-case, in order, once each. */
+export function bootstrapEmails(raw) {
+  const out = [];
+  for (const part of String(raw ?? "").split(/[;,\s]+/)) {
+    const e = part.trim().toLowerCase();
+    if (e && !out.includes(e)) out.push(e);
+  }
+  return out;
+}
+
 /**
  * @param {{query: (sql: string, params?: unknown[]) => Promise<{rows: any[]}>}} db
  * @param {Record<string, string | undefined>} [env]
  * @param {(msg: string) => void} [log]
- * @returns {Promise<"created" | "password_set" | "kept" | "skipped">}
+ * @returns {Promise<"created" | "password_set" | "kept" | "skipped">} what happened to the first owner
  */
 export async function bootstrapOwner(db, env = process.env, log = () => {}) {
-  const email = String(env.ADMIN_BOOTSTRAP_EMAIL ?? "").trim().toLowerCase();
+  const all = bootstrapEmails(env.ADMIN_BOOTSTRAP_EMAIL);
   const password = String(env.ADMIN_BOOTSTRAP_PASSWORD ?? "");
-  if (!email || !password) return "skipped";
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    log("Owner bootstrap skipped: ADMIN_BOOTSTRAP_EMAIL is not an e-mail address.");
+  if (!all.length || !password) return "skipped";
+  const emails = all.filter((e) => EMAIL_RE.test(e));
+  if (emails.length < all.length) log(`Owner bootstrap: ${all.length - emails.length} entry(ies) in ADMIN_BOOTSTRAP_EMAIL are not e-mail addresses and were left out.`);
+  if (!emails.length) {
+    log("Owner bootstrap skipped: ADMIN_BOOTSTRAP_EMAIL has no e-mail address.");
     return "skipped";
   }
+  const [email, ...others] = emails;
   if (passwordProblem(password)) {
     log("Owner bootstrap skipped: ADMIN_BOOTSTRAP_PASSWORD needs 8 to 200 characters.");
     return "skipped";
@@ -42,6 +61,18 @@ export async function bootstrapOwner(db, env = process.env, log = () => {}) {
     log(`Owner bootstrap skipped: no business «${slug}» yet.`);
     return "skipped";
   }
+  // the others: owners without a password; an existing login is left as it is
+  let added = 0;
+  for (const e of others) {
+    const r = await db.query(
+      `insert into users (business_id, email, name, role) values ($1, $2, '', 'owner')
+       on conflict (email) do nothing returning id`,
+      [biz.id, e],
+    );
+    added += r.rows.length;
+  }
+  if (others.length) log(`Owner bootstrap: ${added} more owner(s) added without a password, ${others.length - added} already there.`);
+
   const user = (await db.query("select id, password_hash from users where email = $1", [email])).rows[0];
   if (user && user.password_hash) return "kept";
   const hash = await hashPassword(password);

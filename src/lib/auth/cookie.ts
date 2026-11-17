@@ -7,6 +7,9 @@
  */
 export const SESSION_COOKIE = process.env.NODE_ENV === "production" ? "__Host-rb_staff" : "rb_staff";
 
+/** One «Sign in with Google» round trip: state, PKCE verifier, page to return to (10 minutes). */
+export const GOOGLE_COOKIE = process.env.NODE_ENV === "production" ? "__Host-rb_google" : "rb_google";
+
 /** Browsers cap a cookie at 400 days; the database decides when it really ends. */
 export const SESSION_COOKIE_MAX_AGE = 400 * 86_400;
 

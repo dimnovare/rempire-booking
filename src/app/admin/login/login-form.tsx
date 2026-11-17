@@ -13,6 +13,9 @@ const ERR: Record<string, string> = {
   noEmail: A.login.noEmail,
   noDb: A.noDb,
   role: A.login.role,
+  google: A.login.googleFailed,
+  googleUnknown: A.login.googleUnknown,
+  googleOther: A.login.googleOther,
 };
 
 export function LoginForm({ next, initialError, google }: { next: string; initialError?: string; google: boolean }) {
@@ -83,7 +86,7 @@ export function LoginForm({ next, initialError, google }: { next: string; initia
         </>
       )}
       {google && (
-        <a className="adm-btn adm-btn-ghost" href="/api/auth/google">
+        <a className="adm-btn adm-btn-ghost" href={`/api/auth/google?next=${encodeURIComponent(next)}`}>
           {A.login.google}
         </a>
       )}
