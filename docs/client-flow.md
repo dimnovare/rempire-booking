@@ -1,8 +1,11 @@
 # Client flow: draft 1
 
-*17.11.2026. Screens and taps only. The visual mock follows once Dim picks
-the look (decisions page, `look`). Altegio's flow is in kickoff §3. This
+*17.11.2026. Screens and taps only. Altegio's flow is in kickoff §3. This
 draft keeps its logic and cuts its taps.*
+
+**Mock, draft 1 (17.11.2026):** <https://claude.ai/artifact/TPBgoNWMpgQa5cwbHYztsN>,
+in rempire.ee's look (Dim's `look` answer). Dim's notes per screen are in
+its `feedback` collection.
 
 ## Target
 
@@ -39,6 +42,10 @@ came from. A switcher sits in the header.
   a time» once there is at least one service.
 - **Taps:** barber (1), service (2). No «Continue»: picking a service with a
   barber moves on by itself.
+  - Several services: each row has a **+** that adds the service without
+    moving on. Then the bottom bar's «Choose a time» moves on. Most clients
+    pick one service (the combos, like haircut + beard, are services of
+    their own), so the common path keeps 4 taps.
 
 ### 2. When
 
