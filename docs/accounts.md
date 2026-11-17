@@ -84,8 +84,8 @@ browser.
     one log in with the password or the e-mail code.
 - **Exact addresses:** the app compares the address from Google exactly,
   dots included. Renat's Google account has no dot, so `ADMIN_BOOTSTRAP_EMAIL`
-  lists it that way (Dim, 17.11). An owner made earlier from the dotted
-  spelling may still exist on staging: switch it off under «Доступ».
+  lists it that way (Dim, 17.11). The owner made earlier from the dotted
+  spelling had never logged in; it is switched off under «Доступ» (17.11).
 - **Clients:** one, «rempire-booking», Web application, created 17.11. Its
   redirect URIs:
   - `https://rempire-booking.diipsolutions.eu/api/auth/google/callback`
