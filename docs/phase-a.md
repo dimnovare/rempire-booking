@@ -15,6 +15,25 @@ Screens: `docs/client-flow.md` and the approved mock.*
 | A5 | **Renat's admin:** day and week calendar, one column per barber; add, move, cancel; barbers; services with each barber's price and time; hours, breaks, vacations. | | |
 | A6 | **Messages:** e-mail confirmation with `.ics` and the change link; the 2-hour SMS behind `sendSms(to, text)`; a cron for the outbox. | Resend; SMS provider account | |
 | A7 | **Altegio import:** staff, services, clients, future visits. | Altegio login | |
+| A8 | **My visits (client area):** an account icon top right; log in with a 6-digit SMS code to the phone used for booking, no password; upcoming and past visits; cancel or move until the cutoff; «book again» from any visit. Added by Dim, 17.11.2026. | A6's SMS provider | |
+
+### A8 in detail
+
+- **Login:** phone → SMS code → in. A client who has never booked gets
+  «no visits on this number yet» and the booking button, not an error.
+- **Stays logged in:** an `httpOnly` cookie, 90 days, one row per device;
+  «Log out» ends it. The code is stored only as a hash: 10 minutes, 5 tries,
+  then a new code.
+- **Abuse and cost:** rate limits per phone and per IP, so nobody can run up
+  the SMS bill. Each code is a `notifications` row, so its cost shows with
+  the reminders.
+- **Screens:** upcoming visits first (barber, date, time, services, total,
+  add to calendar, cancel or move until the cutoff); past visits below, each
+  with «book again», which opens the times with the same barber and services.
+- **Data:** visits are matched by `clients.phone_e164`, so visits imported
+  from Altegio (A7) show up too.
+- **Not in A8:** memberships, gift cards and loyalty cards (Altegio's client
+  area has them). They wait for Renat's answer on whether he wants them.
 
 ## Answers that change the build
 

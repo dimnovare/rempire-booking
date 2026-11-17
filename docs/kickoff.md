@@ -323,6 +323,8 @@ No secrets are written here. The full registry for the shop is
   ≤ 5 taps for a first visit, «book again» for a returning client.
 - E-mail confirmation with an `.ics` file and a cancel/move link.
 - The 2-hour SMS.
+- «My visits» for clients: log in with an SMS code, see, cancel, move,
+  book again (Dim, 17.11.2026).
 - RU/ET/EN.
 - Import from Altegio.
 - Done when Renat can run one real day on it, side by side with Altegio.
