@@ -32,7 +32,7 @@ export const et: typeof ru = {
   mins: (n: number) => minsText(n, "t", "min"),
   pick: (t: Text3) => t?.et || t?.ru || t?.en || "",
   title: "Admin",
-  nav: { calendar: "Kalender", staff: "Barberid", services: "Teenused", account: "Ligipääs" },
+  nav: { calendar: "Kalender", staff: "Barberid", services: "Teenused", requests: "Taotlused", account: "Ligipääs" },
   loading: "Laadimine…",
   noDb: "Andmebaas ei ole ühendatud.",
   demo: "Demoandmed. Siinsed broneeringud ei ole päris.",

@@ -57,9 +57,11 @@ html, body { background: var(--ink); }
 .adm-out { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; color: var(--mute); font-size: 14px; }
 .adm-out:hover { color: var(--fg); }
 .adm-out svg { flex: none; }
-.adm-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); height: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px)); padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); background: var(--raise); border-top: 1px solid var(--line-2); }
+.adm-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); height: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px)); padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); background: var(--raise); border-top: 1px solid var(--line-2); }
 .adm-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; margin-top: -1px; text-decoration: none; color: var(--mute); font: 800 11px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; border-top: 2px solid transparent; }
 .adm-nav a[aria-current="page"] { color: var(--lime); border-top-color: var(--lime); }
+/* the tabs share the width whatever their number; with five, the words need a little less room on a phone */
+@media (max-width: 899px) { .adm-nav:has(a:nth-child(5)) a { font-size: 10px; letter-spacing: .04em; } }
 .adm-main { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px)); }
 @media (min-width: 900px) {
   :root { --top-h: 56px; }

@@ -35,6 +35,13 @@ function Icon({ name }: { name: string }) {
         <path d="M8.6 15.4L19 3M15.4 15.4L5 3" />
       </svg>
     );
+  // an inbox: what has come in and waits for an answer (the barbers' requests, Phase B)
+  if (name === "req")
+    return (
+      <svg viewBox="0 0 24 24" width="22" height="22" {...p}>
+        <path d="M3.5 13.5l2.6-8h11.8l2.6 8v6h-17zM3.5 13.5h5l1.2 2.5h4.6l1.2-2.5h5" />
+      </svg>
+    );
   return (
     <svg viewBox="0 0 24 24" width="22" height="22" {...p}>
       <circle cx="8" cy="15" r="4.5" />

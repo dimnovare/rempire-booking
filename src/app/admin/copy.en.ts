@@ -32,7 +32,7 @@ export const en: typeof ru = {
   mins: (n: number) => minsText(n, "h", "min"),
   pick: (t: Text3) => t?.en || t?.ru || t?.et || "",
   title: "Admin",
-  nav: { calendar: "Calendar", staff: "Barbers", services: "Services", account: "Access" },
+  nav: { calendar: "Calendar", staff: "Barbers", services: "Services", requests: "Requests", account: "Access" },
   loading: "Loading…",
   noDb: "The database is not connected.",
   demo: "Demo data. The visits here are not real.",

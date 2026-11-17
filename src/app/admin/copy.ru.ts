@@ -34,7 +34,8 @@ export const ru = {
   /** A {ru, et, en} text from the data (a service, a barber's label): this language first. */
   pick: (t: Text3) => t?.ru || t?.et || t?.en || "",
   title: "Админ",
-  nav: { calendar: "Календарь", staff: "Барберы", services: "Услуги", account: "Доступ" },
+  // `requests` is for the barbers' requests page (Phase B, B4); the menu shows a section only once nav.tsx lists it
+  nav: { calendar: "Календарь", staff: "Барберы", services: "Услуги", requests: "Запросы", account: "Доступ" },
   loading: "Загрузка…",
   noDb: "База данных не подключена.",
   demo: "Демо-данные. Записи здесь не настоящие.",
