@@ -28,8 +28,10 @@ export type BookingInput = {
   locale: Locale;
   smsReminder: boolean;
   idempotencyKey: string;
-  source?: "online" | "admin";
 };
+
+/** Set by the server route, never read from the request body. */
+export type BookOptions = { source?: "online" | "admin"; now?: number };
 
 export type BookedVisit = {
   id: string;
@@ -53,15 +55,22 @@ export function hashToken(token: string): string {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-type Clean = Omit<BookingInput, "phone" | "email" | "comment" | "name"> & {
+type Clean = {
+  serviceIds: string[];
+  staffId: string | null;
+  start: number;
   name: string;
   phone: string;
   email: string | null;
   comment: string;
-  start: number;
+  locale: Locale;
+  smsReminder: boolean;
+  idempotencyKey: string;
+  source: "online" | "admin";
 };
 
-export function validateBooking(input: BookingInput): { ok: true; value: Clean } | { ok: false; field: string } {
+/** Every field checked and copied by name; nothing else from the body gets through. */
+export function validateBooking(input: BookingInput): { ok: true; value: Omit<Clean, "source"> } | { ok: false; field: string } {
   const name = String(input.name ?? "").trim().replace(/\s+/g, " ");
   if (name.length < 1 || name.length > 120) return { ok: false, field: "name" };
   const phone = normalizePhone(input.phone);
@@ -77,10 +86,21 @@ export function validateBooking(input: BookingInput): { ok: true; value: Clean }
   if (!Number.isFinite(start)) return { ok: false, field: "startsAt" };
   if (!LOCALES.includes(input.locale)) return { ok: false, field: "locale" };
   const key = String(input.idempotencyKey ?? "");
-  if (key.length < 8 || key.length > 200) return { ok: false, field: "idempotencyKey" };
+  if (key.length < 16 || key.length > 200) return { ok: false, field: "idempotencyKey" };
   return {
     ok: true,
-    value: { ...input, serviceIds: ids, name, phone, email: emailRaw ? emailRaw.toLowerCase() : null, comment, start, idempotencyKey: key },
+    value: {
+      serviceIds: ids,
+      staffId: input.staffId === null ? null : String(input.staffId),
+      start,
+      name,
+      phone,
+      email: emailRaw ? emailRaw.toLowerCase() : null,
+      comment,
+      locale: input.locale,
+      smsReminder: input.smsReminder === true,
+      idempotencyKey: key,
+    },
   };
 }
 
@@ -94,13 +114,20 @@ const visitOf = (r: VisitRow): BookedVisit => ({
   status: r.status,
 });
 
-async function findByKey(q: Querier, businessId: string, key: string): Promise<BookedVisit | null> {
-  const [row] = await q<VisitRow>(
-    "select id, staff_id, starts_at, ends_at, total_cents, status from appointments where idempotency_key = $1 and business_id = $2",
+/** The visit booked with this key, but only for the same phone: a key is no way to read someone else's visit. */
+async function findByKey(q: Querier, businessId: string, key: string, phone: string): Promise<BookedVisit | null> {
+  const [row] = await q<VisitRow & { phone_e164: string }>(
+    `select a.id, a.staff_id, a.starts_at, a.ends_at, a.total_cents, a.status, c.phone_e164
+       from appointments a join clients c on c.id = a.client_id
+      where a.idempotency_key = $1 and a.business_id = $2`,
     [key, businessId],
   );
-  return row ? visitOf(row) : null;
+  if (!row) return null;
+  if (row.phone_e164 !== phone) throw new KeyReused();
+  return visitOf(row);
 }
+
+class KeyReused extends Error {}
 
 class SlotGone extends Error {}
 
@@ -112,23 +139,33 @@ function pgCode(err: unknown): string | undefined {
  * Book. `q` reads outside the transaction (the idempotency look-up and the
  * «anyone» candidates); the write itself always goes through withTx.
  */
-export async function book(q: Querier, business: Business, input: BookingInput, now = Date.now()): Promise<BookingOutcome> {
+export async function book(q: Querier, business: Business, input: BookingInput, opts: BookOptions = {}): Promise<BookingOutcome> {
   const v = validateBooking(input);
   if (!v.ok) return { ok: false, code: "invalid", field: v.field };
-  const c = v.value;
+  const c: Clean = { ...v.value, source: opts.source ?? "online" };
+  const now = opts.now ?? Date.now();
+  try {
+    return await bookClean(q, business, c, now);
+  } catch (err) {
+    if (err instanceof KeyReused) return { ok: false, code: "invalid", field: "idempotencyKey" };
+    throw err;
+  }
+}
 
-  const prior = await findByKey(q, business.id, c.idempotencyKey);
-  if (prior) return { ok: true, visit: prior, manageToken: null, replay: true };
+async function bookClean(q: Querier, business: Business, c: Clean, now: number): Promise<BookingOutcome> {
+  const replay = async () => {
+    const v = await findByKey(q, business.id, c.idempotencyKey, c.phone);
+    return v ? ({ ok: true, visit: v, manageToken: null, replay: true } as const) : null;
+  };
+
+  const prior = await replay();
+  if (prior) return prior;
 
   const date = localParts(c.start, business.timezone).date;
   const look = await loadAvailability(q, { business, serviceIds: c.serviceIds, staffId: c.staffId, from: date, days: 1, now });
   if (!look.quotes.length) return { ok: false, code: "not_offered", field: c.staffId ? "staff" : "services" };
   const slot = look.days[0]?.slots.find((s) => s.start === c.start);
-  if (!slot) {
-    const again = await findByKey(q, business.id, c.idempotencyKey);
-    if (again) return { ok: true, visit: again, manageToken: null, replay: true };
-    return { ok: false, code: "slot_taken" };
-  }
+  if (!slot) return (await replay()) ?? { ok: false, code: "slot_taken" };
 
   // «Anyone»: the best barber first, the next one if that chair went in between.
   for (const staffId of slot.staffIds) {
@@ -138,16 +175,14 @@ export async function book(q: Querier, business: Business, input: BookingInput, 
     } catch (err) {
       if (err instanceof SlotGone || pgCode(err) === "23P01") continue;
       if (pgCode(err) === "23505") {
-        const again = await findByKey(q, business.id, c.idempotencyKey);
-        if (again) return { ok: true, visit: again, manageToken: null, replay: true };
+        const again = await replay();
+        if (again) return again;
       }
       throw err;
     }
   }
   // The same tap may have won the race on another request.
-  const again = await findByKey(q, business.id, c.idempotencyKey);
-  if (again) return { ok: true, visit: again, manageToken: null, replay: true };
-  return { ok: false, code: "slot_taken" };
+  return (await replay()) ?? { ok: false, code: "slot_taken" };
 }
 
 async function insertVisit(tx: Querier, business: Business, c: Clean, staffId: string, anyStaff: boolean, now: number) {
@@ -178,7 +213,7 @@ async function insertVisit(tx: Querier, business: Business, c: Clean, staffId: s
             locale = excluded.locale,
             updated_at = now()
      returning id`,
-    [business.id, c.name, c.phone, c.email, c.locale, c.source ?? "online"],
+    [business.id, c.name, c.phone, c.email, c.locale, c.source],
   );
 
   const token = randomBytes(24).toString("base64url");
@@ -196,7 +231,7 @@ async function insertVisit(tx: Querier, business: Business, c: Clean, staffId: s
       new Date(c.start),
       new Date(endsAt),
       new Date(blockedUntil),
-      c.source ?? "online",
+      c.source,
       anyStaff,
       c.comment,
       c.smsReminder ? business.settings.reminder_min : null,

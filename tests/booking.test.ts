@@ -112,7 +112,7 @@ describe("free slots", () => {
 
   it("a tidy-up buffer keeps the chair busy after the visit", async () => {
     await query("update services set buffer_after_min = 10 where id = $1", [demo.services.clip]);
-    expect((await book(query, demo.business, input({ time: "10:00" }), NOW)).ok).toBe(true);
+    expect((await book(query, demo.business, input({ time: "10:00" }), { now: NOW })).ok).toBe(true);
     const s = (await slotsOf({ staff: "renat", services: ["clip"], date: TUE })).map((x) => x.start);
     expect(s[0]).toBe(at(TUE, "11:00"));
   });
@@ -124,7 +124,7 @@ describe("free slots", () => {
 
 describe("booking", () => {
   it("books, hides the slot, and stores a hashed change link", async () => {
-    const r = await book(query, demo.business, input(), NOW);
+    const r = await book(query, demo.business, input(), { now: NOW });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.visit.startsAt).toBe(iso(TUE, "10:00"));
@@ -143,7 +143,7 @@ describe("booking", () => {
 
   it("a double tap with the same key books once", async () => {
     const one = input({ idempotencyKey: "double-tap-key-1" });
-    const [a, b] = await Promise.all([book(query, demo.business, one, NOW), book(query, demo.business, one, NOW)]);
+    const [a, b] = await Promise.all([book(query, demo.business, one, { now: NOW }), book(query, demo.business, one, { now: NOW })]);
     expect(a.ok && b.ok).toBe(true);
     if (!a.ok || !b.ok) return;
     expect(a.visit.id).toBe(b.visit.id);
@@ -154,41 +154,56 @@ describe("booking", () => {
 
   it("two clients racing for one slot: one gets it, the other is told", async () => {
     const [a, b] = await Promise.all([
-      book(query, demo.business, input({ phone: "+372 5555 0102" }), NOW),
-      book(query, demo.business, input({ phone: "+372 5555 0103" }), NOW),
+      book(query, demo.business, input({ phone: "+372 5555 0102" }), { now: NOW }),
+      book(query, demo.business, input({ phone: "+372 5555 0103" }), { now: NOW }),
     ]);
     const outcomes = [a, b].map((r) => (r.ok ? "ok" : r.code)).sort();
     expect(outcomes).toEqual(["ok", "slot_taken"]);
   });
 
   it("«anyone» goes to the barber with fewer visits that day", async () => {
-    await book(query, demo.business, input({ staff: "renat", time: "10:00" }), NOW);
-    const a = await book(query, demo.business, input({ staff: null, time: "11:00" }), NOW);
+    await book(query, demo.business, input({ staff: "renat", time: "10:00" }), { now: NOW });
+    const a = await book(query, demo.business, input({ staff: null, time: "11:00" }), { now: NOW });
     expect(a.ok && a.visit.staffId).toBe(demo.staff.valentin);
-    const b = await book(query, demo.business, input({ staff: null, time: "12:00" }), NOW);
+    const b = await book(query, demo.business, input({ staff: null, time: "12:00" }), { now: NOW });
     expect(b.ok && b.visit.staffId).toBe(demo.staff.jevgeni);
     const [row] = await query<{ any_staff: boolean }>("select any_staff from appointments where staff_id = $1", [demo.staff.jevgeni]);
     expect(row.any_staff).toBe(true);
   });
 
   it("finds the same client by phone however it is typed, and keeps the first name", async () => {
-    await book(query, demo.business, input({ phone: "+372 5555 0101", name: "Test Client" }), NOW);
-    await book(query, demo.business, input({ phone: "5555 0101", name: "Someone Else", time: "12:00" }), NOW);
+    await book(query, demo.business, input({ phone: "+372 5555 0101", name: "Test Client" }), { now: NOW });
+    await book(query, demo.business, input({ phone: "5555 0101", name: "Someone Else", time: "12:00" }), { now: NOW });
     const clients = await query<{ name: string; phone_e164: string }>("select name, phone_e164 from clients");
     expect(clients).toEqual([{ name: "Test Client", phone_e164: "+37255550101" }]);
   });
 
   it("refuses a start off the grid, in the past, or with bad details", async () => {
-    expect(await book(query, demo.business, input({ time: "10:07" }), NOW)).toEqual({ ok: false, code: "slot_taken" });
-    expect(await book(query, demo.business, input({ date: "2026-11-16", time: "09:00" }), NOW)).toEqual({ ok: false, code: "slot_taken" });
-    expect(await book(query, demo.business, input({ phone: "12" }), NOW)).toMatchObject({ ok: false, field: "phone" });
-    expect(await book(query, demo.business, input({ name: "  " }), NOW)).toMatchObject({ ok: false, field: "name" });
-    expect(await book(query, demo.business, input({ staff: "milena", services: ["beard"] }), NOW)).toMatchObject({ ok: false, code: "not_offered" });
+    expect(await book(query, demo.business, input({ time: "10:07" }), { now: NOW })).toEqual({ ok: false, code: "slot_taken" });
+    expect(await book(query, demo.business, input({ date: "2026-11-16", time: "09:00" }), { now: NOW })).toEqual({ ok: false, code: "slot_taken" });
+    expect(await book(query, demo.business, input({ phone: "12" }), { now: NOW })).toMatchObject({ ok: false, field: "phone" });
+    expect(await book(query, demo.business, input({ name: "  " }), { now: NOW })).toMatchObject({ ok: false, field: "name" });
+    expect(await book(query, demo.business, input({ staff: "milena", services: ["beard"] }), { now: NOW })).toMatchObject({ ok: false, code: "not_offered" });
   });
 
   it("no SMS reminder when the client switches it off", async () => {
-    const r = await book(query, demo.business, input({ smsReminder: false }), NOW);
+    const r = await book(query, demo.business, input({ smsReminder: false }), { now: NOW });
     const [row] = await query<{ reminder_min: number | null }>("select reminder_min from appointments where id = $1", [r.ok ? r.visit.id : ""]);
     expect(row.reminder_min).toBeNull();
+  });
+
+  it("a reused key with another phone reads nothing back", async () => {
+    await book(query, demo.business, input({ idempotencyKey: "shared-key-0000001" }), { now: NOW });
+    const r = await book(query, demo.business, input({ idempotencyKey: "shared-key-0000001", phone: "+372 5555 0177", time: "12:00" }), { now: NOW });
+    expect(r).toEqual({ ok: false, code: "invalid", field: "idempotencyKey" });
+  });
+
+  it("a public body cannot mark itself as an admin booking", async () => {
+    const body = { ...input(), source: "admin" } as unknown as BookingInput;
+    const r = await book(query, demo.business, body, { now: NOW });
+    const [row] = await query<{ source: string }>("select source from appointments where id = $1", [r.ok ? r.visit.id : ""]);
+    expect(row.source).toBe("online");
+    const [audit] = await query<{ actor: string }>("select actor from audit");
+    expect(audit.actor).toBe("client");
   });
 });
