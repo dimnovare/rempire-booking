@@ -334,7 +334,7 @@ invoice layout.
 - Import from Altegio.
 - Done when Renat can run one real day on it, side by side with Altegio.
 
-**B: Barber PWA**
+**B: Barber PWA** (build plan: `docs/phase-b.md`)
 
 - Login.
 - My day and week.
