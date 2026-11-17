@@ -16,7 +16,7 @@ export default function StaffDetailPage({ params }: PageProps<"/admin/staff/[id]
   return (
     <Suspense
       fallback={
-        <main className="adm-page">
+        <main className="adm-page adm-wide">
           <p className="adm-wait">{A.loading}</p>
         </main>
       }
@@ -26,9 +26,10 @@ export default function StaffDetailPage({ params }: PageProps<"/admin/staff/[id]
   );
 }
 
+/** Back to the list: only a phone needs it, a wide screen has the list on the left. */
 function BackToStaff() {
   return (
-    <Link className="adm-back" href="/admin/staff">
+    <Link className="adm-back only-narrow" href="/admin/staff">
       <PrevIcon />
       {A.staff.title}
     </Link>
@@ -46,15 +47,17 @@ async function Detail({ params }: { params: PageProps<"/admin/staff/[id]">["para
   const { id } = await params;
   if (id === "new") {
     return (
-      <main className="adm-page">
+      <main className="adm-page adm-wide">
         <BackToStaff />
         <h1 className="adm-h1">{A.staff.add}</h1>
-        <ProfileForm id={null} initial={{ name: "", role: { ru: "Барбер", et: "Barber", en: "Barber" }, photoUrl: "", bookable: true, active: true }} />
+        <div className="adm-card-narrow">
+          <ProfileForm id={null} initial={{ name: "", role: { ru: "Барбер", et: "Barber", en: "Barber" }, photoUrl: "", bookable: true, active: true }} />
+        </div>
       </main>
     );
   }
   const today = todayIn(business.timezone);
   const d = await staffDetail(query, business, id, today);
   if (!d) notFound();
-  return <BarberPage d={d} tz={business.timezone} today={today} back={<BackToStaff />} />;
+  return <BarberPage key={d.id} d={d} tz={business.timezone} today={today} back={<BackToStaff />} />;
 }

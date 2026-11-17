@@ -198,6 +198,9 @@ export const A = {
     otherNames: "Названия для клиентов: ET и EN",
     bufferLabel: "Уборка после визита",
     perBarber: "Цены барберов меняются на их страницах.",
+    cols: { name: "Услуга", time: "Время", barbers: "Барберы", online: "Онлайн", price: "Цена" },
+    onlineYes: "да",
+    unsaved: "не сохранено",
   },
 
   account: {

@@ -3,8 +3,11 @@
 /* Renat's admin: rempire.ee's look (docs/brand.md), denser than the client
    flow. Black, square edges, lime only for the current choice and the next
    step. Phones first: one thin bar on top (logo, «Демо», «Выйти»), the
-   sections in a bar at the bottom; 900px+: everything in the top bar and
-   sheets open as a panel on the right, so the page stays in view.
+   sections in a bar at the bottom, a part of a page opens as a sheet.
+   900px+: everything in the top bar and the page takes the whole width.
+   The calendar's sheets open as a panel on the right; a barber's parts,
+   the service editor and the access forms are cards that are always open,
+   so nothing slides in and nothing moves on a click.
    Its own file, so the client flow's styles (globals.css) never mix in.
    The tokens repeat globals.css :root on purpose: one look, two files. */
 :root {
@@ -77,9 +80,22 @@ html, body { background: var(--ink); }
 .adm-page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .adm-section { display: flex; flex-direction: column; gap: 12px; }
 .adm-back { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; min-height: 44px; color: var(--lime) !important; text-decoration: none; font-size: 15px; }
+/* cards: one under another on a phone, as many columns as fit from 900px */
+.adm-cards { display: flex; flex-direction: column; gap: 14px; }
+.adm-card { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 14px; border: 1px solid var(--line-2); }
+.adm-card-h { margin: 0; font: 800 16px/1.1 var(--display); text-transform: uppercase; letter-spacing: .08em; }
+@media (max-width: 899px) {
+  .only-wide { display: none !important; }
+}
 @media (min-width: 900px) {
-  /* a sheet is a panel on the right: the page moves left to stay in view */
-  .adm-page.has-panel { margin-right: var(--panel-w); }
+  .only-narrow { display: none !important; }
+  /* wide screens: the page takes the whole width, nothing sits in a narrow column */
+  .adm-page.adm-wide { max-width: none; margin: 0; padding: 24px; gap: 20px; }
+  .adm-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 16px; align-items: start; }
+  .adm-card { padding: 16px; gap: 14px; }
+  .adm-card-narrow { max-width: 560px; }
+  /* in a card a form's button is small and on the right, as in the barber's cards */
+  .adm-card .adm-form > .adm-btn { width: auto; align-self: flex-end; min-height: 40px; padding: 0 14px; font-size: 13px; }
 }
 
 /* ---------- controls ---------- */
@@ -114,6 +130,7 @@ html, body { background: var(--ink); }
 .adm-field > span, .adm-field > label { font-size: 13px; color: var(--mute); }
 .adm-row { display: flex; flex-wrap: wrap; gap: 10px; }
 .adm-row > input { flex: 1 1 90px; }
+.adm-row-long > input { flex-basis: 200px; }
 .adm-check { display: flex; align-items: center; gap: 10px; min-height: 44px; }
 .adm-toggle { display: flex; align-items: center; gap: 12px; min-height: 48px; cursor: pointer; }
 .adm-toggle > span { flex: 1; min-width: 0; }
@@ -133,12 +150,6 @@ html, body { background: var(--ink); }
 .adm-sheet-body .adm-savebar { position: sticky; bottom: -18px; z-index: 2; margin: 4px calc(-1 * max(16px, env(safe-area-inset-right, 0px))) -18px calc(-1 * max(16px, env(safe-area-inset-left, 0px))); padding: 12px max(16px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); background: var(--raise); border-top: 1px solid var(--line-2); }
 .adm-savebar .adm-bar-row .adm-btn { width: auto; }
 .adm-btns-col { display: flex; flex-direction: column; gap: 8px; }
-.adm-fold { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.adm-fold > summary { display: flex; align-items: center; gap: 10px; min-height: 48px; cursor: pointer; list-style: none; color: var(--fg); }
-.adm-fold > summary::-webkit-details-marker { display: none; }
-.adm-fold > summary::after { content: ""; margin-left: auto; width: 8px; height: 8px; border-right: 2px solid var(--mute); border-bottom: 2px solid var(--mute); transform: translateY(-2px) rotate(45deg); transition: transform .15s ease-out; }
-.adm-fold[open] > summary::after { transform: translateY(2px) rotate(-135deg); }
-.adm-fold > .adm-form { padding: 4px 0 16px; }
 
 /* the barber picker: portraits, the current one lime */
 .adm-who { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
@@ -290,6 +301,25 @@ button.cal-head:hover b { color: var(--lime); }
   .adm-sheet-head { padding-top: 12px; }
 }
 
+/* a pane: a sheet on phones (shown when opened); from 900px a card that is
+   always open in the page, so nothing slides in and nothing moves */
+.adm-pane-wrap:not(.is-open) { display: none; }
+@media (min-width: 900px) {
+  .adm-pane-wrap, .adm-pane-wrap:not(.is-open) { display: block; position: static; width: auto; min-width: 0; background: none; z-index: auto; }
+  .adm-pane { height: auto; border: 1px solid var(--line-2); }
+  .adm-pane > .adm-sheet-head { padding: 14px 16px 12px; }
+  .adm-pane > .adm-sheet-head h2 { font-size: 16px; line-height: 1.1; letter-spacing: .08em; white-space: normal; }
+  .adm-pane > .adm-sheet-head .adm-ibtn { display: none; }
+  .adm-pane > .adm-sheet-body { overflow: visible; padding: 14px 16px 16px; }
+  .adm-pane > .adm-bar { padding: 12px 16px; }
+  /* in a card the button sits at the end of its part, small, on the right */
+  .adm-pane .adm-savebar { position: static; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; margin: 2px 0 0; padding: 0; background: none; border: 0; }
+  .adm-pane .adm-savebar > p, .adm-pane .adm-savebar > .adm-bar-row { flex: 1 1 auto; }
+  .adm-pane .adm-savebar .adm-btn { width: auto; min-height: 40px; padding: 0 14px; font-size: 13px; }
+  /* «Добавить» is the quiet one: lime fills only the card that has changes to save */
+  .adm-pane .adm-btn-add { background: none; border: 1px solid var(--lime) !important; color: var(--lime) !important; }
+}
+
 /* the new-visit and visit sheets */
 .adm-time { margin: 0; display: flex; flex-direction: column; gap: 2px; }
 .adm-time b { font: 800 24px/1 var(--display); font-variant-numeric: tabular-nums; }
@@ -335,14 +365,69 @@ button.cal-head:hover b { color: var(--lime); }
 .adm-item .end.price { color: var(--fg); font: 800 18px/1 var(--display); }
 .adm-item.is-off { opacity: .5; }
 .adm-chev { flex: none; color: var(--mute); }
+@media (hover: hover) { .adm-item:hover { background: var(--raise); } }
+
+/* ---------- barbers: the list is the page on a phone; from 900px it stays
+   on the left and the barber opens beside it ---------- */
+.adm-rail { width: 100%; max-width: 760px; margin: 0 auto; padding: 18px max(16px, env(safe-area-inset-right, 0px)) 32px max(16px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 18px; }
+.adm-rail:not(.is-index) { display: none; }
+@media (min-width: 900px) {
+  .adm-split { display: grid; grid-template-columns: 264px minmax(0, 1fr); align-items: start; }
+  .adm-rail, .adm-rail:not(.is-index) { display: flex; position: sticky; top: var(--top-h); max-width: none; height: calc(100dvh - var(--top-h)); margin: 0; padding: 20px 12px 24px 16px; gap: 10px; overflow-y: auto; border-right: 1px solid var(--line); }
+  .adm-rail .adm-page-head { padding: 0 4px 0 8px; }
+  .adm-rail .adm-h1 { font: 800 13px/1 var(--display); letter-spacing: .14em; color: var(--mute); }
+  .adm-rail .adm-btn-sm { min-height: 36px; }
+  .adm-rail .adm-list, .adm-rail .adm-list > li { border: 0; }
+  .adm-rail .adm-item { gap: 12px; padding: 6px 8px; border-left: 2px solid transparent; }
+  .adm-rail .adm-item .adm-ava { width: 40px; height: 52px; font-size: 16px; }
+  .adm-rail .adm-item .txt b { font-size: 18px; letter-spacing: .04em; }
+  .adm-rail .adm-item .txt small { font-size: 12px; }
+  .adm-rail .adm-chev, .adm-rail .adm-tag:not(.warn) { display: none; }
+  .adm-rail .adm-item[aria-current="page"], .adm-rail.is-index li:first-child .adm-item { background: var(--raise); border-left-color: var(--lime); }
+  .adm-rail .adm-item[aria-current="page"] b, .adm-rail.is-index li:first-child .adm-item b { color: var(--lime); }
+}
+
+/* ---------- services: the list and, from 900px, the editor always open beside it ---------- */
+.adm-two-main { display: flex; flex-direction: column; gap: 18px; min-width: 0; container-type: inline-size; }
+.adm-svc-head { display: none; }
+.adm-svc .c { display: none; }
+.adm-svc .adm-tag { margin-left: 8px; }
+@media (min-width: 900px) {
+  .adm-page.adm-two { display: grid; grid-template-columns: minmax(0, 1fr) clamp(380px, 32vw, 520px); gap: 24px; align-items: start; }
+  .adm-two > .adm-pane-wrap { position: sticky; top: calc(var(--top-h) + 24px); }
+  .adm-two .adm-pane > .adm-sheet-head h2 { font-size: 22px; letter-spacing: .03em; }
+  .adm-svc { padding: 10px 12px; border-left: 2px solid transparent; }
+  .adm-svc[aria-current="true"] { background: var(--raise); border-left-color: var(--lime); }
+  .adm-svc[aria-current="true"] .plain { color: var(--lime); }
+}
+/* with room, the facts get their own columns */
+@container (min-width: 760px) {
+  .adm-svc-head, .adm-svc { display: grid; grid-template-columns: minmax(0, 1fr) 130px 120px 150px 90px; gap: 0 12px; align-items: center; }
+  .adm-svc-head { padding: 0 12px 8px 14px; color: var(--mute); font-size: 13px; }
+  .adm-svc-head > :last-child { text-align: right; }
+  .adm-svc .c { display: block; color: var(--mute); font-size: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .adm-svc .txt small { display: none; }
+  .adm-two-main .adm-list { border-top-color: var(--line-2); }
+}
 
 /* ---------- the barber page ---------- */
-.adm-hero { display: flex; align-items: flex-end; gap: 16px; }
+.adm-hero { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; }
 .adm-hero .adm-ava { width: 72px; height: 92px; font-size: 30px; }
 .adm-hero .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .adm-hero .txt span { color: var(--mute); font-size: 14px; }
-.adm-sumrows { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
-.adm-sumrows li { border-bottom: 1px solid var(--line); }
+.adm-hero .adm-btns { flex: 1 0 100%; }
+/* a barber's parts: a line each on a phone (a tap opens the part as a sheet);
+   from 900px every part is open as a card */
+.adm-parts { gap: 0; border-top: 1px solid var(--line); }
+.adm-part { min-width: 0; border-bottom: 1px solid var(--line); }
+@media (min-width: 900px) {
+  .adm-hero .adm-h1 { font-size: 44px; }
+  .adm-hero .adm-btns { flex: 0 0 auto; }
+  .adm-hero .adm-btn-auto { flex: 0 0 auto; }
+  .adm-parts { gap: 16px; border-top: 0; }
+  .adm-part { border-bottom: 0; }
+  .adm-part > .adm-sumrow { display: none; }
+}
 .adm-sumrow { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 68px; padding: 10px 2px; text-align: left; }
 .adm-sumrow .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .adm-sumrow .tx b { font: 800 16px/1.1 var(--display); text-transform: uppercase; letter-spacing: .08em; }
@@ -364,10 +449,12 @@ button.cal-head:hover b { color: var(--lime); }
 .adm-week .wd > b { flex: 0 0 28px; font: 800 15px/44px var(--display); text-transform: uppercase; }
 .adm-week .spans { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .adm-week .span { display: flex; align-items: center; gap: 6px; }
-.adm-week .span input { width: 88px; flex: none; min-height: 44px; text-align: center; padding: 0 4px; }
+.adm-week .span input { flex: 1 1 0; min-width: 56px; max-width: 92px; min-height: 44px; text-align: center; padding: 0 4px; }
+/* fourteen clock icons say nothing and cost the width the times need; the field is typed into, and a phone opens its own picker on a tap */
+.adm-week .span input::-webkit-calendar-picker-indicator { display: none; }
 .adm-week .span .adm-ibtn { width: 40px; border-color: transparent !important; color: var(--mute); }
 .adm-week .off { color: var(--dim); line-height: 44px; }
-.adm-week .adm-txt { min-height: 36px; font-size: 14px; }
+.adm-week .adm-txt { flex: none; min-height: 44px; padding-left: 4px; font-size: 14px; white-space: nowrap; }
 .adm-mini { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
 .adm-mini li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 56px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
 .adm-mini li > span { min-width: 0; overflow-wrap: anywhere; }
@@ -377,9 +464,22 @@ button.cal-head:hover b { color: var(--lime); }
 .adm-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
 /* ---------- «Доступ» ---------- */
-.adm-mecard { display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid var(--line-2); }
-.adm-mecard .who { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.adm-mecard .who span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-who-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.adm-who-row span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-card .adm-mini { border-top: 0; margin: -6px 0; }
+.adm-card .adm-mini li:last-child { border-bottom: 0; }
+/* a form behind one line on a phone; open from 900px, where there is room */
+.adm-fold2 { border-top: 1px solid var(--line); }
+.adm-fold2-btn { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; }
+.adm-fold2-btn::after { content: ""; margin-left: auto; width: 8px; height: 8px; border-right: 2px solid var(--mute); border-bottom: 2px solid var(--mute); transform: translateY(-2px) rotate(45deg); transition: transform .15s ease-out; }
+.adm-fold2.is-open .adm-fold2-btn::after { transform: translateY(2px) rotate(-135deg); }
+.adm-fold2-body { display: none; padding: 4px 0 4px; }
+.adm-fold2.is-open .adm-fold2-body { display: block; }
+@media (min-width: 900px) {
+  .adm-fold2 { padding-top: 14px; }
+  .adm-fold2-h { margin: 0 0 12px; font: 800 13px/1 var(--display); text-transform: uppercase; letter-spacing: .14em; color: var(--mute); }
+  .adm-fold2-body { display: block; padding: 0; }
+}
 .adm-users li { min-height: 60px; }
 .adm-users .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .adm-users .tx > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

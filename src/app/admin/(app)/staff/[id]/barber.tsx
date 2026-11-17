@@ -1,15 +1,17 @@
 "use client";
 
 /**
- * The barber page: a line per part with what is set now («Пн–Пт 10–20 ·
- * Сб 10–18 · Вс выходной»). A tap opens that part alone, with one «Сохранить».
+ * The barber page, six parts. On a phone: a line per part with what is set
+ * now («Пн–Пт 10–20 · Сб 10–18 · Вс выходной»); a tap opens that part alone
+ * as a sheet. From 900px there is room, so every part is open as a card and
+ * a change is made right where it is seen. Each part has its own button.
  */
 import Link from "next/link";
 import { useState } from "react";
 import type { StaffDetail } from "@/lib/admin/staff";
 import { A, eur, ru } from "../../../copy";
 import { Ava, NextIcon, PlusIcon } from "../../../icons";
-import { Sheet } from "../../sheet";
+import { Pane } from "../../sheet";
 import { DaysForm, HoursForm, OffersForm, ProfileForm, SpecialForm, TimeOffForm } from "./forms";
 
 type Part = "profile" | "offers" | "hours" | "days" | "off" | "special";
@@ -61,10 +63,18 @@ export function BarberPage({ d, tz, today, back }: { d: StaffDetail; tz: string;
     },
     { k: "special", title: A.staff.special, value: firstSp ? `${dt.format(firstSp.from)}, ${tm.format(firstSp.from)}–${tm.format(firstSp.to)}, +${eur(firstSp.extraCents)}${more(d.special.length)}` : A.staff.none },
   ];
-  const current = rows.find((r) => r.k === open);
+  const form = (k: Part) => {
+    if (k === "profile")
+      return <ProfileForm id={d.id} initial={{ name: d.name, role: { ru: d.role.ru ?? "", et: d.role.et ?? "", en: d.role.en ?? "" }, photoUrl: d.photoUrl ?? "", bookable: d.bookable, active: d.active }} />;
+    if (k === "offers") return <OffersForm staffId={d.id} offers={d.offers} />;
+    if (k === "hours") return <HoursForm staffId={d.id} hours={d.hours} />;
+    if (k === "days") return <DaysForm staffId={d.id} overrides={d.overrides} today={today} />;
+    if (k === "off") return <TimeOffForm staffId={d.id} rows={d.timeOff} tz={tz} today={today} />;
+    return <SpecialForm staffId={d.id} rows={d.special} tz={tz} today={today} />;
+  };
 
   return (
-    <main className={`adm-page${open ? " has-panel" : ""}`}>
+    <main className="adm-page adm-wide">
       {back}
       <div className="adm-hero">
         <Ava src={d.photoUrl} name={d.name} />
@@ -74,20 +84,21 @@ export function BarberPage({ d, tz, today, back }: { d: StaffDetail; tz: string;
             {ru(d.role) || A.visit.barber} · {d.active ? A.staff.active : A.staff.off} · {d.bookable ? A.staff.bookableOn : A.staff.bookableOff}
           </span>
         </div>
-      </div>
-      <div className="adm-btns">
-        <Link className="adm-btn adm-btn-ghost adm-btn-sm adm-btn-auto" href={`/admin?d=${today}&v=week&s=${d.id}`}>
-          {A.staff.inCalendar}
-        </Link>
-        <button type="button" className="adm-btn adm-btn-line adm-btn-sm adm-btn-auto" onClick={() => setOpen("off")}>
-          <PlusIcon size={14} />
-          {A.staff.vacation}
-        </button>
+        <div className="adm-btns">
+          <Link className="adm-btn adm-btn-ghost adm-btn-sm adm-btn-auto" href={`/admin?d=${today}&v=week&s=${d.id}`}>
+            {A.staff.inCalendar}
+          </Link>
+          {/* a wide screen has the «Отпуск» card open already */}
+          <button type="button" className="adm-btn adm-btn-line adm-btn-sm adm-btn-auto only-narrow" onClick={() => setOpen("off")}>
+            <PlusIcon size={14} />
+            {A.staff.vacation}
+          </button>
+        </div>
       </div>
 
-      <ul className="adm-sumrows">
+      <div className="adm-cards adm-parts">
         {rows.map((r) => (
-          <li key={r.k}>
+          <div className="adm-part" key={r.k}>
             <button type="button" className="adm-sumrow" aria-expanded={open === r.k} onClick={() => setOpen(r.k)}>
               <span className="tx">
                 <b>{r.title}</b>
@@ -97,22 +108,12 @@ export function BarberPage({ d, tz, today, back }: { d: StaffDetail; tz: string;
                 <NextIcon />
               </span>
             </button>
-          </li>
+            <Pane title={r.title} open={open === r.k} onClose={() => setOpen(null)}>
+              {form(r.k)}
+            </Pane>
+          </div>
         ))}
-      </ul>
-
-      {current && (
-        <Sheet title={current.title} onClose={() => setOpen(null)}>
-          {open === "profile" && (
-            <ProfileForm id={d.id} initial={{ name: d.name, role: { ru: d.role.ru ?? "", et: d.role.et ?? "", en: d.role.en ?? "" }, photoUrl: d.photoUrl ?? "", bookable: d.bookable, active: d.active }} />
-          )}
-          {open === "offers" && <OffersForm staffId={d.id} offers={d.offers} />}
-          {open === "hours" && <HoursForm staffId={d.id} hours={d.hours} />}
-          {open === "days" && <DaysForm staffId={d.id} overrides={d.overrides} today={today} />}
-          {open === "off" && <TimeOffForm staffId={d.id} rows={d.timeOff} tz={tz} today={today} />}
-          {open === "special" && <SpecialForm staffId={d.id} rows={d.special} tz={tz} today={today} />}
-        </Sheet>
-      )}
+      </div>
     </main>
   );
 }

@@ -23,6 +23,8 @@ function useSaver() {
       const ok = typeof r === "boolean" ? r : r.ok;
       const field = typeof r === "object" && !r.ok ? r.field : undefined;
       setMsg(ok ? { ok: true, text: okText } : { ok: false, text: field ? A.visit.invalid(field.split(":")[0]) : A.error });
+      // «Сохранено» has done its job after a few seconds; an error stays until the next try
+      if (ok) setTimeout(() => setMsg((m) => (m?.ok ? null : m)), 4000);
       return ok;
     } catch {
       setMsg({ ok: false, text: A.error });
@@ -57,19 +59,25 @@ function Remove({ onClick, disabled }: { onClick: () => void; disabled: boolean 
 }
 
 export function ProfileForm({ id, initial }: { id: string | null; initial: { name: string; role: { ru: string; et: string; en: string }; photoUrl: string; bookable: boolean; active: boolean } }) {
+  const [first, setFirst] = useState(initial);
   const [p, setP] = useState(initial);
   const s = useSaver();
   const router = useRouter();
+  // «Сохранить» lights up only when there is something to save
+  const dirty = JSON.stringify(p) !== JSON.stringify(first);
   return (
     <form
       className="adm-form"
       onSubmit={(e) => {
         e.preventDefault();
-        void s.run(async () => {
-          const r = await saveProfile(id, p);
-          if (r.ok && !id) router.push(`/admin/staff/${r.id}`);
-          return r;
-        });
+        const sent = p;
+        void s
+          .run(async () => {
+            const r = await saveProfile(id, sent);
+            if (r.ok && !id) router.push(`/admin/staff/${r.id}`);
+            return r;
+          })
+          .then((ok) => ok && setFirst(sent));
       }}
     >
       <label className="adm-field">
@@ -100,7 +108,7 @@ export function ProfileForm({ id, initial }: { id: string | null; initial: { nam
       </div>
       <SaveBar>
         {s.view}
-        <button className="adm-btn adm-btn-lime" disabled={s.busy}>
+        <button className="adm-btn adm-btn-lime" disabled={s.busy || (!!id && !dirty)}>
           {id ? A.save : A.staff.add}
         </button>
       </SaveBar>
@@ -177,7 +185,7 @@ export function OffersForm({ staffId, offers }: { staffId: string; offers: Offer
           <span className="adm-meta" style={{ flex: 1 }}>
             {changed > 0 && A.staff.changed(changed)}
           </span>
-          <button className="adm-btn adm-btn-lime" disabled={s.busy}>
+          <button className="adm-btn adm-btn-lime" disabled={s.busy || changed === 0}>
             {A.save}
           </button>
         </div>
@@ -187,15 +195,20 @@ export function OffersForm({ staffId, offers }: { staffId: string; offers: Offer
 }
 
 export function HoursForm({ staffId, hours }: { staffId: string; hours: HoursDay[] }) {
-  const [days, setDays] = useState<Record<number, [string, string][]>>(() => Object.fromEntries(hours.map((h) => [h.weekday, h.spans])));
+  const start = () => Object.fromEntries(hours.map((h) => [h.weekday, h.spans])) as Record<number, [string, string][]>;
+  const [first, setFirst] = useState(start);
+  const [days, setDays] = useState(start);
   const s = useSaver();
   const setDay = (wd: number, spans: [string, string][]) => setDays({ ...days, [wd]: spans });
+  const week = (d: Record<number, [string, string][]>) => JSON.stringify([1, 2, 3, 4, 5, 6, 7].map((wd) => d[wd] ?? []));
+  const dirty = week(days) !== week(first);
   return (
     <form
       className="adm-form"
       onSubmit={(e) => {
         e.preventDefault();
-        void s.run(() => saveHours(staffId, days));
+        const sent = days;
+        void s.run(() => saveHours(staffId, sent)).then((ok) => ok && setFirst(sent));
       }}
     >
       <p className="adm-meta">{A.staff.hoursHint}</p>
@@ -221,23 +234,24 @@ export function HoursForm({ staffId, hours }: { staffId: string; hours: HoursDay
                     <input type="time" step={900} value={a} aria-label={`${name}, ${A.block.from}`} onChange={(e) => setDay(wd, spans.map((x, j) => (j === i ? [e.target.value, x[1]] : x)))} />
                     –
                     <input type="time" step={900} value={b} aria-label={`${name}, ${A.block.to}`} onChange={(e) => setDay(wd, spans.map((x, j) => (j === i ? [x[0], e.target.value] : x)))} />
-                    <Remove disabled={false} onClick={() => setDay(wd, spans.filter((_, j) => j !== i))} />
+                    {/* the first line of a day carries «+ отрезок»; an added one can be removed. The switch turns the whole day off. */}
+                    {i === 0 ? (
+                      <button
+                        type="button"
+                        className="adm-txt lime"
+                        onClick={() => {
+                          const last = spans[spans.length - 1];
+                          const start = Math.min(toMin(last[1]) + 60, 22 * 60);
+                          setDay(wd, [...spans, [hhmm(start), hhmm(Math.min(start + 120, 23 * 60 + 45))]]);
+                        }}
+                      >
+                        {A.staff.addSpan}
+                      </button>
+                    ) : (
+                      <Remove disabled={false} onClick={() => setDay(wd, spans.filter((_, j) => j !== i))} />
+                    )}
                   </div>
                 ))}
-                {spans.length > 0 && (
-                  <button
-                    type="button"
-                    className="adm-txt lime"
-                    style={{ alignSelf: "flex-start" }}
-                    onClick={() => {
-                      const last = spans[spans.length - 1];
-                      const start = last ? Math.min(toMin(last[1]) + 60, 22 * 60) : 10 * 60;
-                      setDay(wd, [...spans, [hhmm(start), hhmm(Math.min(start + (last ? 120 : 600), 23 * 60 + 45))]]);
-                    }}
-                  >
-                    {A.staff.addSpan}
-                  </button>
-                )}
               </div>
             </div>
           );
@@ -248,7 +262,7 @@ export function HoursForm({ staffId, hours }: { staffId: string; hours: HoursDay
       </button>
       <SaveBar>
         {s.view}
-        <button className="adm-btn adm-btn-lime" disabled={s.busy}>
+        <button className="adm-btn adm-btn-lime" disabled={s.busy || !dirty}>
           {A.save}
         </button>
       </SaveBar>
@@ -305,7 +319,7 @@ export function DaysForm({ staffId, overrides, today }: { staffId: string; overr
       </label>
       <SaveBar>
         {s.view}
-        <button type="button" className="adm-btn adm-btn-lime" disabled={s.busy} onClick={() => void s.run(() => saveDay(staffId, date, off ? [] : [[from, to]], note))}>
+        <button type="button" className="adm-btn adm-btn-lime adm-btn-add" disabled={s.busy} onClick={() => void s.run(() => saveDay(staffId, date, off ? [] : [[from, to]], note))}>
           {A.add}
         </button>
       </SaveBar>
@@ -362,7 +376,7 @@ export function TimeOffForm({ staffId, rows, tz, today }: { staffId: string; row
         {s.view}
         <button
           type="button"
-          className="adm-btn adm-btn-lime"
+          className="adm-btn adm-btn-lime adm-btn-add"
           disabled={s.busy}
           onClick={() =>
             void s.run(async () => {
@@ -433,7 +447,7 @@ export function SpecialForm({ staffId, rows, tz, today }: { staffId: string; row
         {s.view}
         <button
           type="button"
-          className="adm-btn adm-btn-lime"
+          className="adm-btn adm-btn-lime adm-btn-add"
           disabled={s.busy}
           onClick={() => {
             const a = toMin(from);
