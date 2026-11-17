@@ -5,6 +5,7 @@ import { dbConfigured, dbKind } from "@/lib/db";
 import { A } from "../copy";
 import { OutIcon } from "../icons";
 import { logout } from "./account/actions";
+import { SaveToast } from "./autosave";
 import { Nav, NavLinks } from "./nav";
 
 /**
@@ -27,6 +28,7 @@ export default function AdminApp({ children }: { children: React.ReactNode }) {
         </Suspense>
       </header>
       <div className="adm-main">{children}</div>
+      <SaveToast />
     </div>
   );
 }

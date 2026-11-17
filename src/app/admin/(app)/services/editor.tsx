@@ -130,7 +130,7 @@ function ServicePane({ service, open, onClose, onCreated }: { service?: ServiceR
       active: v.active,
       allBarbers: !id && v.allBarbers,
     });
-  const auto = useAutoSave<Draft>(d, setD, send, { off: !id, check: wrong });
+  const auto = useAutoSave<Draft>(d, setD, send, { off: !id, check: wrong, label: (service && ru(service.name)) || A.services.title });
 
   const create = async () => {
     setBusy(true);

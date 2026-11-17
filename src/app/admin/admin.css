@@ -158,6 +158,20 @@ html, body { background: var(--ink); }
 .adm-auto-st .bad { color: var(--warn); }
 .adm-auto-act { min-height: 44px; color: var(--fg); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
 .adm-auto .adm-btn { width: auto; }
+/* the quiet «Сохранено» of auto-save on wide screens: bottom left, one at a
+   time, always the same spot (on «Барберы» the empty end of the list), so it
+   covers nothing that is worked on. On a phone the sheet's bar says it
+   instead. The calendar's lime .adm-toast is for rarer, bigger news. */
+.adm-savetoast { position: fixed; left: 16px; bottom: 16px; z-index: 60; display: flex; flex-wrap: wrap; align-items: center; gap: 0 14px; max-width: 256px; min-height: 46px; padding: 0 14px; background: var(--raise-2); border: 1px solid var(--line-2); color: var(--fg); font-size: 14px; animation: adm-savetoast-in .18s ease-out; }
+.adm-savetoast .m { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; white-space: nowrap; }
+.adm-savetoast .m svg { color: var(--lime); flex: none; }
+.adm-savetoast button { min-height: 44px; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.adm-savetoast.is-bad, .adm-savetoast.is-failed { border-color: var(--warn); padding-top: 10px; padding-bottom: 4px; }
+.adm-savetoast.is-bad .m, .adm-savetoast.is-failed .m { flex: 1 0 100%; min-height: 0; color: var(--warn); white-space: normal; }
+.adm-savetoast small { flex: 1 0 100%; padding: 2px 0 6px; color: var(--mute); font-size: 13px; }
+/* it only slides up a little: a box that starts invisible stays invisible when the browser is slow to draw */
+@keyframes adm-savetoast-in { from { transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) { .adm-savetoast { animation: none; } }
 .adm-btns-col { display: flex; flex-direction: column; gap: 8px; }
 
 /* the barber picker: portraits, the current one lime */
@@ -325,6 +339,8 @@ button.cal-head:hover b { color: var(--lime); }
   .adm-pane .adm-savebar { position: static; flex-direction: row; flex-wrap: wrap; align-items: center; justify-content: flex-end; margin: 2px 0 0; padding: 0; background: none; border: 0; }
   .adm-pane .adm-savebar > p, .adm-pane .adm-savebar > .adm-bar-row, .adm-pane .adm-savebar > .adm-auto { flex: 1 1 auto; }
   .adm-auto-st { min-height: 40px; font-size: 13px; }
+  /* the box at the bottom left is the lit one here; the part's line stays grey */
+  .adm-auto-st .ok { color: var(--mute); }
   .adm-auto-act { min-height: 40px; font-size: 13px; }
   .adm-pane .adm-savebar .adm-btn { width: auto; min-height: 40px; padding: 0 14px; font-size: 13px; }
   /* «Добавить» is the quiet one: lime fills only the card that has changes to save */

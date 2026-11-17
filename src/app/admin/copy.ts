@@ -31,6 +31,7 @@ export const A = {
     retry: "Повторить",
     done: "Готово",
     needName: "Введите имя: без него не сохранить.",
+    notSaved: (part: string) => (part ? `Не сохранено: ${part}` : "Не сохранено"),
   },
 
   login: {

@@ -70,7 +70,7 @@ export function ProfileForm({ id, initial, onDone }: { id: string | null; initia
   const [p, setP] = useState(initial);
   const s = useSaver();
   const router = useRouter();
-  const auto = useAutoSave<Profile>(p, setP, (v) => saveProfile(id, v), { off: !id, check: (v) => (v.name.trim() ? null : A.auto.needName) });
+  const auto = useAutoSave<Profile>(p, setP, (v) => saveProfile(id, v), { off: !id, label: A.staff.profile, check: (v) => (v.name.trim() ? null : A.auto.needName) });
   return (
     <form
       className="adm-form"
@@ -147,6 +147,7 @@ export function OffersForm({ staffId, offers, onDone }: { staffId: string; offer
         })),
       ),
     {
+      label: A.staff.offersRow,
       // a half-typed price or time is not sent («4» on the way to «45» minutes)
       check: (v) => {
         for (const r of v) {
@@ -214,6 +215,7 @@ export function HoursForm({ staffId, hours, onDone }: { staffId: string; hours: 
   const [days, setDays] = useState<Week>(() => Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map((wd) => [wd, hours.find((h) => h.weekday === wd)?.spans ?? []])));
   const setDay = (wd: number, spans: [string, string][]) => setDays({ ...days, [wd]: spans });
   const auto = useAutoSave<Week>(days, setDays, (v) => saveHours(staffId, v), {
+    label: A.staff.hours,
     // a span must end after it starts and after the one before it; a time still being typed is not sent
     check: (v) => {
       for (const spans of Object.values(v)) {
