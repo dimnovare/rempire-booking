@@ -36,7 +36,7 @@ describe("passwords", () => {
   });
 });
 
-describe("the first owner from env", () => {
+describe("owners from env", () => {
   it("is created once and never overwritten", async () => {
     const env = { ADMIN_BOOTSTRAP_EMAIL: " Owner@Example.test ", ADMIN_BOOTSTRAP_PASSWORD: PW };
     expect(await bootstrapOwner(db, env)).toBe("created");
@@ -48,10 +48,16 @@ describe("the first owner from env", () => {
     expect(await bootstrapOwner(db, {})).toBe("skipped");
   });
 
-  it("takes a list: the first gets the password, the rest are owners without one", async () => {
+  it("takes a list: every address gets the password, one already set is kept", async () => {
     await owner("second@example.test", "their-own-password");
-    const env = { ADMIN_BOOTSTRAP_EMAIL: "First@Example.test; second@example.test,third@example.test not-an-email ;", ADMIN_BOOTSTRAP_PASSWORD: PW };
-    expect(bootstrapEmails(env.ADMIN_BOOTSTRAP_EMAIL)).toEqual(["first@example.test", "second@example.test", "third@example.test", "not-an-email"]);
+    await owner("fourth@example.test", null);
+    const env = {
+      ADMIN_BOOTSTRAP_EMAIL: "First@Example.test; second@example.test,third@example.test not-an-email ; fourth@example.test",
+      ADMIN_BOOTSTRAP_PASSWORD: PW,
+    };
+    expect(bootstrapEmails(env.ADMIN_BOOTSTRAP_EMAIL)).toEqual([
+      "first@example.test", "second@example.test", "third@example.test", "not-an-email", "fourth@example.test",
+    ]);
     const log: string[] = [];
     expect(await bootstrapOwner(db, env, (m) => log.push(m))).toBe("created");
     const rows = await query<{ email: string; role: string; has_pw: boolean }>(
@@ -59,16 +65,31 @@ describe("the first owner from env", () => {
     );
     expect(rows).toEqual([
       { email: "first@example.test", role: "owner", has_pw: true },
+      { email: "fourth@example.test", role: "owner", has_pw: true },
       { email: "second@example.test", role: "owner", has_pw: true },
-      { email: "third@example.test", role: "owner", has_pw: false },
+      { email: "third@example.test", role: "owner", has_pw: true },
     ]);
-    // the existing login keeps its own password; the shared one opens only the first
+    // the shared password opens every listed login that had none
+    for (const e of ["first@example.test", "third@example.test", "fourth@example.test"]) {
+      expect((await loginWithPassword(query, e, PW, IP)).ok).toBe(true);
+    }
+    // a password already set stays: the shared one does not open it
     expect((await loginWithPassword(query, "second@example.test", "their-own-password", IP)).ok).toBe(true);
-    expect((await loginWithPassword(query, "third@example.test", PW, IP)).ok).toBe(false);
+    expect((await loginWithPassword(query, "second@example.test", PW, IP)).ok).toBe(false);
+    // each login has its own salt, so the rows don't show the password is shared
+    const hashes = await query<{ h: string }>("select password_hash as h from users where email <> 'second@example.test'");
+    expect(new Set(hashes.map((r) => r.h)).size).toBe(3);
+    // counts only, never an address
+    expect(log.join("\n")).toContain("2 created, 1 got the password, 1 kept");
     expect(log.join("\n")).not.toContain("@");
     // a second deploy changes nothing
     expect(await bootstrapOwner(db, env)).toBe("kept");
-    expect((await query("select 1 from users")).length).toBe(3);
+    expect((await query("select 1 from users")).length).toBe(4);
+    // an owner added later without a password gets it on the next deploy
+    await owner("late@example.test", null);
+    const later = { ...env, ADMIN_BOOTSTRAP_EMAIL: env.ADMIN_BOOTSTRAP_EMAIL + " late@example.test" };
+    expect(await bootstrapOwner(db, later)).toBe("password_set");
+    expect((await loginWithPassword(query, "late@example.test", PW, IP)).ok).toBe(true);
   });
 });
 

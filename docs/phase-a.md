@@ -68,7 +68,7 @@ Renat's request, settled with Dim (17.11.2026):
 | `db/migrations/003_staff_auth.sql` | `users`, `sessions`, `login_codes`, `auth_attempts`; walk-ins without a phone |
 | `db/migrations/004_notifications.sql` | the message outbox |
 | `src/lib/auth/` | passwords (`tools/password.mjs`), sessions, login, the cookie, `requireAdmin()` |
-| `tools/bootstrap-owner.mjs` | owner logins from `ADMIN_BOOTSTRAP_*`: one e-mail or a list, the first gets the password, the rest none (code or Google); never overwrites a password |
+| `tools/bootstrap-owner.mjs` | owner logins from `ADMIN_BOOTSTRAP_*`: one e-mail or a list; every listed address becomes an owner with that password (one shared admin password, Dim, 17.11); a password already set is never overwritten |
 | `src/proxy.ts` | `/admin` without a cookie → `/admin/login`; admin pages always noindex |
 | `src/app/admin/login/` | password or e-mail code |
 | `src/app/admin/(app)/` | calendar, barbers, services, access |

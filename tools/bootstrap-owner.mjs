@@ -1,22 +1,24 @@
 #!/usr/bin/env node
 /**
- * The first owner login (Renat, or Dim while building), from two env vars:
+ * The owner logins (Renat, the shop's addresses, Dim while building), from
+ * two env vars:
  *
- *   ADMIN_BOOTSTRAP_EMAIL     the owner's e-mail (Config); or a list split
- *                             by «;», «,» or spaces: the first address gets
- *                             the password, the others become owners with no
- *                             password (they sign in with the e-mail code or
- *                             Google), so no password is shared
- *   ADMIN_BOOTSTRAP_PASSWORD  the first owner's first password (Secret), 8+ characters
+ *   ADMIN_BOOTSTRAP_EMAIL     one e-mail, or a list split by «;», «,» or
+ *                             spaces (Config)
+ *   ADMIN_BOOTSTRAP_PASSWORD  the password every listed owner starts with
+ *                             (Secret), 8+ characters. One shared password is
+ *                             Dim's choice (17.11.2026): any listed address
+ *                             can open the admin. Each owner can change theirs
+ *                             under «Доступ».
  *
  * Dim puts the values into Vercel; they never go into git or chat.
  * postbuild runs this after the migrations and the demo seed:
  *
  *   node tools/bootstrap-owner.mjs --if-configured
  *
- * It only adds what is missing: a new owner, or a password for an owner who
- * has none. A password changed since in the admin is never overwritten, so
- * the env var can be deleted once the owner has logged in.
+ * It only adds what is missing: a new owner, or the password for an owner
+ * who has none. A password already set (or changed since in the admin) is
+ * never overwritten, so the env vars can be deleted once everyone is in.
  */
 import { pathToFileURL } from "node:url";
 import { sslFor } from "./migrate.mjs";
@@ -38,7 +40,8 @@ export function bootstrapEmails(raw) {
  * @param {{query: (sql: string, params?: unknown[]) => Promise<{rows: any[]}>}} db
  * @param {Record<string, string | undefined>} [env]
  * @param {(msg: string) => void} [log]
- * @returns {Promise<"created" | "password_set" | "kept" | "skipped">} what happened to the first owner
+ * @returns {Promise<"created" | "password_set" | "kept" | "skipped">} "created" if any login was
+ *   added, else "password_set" if any owner got the password, else "kept"
  */
 export async function bootstrapOwner(db, env = process.env, log = () => {}) {
   const all = bootstrapEmails(env.ADMIN_BOOTSTRAP_EMAIL);
@@ -50,7 +53,6 @@ export async function bootstrapOwner(db, env = process.env, log = () => {}) {
     log("Owner bootstrap skipped: ADMIN_BOOTSTRAP_EMAIL has no e-mail address.");
     return "skipped";
   }
-  const [email, ...others] = emails;
   if (passwordProblem(password)) {
     log("Owner bootstrap skipped: ADMIN_BOOTSTRAP_PASSWORD needs 8 to 200 characters.");
     return "skipped";
@@ -61,31 +63,32 @@ export async function bootstrapOwner(db, env = process.env, log = () => {}) {
     log(`Owner bootstrap skipped: no business «${slug}» yet.`);
     return "skipped";
   }
-  // the others: owners without a password; an existing login is left as it is
-  let added = 0;
-  for (const e of others) {
+  const done = { created: 0, password_set: 0, kept: 0 };
+  for (const email of emails) {
+    const user = (await db.query("select id, password_hash from users where email = $1", [email])).rows[0];
+    if (user && user.password_hash) {
+      done.kept++;
+      continue;
+    }
+    // a hash (and salt) of its own per login, so equal passwords don't show as equal rows
+    const hash = await hashPassword(password);
+    if (user) {
+      const r = await db.query("update users set password_hash = $2, updated_at = now() where id = $1 and password_hash is null returning id", [user.id, hash]);
+      if (r.rows.length) done.password_set++;
+      else done.kept++;
+      continue;
+    }
     const r = await db.query(
-      `insert into users (business_id, email, name, role) values ($1, $2, '', 'owner')
+      `insert into users (business_id, email, name, password_hash, role) values ($1, $2, '', $3, 'owner')
        on conflict (email) do nothing returning id`,
-      [biz.id, e],
+      [biz.id, email, hash],
     );
-    added += r.rows.length;
+    if (r.rows.length) done.created++;
+    else done.kept++;
   }
-  if (others.length) log(`Owner bootstrap: ${added} more owner(s) added without a password, ${others.length - added} already there.`);
-
-  const user = (await db.query("select id, password_hash from users where email = $1", [email])).rows[0];
-  if (user && user.password_hash) return "kept";
-  const hash = await hashPassword(password);
-  if (user) {
-    await db.query("update users set password_hash = $2, updated_at = now() where id = $1 and password_hash is null", [user.id, hash]);
-    return "password_set";
-  }
-  await db.query(
-    `insert into users (business_id, email, name, password_hash, role) values ($1, $2, '', $3, 'owner')
-     on conflict (email) do nothing`,
-    [biz.id, email, hash],
-  );
-  return "created";
+  // counts only: build logs are read by others, so never an address
+  if (emails.length > 1) log(`Owner bootstrap: ${done.created} created, ${done.password_set} got the password, ${done.kept} kept.`);
+  return done.created ? "created" : done.password_set ? "password_set" : "kept";
 }
 
 async function main() {
