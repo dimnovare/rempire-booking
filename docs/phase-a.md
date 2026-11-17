@@ -98,9 +98,11 @@ client's is stored only as a hash.
 
 ### Waiting on outside accounts
 
+Every account in use, and what switches at the move: `docs/accounts.md`.
+
 | What | For | Env var names |
 |---|---|---|
-| First owner login on staging | A4 | `ADMIN_BOOTSTRAP_EMAIL`, `ADMIN_BOOTSTRAP_PASSWORD` (sensitive), then redeploy |
+| Owner logins on staging: done 17.11, all 5 listed addresses have the shared password | A4 | `ADMIN_BOOTSTRAP_EMAIL`, `ADMIN_BOOTSTRAP_PASSWORD` (sensitive) |
 | Resend: account made 17.11 (new free account, as decided); a sending domain and an API key | A4 codes, A6 e-mail | `RESEND_API_KEY` (sensitive), `EMAIL_FROM` |
 | Google OAuth client in the shop's Google account (Web application; redirect URIs in `src/lib/auth/google.ts`) | A4 Google login | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (sensitive) |
 | SMS provider: Dim asked for a price comparison first (17.11) | A6 reminders, A8 codes | added with the provider |
