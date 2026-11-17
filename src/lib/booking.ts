@@ -1,0 +1,222 @@
+/**
+ * One «Book» tap → one appointment, or a clear reason why not.
+ *
+ * In one transaction: lock the barber's staff row, re-run the free-slot
+ * check (hours, breaks, time off, buffers), find or add the client by phone,
+ * insert the visit and its services. The appointments_no_overlap constraint
+ * backs the check. The Idempotency-Key makes a double tap or a retry return
+ * the first booking instead of a second one.
+ */
+import { createHash, randomBytes } from "node:crypto";
+import { loadAvailability, type Business } from "./availability";
+import { withTx, type Querier } from "./db";
+import { normalizePhone } from "./phone";
+import { localParts } from "./tz";
+
+export type Locale = "ru" | "et" | "en";
+export const LOCALES: readonly Locale[] = ["ru", "et", "en"];
+
+export type BookingInput = {
+  serviceIds: string[];
+  /** a staff id, or null for «anyone» */
+  staffId: string | null;
+  startsAt: string; // ISO moment
+  name: string;
+  phone: string;
+  email?: string | null;
+  comment?: string | null;
+  locale: Locale;
+  smsReminder: boolean;
+  idempotencyKey: string;
+  source?: "online" | "admin";
+};
+
+export type BookedVisit = {
+  id: string;
+  staffId: string;
+  startsAt: string;
+  endsAt: string;
+  totalCents: number;
+  status: string;
+};
+
+export type BookingOutcome =
+  | { ok: true; visit: BookedVisit; manageToken: string | null; replay: boolean }
+  | { ok: false; code: BookingErrorCode; field?: string };
+
+export type BookingErrorCode = "invalid" | "slot_taken" | "not_offered";
+
+export function hashToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type Clean = Omit<BookingInput, "phone" | "email" | "comment" | "name"> & {
+  name: string;
+  phone: string;
+  email: string | null;
+  comment: string;
+  start: number;
+};
+
+export function validateBooking(input: BookingInput): { ok: true; value: Clean } | { ok: false; field: string } {
+  const name = String(input.name ?? "").trim().replace(/\s+/g, " ");
+  if (name.length < 1 || name.length > 120) return { ok: false, field: "name" };
+  const phone = normalizePhone(input.phone);
+  if (!phone) return { ok: false, field: "phone" };
+  const emailRaw = String(input.email ?? "").trim();
+  if (emailRaw && (emailRaw.length > 254 || !EMAIL_RE.test(emailRaw))) return { ok: false, field: "email" };
+  const comment = String(input.comment ?? "").trim();
+  if (comment.length > 1000) return { ok: false, field: "comment" };
+  const ids = [...new Set(input.serviceIds ?? [])];
+  if (!ids.length || ids.length > 5 || !ids.every((id) => UUID_RE.test(id))) return { ok: false, field: "services" };
+  if (input.staffId !== null && !UUID_RE.test(String(input.staffId))) return { ok: false, field: "staff" };
+  const start = Date.parse(input.startsAt);
+  if (!Number.isFinite(start)) return { ok: false, field: "startsAt" };
+  if (!LOCALES.includes(input.locale)) return { ok: false, field: "locale" };
+  const key = String(input.idempotencyKey ?? "");
+  if (key.length < 8 || key.length > 200) return { ok: false, field: "idempotencyKey" };
+  return {
+    ok: true,
+    value: { ...input, serviceIds: ids, name, phone, email: emailRaw ? emailRaw.toLowerCase() : null, comment, start, idempotencyKey: key },
+  };
+}
+
+type VisitRow = { id: string; staff_id: string; starts_at: Date; ends_at: Date; total_cents: number; status: string };
+const visitOf = (r: VisitRow): BookedVisit => ({
+  id: r.id,
+  staffId: r.staff_id,
+  startsAt: new Date(r.starts_at).toISOString(),
+  endsAt: new Date(r.ends_at).toISOString(),
+  totalCents: r.total_cents,
+  status: r.status,
+});
+
+async function findByKey(q: Querier, businessId: string, key: string): Promise<BookedVisit | null> {
+  const [row] = await q<VisitRow>(
+    "select id, staff_id, starts_at, ends_at, total_cents, status from appointments where idempotency_key = $1 and business_id = $2",
+    [key, businessId],
+  );
+  return row ? visitOf(row) : null;
+}
+
+class SlotGone extends Error {}
+
+function pgCode(err: unknown): string | undefined {
+  return (err as { code?: string })?.code;
+}
+
+/**
+ * Book. `q` reads outside the transaction (the idempotency look-up and the
+ * «anyone» candidates); the write itself always goes through withTx.
+ */
+export async function book(q: Querier, business: Business, input: BookingInput, now = Date.now()): Promise<BookingOutcome> {
+  const v = validateBooking(input);
+  if (!v.ok) return { ok: false, code: "invalid", field: v.field };
+  const c = v.value;
+
+  const prior = await findByKey(q, business.id, c.idempotencyKey);
+  if (prior) return { ok: true, visit: prior, manageToken: null, replay: true };
+
+  const date = localParts(c.start, business.timezone).date;
+  const look = await loadAvailability(q, { business, serviceIds: c.serviceIds, staffId: c.staffId, from: date, days: 1, now });
+  if (!look.quotes.length) return { ok: false, code: "not_offered", field: c.staffId ? "staff" : "services" };
+  const slot = look.days[0]?.slots.find((s) => s.start === c.start);
+  if (!slot) {
+    const again = await findByKey(q, business.id, c.idempotencyKey);
+    if (again) return { ok: true, visit: again, manageToken: null, replay: true };
+    return { ok: false, code: "slot_taken" };
+  }
+
+  // «Anyone»: the best barber first, the next one if that chair went in between.
+  for (const staffId of slot.staffIds) {
+    try {
+      const out = await withTx((tx) => insertVisit(tx, business, c, staffId, c.staffId === null, now));
+      return { ok: true, visit: out.visit, manageToken: out.token, replay: false };
+    } catch (err) {
+      if (err instanceof SlotGone || pgCode(err) === "23P01") continue;
+      if (pgCode(err) === "23505") {
+        const again = await findByKey(q, business.id, c.idempotencyKey);
+        if (again) return { ok: true, visit: again, manageToken: null, replay: true };
+      }
+      throw err;
+    }
+  }
+  // The same tap may have won the race on another request.
+  const again = await findByKey(q, business.id, c.idempotencyKey);
+  if (again) return { ok: true, visit: again, manageToken: null, replay: true };
+  return { ok: false, code: "slot_taken" };
+}
+
+async function insertVisit(tx: Querier, business: Business, c: Clean, staffId: string, anyStaff: boolean, now: number) {
+  // One booking at a time per barber: the check below and the insert see the same chair.
+  await tx("select id from staff where id = $1 and business_id = $2 for update", [staffId, business.id]);
+  const date = localParts(c.start, business.timezone).date;
+  const look = await loadAvailability(tx, { business, serviceIds: c.serviceIds, staffId, from: date, days: 1, now });
+  const quote = look.quotes[0];
+  if (!quote || !look.days[0]?.slots.some((s) => s.start === c.start)) throw new SlotGone();
+
+  const services = await tx<{ id: string; name: unknown; duration_min: number; price_cents: number }>(
+    `select sv.id, sv.name,
+            coalesce(ss.duration_min, sv.duration_min) as duration_min,
+            coalesce(ss.price_cents, sv.price_cents) as price_cents
+       from services sv join staff_services ss on ss.service_id = sv.id and ss.staff_id = $1
+      where sv.id = any($2::uuid[])`,
+    [staffId, c.serviceIds],
+  );
+  const ordered = c.serviceIds.map((id) => services.find((s) => s.id === id)!);
+  const endsAt = c.start + quote.durationMin * 60_000;
+  const blockedUntil = endsAt + quote.bufferMin * 60_000;
+
+  const [client] = await tx<{ id: string }>(
+    `insert into clients (business_id, name, phone_e164, email, locale, source)
+     values ($1, $2, $3, $4, $5, $6)
+     on conflict (business_id, phone_e164) do update
+        set email = coalesce(clients.email, excluded.email),
+            locale = excluded.locale,
+            updated_at = now()
+     returning id`,
+    [business.id, c.name, c.phone, c.email, c.locale, c.source ?? "online"],
+  );
+
+  const token = randomBytes(24).toString("base64url");
+  const [row] = await tx<VisitRow>(
+    `insert into appointments
+       (business_id, location_id, staff_id, client_id, starts_at, ends_at, blocked_until, source, any_staff,
+        client_comment, reminder_min, total_cents, locale, manage_token_hash, idempotency_key)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+     returning id, staff_id, starts_at, ends_at, total_cents, status`,
+    [
+      business.id,
+      quote.locationId,
+      staffId,
+      client.id,
+      new Date(c.start),
+      new Date(endsAt),
+      new Date(blockedUntil),
+      c.source ?? "online",
+      anyStaff,
+      c.comment,
+      c.smsReminder ? business.settings.reminder_min : null,
+      quote.priceCents,
+      c.locale,
+      hashToken(token),
+      c.idempotencyKey,
+    ],
+  );
+  for (const [position, s] of ordered.entries()) {
+    await tx(
+      `insert into appointment_services (appointment_id, position, service_id, name, duration_min, price_cents)
+       values ($1, $2, $3, $4::jsonb, $5, $6)`,
+      [row.id, position, s.id, JSON.stringify(s.name), s.duration_min, s.price_cents],
+    );
+  }
+  await tx(
+    `insert into audit (actor, entity, entity_id, action, after)
+     values ($1, 'appointment', $2, 'create', $3::jsonb)`,
+    [c.source === "admin" ? "admin" : "client", row.id, JSON.stringify({ staff_id: staffId, starts_at: new Date(c.start).toISOString(), any_staff: anyStaff })],
+  );
+  return { visit: visitOf(row), token };
+}
