@@ -15,7 +15,8 @@
     "test": "vitest run",
     "migrate": "node tools/migrate.mjs",
     "seed:demo": "node tools/seed-demo.mjs",
-    "check:noindex": "node tools/check-noindex.mjs"
+    "check:noindex": "node tools/check-noindex.mjs",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.16",
@@ -30,6 +31,7 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/turbopack": "4.3.3",
     "@types/node": "^22",
     "@types/pg": "^8.23.1",

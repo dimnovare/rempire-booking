@@ -80,6 +80,8 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-strip-days b { font: 800 19px/1 var(--display); font-variant-numeric: tabular-nums; }
 .bx-strip-days i { font-style: normal; font-size: 11px; line-height: 14px; min-height: 14px; color: var(--lime); font-variant-numeric: tabular-nums; }
 .bx-strip-days .is-off b { color: var(--dim); }
+/* the narrowest phones (320 px): a little more room for each day */
+@media (max-width: 359px) { .bx-strip .adm-ibtn { width: 28px; } .bx-strip-days { gap: 0; } }
 .bx-strip-days .is-today { border-color: var(--line-2) !important; }
 .bx-strip-days [aria-pressed="true"] { background: var(--lime); border-color: var(--lime) !important; }
 .bx-strip-days [aria-pressed="true"] :is(small, b, i) { color: var(--on-lime); }
@@ -138,17 +140,18 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-week { gap: 14px; padding-top: 12px; }
 .bx-wnav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .bx-wnav > div { flex: 1; min-width: 0; text-align: center; display: flex; flex-direction: column; gap: 4px; }
-.bx-wk { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--line); }
-.bx-wk > li { border-bottom: 1px solid var(--line); }
-.bx-wk > li > a { display: flex; flex-direction: column; gap: 4px; padding: 12px 0 12px 12px; text-decoration: none; border-left: 3px solid transparent; }
+.bx-wk { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--line); min-width: 0; }
+/* min-width: 0 all the way down: the one-line visits end in «…» instead of widening the page (WebKit) */
+.bx-wk > li { border-bottom: 1px solid var(--line); min-width: 0; }
+.bx-wk > li > a { display: flex; flex-direction: column; gap: 4px; padding: 12px 0 12px 12px; text-decoration: none; border-left: 3px solid transparent; min-width: 0; }
 .bx-wk > li.is-today > a { border-left-color: var(--lime); }
 .bx-wk-head { display: flex; justify-content: space-between; gap: 12px; }
 .bx-wk-head b { font: 800 17px/1.1 var(--display); text-transform: uppercase; letter-spacing: .03em; }
 .bx-wk-head span { font-variant-numeric: tabular-nums; }
 .bx-wk > li > a > small { color: var(--mute); font-size: 13px; }
 .bx-wk > li.is-off .bx-wk-head b { color: var(--dim); }
-.bx-wk-list { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; font-size: 14px; }
-.bx-wk-list > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bx-wk-list { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; font-size: 14px; min-width: 0; }
+.bx-wk-list > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .bx-wk-list b { font-variant-numeric: tabular-nums; }
 .bx-wk-list small { color: var(--dim); font-size: 13px; }
 .bx-wk-list .is-ns { text-decoration: line-through; color: var(--dim); }
@@ -192,8 +195,9 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .adm-svcs button[aria-pressed="true"] .bx-tick { background: var(--lime); border-color: var(--lime); color: var(--on-lime); }
 
 /* ---------- «Моё время» (B4) ---------- */
-.bx-time-add { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.bx-time-add .adm-btn { min-height: 56px; padding: 0 10px; }
+.bx-time-add { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.bx-time-add .adm-btn { min-height: 56px; padding: 0 10px; white-space: normal; line-height: 1.15; } /* «Особое время» may take two lines on a narrow phone */
+.bx-time-add .adm-btn svg { flex: none; }
 .bx-rows > li { padding: 0; }
 .bx-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 10px 2px; text-align: left; }
 .bx-row .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }

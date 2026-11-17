@@ -19,7 +19,7 @@ export const et: Copy = {
   h: "t",
   demo: "Demo",
 
-  nav: { day: "Päev", week: "Nädal", time: "Minu aeg", sell: "Müü", more: "Veel" },
+  nav: { label: "Jaotised", day: "Päev", week: "Nädal", time: "Minu aeg", sell: "Müü", more: "Veel" },
 
   login: {
     title: "Sisselogimine",

@@ -25,6 +25,7 @@ Later it moves to rempire.ee.
 npm install
 npm run dev        # http://localhost:3400
 npm test
+npm run e2e        # Playwright: the barber app at phone width
 npm run typecheck
 ```
 

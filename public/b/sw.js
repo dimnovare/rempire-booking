@@ -13,8 +13,9 @@
  *   3. the app shell: a page of the app opened without internet shows the
  *      copy loaded last time (the barber's own day), or a short «no
  *      internet» page. Next's /_next/static files are content-hashed, so
- *      they are kept and reused; nothing else is cached. «Выйти» empties the
- *      page cache (src/app/b/(app)/more).
+ *      they are kept and reused. The logo, the icons and the barbers' photos
+ *      come from the network, with the last copy kept for offline. Nothing
+ *      else is cached. «Выйти» empties the page cache (src/app/b/(app)/more).
  *
  * Bump VERSION when this file changes in a way that needs the old caches gone.
  *
@@ -25,6 +26,9 @@ var VERSION = "b2";
 var DEV = new URL(self.location.href).searchParams.get("dev") === "1";
 var PAGES = "rb-pages-" + VERSION;
 var STATIC = "rb-static-" + VERSION;
+var IMAGES = "rb-img-" + VERSION;
+// the app's own pictures: the logo, its icons, the barbers' photos
+var IMAGE_DIRS = ["/brand/", "/barbers/", "/b/icons/"];
 var STATIC_MAX = 200;
 var APP = "/b";
 var ICON = "/b/icons/icon-192.png";
@@ -51,7 +55,7 @@ self.addEventListener("activate", function (event) {
         return Promise.all(
           keys
             .filter(function (k) {
-              return k.indexOf("rb-") === 0 && (DEV || (k !== PAGES && k !== STATIC));
+              return k.indexOf("rb-") === 0 && (DEV || (k !== PAGES && k !== STATIC && k !== IMAGES));
             })
             .map(function (k) {
               return caches.delete(k);
@@ -97,6 +101,37 @@ self.addEventListener("fetch", function (event) {
           });
         });
       }),
+    );
+    return;
+  }
+
+  // the app's pictures: the network first (a new photo shows at once), the
+  // kept copy without it, so the day opened offline has its logo and faces
+  if (
+    IMAGE_DIRS.some(function (d) {
+      return url.pathname.indexOf(d) === 0;
+    })
+  ) {
+    event.respondWith(
+      fetch(req)
+        .then(function (res) {
+          if (res.ok && res.type === "basic") {
+            var copy = res.clone();
+            caches.open(IMAGES).then(function (cache) {
+              cache.put(url.pathname, copy).then(function () {
+                return trim(cache);
+              });
+            });
+          }
+          return res;
+        })
+        .catch(function () {
+          return caches.open(IMAGES).then(function (cache) {
+            return cache.match(url.pathname).then(function (hit) {
+              return hit || Response.error();
+            });
+          });
+        }),
     );
     return;
   }

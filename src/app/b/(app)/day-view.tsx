@@ -44,7 +44,10 @@ export function DayView({ days, date, today, now: serverNow, tz, step, offers }:
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ text: string; bad?: boolean } | null>(null);
   const now = useNow(serverNow);
-  const online = useOnline();
+  // offline, or the copy the service worker kept (a weak connection says it is online)
+  const onLine = useOnline();
+  const cached = useCached(serverNow);
+  const online = onLine && !cached;
   const [refreshing, startRefresh] = useTransition();
   const reload = useCallback(() => startRefresh(() => router.refresh()), [router]);
   const pulled = usePullRefresh(reload, sheet === null);
@@ -496,6 +499,20 @@ function useOnline(): boolean {
     () => navigator.onLine,
     () => true,
   );
+}
+
+/**
+ * The page is the service worker's kept copy (public/b/sw.js): the server
+ * made it more than five minutes before it opened. A fresh page from the
+ * server, after a refresh, clears it.
+ */
+const CACHED_MS = 5 * 60_000;
+function useCached(serverNow: number): boolean {
+  const [cached, setCached] = useState(false);
+  useEffect(() => {
+    setCached(Date.now() - serverNow > CACHED_MS);
+  }, [serverNow]);
+  return cached;
 }
 
 /** Fresh data when the barber comes back to the app, and every two minutes while it is open. */

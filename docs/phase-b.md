@@ -57,8 +57,10 @@ a day off. Renat sees all of it in the admin.
 B1 comes first. B2 and B5 can then run side by side, and B3, B4 and B6
 build on B2.
 
-**Real-phone test:** `docs/phase-b-phone-test.md` (one barber, one iPhone,
-one Android, about an hour). It needs the VAPID keys in Vercel first.
+**Tests:** `npm test` for the server side, `npm run e2e` (Playwright, in
+`e2e/`) for every screen of `/b` on an Android and an iPhone screen. What
+only a real phone can show is in `docs/phase-b-phone-test.md` (one barber,
+one iPhone, one Android, about 30 minutes).
 
 ## Data
 

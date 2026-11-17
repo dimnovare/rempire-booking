@@ -22,7 +22,7 @@ export const ru = {
   h: "ч",
   demo: "Демо",
 
-  nav: { day: "День", week: "Неделя", time: "Моё время", sell: "Продать", more: "Ещё" },
+  nav: { label: "Разделы", day: "День", week: "Неделя", time: "Моё время", sell: "Продать", more: "Ещё" },
 
   login: {
     title: "Вход",

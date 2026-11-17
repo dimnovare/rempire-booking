@@ -53,7 +53,7 @@ export function BNav() {
     { href: "/b/more", label: B.nav.more, icon: "more", on: path.startsWith("/b/more") || path.startsWith("/b/pick") || path.startsWith("/b/money") },
   ];
   return (
-    <nav className="adm-nav bx-nav" aria-label={B.nav.more}>
+    <nav className="adm-nav bx-nav" aria-label={B.nav.label}>
       {items.map((it) => (
         <Link key={it.href} href={it.href} aria-current={it.on ? "page" : undefined} prefetch={false}>
           <Icon name={it.icon} />

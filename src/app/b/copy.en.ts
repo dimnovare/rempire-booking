@@ -19,7 +19,7 @@ export const en: Copy = {
   h: "h",
   demo: "Demo",
 
-  nav: { day: "Day", week: "Week", time: "My time", sell: "Sell", more: "More" },
+  nav: { label: "Sections", day: "Day", week: "Week", time: "My time", sell: "Sell", more: "More" },
 
   login: {
     title: "Log in",

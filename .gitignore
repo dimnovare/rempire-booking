@@ -41,3 +41,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# e2e: the server log, logins, results and report (playwright.config.ts)
+/e2e/.out/

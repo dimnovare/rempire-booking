@@ -74,6 +74,9 @@ look. Copy their flows and features, never their branding, texts or visuals.
 - **Commands:**
   - `npm run dev`: port 3400. The shop uses 3300.
   - `npm test`
+  - `npm run e2e`: Playwright, the barber app at phone width, on its own
+    server (port 3420, fake data). `E2E_PROD=yes` after `npm run build`
+    for the production build and offline. See `playwright.config.ts`.
   - `npm run typecheck`: runs `next typegen` first, for the global
     `LayoutProps` / `PageProps` types.
   - `npm run build`
