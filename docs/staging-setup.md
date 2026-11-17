@@ -89,7 +89,7 @@ Both records were added on 17.11.2026, in Dim's Cloudflare account.
 
 | Name | Type | Put there by | Value |
 |---|---|---|---|
-| `DATABASE_URL` | Secret | Dim | Railway → `rempire-booking-staging` → Postgres → Variables → `DATABASE_PUBLIC_URL` (not `DATABASE_URL`: that one is the private host, which Vercel cannot reach) |
+| `DATABASE_URL` | Secret | Dim, 17.11.2026 | Railway → `rempire-booking-staging` → Postgres → Variables → `DATABASE_PUBLIC_URL` (not `DATABASE_URL`: that one is the private host, which Vercel cannot reach) |
 | `DATABASE_SSL_CA` | Config | Claude, 17.11.2026 | the database's own CA certificate, PEM. Public, not a secret |
 | `DB_DRIVER`, `SEED_DEMO` | — | CI, per deploy | `auto`, `yes` |
 | `ALLOW_INDEXING` | — | nobody | stays unset on staging |
