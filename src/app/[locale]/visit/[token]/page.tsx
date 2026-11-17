@@ -7,7 +7,7 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { CheckIcon, CrossIcon, Logo } from "@/components/brand";
 import { currentBusiness } from "@/lib/business";
-import { dbConfigured, query } from "@/lib/db";
+import { dbConfigured, dbKind, query } from "@/lib/db";
 import { COPY, duration, eur, INTL, isLocale, LOCALES, pick, type Locale } from "@/lib/i18n";
 import { canChange, findVisit } from "@/lib/visits";
 import { cancelVisit } from "./actions";
@@ -39,16 +39,19 @@ async function Visit({ params }: { params: PageProps<"/[locale]/visit/[token]">[
   const v = business ? await findVisit(query, business.id, token) : null;
 
   const header = (
-    <header className="top">
-      <Logo />
-      <nav className="langs" aria-label="Language">
-        {LOCALES.map((l) => (
-          <a key={l} href={`/${l}/visit/${token}`} aria-current={l === locale ? "true" : undefined}>
-            {l.toUpperCase()}
-          </a>
-        ))}
-      </nav>
-    </header>
+    <>
+      <header className="top">
+        <Logo />
+        <nav className="langs" aria-label="Language">
+          {LOCALES.map((l) => (
+            <a key={l} href={`/${l}/visit/${token}`} aria-current={l === locale ? "true" : undefined}>
+              {l.toUpperCase()}
+            </a>
+          ))}
+        </nav>
+      </header>
+      {dbKind() === "pglite" && <p className="demo">{c.demo}</p>}
+    </>
   );
 
   if (!v || !business) {

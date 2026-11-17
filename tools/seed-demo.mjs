@@ -10,6 +10,7 @@
  * Safe to run again: it only adds what is missing and never overwrites a
  * row Renat has since edited in the admin.
  */
+import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { sslFor } from "./migrate.mjs";
 
@@ -42,35 +43,45 @@ export const DEMO = {
 
 const ROLE = T("Барбер", "Barber", "Barber");
 
+/**
+ * Fixed ids, derived from the slugs. Each serverless instance of the
+ * in-memory demo database (DB_DRIVER=auto, no DATABASE_URL) seeds itself,
+ * and the page and the API must agree on what a barber or service id is.
+ */
+export function demoId(kind, slug) {
+  const h = createHash("sha256").update(`rempire-demo:${kind}:${slug}`).digest("hex");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
+}
+
 /** @param {{query: (sql: string, params?: unknown[]) => Promise<{rows: any[]}>}} db */
 export async function seedDemo(db) {
   const one = async (sql, params) => (await db.query(sql, params)).rows[0];
   const b = DEMO.business;
   const biz = await one(
-    `insert into businesses (slug, name, timezone, default_locale) values ($1, $2, $3, $4)
+    `insert into businesses (id, slug, name, timezone, default_locale) values ($5, $1, $2, $3, $4)
      on conflict (slug) do update set slug = excluded.slug returning id`,
-    [b.slug, b.name, b.timezone, b.default_locale],
+    [b.slug, b.name, b.timezone, b.default_locale, demoId("business", b.slug)],
   );
   const loc = await one(
-    `insert into locations (business_id, slug, name, address, timezone) values ($1, $2, $3, $4, $5)
+    `insert into locations (id, business_id, slug, name, address, timezone) values ($6, $1, $2, $3, $4, $5)
      on conflict (business_id, slug) do update set slug = excluded.slug returning id`,
-    [biz.id, DEMO.location.slug, DEMO.location.name, DEMO.location.address, b.timezone],
+    [biz.id, DEMO.location.slug, DEMO.location.name, DEMO.location.address, b.timezone, demoId("location", DEMO.location.slug)],
   );
   const svc = {};
   for (const [i, s] of DEMO.services.entries()) {
     const prices = DEMO.staff.map((st) => st.p[s.slug]).filter((x) => x != null);
     const row = await one(
-      `insert into services (business_id, slug, name, duration_min, price_cents, sort) values ($1, $2, $3::jsonb, $4, $5, $6)
+      `insert into services (id, business_id, slug, name, duration_min, price_cents, sort) values ($7, $1, $2, $3::jsonb, $4, $5, $6)
        on conflict (business_id, slug) do update set slug = excluded.slug returning id`,
-      [biz.id, s.slug, JSON.stringify(s.name), s.d, Math.min(...prices) * 100, i],
+      [biz.id, s.slug, JSON.stringify(s.name), s.d, Math.min(...prices) * 100, i, demoId("service", s.slug)],
     );
     svc[s.slug] = row.id;
   }
   for (const [i, st] of DEMO.staff.entries()) {
     const inserted = await one(
-      `insert into staff (business_id, location_id, slug, display_name, role, sort) values ($1, $2, $3, $4, $5::jsonb, $6)
+      `insert into staff (id, business_id, location_id, slug, display_name, role, sort) values ($7, $1, $2, $3, $4, $5::jsonb, $6)
        on conflict (business_id, slug) do nothing returning id`,
-      [biz.id, loc.id, st.slug, st.name, JSON.stringify(ROLE), i],
+      [biz.id, loc.id, st.slug, st.name, JSON.stringify(ROLE), i, demoId("staff", st.slug)],
     );
     const staffId = inserted?.id ?? (await one("select id from staff where business_id = $1 and slug = $2", [biz.id, st.slug])).id;
     for (const [slug, eur] of Object.entries(st.p)) {

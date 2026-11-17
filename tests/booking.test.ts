@@ -3,6 +3,7 @@ import { loadAvailability } from "@/lib/availability";
 import { book, hashToken, type BookingInput } from "@/lib/booking";
 import { closeDb, query } from "@/lib/db";
 import { zonedToUtc } from "@/lib/tz";
+import { demoId } from "../tools/seed-demo.mjs";
 import { freshDemo, type Demo } from "./helpers";
 
 const TZ = "Europe/Tallinn";
@@ -42,6 +43,14 @@ const input = (o: Partial<BookingInput> & { staff?: string | null; services?: st
   locale: o.locale ?? "ru",
   smsReminder: o.smsReminder ?? true,
   idempotencyKey: o.idempotencyKey ?? `test-key-${++n}-${Math.random()}`,
+});
+
+describe("demo seed", () => {
+  it("uses the same ids on every instance, so page and API agree", () => {
+    expect(demo.staff.renat).toBe(demoId("staff", "renat"));
+    expect(demo.services.clip).toBe(demoId("service", "clip"));
+    expect(demo.business.id).toBe(demoId("business", "rempire"));
+  });
 });
 
 describe("database", () => {
