@@ -4,13 +4,14 @@
  * «Услуги»: the list and the editor of one service. On a phone a tap opens
  * the editor as a sheet. From 900px the editor is always open beside the
  * list (the first service to start with), so a click only swaps what it
- * shows. What was typed for a service stays while another one is looked at:
- * its row says «не сохранено» until it is saved.
+ * shows. A service that exists saves by itself (autosave.tsx); a new one is
+ * made with the one button.
  */
 import { useState } from "react";
 import type { ServiceRow } from "@/lib/admin/services";
 import { A, eur, mins, ru } from "../../copy";
 import { PlusIcon } from "../../icons";
+import { SaveState, useAutoSave } from "../autosave";
 import { Pane } from "../sheet";
 import { saveServiceAction } from "./actions";
 
@@ -28,65 +29,31 @@ const draftOf = (s?: ServiceRow): Draft => ({
   allBarbers: true,
 });
 
-const cents = (s: string) => Math.round(Number(s.replace(",", ".")) * 100);
-const same = (a: Draft, b: Draft) => JSON.stringify(a) === JSON.stringify(b);
+const num = (s: string) => Number(s.replace(",", "."));
+const cents = (s: string) => Math.round(num(s) * 100);
 const BUFFERS = ["0", "5", "10", "15"];
 const NEW = "new";
+
+/** What is wrong with a draft, or null. A half-typed price or time is not sent. */
+function wrong(d: Draft): string | null {
+  if (!d.name.ru.trim()) return A.services.needName;
+  if (d.price.trim() === "" || !(num(d.price) >= 0)) return A.visit.invalid("priceCents");
+  if (!(Number.isInteger(Number(d.duration)) && Number(d.duration) >= 5 && Number(d.duration) <= 720)) return A.visit.invalid("durationMin");
+  if (d.range && d.priceMax.trim() !== "" && !(num(d.priceMax) >= num(d.price))) return A.visit.invalid("priceMaxCents");
+  return null;
+}
 
 export function ServicesEditor({ services }: { services: ServiceRow[] }) {
   // which service the editor shows; a phone shows the editor only once a row is tapped
   const [sel, setSel] = useState<string>(services[0]?.id ?? NEW);
   const [shown, setShown] = useState(false);
-  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
   const current = services.find((s) => s.id === sel);
-  const isNew = !current;
-  const d = drafts[sel] ?? draftOf(current);
-  const setD = (next: Draft) => setDrafts({ ...drafts, [sel]: next });
-  const unsaved = (s: ServiceRow) => drafts[s.id] != null && !same(drafts[s.id], draftOf(s));
-  const dirty = isNew || !same(d, draftOf(current));
+  const C = A.services.cols;
 
   const pick = (id: string) => {
     setSel(id);
-    setMsg(null);
     setShown(true);
   };
-
-  const save = async () => {
-    setBusy(true);
-    setMsg(null);
-    try {
-      const r = await saveServiceAction(isNew ? null : sel, {
-        name: d.name,
-        durationMin: Number(d.duration),
-        priceCents: cents(d.price),
-        priceMaxCents: d.range && d.priceMax.trim() ? cents(d.priceMax) : null,
-        bufferMin: Number(d.buffer || 0),
-        online: d.online,
-        active: d.active,
-        allBarbers: isNew && d.allBarbers,
-      });
-      if (r.ok) {
-        const rest = { ...drafts };
-        delete rest[sel];
-        setDrafts(rest);
-        setSel(r.id);
-        setShown(false);
-        setMsg({ ok: true, text: A.saved });
-        setTimeout(() => setMsg((m) => (m?.ok ? null : m)), 4000);
-      } else setMsg({ ok: false, text: A.visit.invalid(r.field) });
-    } catch {
-      setMsg({ ok: false, text: A.error });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // a buffer set before the four choices existed stays a choice
-  const buffers = BUFFERS.includes(d.buffer) ? BUFFERS : [...BUFFERS, d.buffer];
-  const C = A.services.cols;
 
   return (
     <main className="adm-page adm-wide adm-two">
@@ -111,10 +78,7 @@ export function ServicesEditor({ services }: { services: ServiceRow[] }) {
               <li key={s.id}>
                 <button type="button" className={`adm-item adm-svc${s.active ? "" : " is-off"}`} aria-current={sel === s.id ? "true" : undefined} onClick={() => pick(s.id)}>
                   <span className="txt">
-                    <span className="plain">
-                      {ru(s.name)}
-                      {unsaved(s) && <span className="adm-tag lime">{A.services.unsaved}</span>}
-                    </span>
+                    <span className="plain">{ru(s.name)}</span>
                     <small>
                       {mins(s.durationMin)} · {A.services.barbersN(s.barbers)}
                       {!s.active ? ` · ${A.services.inactive}` : !s.online ? ` · ${A.services.offline}` : ""}
@@ -134,95 +98,151 @@ export function ServicesEditor({ services }: { services: ServiceRow[] }) {
         </div>
       </div>
 
-      <Pane
-        title={isNew ? A.services.add : ru(d.name) || A.services.title}
+      {/* a pane per service: its state starts from that service, and what is waiting is sent when another one is picked */}
+      <ServicePane
+        key={current?.id ?? NEW}
+        service={current}
         open={shown}
         onClose={() => setShown(false)}
-        bar={
+        onCreated={(id) => {
+          setSel(id);
+          setShown(false);
+        }}
+      />
+    </main>
+  );
+}
+
+function ServicePane({ service, open, onClose, onCreated }: { service?: ServiceRow; open: boolean; onClose: () => void; onCreated: (id: string) => void }) {
+  const [d, setD] = useState<Draft>(() => draftOf(service));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const id = service?.id ?? null;
+
+  const send = (v: Draft) =>
+    saveServiceAction(id, {
+      name: v.name,
+      durationMin: Number(v.duration),
+      priceCents: cents(v.price),
+      priceMaxCents: v.range && v.priceMax.trim() ? cents(v.priceMax) : null,
+      bufferMin: Number(v.buffer || 0),
+      online: v.online,
+      active: v.active,
+      allBarbers: !id && v.allBarbers,
+    });
+  const auto = useAutoSave<Draft>(d, setD, send, { off: !id, check: wrong });
+
+  const create = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const r = await send(d);
+      // stays busy on success: this pane is replaced by the new service's own
+      if (r.ok) return onCreated(r.id);
+      setErr(A.visit.invalid(r.field));
+    } catch {
+      setErr(A.error);
+    }
+    setBusy(false);
+  };
+
+  // a buffer set before the four choices existed stays a choice
+  const buffers = BUFFERS.includes(d.buffer) ? BUFFERS : [...BUFFERS, d.buffer];
+
+  return (
+    <Pane
+      title={id ? ru(d.name) || A.services.title : A.services.add}
+      open={open}
+      onClose={() => {
+        auto.flush();
+        onClose();
+      }}
+      bar={
+        id ? (
+          <SaveState auto={auto} onDone={onClose} />
+        ) : (
           <>
-            {msg && (
-              <p className={msg.ok ? "adm-ok" : "adm-err"} role={msg.ok ? "status" : "alert"}>
-                {msg.text}
+            {err && (
+              <p className="adm-err" role="alert">
+                {err}
               </p>
             )}
-            <div className="adm-bar-row">
-              <div className="sum">
-                <small>{A.services.perBarber}</small>
-              </div>
-              <button type="submit" form="svc-form" className="adm-btn adm-btn-lime" disabled={busy || !dirty}>
-                {A.save}
-              </button>
-            </div>
+            <button type="submit" form="svc-form" className="adm-btn adm-btn-lime" disabled={busy}>
+              {A.services.add}
+            </button>
           </>
-        }
+        )
+      }
+    >
+      <form
+        id="svc-form"
+        className="adm-form"
+        onBlur={auto.flush}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (id) auto.flush();
+          else void create();
+        }}
       >
-        <form
-          id="svc-form"
-          className="adm-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void save();
-          }}
-        >
+        <label className="adm-field">
+          <span>{A.services.nameRu}</span>
+          <input required maxLength={120} value={d.name.ru} onChange={(e) => setD({ ...d, name: { ...d.name, ru: e.target.value } })} />
+        </label>
+        <div className="adm-row">
           <label className="adm-field">
-            <span>{A.services.nameRu}</span>
-            <input required maxLength={120} value={d.name.ru} onChange={(e) => setD({ ...d, name: { ...d.name, ru: e.target.value } })} />
+            <span>{A.services.price}</span>
+            <input type="number" inputMode="decimal" required min={0} step="0.5" value={d.price} onChange={(e) => setD({ ...d, price: e.target.value })} />
           </label>
-          <div className="adm-row">
-            <label className="adm-field">
-              <span>{A.services.price}</span>
-              <input type="number" inputMode="decimal" required min={0} step="0.5" value={d.price} onChange={(e) => setD({ ...d, price: e.target.value })} />
-            </label>
-            <label className="adm-field">
-              <span>{A.services.duration}</span>
-              <input type="number" inputMode="numeric" required min={5} max={720} step={5} value={d.duration} onChange={(e) => setD({ ...d, duration: e.target.value })} />
-            </label>
+          <label className="adm-field">
+            <span>{A.services.duration}</span>
+            <input type="number" inputMode="numeric" required min={5} max={720} step={5} value={d.duration} onChange={(e) => setD({ ...d, duration: e.target.value })} />
+          </label>
+        </div>
+        <div className="adm-field">
+          <span>{A.services.bufferLabel}</span>
+          <div className="adm-seg adm-seg-wide" role="group" aria-label={A.services.buffer}>
+            {buffers.map((b) => (
+              <button key={b} type="button" aria-pressed={d.buffer === b} onClick={() => setD({ ...d, buffer: b })}>
+                {b === "0" ? "0" : `${b} ${A.min}`}
+              </button>
+            ))}
           </div>
-          <div className="adm-field">
-            <span>{A.services.bufferLabel}</span>
-            <div className="adm-seg adm-seg-wide" role="group" aria-label={A.services.buffer}>
-              {buffers.map((b) => (
-                <button key={b} type="button" aria-pressed={d.buffer === b} onClick={() => setD({ ...d, buffer: b })}>
-                  {b === "0" ? "0" : `${b} ${A.min}`}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
+        </div>
+        <div>
+          <label className="adm-toggle">
+            <span>{A.services.range}</span>
+            <input type="checkbox" role="switch" className="adm-sw" checked={d.range} onChange={(e) => setD({ ...d, range: e.target.checked })} />
+          </label>
+          {d.range && (
+            <label className="adm-field" style={{ paddingBottom: 8 }}>
+              <span>{A.services.priceTo}</span>
+              <input type="number" inputMode="decimal" min={0} step="0.5" value={d.priceMax} onChange={(e) => setD({ ...d, priceMax: e.target.value })} />
+            </label>
+          )}
+          <label className="adm-toggle">
+            <span>{A.services.online}</span>
+            <input type="checkbox" role="switch" className="adm-sw" checked={d.online} onChange={(e) => setD({ ...d, online: e.target.checked })} />
+          </label>
+          <label className="adm-toggle">
+            <span>{A.services.active}</span>
+            <input type="checkbox" role="switch" className="adm-sw" checked={d.active} onChange={(e) => setD({ ...d, active: e.target.checked })} />
+          </label>
+          {!id && (
             <label className="adm-toggle">
-              <span>{A.services.range}</span>
-              <input type="checkbox" role="switch" className="adm-sw" checked={d.range} onChange={(e) => setD({ ...d, range: e.target.checked })} />
+              <span>{A.services.allBarbers}</span>
+              <input type="checkbox" role="switch" className="adm-sw" checked={d.allBarbers} onChange={(e) => setD({ ...d, allBarbers: e.target.checked })} />
             </label>
-            {d.range && (
-              <label className="adm-field" style={{ paddingBottom: 8 }}>
-                <span>{A.services.priceTo}</span>
-                <input type="number" inputMode="decimal" min={0} step="0.5" value={d.priceMax} onChange={(e) => setD({ ...d, priceMax: e.target.value })} />
-              </label>
-            )}
-            <label className="adm-toggle">
-              <span>{A.services.online}</span>
-              <input type="checkbox" role="switch" className="adm-sw" checked={d.online} onChange={(e) => setD({ ...d, online: e.target.checked })} />
-            </label>
-            <label className="adm-toggle">
-              <span>{A.services.active}</span>
-              <input type="checkbox" role="switch" className="adm-sw" checked={d.active} onChange={(e) => setD({ ...d, active: e.target.checked })} />
-            </label>
-            {isNew && (
-              <label className="adm-toggle">
-                <span>{A.services.allBarbers}</span>
-                <input type="checkbox" role="switch" className="adm-sw" checked={d.allBarbers} onChange={(e) => setD({ ...d, allBarbers: e.target.checked })} />
-              </label>
-            )}
+          )}
+        </div>
+        <div className="adm-field">
+          <span>{A.services.otherNames}</span>
+          <div className="adm-row adm-row-long">
+            <input aria-label={A.services.nameEt} placeholder="ET" maxLength={120} value={d.name.et} onChange={(e) => setD({ ...d, name: { ...d.name, et: e.target.value } })} />
+            <input aria-label={A.services.nameEn} placeholder="EN" maxLength={120} value={d.name.en} onChange={(e) => setD({ ...d, name: { ...d.name, en: e.target.value } })} />
           </div>
-          <div className="adm-field">
-            <span>{A.services.otherNames}</span>
-            <div className="adm-row adm-row-long">
-              <input aria-label={A.services.nameEt} placeholder="ET" maxLength={120} value={d.name.et} onChange={(e) => setD({ ...d, name: { ...d.name, et: e.target.value } })} />
-              <input aria-label={A.services.nameEn} placeholder="EN" maxLength={120} value={d.name.en} onChange={(e) => setD({ ...d, name: { ...d.name, en: e.target.value } })} />
-            </div>
-          </div>
-        </form>
-      </Pane>
-    </main>
+        </div>
+        <p className="adm-meta">{A.services.perBarber}</p>
+      </form>
+    </Pane>
   );
 }

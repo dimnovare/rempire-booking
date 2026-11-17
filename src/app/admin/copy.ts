@@ -22,6 +22,17 @@ export const A = {
   min: "мин",
   h: "ч",
 
+  /** Parts that save by themselves (no «Сохранить»). */
+  auto: {
+    idle: "Изменения сохраняются сами",
+    saving: "Сохраняется…",
+    undo: "Вернуть как было",
+    failed: "Не сохранилось. Проверьте интернет.",
+    retry: "Повторить",
+    done: "Готово",
+    needName: "Введите имя: без него не сохранить.",
+  },
+
   login: {
     title: "Вход",
     email: "E-mail",
@@ -200,7 +211,7 @@ export const A = {
     perBarber: "Цены барберов меняются на их страницах.",
     cols: { name: "Услуга", time: "Время", barbers: "Барберы", online: "Онлайн", price: "Цена" },
     onlineYes: "да",
-    unsaved: "не сохранено",
+    needName: "Введите название: без него не сохранить.",
   },
 
   account: {

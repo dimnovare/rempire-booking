@@ -1,6 +1,10 @@
 "use client";
 
-/** The barber page's parts: each saves on its own, so a change is one tap on its «Сохранить». */
+/**
+ * The barber page's parts. Profile, prices and the week save by themselves
+ * (autosave.tsx). The lists (special days, time off, special time) add a
+ * record with one «Добавить» and remove one with one tap.
+ */
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { hhmm, momentAt } from "@/lib/admin/grid";
@@ -8,6 +12,7 @@ import type { DayOverride, HoursDay, Offer, SpecialRow, TimeOffRow } from "@/lib
 import { addDays } from "@/lib/tz";
 import { A, eur, mins, ru } from "../../../copy";
 import { XIcon } from "../../../icons";
+import { SaveState, useAutoSave } from "../../autosave";
 import { addOff, addSpecial, removeOff, removeSpecial, saveDay, saveHours, saveOffers, saveProfile } from "../actions";
 
 type Msg = { ok: boolean; text: string } | null;
@@ -58,26 +63,26 @@ function Remove({ onClick, disabled }: { onClick: () => void; disabled: boolean 
   );
 }
 
-export function ProfileForm({ id, initial }: { id: string | null; initial: { name: string; role: { ru: string; et: string; en: string }; photoUrl: string; bookable: boolean; active: boolean } }) {
-  const [first, setFirst] = useState(initial);
+type Profile = { name: string; role: { ru: string; et: string; en: string }; photoUrl: string; bookable: boolean; active: boolean };
+
+/** A barber who exists saves by itself; a new one is made with the one button. */
+export function ProfileForm({ id, initial, onDone }: { id: string | null; initial: Profile; onDone?: () => void }) {
   const [p, setP] = useState(initial);
   const s = useSaver();
   const router = useRouter();
-  // «Сохранить» lights up only when there is something to save
-  const dirty = JSON.stringify(p) !== JSON.stringify(first);
+  const auto = useAutoSave<Profile>(p, setP, (v) => saveProfile(id, v), { off: !id, check: (v) => (v.name.trim() ? null : A.auto.needName) });
   return (
     <form
       className="adm-form"
+      onBlur={auto.flush}
       onSubmit={(e) => {
         e.preventDefault();
-        const sent = p;
-        void s
-          .run(async () => {
-            const r = await saveProfile(id, sent);
-            if (r.ok && !id) router.push(`/admin/staff/${r.id}`);
-            return r;
-          })
-          .then((ok) => ok && setFirst(sent));
+        if (id) return auto.flush();
+        void s.run(async () => {
+          const r = await saveProfile(null, p);
+          if (r.ok) router.push(`/admin/staff/${r.id}`);
+          return r;
+        });
       }}
     >
       <label className="adm-field">
@@ -107,41 +112,58 @@ export function ProfileForm({ id, initial }: { id: string | null; initial: { nam
         </label>
       </div>
       <SaveBar>
-        {s.view}
-        <button className="adm-btn adm-btn-lime" disabled={s.busy || (!!id && !dirty)}>
-          {id ? A.save : A.staff.add}
-        </button>
+        {id ? (
+          <SaveState auto={auto} onDone={onDone} />
+        ) : (
+          <>
+            {s.view}
+            <button className="adm-btn adm-btn-lime" disabled={s.busy}>
+              {A.staff.add}
+            </button>
+          </>
+        )}
       </SaveBar>
     </form>
   );
 }
 
-export function OffersForm({ staffId, offers }: { staffId: string; offers: Offer[] }) {
-  const start = () => offers.map((o) => ({ ...o, price: o.priceCents == null ? "" : String(o.priceCents / 100), dur: o.durationMin == null ? "" : String(o.durationMin) }));
-  const [first, setFirst] = useState(start);
-  const [rows, setRows] = useState(start);
-  const s = useSaver();
-  const set = (i: number, patch: Partial<(typeof rows)[number]>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
-  const changed = rows.filter((r, i) => r.offered !== first[i].offered || r.price !== first[i].price || r.dur !== first[i].dur).length;
+type OfferRow = Offer & { price: string; dur: string };
+const num = (s: string) => Number(s.replace(",", "."));
+
+export function OffersForm({ staffId, offers, onDone }: { staffId: string; offers: Offer[]; onDone?: () => void }) {
+  const [rows, setRows] = useState<OfferRow[]>(() => offers.map((o) => ({ ...o, price: o.priceCents == null ? "" : String(o.priceCents / 100), dur: o.durationMin == null ? "" : String(o.durationMin) })));
+  const set = (i: number, patch: Partial<OfferRow>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const auto = useAutoSave<OfferRow[]>(
+    rows,
+    setRows,
+    (v) =>
+      saveOffers(
+        staffId,
+        v.map((r) => ({
+          serviceId: r.serviceId,
+          offered: r.offered,
+          priceCents: r.price.trim() === "" ? null : Math.round(num(r.price) * 100),
+          durationMin: r.dur.trim() === "" ? null : Number(r.dur),
+        })),
+      ),
+    {
+      // a half-typed price or time is not sent («4» on the way to «45» minutes)
+      check: (v) => {
+        for (const r of v) {
+          if (r.price.trim() !== "" && !(num(r.price) >= 0)) return A.visit.invalid("priceCents");
+          if (r.dur.trim() !== "" && !(Number.isInteger(Number(r.dur)) && Number(r.dur) >= 5 && Number(r.dur) <= 720)) return A.visit.invalid("durationMin");
+        }
+        return null;
+      },
+    },
+  );
   return (
     <form
       className="adm-form"
+      onBlur={auto.flush}
       onSubmit={(e) => {
         e.preventDefault();
-        const sent = rows;
-        void s
-          .run(() =>
-            saveOffers(
-              staffId,
-              sent.map((r) => ({
-                serviceId: r.serviceId,
-                offered: r.offered,
-                priceCents: r.price.trim() === "" ? null : Math.round(Number(r.price.replace(",", ".")) * 100),
-                durationMin: r.dur.trim() === "" ? null : Number(r.dur),
-              })),
-            ),
-          )
-          .then((ok) => ok && setFirst(sent));
+        auto.flush();
       }}
     >
       <p className="adm-meta">{A.staff.offersHint}</p>
@@ -180,35 +202,37 @@ export function OffersForm({ staffId, offers }: { staffId: string; offers: Offer
         </tbody>
       </table>
       <SaveBar>
-        {s.view}
-        <div className="adm-bar-row">
-          <span className="adm-meta" style={{ flex: 1 }}>
-            {changed > 0 && A.staff.changed(changed)}
-          </span>
-          <button className="adm-btn adm-btn-lime" disabled={s.busy || changed === 0}>
-            {A.save}
-          </button>
-        </div>
+        <SaveState auto={auto} onDone={onDone} />
       </SaveBar>
     </form>
   );
 }
 
-export function HoursForm({ staffId, hours }: { staffId: string; hours: HoursDay[] }) {
-  const start = () => Object.fromEntries(hours.map((h) => [h.weekday, h.spans])) as Record<number, [string, string][]>;
-  const [first, setFirst] = useState(start);
-  const [days, setDays] = useState(start);
-  const s = useSaver();
+type Week = Record<number, [string, string][]>;
+
+export function HoursForm({ staffId, hours, onDone }: { staffId: string; hours: HoursDay[]; onDone?: () => void }) {
+  const [days, setDays] = useState<Week>(() => Object.fromEntries([1, 2, 3, 4, 5, 6, 7].map((wd) => [wd, hours.find((h) => h.weekday === wd)?.spans ?? []])));
   const setDay = (wd: number, spans: [string, string][]) => setDays({ ...days, [wd]: spans });
-  const week = (d: Record<number, [string, string][]>) => JSON.stringify([1, 2, 3, 4, 5, 6, 7].map((wd) => d[wd] ?? []));
-  const dirty = week(days) !== week(first);
+  const auto = useAutoSave<Week>(days, setDays, (v) => saveHours(staffId, v), {
+    // a span must end after it starts and after the one before it; a time still being typed is not sent
+    check: (v) => {
+      for (const spans of Object.values(v)) {
+        let last = -1;
+        for (const [a, b] of spans) {
+          if (!(toMin(a) >= last && toMin(b) > toMin(a))) return A.visit.invalid("to");
+          last = toMin(b);
+        }
+      }
+      return null;
+    },
+  });
   return (
     <form
       className="adm-form"
+      onBlur={auto.flush}
       onSubmit={(e) => {
         e.preventDefault();
-        const sent = days;
-        void s.run(() => saveHours(staffId, sent)).then((ok) => ok && setFirst(sent));
+        auto.flush();
       }}
     >
       <p className="adm-meta">{A.staff.hoursHint}</p>
@@ -261,10 +285,7 @@ export function HoursForm({ staffId, hours }: { staffId: string; hours: HoursDay
         {A.staff.copyMon}
       </button>
       <SaveBar>
-        {s.view}
-        <button className="adm-btn adm-btn-lime" disabled={s.busy || !dirty}>
-          {A.save}
-        </button>
+        <SaveState auto={auto} onDone={onDone} />
       </SaveBar>
     </form>
   );
