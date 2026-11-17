@@ -54,13 +54,18 @@ html, body { background: var(--ink); }
 .adm-me { margin-left: auto; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .adm-me form { display: contents; }
 .adm-email { display: none; color: var(--mute); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
-.adm-out { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; color: var(--mute); font-size: 14px; }
-.adm-out:hover { color: var(--fg); }
-.adm-out svg { flex: none; }
+/* the corner: «Доступ» (the person's own section) and «Выйти», two quiet links of one kind */
+.adm-out, .adm-acc { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; color: var(--mute); font-size: 14px; white-space: nowrap; text-decoration: none; }
+.adm-out:hover, .adm-acc:hover { color: var(--fg); }
+.adm-out svg, .adm-acc svg { flex: none; width: 20px; height: 20px; }
+.adm-acc[aria-current="page"] { color: var(--lime); }
+/* «Демо» (a local demo only) gives way to the two links on a narrow phone */
+@media (max-width: 419px) { .adm-me .adm-tag { display: none; } }
+@media (max-width: 359px) { .adm-out, .adm-acc { padding: 0 6px; gap: 6px; } }
 .adm-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); height: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px)); padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); background: var(--raise); border-top: 1px solid var(--line-2); }
 .adm-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; margin-top: -1px; text-decoration: none; color: var(--mute); font: 800 11px/1 var(--display); letter-spacing: .1em; text-transform: uppercase; border-top: 2px solid transparent; }
 .adm-nav a[aria-current="page"] { color: var(--lime); border-top-color: var(--lime); }
-/* the tabs share the width whatever their number; with five, the words need a little less room on a phone */
+/* the tabs share the width whatever their number (five at most, see nav.tsx); with five, the words need a little less room on a phone */
 @media (max-width: 899px) { .adm-nav:has(a:nth-child(5)) a { font-size: 10px; letter-spacing: .04em; } }
 .adm-main { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px)); }
 @media (min-width: 900px) {
@@ -71,9 +76,14 @@ html, body { background: var(--ink); }
   .adm-nav a { flex-direction: row; gap: 8px; margin-top: 0; padding: 0 16px; font-size: 13px; border-top: 0; border-bottom: 2px solid transparent; }
   .adm-nav a svg { width: 18px; height: 18px; }
   .adm-nav a[aria-current="page"] { border-bottom-color: var(--lime); }
-  .adm-email { display: block; margin-left: 8px; }
   .adm-main { padding-bottom: 0; }
 }
+/* five sections, «Доступ» and «Выйти» in one bar: tighter just above 900px, and the e-mail only where there is room for it */
+@media (min-width: 900px) and (max-width: 1099px) {
+  .adm-top { gap: 16px; }
+  .adm-nav a { padding: 0 8px; gap: 6px; }
+}
+@media (min-width: 1280px) { .adm-email { display: block; margin-left: 8px; } }
 
 .adm-wait { padding: 24px 16px; color: var(--mute); }
 .adm-h1 { font: 800 32px/1 var(--display); text-transform: uppercase; letter-spacing: .02em; margin: 0; overflow-wrap: anywhere; }

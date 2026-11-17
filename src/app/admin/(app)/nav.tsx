@@ -4,13 +4,21 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Title, useA } from "../lang";
 
+/**
+ * The sections of the daily work: the bottom bar on a phone, the top bar
+ * from 900px. Five at most, so that each stays one tap away and its word
+ * stays readable on a 360px phone. A sixth section needs a «Ещё» tab
+ * first; it never becomes a sixth column.
+ */
 const ITEMS = [
   { href: "/admin", key: "calendar", icon: "cal" },
   { href: "/admin/staff", key: "staff", icon: "staff" },
   { href: "/admin/services", key: "services", icon: "svc" },
   { href: "/admin/requests", key: "requests", icon: "req" },
-  { href: "/admin/account", key: "account", icon: "key" },
 ] as const;
+
+/** «Доступ» is about the person, not the work: it sits in the corner beside «Выйти» (AccountLink). */
+const ACCOUNT = { href: "/admin/account", key: "account", icon: "key" } as const;
 
 function Icon({ name }: { name: string }) {
   const p = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, "aria-hidden": true } as const;
@@ -59,7 +67,7 @@ export function Nav() {
 export function NavLinks({ path }: { path: string }) {
   const A = useA();
   const on = (href: string) => (href === "/admin" ? path === "/admin" : path.startsWith(href));
-  const here = ITEMS.find((it) => on(it.href));
+  const here = [...ITEMS, ACCOUNT].find((it) => on(it.href));
   return (
     <>
       {/* the browser tab says where you are, in the login's language */}
@@ -73,5 +81,17 @@ export function NavLinks({ path }: { path: string }) {
         ))}
       </nav>
     </>
+  );
+}
+
+/** «Доступ» in the top bar's corner: the logins, the password, the language. Lit while it is open. */
+export function AccountLink() {
+  const A = useA();
+  const on = usePathname().startsWith(ACCOUNT.href);
+  return (
+    <Link href={ACCOUNT.href} className="adm-acc" aria-current={on ? "page" : undefined} prefetch={false}>
+      <Icon name={ACCOUNT.icon} />
+      <span>{A.nav[ACCOUNT.key]}</span>
+    </Link>
   );
 }

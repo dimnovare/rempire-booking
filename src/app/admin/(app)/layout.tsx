@@ -6,12 +6,12 @@ import { OutIcon } from "../icons";
 import { getA } from "../lang-server";
 import { logout } from "./account/actions";
 import { SaveToast } from "./autosave";
-import { Nav, NavLinks } from "./nav";
+import { AccountLink, Nav, NavLinks } from "./nav";
 
 /**
- * The logged-in admin. One thin bar on top with «Выйти» on the right, on
- * every screen; the sections sit at the bottom on phones and in the top bar
- * from 900px. Each page checks the login itself.
+ * The logged-in admin. One thin bar on top with «Доступ» and «Выйти» on the
+ * right, on every screen; the sections of the daily work sit at the bottom
+ * on phones and in the top bar from 900px. Each page checks the login itself.
  */
 export default function AdminApp({ children }: { children: React.ReactNode }) {
   return (
@@ -33,7 +33,7 @@ export default function AdminApp({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** «Демо», the e-mail (wide screens) and «Выйти». */
+/** «Демо», the e-mail (wide screens), «Доступ» and «Выйти». */
 async function Me() {
   if (!dbConfigured()) return null;
   const user = await currentStaffUser();
@@ -47,6 +47,7 @@ async function Me() {
         </span>
       )}
       <span className="adm-email">{user.email}</span>
+      <AccountLink />
       <form action={logout}>
         <button className="adm-out">
           <OutIcon />
