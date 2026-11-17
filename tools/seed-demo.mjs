@@ -95,6 +95,10 @@ async function main() {
     return;
   }
   const url = process.env.DATABASE_URL;
+  if (!url && process.argv.includes("--if-enabled")) {
+    console.log("Demo seed skipped (DATABASE_URL is not set).");
+    return;
+  }
   if (!url) {
     console.error("DATABASE_URL is not set.");
     process.exit(1);
