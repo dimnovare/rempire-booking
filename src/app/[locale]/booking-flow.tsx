@@ -82,8 +82,11 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
   const [mine, setMine] = useState<string | null>(null); // the latest visit's own link
   const [calMonth, setCalMonth] = useState<string | null>(null); // "YYYY-MM" the calendar shows
   const [calOpen, setCalOpen] = useState(false); // phones: the month instead of the strip
+  const [showComment, setShowComment] = useState(false);
+  const [more, setMore] = useState(false); // part of the screen is still under the bar
   const key = useRef("");
   const strip = useRef<HTMLDivElement>(null);
+  const end = useRef<HTMLDivElement>(null);
 
   const staffById = useMemo(() => new Map(catalog.staff.map((s) => [s.id, s])), [catalog.staff]);
   const svcById = useMemo(() => new Map(catalog.services.map((s) => [s.id, s])), [catalog.services]);
@@ -124,6 +127,32 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [screen]);
+
+  // «More below» while the end of the screen is still hidden under the bar,
+  // so nobody takes the bar for the end of the page (Dim, 17.11.2026)
+  useEffect(() => {
+    let frame = 0;
+    const check = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const bar = document.querySelector(".bar");
+        const el = end.current;
+        setMore(!!bar && !!el && el.getBoundingClientRect().top > bar.getBoundingClientRect().top + 1);
+      });
+    };
+    check();
+    window.addEventListener("scroll", check, { passive: true });
+    window.addEventListener("resize", check);
+    // the page grows and shrinks as screens change and fields open
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(check);
+    ro?.observe(document.body);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", check);
+      window.removeEventListener("resize", check);
+      ro?.disconnect();
+    };
+  }, []);
 
   // free times for the current choice, the whole horizon at once
   const availKey = barber && services.length ? `${barber}|${services.join(",")}` : "";
@@ -170,11 +199,14 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
   };
 
   /* ---------- who and how much ---------- */
-  const assigned = slot ? staffById.get(slot.staffId) ?? null : barber && barber !== "any" ? staffById.get(barber) ?? null : null;
-  const extra = slot?.extra ?? 0;
+  // a picked time counts only from the details on: back on steps 1–2 the
+  // bar shows the choice being made, not the time picked before
+  const slotStaff = slot && screen >= 3 ? staffById.get(slot.staffId) ?? null : null;
+  const assigned = slotStaff ?? (barber && barber !== "any" ? staffById.get(barber) ?? null : null);
+  const extra = slotStaff ? slot?.extra ?? 0 : 0;
   const base = assigned ? priceOf(assigned, services) : 0;
   const who = () => {
-    if (slot && barber === "any" && assigned) return `${assigned.name} (${c.firstFree})`;
+    if (slotStaff && barber === "any") return `${slotStaff.name} (${c.firstFree})`;
     if (barber === "any") return c.anyone;
     return assigned?.name ?? "";
   };
@@ -782,13 +814,15 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
           {remembered && <p className="welcome">{c.welcome}</p>}
           {/* «Book» is in the bottom bar, tied to this form */}
           <form id="bf" className="fields" noValidate onSubmit={submit}>
-            {field("name", c.name, false, <input className="input" id="f-name" name="name" autoComplete="name" value={form.name} onChange={onField("name")} maxLength={120} />)}
-            {field(
-              "phone",
-              c.phone,
-              false,
-              <input className="input" id="f-phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" value={form.phone} onChange={onField("phone")} maxLength={30} />,
-            )}
+            <div className="pair">
+              {field("name", c.name, false, <input className="input" id="f-name" name="name" autoComplete="name" value={form.name} onChange={onField("name")} maxLength={120} />)}
+              {field(
+                "phone",
+                c.phone,
+                false,
+                <input className="input" id="f-phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" value={form.phone} onChange={onField("phone")} maxLength={30} />,
+              )}
+            </div>
             {field(
               "email",
               c.email,
@@ -796,7 +830,15 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
               <input className="input" id="f-email" name="email" type="email" inputMode="email" autoComplete="email" value={form.email} onChange={onField("email")} maxLength={254} />,
               c.emailHint,
             )}
-            {field("comment", c.comment, true, <textarea className="input" id="f-comment" name="comment" rows={2} value={form.comment} onChange={onField("comment")} maxLength={1000} />)}
+            {/* most clients leave no comment: one line until they want one */}
+            {showComment || form.comment ? (
+              field("comment", c.comment, true, <textarea className="input" id="f-comment" name="comment" rows={2} value={form.comment} onChange={onField("comment")} maxLength={1000} autoFocus={showComment && !form.comment} />)
+            ) : (
+              <button type="button" className="addline" onClick={() => setShowComment(true)}>
+                <PlusIcon />
+                {c.addComment}
+              </button>
+            )}
             <div className="switchrow">
               <span id="smsl">{c.sms}</span>
               <button type="button" className="switch" role="switch" aria-labelledby="smsl" aria-checked={sms} onClick={() => setSms((v) => !v)} />
@@ -907,7 +949,13 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
   };
 
   const bar = (b: Bar) => (
-    <div className="bar">
+    <div className={`bar${more ? " more-below" : ""}`}>
+      {more && (
+        <button type="button" className="more" onClick={() => window.scrollBy({ top: Math.round(window.innerHeight * 0.6), behavior: "smooth" })}>
+          {c.moreBelow}
+          <BackIcon />
+        </button>
+      )}
       <div className="bar-in gut">
         {b.back && (
           <button type="button" className="iconbtn bar-back" onClick={b.back} aria-label={c.back}>
@@ -923,7 +971,16 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
           {b.mSub && <span className="p-only">{b.mSub}</span>}
         </div>
         {b.price && <div className="bar-price w-only">{b.price}</div>}
-        <button type={b.go.form ? "submit" : "button"} form={b.go.form} className="btn btn-lime bar-go" disabled={b.go.disabled} onClick={b.go.onClick}>
+        {/* a new button per screen: reusing one would let the tap on «Earliest»
+            become a tap on «Book» as the same element turns into the submit */}
+        <button
+          key={`go-${screen}`}
+          type={b.go.form ? "submit" : "button"}
+          form={b.go.form}
+          className="btn btn-lime bar-go"
+          disabled={b.go.disabled}
+          onClick={b.go.onClick}
+        >
           {b.go.mLabel ? (
             <>
               <span className="w-only">{b.go.label}</span>
@@ -947,6 +1004,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
           {screen === 2 && screen2()}
           {screen === 3 && screen3()}
           {screen === 4 && screen4()}
+          <div ref={end} className="end" aria-hidden="true" />
         </div>
       </main>
       {spec && bar(spec)}

@@ -24,6 +24,8 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 html, body { background: var(--ink); }
+/* a focused field or an error never lands under the bottom bar */
+html { scroll-padding-bottom: 150px; }
 body { margin: 0; color: var(--fg); font: 16px/1.45 var(--body); -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent; }
 button { font: inherit; color: inherit; background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-align: inherit; }
 button:disabled { cursor: default; }
@@ -124,6 +126,11 @@ a { color: inherit; }
 .bar-go .two { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; line-height: 1; }
 .bar-go .two small { font-size: 11px; letter-spacing: .14em; }
 .bar-go .two span { font-size: 17px; letter-spacing: .04em; }
+/* part of the screen is still under the bar: say so, and fade the edge */
+.bar.more-below::before { content: ""; position: absolute; left: 0; right: 0; bottom: 100%; height: 40px; background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, .9)); pointer-events: none; }
+.more { position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%); z-index: 1; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px 0 16px; background: var(--ink); border: 1px solid var(--lime); color: var(--lime); font-size: 14px; white-space: nowrap; }
+.more svg { width: 16px; height: 16px; transform: rotate(-90deg); }
+.end { height: 1px; }
 
 /* when */
 .iconbtn { flex: 0 0 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--line-2); }
@@ -165,6 +172,9 @@ a { color: inherit; }
 .kv.tot { border-top: 1px solid var(--line); padding-top: 10px; }
 .kv.tot .v { font: 800 22px/1 var(--display); }
 .fields { display: flex; flex-direction: column; gap: 16px; }
+.pair { display: flex; flex-direction: column; gap: 16px; }
+.addline { align-self: flex-start; display: inline-flex; align-items: center; gap: 10px; min-height: 44px; color: var(--lime); font-size: 15px; }
+.addline svg { width: 16px; height: 16px; }
 .field { display: flex; flex-direction: column; gap: 7px; }
 .flabel { font: 800 13px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--mute); }
 .flabel em { font: 400 12px/1 var(--body); letter-spacing: 0; text-transform: none; font-style: normal; color: var(--dim); margin-left: 6px; }
@@ -256,6 +266,7 @@ textarea.input { min-height: 84px; resize: vertical; }
   .d-only { display: grid; }
   .day { flex-basis: 58px; }
   .fields, .taken { max-width: 600px; }
+  .pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 @media (min-width: 1024px) {
@@ -264,6 +275,10 @@ textarea.input { min-height: 84px; resize: vertical; }
   .bar .bar-go { min-width: 300px; }
   .m-only { display: none !important; }
   .h1 { font-size: 60px; }
+  /* step 1 fits a laptop screen above the bar: shorter photos, tighter rows */
+  .stack { gap: 22px; }
+  .chip .ava { aspect-ratio: auto; height: 150px; }
+  .svc-main { padding-block: 12px; }
   .flow.narrow { max-width: 620px; margin: 0 auto; }
   .details { display: grid; grid-template-columns: minmax(0, 600px) 380px; justify-content: space-between; gap: 56px; align-items: start; }
   .details-card { display: block; position: sticky; top: 24px; }
