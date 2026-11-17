@@ -4,15 +4,15 @@ on:
   push:
     branches: [main]
   pull_request:
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_dispatch:
 
 jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    concurrency:
+      group: check-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,3 +28,73 @@ jobs:
           npx next start -p 3400 &
           for i in $(seq 1 30); do curl -sf -o /dev/null http://localhost:3400/ && break; sleep 1; done
           npm run check:noindex -- http://localhost:3400
+
+  # Staging deploy to Rempire's Vercel team (kickoff §11; Dim, 17.11.2026).
+  # Dim's own Vercel login is not a member of that team, so CI deploys with a
+  # token created once on the team's account (docs/staging-setup.md). Until
+  # the VERCEL_TOKEN secret exists, this job only prints a notice.
+  deploy:
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: deploy-staging
+      cancel-in-progress: false
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      SCOPE: ${{ vars.VERCEL_SCOPE || 'rempire' }}
+      PROJECT: rempire-booking
+      DOMAIN: rempire-booking.diipsolutions.eu
+      VERCEL_CLI: vercel@65.15.0
+    steps:
+      - name: Token check
+        if: env.VERCEL_TOKEN == ''
+        run: echo "::notice::No VERCEL_TOKEN secret yet, so no staging deploy. See docs/staging-setup.md."
+
+      - if: env.VERCEL_TOKEN != ''
+        uses: actions/checkout@v4
+      - if: env.VERCEL_TOKEN != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - if: env.VERCEL_TOKEN != ''
+        run: npm ci
+
+      - name: Project (created on the first run) and link
+        if: env.VERCEL_TOKEN != ''
+        run: |
+          V="npx --yes $VERCEL_CLI"
+          T=(--token "$VERCEL_TOKEN" --scope "$SCOPE")
+          $V project inspect "$PROJECT" "${T[@]}" > /dev/null 2>&1 || $V project create "$PROJECT" "${T[@]}"
+          $V link --yes --project "$PROJECT" "${T[@]}"
+
+      - name: Build
+        if: env.VERCEL_TOKEN != ''
+        run: |
+          V="npx --yes $VERCEL_CLI"
+          T=(--token "$VERCEL_TOKEN" --scope "$SCOPE")
+          $V pull --yes --environment=production "${T[@]}"
+          $V build --prod "${T[@]}"
+
+      - name: Deploy
+        if: env.VERCEL_TOKEN != ''
+        run: npx --yes $VERCEL_CLI deploy --prebuilt --prod --token "$VERCEL_TOKEN" --scope "$SCOPE"
+
+      - name: Staging domain and its DNS
+        if: env.VERCEL_TOKEN != ''
+        run: |
+          V="npx --yes $VERCEL_CLI"
+          T=(--token "$VERCEL_TOKEN" --scope "$SCOPE")
+          $V domains add "$DOMAIN" "$PROJECT" "${T[@]}" || echo "(already added, or see the message above)"
+          $V domains verify "$DOMAIN" "${T[@]}" || echo "::warning::DNS for $DOMAIN is not right yet. The output above says which record to add."
+
+      - name: noindex on staging
+        if: env.VERCEL_TOKEN != ''
+        run: |
+          if curl -s -o /dev/null --max-time 15 "https://$DOMAIN/robots.txt"; then
+            npm run check:noindex -- "https://$DOMAIN"
+          else
+            echo "::warning::https://$DOMAIN does not answer yet. Add the DNS record (docs/staging-setup.md)."
+          fi
