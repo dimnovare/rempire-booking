@@ -199,6 +199,10 @@ describe("the 6-digit e-mail code", () => {
       throw new EmailDisabled();
     };
     expect(await sendLoginCode(query, "owner@example.test", IP, Date.now(), off)).toBe("disabled");
+    const refused = async () => {
+      throw new Error("Resend answered 403");
+    };
+    expect(await sendLoginCode(query, "owner@example.test", "198.51.100.77", Date.now(), refused)).toBe("failed");
   });
 });
 
@@ -232,7 +236,9 @@ describe("password change and logins", () => {
 
 describe("e-mail transport", () => {
   it("Resend with a key, console in development, off in production", async () => {
-    expect(emailTransport({ RESEND_API_KEY: "x", NODE_ENV: "production" })).toBe("resend");
+    expect(emailTransport({ RESEND_API_KEY: "x", EMAIL_FROM: "REMPIRE <noreply@example.test>", NODE_ENV: "production" })).toBe("resend");
+    // a key alone is not enough: Resend refuses an unverified sender
+    expect(emailTransport({ RESEND_API_KEY: "x", NODE_ENV: "production" })).toBe("disabled");
     expect(emailTransport({ NODE_ENV: "development" })).toBe("console");
     expect(emailTransport({ NODE_ENV: "production" })).toBe("disabled");
     expect(emailTransport({ NODE_ENV: "production", EMAIL_TRANSPORT: "console" })).toBe("console");

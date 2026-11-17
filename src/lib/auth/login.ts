@@ -62,7 +62,7 @@ export async function loginWithPassword(q: Querier, emailRaw: string, password: 
 
 const codeHash = (email: string, code: string) => createHash("sha256").update(`${email}:${code}`).digest("hex");
 
-export type CodeSendResult = "sent" | "wait" | "disabled";
+export type CodeSendResult = "sent" | "wait" | "disabled" | "failed";
 
 /**
  * «Send me a code». Says «sent» for an unknown address too; only a known,
@@ -86,7 +86,9 @@ export async function sendLoginCode(q: Querier, emailRaw: string, ip: string, no
     await send(email, `REMPIRE: ${code}`, `Код для входа: ${code}\nLogin code: ${code}\n\nДействует ${LIMITS.codeTtlMin} минут. Valid for ${LIMITS.codeTtlMin} minutes.\nЕсли вы не входили, просто удалите это письмо.`);
   } catch (err) {
     if (err instanceof EmailDisabled) return "disabled";
-    throw err;
+    // the provider refused (unverified sender, a bad key, an outage): say so, never the address
+    console.error("login code e-mail failed:", err instanceof Error ? err.message : err);
+    return "failed";
   }
   return "sent";
 }

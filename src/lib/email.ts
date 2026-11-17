@@ -3,10 +3,12 @@
  * provider can change without touching the callers.
  *
  * Transports, chosen by env only:
- *   RESEND_API_KEY set          ⇒ Resend (EMAIL_FROM is the sender);
+ *   RESEND_API_KEY + EMAIL_FROM ⇒ Resend; EMAIL_FROM must be on a domain
+ *                                 verified in that Resend account;
  *   EMAIL_TRANSPORT=console     ⇒ printed to the server log, nothing sent;
  *   neither, outside production ⇒ console (a local run);
- *   neither, in production      ⇒ EmailDisabled: callers say «not set up yet».
+ *   neither, in production      ⇒ EmailDisabled: callers say «not set up yet»
+ *                                 (a key without EMAIL_FROM counts as neither).
  *
  * The console transport prints the whole letter, login codes included, so
  * it is never the default in production.
@@ -23,7 +25,7 @@ export type EmailTransport = "resend" | "console" | "disabled";
 type Env = Record<string, string | undefined>;
 
 export function emailTransport(env: Env = process.env): EmailTransport {
-  if (env.RESEND_API_KEY) return "resend";
+  if (env.RESEND_API_KEY && env.EMAIL_FROM) return "resend";
   if (env.EMAIL_TRANSPORT === "console") return "console";
   if (env.NODE_ENV !== "production") return "console";
   return "disabled";
@@ -46,7 +48,7 @@ export async function sendEmail(to: string, subject: string, text: string, env: 
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: env.EMAIL_FROM || "REMPIRE <booking@rempire.ee>", to: [to], subject, text }),
+    body: JSON.stringify({ from: env.EMAIL_FROM, to: [to], subject, text }),
   });
   if (!res.ok) throw new Error(`Resend answered ${res.status}`);
   const body = (await res.json().catch(() => ({}))) as { id?: string };

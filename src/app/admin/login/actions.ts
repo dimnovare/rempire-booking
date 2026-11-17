@@ -25,6 +25,7 @@ export async function requestCode(_prev: LoginState, form: FormData): Promise<Lo
   const r = await sendLoginCode(query, email, await clientIp());
   if (r === "wait") return { error: "waitCode", email };
   if (r === "disabled") return { error: "noEmail", email };
+  if (r === "failed") return { error: "mailFailed", email };
   return { sent: true, email };
 }
 

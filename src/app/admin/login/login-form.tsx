@@ -11,6 +11,7 @@ const ERR: Record<string, string> = {
   wait: A.login.wait,
   waitCode: A.login.waitCode,
   noEmail: A.login.noEmail,
+  mailFailed: A.login.mailFailed,
   noDb: A.noDb,
   role: A.login.role,
   google: A.login.googleFailed,
