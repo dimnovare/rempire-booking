@@ -384,5 +384,10 @@ No secrets are written here. The full registry for the shop is
     `rempireshop` (shop's `docs/accounts.md`).
   - Dim's Vercel CLI login only sees his own team, and the Railway CLI is on
     Dim's own account.
-  - On Pro every team member is a paid seat. Dim chooses how staging reaches
-    the Rempire team.
+  - On Pro every team member is a paid seat.
+  - **Resolved the same day:**
+    - Dim chose a one-time token.
+    - The project `rempire-booking` and its domain were made in the
+      dashboard.
+    - CI deploys with a token scoped to that project only.
+    - Details: `docs/staging-setup.md`.

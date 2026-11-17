@@ -31,8 +31,10 @@ jobs:
 
   # Staging deploy to Rempire's Vercel team (kickoff §11; Dim, 17.11.2026).
   # Dim's own Vercel login is not a member of that team, so CI deploys with a
-  # token created once on the team's account (docs/staging-setup.md). Until
-  # the VERCEL_TOKEN secret exists, this job only prints a notice.
+  # token created on the team's account and scoped to the rempire-booking
+  # project only (docs/staging-setup.md). The project and its domain were set
+  # up in the dashboard; their IDs are repo variables, not secrets. Until the
+  # VERCEL_TOKEN secret exists, this job only prints a notice.
   deploy:
     needs: check
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
@@ -43,8 +45,8 @@ jobs:
       cancel-in-progress: false
     env:
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      SCOPE: ${{ vars.VERCEL_SCOPE || 'rempire' }}
-      PROJECT: rempire-booking
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
       DOMAIN: rempire-booking.diipsolutions.eu
       VERCEL_CLI: vercel@65.15.0
     steps:
@@ -62,33 +64,15 @@ jobs:
       - if: env.VERCEL_TOKEN != ''
         run: npm ci
 
-      - name: Project (created on the first run) and link
-        if: env.VERCEL_TOKEN != ''
-        run: |
-          V="npx --yes $VERCEL_CLI"
-          T=(--token "$VERCEL_TOKEN" --scope "$SCOPE")
-          $V project inspect "$PROJECT" "${T[@]}" > /dev/null 2>&1 || $V project create "$PROJECT" "${T[@]}"
-          $V link --yes --project "$PROJECT" "${T[@]}"
-
       - name: Build
         if: env.VERCEL_TOKEN != ''
         run: |
-          V="npx --yes $VERCEL_CLI"
-          T=(--token "$VERCEL_TOKEN" --scope "$SCOPE")
-          $V pull --yes --environment=production "${T[@]}"
-          $V build --prod "${T[@]}"
+          npx --yes $VERCEL_CLI pull --yes --environment=production --token "$VERCEL_TOKEN"
+          npx --yes $VERCEL_CLI build --prod --token "$VERCEL_TOKEN"
 
       - name: Deploy
         if: env.VERCEL_TOKEN != ''
-        run: npx --yes $VERCEL_CLI deploy --prebuilt --prod --token "$VERCEL_TOKEN" --scope "$SCOPE"
-
-      - name: Staging domain and its DNS
-        if: env.VERCEL_TOKEN != ''
-        run: |
-          V="npx --yes $VERCEL_CLI"
-          T=(--token "$VERCEL_TOKEN" --scope "$SCOPE")
-          $V domains add "$DOMAIN" "$PROJECT" "${T[@]}" || echo "(already added, or see the message above)"
-          $V domains verify "$DOMAIN" "${T[@]}" || echo "::warning::DNS for $DOMAIN is not right yet. The output above says which record to add."
+        run: npx --yes $VERCEL_CLI deploy --prebuilt --prod --token "$VERCEL_TOKEN"
 
       - name: noindex on staging
         if: env.VERCEL_TOKEN != ''
