@@ -38,7 +38,7 @@ switch at the move to rempire.ee. The shop's own registry is
 | **Isolta** (Finago) | Invoices to the barbers | Renat's login | — | Renat | Replaced by the app. Export the receivers and the invoice history first |
 | **rempire.ee website** | Renat's React site; its «book» buttons go to Altegio | whoever runs it (unknown, like the DNS) | GA4 `G-FZ84GVRXZ4`, GTM `GTM-T43NKNP` | ? | Point the buttons at the booking host |
 | **Telegram** | `@rempireshop_bot` is the shop's order pings: **never touch**. Renat is making a new bot for tattoo booking | Renat (BotFather) | — | free | An optional channel later |
-| **Web Push** (VAPID) | The barber PWA (Phase B): pushes to barbers' and Renat's phones | no account: a key pair Dim made on 17.11 with `npx web-push generate-vapid-keys`; it lives only in Vercel | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (`mailto:booking@rempire-booking.diipsolutions.eu`) | free | Keep the same two keys: new keys cut off every subscribed phone. Change only `VAPID_SUBJECT` to a rempire.ee address |
+| **Web Push** (VAPID) | The barber PWA (Phase B): pushes to barbers' and Renat's phones | no account: a key pair Dim made on 17.11 with `npx web-push generate-vapid-keys`; it lives only in Vercel | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (`mailto:rempireshopinfo@gmail.com`, Dim, 17.11: an inbox someone reads, where Apple, Google or Mozilla can write if pushes go wrong) | free | Keep the same two keys: new keys cut off every subscribed phone. The subject can stay; changing it is safe and needs only a redeploy |
 | **Montonio** | Only if deposits or prepayments are wanted (decision 15) | Renat's contract | — | Renat | — |
 
 ## Env vars in Vercel (`rempire-booking`, Production)
@@ -128,7 +128,7 @@ The client ID and the secret stay the same, so Vercel needs no change.
 4. **Vercel domain:** add the booking host (`broneeri.rempire.ee` or
    `book.rempire.ee`) and its CNAME on rempire.ee. Set `SITE_URL`.
 5. **Resend:** add rempire.ee and its 3 DNS records, then change `EMAIL_FROM`.
-   Change `VAPID_SUBJECT` to the same rempire.ee address; keep both VAPID keys.
+   Keep both VAPID keys as they are.
 6. **Google:** add the new redirect URI, the home page, the privacy policy
    and `rempire.ee`, then publish the app (§ Google Cloud).
 7. **SMS:** check that the sender name is approved for the live account.
