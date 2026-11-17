@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useA, useTitle } from "../lang";
+import { Title, useA } from "../lang";
 
 const ITEMS = [
   { href: "/admin", key: "calendar", icon: "cal" },
@@ -59,16 +59,18 @@ export function NavLinks({ path }: { path: string }) {
   const A = useA();
   const on = (href: string) => (href === "/admin" ? path === "/admin" : path.startsWith(href));
   const here = ITEMS.find((it) => on(it.href));
-  // the browser tab says where you are, in the login's language
-  useTitle(here ? A.nav[here.key] : "");
   return (
-    <nav className="adm-nav" aria-label={A.sections}>
-      {ITEMS.map((it) => (
-        <Link key={it.href} href={it.href} aria-current={on(it.href) ? "page" : undefined} prefetch={false}>
-          <Icon name={it.icon} />
-          <span>{A.nav[it.key]}</span>
-        </Link>
-      ))}
-    </nav>
+    <>
+      {/* the browser tab says where you are, in the login's language */}
+      <Title text={here ? A.nav[here.key] : ""} />
+      <nav className="adm-nav" aria-label={A.sections}>
+        {ITEMS.map((it) => (
+          <Link key={it.href} href={it.href} aria-current={on(it.href) ? "page" : undefined} prefetch={false}>
+            <Icon name={it.icon} />
+            <span>{A.nav[it.key]}</span>
+          </Link>
+        ))}
+      </nav>
+    </>
   );
 }

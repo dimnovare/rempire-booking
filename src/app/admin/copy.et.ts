@@ -97,8 +97,9 @@ export const et: typeof ru = {
     noStaff: "Barbereid ei ole. Lisage nad jaotises «Barberid».",
     closed: "Puhkepäev",
     visits: (n: number) => `${n} ${pl(n, "broneering", "broneeringut")}`,
-    moving: (who: string) => `Teisaldamine: ${who}. Vajutage uuele ajale.`,
-    moved: "Teisaldatud",
+    // «перенести» is «muuda aega», as in the letter the client gets («Aeg on muudetud», src/lib/letters.ts)
+    moving: (who: string) => `Aja muutmine: ${who}. Vajutage uuele ajale.`,
+    moved: "Aeg muudetud",
     booked: "Broneeritud",
     cancelled: "Broneering tühistatud",
     blocked: "Aeg on blokeeritud",
@@ -136,13 +137,14 @@ export const et: typeof ru = {
     outsideHours: "See on väljaspool barberi tööaega.",
     overBlock: "Sellel ajal on blokk.",
     anyway: "Broneeri ikkagi",
-    anywayMove: "Teisalda ikkagi",
+    anywayMove: "Muuda aega ikkagi",
     overlap: "See aeg on juba teise broneeringuga hõivatud.",
     notOffered: "See barber ei tee valitud teenust.",
     invalid: (f?: string) => `Kontrollige välja${f ? `: ${FIELD[f] ?? f}` : ""}.`,
     status: { booked: "Broneeritud", arrived: "Kohal", done: "Valmis", no_show: "Ei tulnud", pending: "Ootel", cancelled: "Tühistatud" } as Record<string, string>,
-    move: "Teisalda",
-    edit: "Muuda",
+    move: "Muuda aega",
+    // beside «Muuda aega» a bare «Muuda» reads the same: this one changes the rest (services, barber, note)
+    edit: "Muuda andmeid",
     cancelVisit: "Tühista broneering",
     cancelSure: "Kas tühistada see broneering?",
     cancelYes: "Jah, tühista",
@@ -162,7 +164,7 @@ export const et: typeof ru = {
     note: "Märkus",
     save: "Blokeeri",
     remove: "Eemalda blokk",
-    visitsInside: (n: number) => `Tähelepanu: sellel ajal on ${n} ${pl(n, "broneering", "broneeringut")}. Need tuleb teisaldada või tühistada.`,
+    visitsInside: (n: number) => `Tähelepanu: sellel ajal on ${n} ${pl(n, "broneering", "broneeringut")}. Muutke nende aega või tühistage need.`,
   },
 
   staff: {

@@ -23,9 +23,8 @@ const display = localFont({
 // Questrial has no Cyrillic: Russian text falls back to the system face, as in the client flow.
 const body = Questrial({ weight: "400", subsets: ["latin", "latin-ext"], display: "swap", variable: "--font-body" });
 
-// the section's name is added in the browser, in the login's language (lang.tsx, useTitle)
+// no title here: each section renders its own <title> in the login's language (lang.tsx, Title)
 export const metadata: Metadata = {
-  title: "REMPIRE",
   robots: { index: false, follow: false, nocache: true, googleBot: { index: false, follow: false } },
   referrer: "same-origin",
 };

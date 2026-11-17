@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import type { Copy } from "../copy";
 import { EyeIcon } from "../icons";
-import { LangSwitch, useA, useTitle } from "../lang";
+import { LangSwitch, Title, useA } from "../lang";
 import { codeLogin, passwordLogin, requestCode, setLoginLang, type LoginState } from "./actions";
 
 const errors = (A: Copy): Record<string, string> => ({
@@ -24,8 +24,12 @@ const errors = (A: Copy): Record<string, string> => ({
 /** «Вход», and the browser tab's title with it. */
 export function LoginTitle() {
   const A = useA();
-  useTitle(A.login.title);
-  return <h1 className="adm-h1">{A.login.title}</h1>;
+  return (
+    <>
+      <Title text={A.login.title} />
+      <h1 className="adm-h1">{A.login.title}</h1>
+    </>
+  );
 }
 
 /** Русский · Eesti · English under the form: kept on this device until someone logs in. */

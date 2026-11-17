@@ -28,11 +28,14 @@ export function Wait() {
   return <p className="adm-wait">{useA().loading}</p>;
 }
 
-/** The browser tab's title: the section, in the admin's language. */
-export function useTitle(title: string) {
-  useEffect(() => {
-    if (title) document.title = `${title} · REMPIRE`;
-  }, [title]);
+/**
+ * The browser tab's title: the section, in the admin's language. A real
+ * <title> (React puts it in <head>), not document.title in an effect: Next
+ * redraws the head after every server action and an effect's title was lost.
+ * The layout sets no title of its own, so this is the only one.
+ */
+export function Title({ text }: { text: string }) {
+  return text ? <title>{`${text} · REMPIRE`}</title> : null;
 }
 
 /**
