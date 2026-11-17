@@ -19,7 +19,7 @@ export const metadata = { title: "REMPIRE · Visit", referrer: "no-referrer" as 
 // outside the Suspense boundary.
 export default function VisitPage({ params }: PageProps<"/[locale]/visit/[token]">) {
   return (
-    <main className="app gut">
+    <main className="app gut narrow">
       <Suspense fallback={<p className="wait" />}>
         <Visit params={params} />
       </Suspense>

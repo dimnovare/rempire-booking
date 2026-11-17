@@ -2,7 +2,7 @@ import { Logo } from "@/components/brand";
 
 export default function NotFound() {
   return (
-    <main className="app gut">
+    <main className="app gut narrow">
       <header className="top">
         <Logo />
       </header>

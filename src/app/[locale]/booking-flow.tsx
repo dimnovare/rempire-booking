@@ -26,6 +26,8 @@ type Slot = { t: number; staffId: string };
 type Done = { visitId: string; start: number; end: number; staffId: string; manageUrl: string | null };
 
 const STORE = "rempire-booking:client";
+// the last barber + services booked on this device: «Same as last time» is one tap
+const LAST = "rempire-booking:last";
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const dateOf = (d: string) => {
   const [y, m, dd] = d.split("-").map(Number);
@@ -51,6 +53,8 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState<Done | null>(null);
   const [remembered, setRemembered] = useState(false);
+  const [last, setLast] = useState<{ barber: string; services: string[] } | null>(null);
+  const [calMonth, setCalMonth] = useState<string | null>(null); // "YYYY-MM" the calendar shows
   const key = useRef("");
   const strip = useRef<HTMLDivElement>(null);
 
@@ -70,9 +74,19 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
         setForm((f) => ({ ...f, name: saved.name, phone: saved.phone, email: typeof saved.email === "string" ? saved.email : "" }));
         setRemembered(true);
       }
+      // only if that barber still does all of those services
+      const l = JSON.parse(localStorage.getItem(LAST) || "null");
+      if (l && typeof l.barber === "string" && Array.isArray(l.services) && l.services.length) {
+        const ids = l.services.filter((id: unknown): id is string => typeof id === "string" && svcById.has(id));
+        const b = l.barber === "any" ? null : staffById.get(l.barber);
+        const ok = ids.length === l.services.length && (l.barber === "any" ? capable(ids).length > 0 : !!b && can(b, ids));
+        if (ok) setLast({ barber: l.barber, services: ids });
+      }
     } catch {
       /* private mode: nothing remembered */
     }
+    // once, on arrival: the catalog does not change under the page
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -134,6 +148,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
     setDay(null);
     setSlot(null);
     setTaken(null);
+    setCalMonth(null);
   };
 
   const switchLang = (l: Locale) => {
@@ -214,6 +229,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
       if (res.ok && j.visit) {
         try {
           localStorage.setItem(STORE, JSON.stringify({ name: form.name.trim(), phone: form.phone.trim(), email: form.email.trim() }));
+          if (barber) localStorage.setItem(LAST, JSON.stringify({ barber, services }));
         } catch {
           /* not remembered: fine */
         }
@@ -250,6 +266,9 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
   };
 
   /* ---------- pieces ---------- */
+  // eslint-disable-next-line @next/next/no-img-element
+  const face = (s: CatalogStaff) => (s.photoUrl ? <img src={s.photoUrl} alt="" width={480} height={640} decoding="async" /> : s.name.slice(0, 2).toUpperCase());
+
   const header = (
     <>
       <header className="top">
@@ -271,8 +290,9 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
     </>
   );
 
+  // phones get this line; wide screens the summary panel instead
   const summaryLine = (
-    <div className="sumrow">
+    <div className="sumrow m-only">
       <button type="button" className="iconbtn" onClick={() => go(1)} aria-label={c.back}>
         <BackIcon />
       </button>
@@ -338,6 +358,30 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
           <div className="eyebrow">{c.loc}</div>
           <h1 className="h1">{c.title}</h1>
         </div>
+        {last && !barber && !ids.length && (
+          <button
+            type="button"
+            className="again"
+            onClick={() => {
+              resetTime();
+              setBarber(last.barber);
+              setServices(last.services);
+              go(2);
+            }}
+          >
+            <span className={`ava${last.barber === "any" ? " any" : ""}`}>
+              {last.barber === "any" ? <TowerMark /> : face(staffById.get(last.barber)!)}
+            </span>
+            <span className="again-txt">
+              <small>{c.sameAgain}</small>
+              <strong>{last.barber === "any" ? c.anyone : staffById.get(last.barber)!.name}</strong>
+              <span>{last.services.map((id) => pick(svcById.get(id)?.name, lang)).join(" + ")}</span>
+            </span>
+            <span className="again-go" aria-hidden="true">
+              <BackIcon />
+            </span>
+          </button>
+        )}
         <section>
           <h2 className="label">{c.barber}</h2>
           <div className="bleed">
@@ -369,10 +413,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
                     onClick={() => tapBarber(s.id)}
                     aria-label={s.rating != null ? `${s.name}, ${s.rating}, ${s.reviewCount} ${c.reviews}` : s.name}
                   >
-                    <span className="ava">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      {s.photoUrl ? <img src={s.photoUrl} alt="" /> : s.name.slice(0, 2).toUpperCase()}
-                    </span>
+                    <span className="ava">{face(s)}</span>
                     <span className="nm">{s.name}</span>
                     <span className="sub">{sub}</span>
                   </button>
@@ -381,7 +422,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
             </div>
           </div>
         </section>
-        {ids.length > 0 && !barber && <p className="note">{c.pickBarber}</p>}
+        {ids.length > 0 && !barber && <p className="note m-only">{c.pickBarber}</p>}
         <section>
           <h2 className="label">{c.service}</h2>
           <div className="svcs">
@@ -475,32 +516,34 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
         [c.day, (m) => m >= 720 && m < 1020],
         [c.evening, (m) => m >= 1020],
       ];
-      body = groups.map(([name, f]) => {
-        const xs = current.s.filter(([t]) => f(localParts(t, tz).minutes));
-        if (!xs.length) return null;
-        return (
-          <div className="group" key={name}>
-            <h2 className="label">{name}</h2>
-            <div className="slots">
-              {xs.map(([t, sid]) => (
-                <button key={t} type="button" className="slot" onClick={() => pickSlot(current.d, t, sid)}>
-                  {fmtTime(t)}
-                </button>
-              ))}
-            </div>
-          </div>
-        );
-      });
+      body = (
+        <div className="groups">
+          {groups.map(([name, f]) => {
+            const xs = current.s.filter(([t]) => f(localParts(t, tz).minutes));
+            if (!xs.length) return null;
+            return (
+              <div className="group" key={name}>
+                <h2 className="label">{name}</h2>
+                <div className="slots">
+                  {xs.map(([t, sid]) => (
+                    <button key={t} type="button" className="slot" onClick={() => pickSlot(current.d, t, sid)}>
+                      {fmtTime(t)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      );
     }
-    return (
-      <div className="stack">
-        {summaryLine}
-        <h1 className="h1">{c.when}</h1>
-        <button type="button" className="earliest" onClick={() => pickSlot(earliest.d, earliest.t, earliest.staffId)}>
-          <small>{c.earliestFree}</small>
-          <span>
-            {dShort(earliest.d)} · {fmtTime(earliest.t)}
-          </span>
+    const scrollDays = (dir: 1 | -1) => strip.current?.scrollBy({ left: dir * strip.current.clientWidth * 0.8, behavior: "smooth" });
+
+    // phones and tablets: a strip of days to swipe (arrows from 768px: a mouse cannot swipe)
+    const dayStrip = (
+      <div className="strip">
+        <button type="button" className="iconbtn d-only" aria-label={c.prevDays} onClick={() => scrollDays(-1)}>
+          <BackIcon />
         </button>
         <div className="bleed" ref={strip}>
           <div className="days">
@@ -519,7 +562,69 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
             ))}
           </div>
         </div>
-        {body}
+        <button type="button" className="iconbtn d-only flip" aria-label={c.nextDays} onClick={() => scrollDays(1)}>
+          <BackIcon />
+        </button>
+      </div>
+    );
+
+    // wide screens: a month calendar instead of the strip; only days with a free time can be tapped
+    const months = [...new Set(ready.days.map((d) => d.d.slice(0, 7)))];
+    const month = calMonth && months.includes(calMonth) ? calMonth : current.d.slice(0, 7);
+    const mi = months.indexOf(month);
+    const byDate = new Map(ready.days.map((d) => [d.d, d]));
+    const [cy, cm] = month.split("-").map(Number);
+    const first = new Date(Date.UTC(cy, cm - 1, 1));
+    const lead = (first.getUTCDay() + 6) % 7; // weeks start on Monday
+    const inMonth = new Date(Date.UTC(cy, cm, 0)).getUTCDate();
+    const cells = [...Array<null>(lead).fill(null), ...Array.from({ length: inMonth }, (_, i) => `${month}-${String(i + 1).padStart(2, "0")}`)];
+    const wdNames = Array.from({ length: 7 }, (_, i) => wd(`2024-01-0${i + 1}`)); // 01.01.2024 was a Monday
+    const calendar = (
+      <div className="cal">
+        <div className="cal-head">
+          <button type="button" className="iconbtn" disabled={mi <= 0} aria-label={c.prevDays} onClick={() => setCalMonth(months[mi - 1])}>
+            <BackIcon />
+          </button>
+          <strong>{cap(new Intl.DateTimeFormat(INTL[lang], { month: "long", timeZone: "UTC" }).format(first))}</strong>
+          <button type="button" className="iconbtn flip" disabled={mi >= months.length - 1} aria-label={c.nextDays} onClick={() => setCalMonth(months[mi + 1])}>
+            <BackIcon />
+          </button>
+        </div>
+        <div className="cal-grid">
+          {wdNames.map((n) => (
+            <span key={n} className="cal-wd" aria-hidden="true">
+              {n}
+            </span>
+          ))}
+          {cells.map((d, i) => {
+            if (!d) return <span key={`_${i}`} />;
+            const free = !!byDate.get(d)?.s.length;
+            return (
+              <button key={d} type="button" className={`cal-d${free ? " free" : ""}`} disabled={!free} aria-pressed={d === current.d} aria-label={dLong(d)} onClick={() => setDay(d)}>
+                {Number(d.slice(8, 10))}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+    return (
+      <div className="stack">
+        {summaryLine}
+        <h1 className="h1">{c.when}</h1>
+        <button type="button" className="earliest" onClick={() => pickSlot(earliest.d, earliest.t, earliest.staffId)}>
+          <small>{c.earliestFree}</small>
+          <span>
+            {dShort(earliest.d)} · {fmtTime(earliest.t)}
+          </span>
+        </button>
+        <div className="when">
+          <div className="when-days">
+            {dayStrip}
+            {calendar}
+          </div>
+          <div className="when-times">{body}</div>
+        </div>
       </div>
     );
   };
@@ -550,7 +655,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
           {c.details}
         </h1>
       </div>
-      {card()}
+      <div className="m-only">{card()}</div>
       {taken && (
         <div className="taken" role="alert">
           <h3>{c.taken}</h3>
@@ -644,18 +749,81 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
     );
   };
 
+  /* ---------- the summary panel (wide screens; hidden on phones) ---------- */
+  const side = () => {
+    if (screen === 4) return null;
+    if (screen === 3) return <aside className="side">{card()}</aside>;
+    const ready1 = services.length > 0 && !!barber;
+    const b = barber && barber !== "any" ? staffById.get(barber) ?? null : null;
+    return (
+      <aside className="side" aria-label={c.yourVisit}>
+        <div className="side-in">
+          <h2 className="label">{c.yourVisit}</h2>
+          {barber && (
+            <div className="side-who">
+              <span className={`ava${barber === "any" ? " any" : ""}`}>{barber === "any" ? <TowerMark /> : b ? face(b) : null}</span>
+              <strong>{who()}</strong>
+            </div>
+          )}
+          {services.length > 0 && (
+            <div className="side-list">
+              {services.map((id) => (
+                <div className="kv" key={id}>
+                  <span className="k">{pick(svcById.get(id)?.name, lang)}</span>
+                  <span className="v">{b ? eur(b.offers[id]?.[0] ?? 0) : euroRange(capable([id]).map((x) => x.offers[id][0]))}</span>
+                </div>
+              ))}
+              <div className="kv tot">
+                <span className="k">
+                  {c.total} · {duration(durNow(), c)}
+                </span>
+                <span className="v">{priceNow()}</span>
+              </div>
+            </div>
+          )}
+          {screen === 1 &&
+            (ready1 ? (
+              <button
+                type="button"
+                className="btn btn-lime"
+                onClick={() => {
+                  resetTime();
+                  go(2);
+                }}
+              >
+                {c.choose}
+              </button>
+            ) : (
+              <p className="note">{services.length && !barber ? c.pickBarber : c.pickFirst}</p>
+            ))}
+          {screen === 2 && (
+            <button type="button" className="btn btn-ghost" onClick={() => go(1)}>
+              {c.change}
+            </button>
+          )}
+        </div>
+      </aside>
+    );
+  };
+
   const showCta = screen === 1 && services.length > 0 && !!barber;
+  const aside = side();
   return (
     <>
       <main className={`app gut${showCta ? " has-cta" : ""}`} aria-live="polite">
         {header}
-        {screen === 1 && screen1()}
-        {screen === 2 && screen2()}
-        {screen === 3 && screen3()}
-        {screen === 4 && screen4()}
+        <div className={`flow${aside ? " has-side" : ""}`}>
+          <div className="flow-main">
+            {screen === 1 && screen1()}
+            {screen === 2 && screen2()}
+            {screen === 3 && screen3()}
+            {screen === 4 && screen4()}
+          </div>
+          {aside}
+        </div>
       </main>
       {showCta && (
-        <div className="cta">
+        <div className="cta m-only">
           <div className="cta-in gut">
             <div className="cta-sum">
               <b>{priceNow()}</b>

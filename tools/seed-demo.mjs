@@ -29,7 +29,9 @@ export const DEMO = {
     { slug: "kid", d: 45, name: T("Детская стрижка", "Lapse juukselõikus", "Kid's haircut") },
     { slug: "fs", d: 90, name: T("Отец и сын", "Isa ja poeg", "Father and son") },
   ],
-  // price in euros per service; a missing service = the barber does not do it
+  // price in euros per service; a missing service = the barber does not do it.
+  // Photos: the portraits from rempire.ee/en/barbershop, 480 x 640, grey
+  // (public/barbers/, 17.11.2026).
   staff: [
     { slug: "renat", name: "Renat", p: { clip: 40, long: 45, buzz: 35, cutbeard: 60, beard: 28, grey: 35, kid: 35, fs: 65 } },
     { slug: "valentin", name: "Valentin", p: { clip: 40, long: 45, buzz: 35, cutbeard: 60, beard: 28, grey: 30, kid: 35, fs: 65 } },
@@ -78,12 +80,15 @@ export async function seedDemo(db) {
     svc[s.slug] = row.id;
   }
   for (const [i, st] of DEMO.staff.entries()) {
+    const photo = `/barbers/${st.slug}.webp`;
     const inserted = await one(
-      `insert into staff (id, business_id, location_id, slug, display_name, role, sort) values ($7, $1, $2, $3, $4, $5::jsonb, $6)
+      `insert into staff (id, business_id, location_id, slug, display_name, role, sort, photo_url) values ($7, $1, $2, $3, $4, $5::jsonb, $6, $8)
        on conflict (business_id, slug) do nothing returning id`,
-      [biz.id, loc.id, st.slug, st.name, JSON.stringify(ROLE), i, demoId("staff", st.slug)],
+      [biz.id, loc.id, st.slug, st.name, JSON.stringify(ROLE), i, demoId("staff", st.slug), photo],
     );
     const staffId = inserted?.id ?? (await one("select id from staff where business_id = $1 and slug = $2", [biz.id, st.slug])).id;
+    // a barber seeded before the photos existed gets one; a photo set since is kept
+    if (!inserted) await db.query("update staff set photo_url = $2 where id = $1 and photo_url is null", [staffId, photo]);
     for (const [slug, eur] of Object.entries(st.p)) {
       await db.query(
         `insert into staff_services (staff_id, service_id, price_cents) values ($1, $2, $3) on conflict do nothing`,

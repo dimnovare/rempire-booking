@@ -1,8 +1,10 @@
 @import "tailwindcss";
 
-/* rempire.ee look, as in the approved mock (Dim, 17.11.2026): one
-   phone-width column on black, square edges, lime only for the current
-   choice and the next step. Colours: docs/brand.md. */
+/* rempire.ee look, as in the approved mock (Dim, 17.11.2026): black,
+   square edges, lime only for the current choice and the next step.
+   Phones: one column. 768px+: the column widens, barbers become a grid.
+   1024px+: a summary panel sits beside it (Dim, 17.11.2026).
+   Colours: docs/brand.md. */
 :root {
   --ink: #000;
   --raise: #0e0e0d;
@@ -54,7 +56,7 @@ a { color: inherit; }
 .chips { display: flex; gap: 10px; padding-bottom: 2px; }
 .chip { flex: 0 0 86px; display: flex; flex-direction: column; gap: 7px; }
 .ava { width: 86px; height: 100px; display: grid; place-items: center; border: 2px solid transparent; background: linear-gradient(165deg, #4a4a45 0%, #1b1b19 62%, #0b0b0a 100%); font: 800 30px/1 var(--display); color: #fff; letter-spacing: .02em; overflow: hidden; }
-.ava img { width: 100%; height: 100%; object-fit: cover; }
+.ava img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 22%; }
 .ava.any { background: var(--raise); border: 1px dashed var(--line-2); color: var(--lime); }
 .ava.any svg { height: 44px; width: auto; }
 .chip[aria-pressed="true"] .ava { border: 2px solid var(--lime); }
@@ -158,5 +160,83 @@ textarea.input { min-height: 84px; resize: vertical; }
 .lead { font-size: 17px; margin: 0; }
 .btns { display: flex; flex-direction: column; gap: 10px; }
 .cut { color: var(--dim); font-size: 13px; margin: -2px 0 0; text-align: center; }
+
+/* «Same as last time»: one tap to the times */
+.again { display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px; border: 1px solid var(--lime); }
+.again .ava { flex: 0 0 48px; width: 48px; height: 60px; aspect-ratio: auto; font-size: 18px; border: 0; }
+.again .ava.any svg { height: 28px; }
+.again-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.again-txt small { font: 800 12px/1 var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--lime); }
+.again-txt strong { font: 800 19px/1 var(--display); text-transform: uppercase; letter-spacing: .03em; }
+.again-txt span { font-size: 13px; color: var(--mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.again-go { flex: 0 0 auto; color: var(--lime); display: grid; }
+.again-go svg { transform: scaleX(-1); }
+
+/* when: strip on phones, month calendar on wide screens */
+.when, .when-days, .groups { display: flex; flex-direction: column; gap: 22px; }
+.cal { display: none; }
+.cal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; }
+.cal-head strong { font: 800 20px/1 var(--display); text-transform: uppercase; letter-spacing: .05em; }
+.iconbtn:disabled { opacity: .3; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-wd { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--mute); text-align: center; padding-bottom: 6px; }
+.cal-d { aspect-ratio: 1; display: grid; place-items: center; font: 800 18px/1 var(--display); color: var(--dim); font-variant-numeric: tabular-nums; border: 1px solid transparent; }
+.cal-d.free { color: var(--fg); border-color: var(--line-2); }
+.cal-d.free:hover { border-color: var(--lime); }
+.cal-d[aria-pressed="true"] { background: var(--fg); border-color: var(--fg); color: var(--ink); }
+
+/* wider screens */
+.side, .d-only { display: none; }
+.strip { display: flex; align-items: center; gap: 8px; }
+.strip .bleed { flex: 1; min-width: 0; }
+.iconbtn.flip svg { transform: scaleX(-1); }
+.side-in { border: 1px solid var(--line); padding: 20px; display: flex; flex-direction: column; gap: 18px; }
+.side-in .label { margin: 0; }
+.side-who { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.side-who .ava { flex: 0 0 56px; width: 56px; height: 72px; aspect-ratio: auto; font-size: 20px; border-width: 0; }
+.side-who .ava.any svg { height: 32px; }
+.side-who strong { font: 800 20px/1.05 var(--display); text-transform: uppercase; letter-spacing: .03em; min-width: 0; }
+.side-list { display: flex; flex-direction: column; gap: 10px; }
+
+@media (min-width: 768px) {
+  .app { max-width: 760px; }
+  .app.narrow { max-width: 640px; }
+  .cta-in { max-width: 760px; }
+  .gut { padding-left: max(32px, env(safe-area-inset-left, 0px)); padding-right: max(32px, env(safe-area-inset-right, 0px)); }
+  .top { padding-block: 24px 18px; }
+  .logo { height: 34px; }
+  .h1 { font-size: 52px; }
+  .stack { gap: 28px; }
+  .bleed { margin-left: 0; margin-right: 0; padding-left: 0; padding-right: 0; }
+  .chips { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+  .chip { min-width: 0; }
+  .ava { width: 100%; height: auto; aspect-ratio: 3 / 4; font-size: 34px; }
+  .ava.any svg { height: 56px; }
+  .chip .nm { font-size: 18px; }
+  .chip .sub { font-size: 13px; }
+  .svc-main { padding-block: 16px; }
+  .slots { grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+  .d-only { display: grid; }
+  .day { flex-basis: 58px; }
+  .fields, .taken { max-width: 600px; }
+}
+
+@media (min-width: 1024px) {
+  .app { max-width: 1200px; }
+  .app.has-cta { padding-bottom: 48px; }
+  .m-only { display: none !important; }
+  .h1 { font-size: 60px; }
+  .flow.has-side { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 56px; align-items: start; }
+  .flow:not(.has-side) { max-width: 620px; margin: 0 auto; }
+  .side { display: block; position: sticky; top: 24px; }
+  .svcs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 32px; }
+  .when { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 44px; align-items: start; }
+  .when .strip { display: none; }
+  .cal { display: block; }
+  .when-times .groups { display: flex; flex-direction: column; gap: 22px; }
+  .when-times .slots { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
+  .earliest { align-self: flex-start; width: auto; min-width: 340px; }
+  .again { max-width: 520px; }
+}
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
