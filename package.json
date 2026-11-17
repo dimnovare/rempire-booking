@@ -16,7 +16,8 @@
     "migrate": "node tools/migrate.mjs",
     "seed:demo": "node tools/seed-demo.mjs",
     "check:noindex": "node tools/check-noindex.mjs",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "test:shop-link": "node tools/shop-link-local.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.16",

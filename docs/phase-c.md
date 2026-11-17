@@ -143,7 +143,20 @@ Everything below runs on staging with demo barbers, demo companies
 contract is the shop's `docs/partner-api.md`; booking's `src/lib/shop.ts`
 already speaks it.
 
-What the push changes on the live shop:
+> **Never push `booking-partner-api` to `rempireshop/rempire-web`, not even
+> as a branch.**
+>
+> - The live shop's Vercel project sets `DATABASE_URL`, the Montonio and R2
+>   keys, `TELEGRAM_BOT_TOKEN` and `CRON_SECRET` for «All Environments».
+> - So a pushed branch builds a Preview that holds the live values.
+> - Its `postbuild` (`migrate --if-configured`) would then run
+>   `230_partner_api.sql` on the **production** database.
+>
+> The branch reaches the live shop only as a merge into `main`, with Dim's
+> OK, at the moment he wants it deployed. Until then it is tested on this
+> computer only (§ Testing the shop link locally).
+
+What the merge changes on the live shop:
 
 - **Migration `230_partner_api.sql`**, run once at deploy:
   - a new table `purchase_prices`;
@@ -169,6 +182,31 @@ Watch for:
 
 Then set `SHOP_API_URL` and `SHOP_API_SECRET` in booking's Vercel. Until
 then staging stays on the fake shop.
+
+## Testing the shop link locally
+
+`npm run test:shop-link` (`tools/shop-link-local.mjs`) is the automated
+check of the shop branch against booking. It is a developer check, not the
+staging test run (that is `docs/test-run.md`).
+
+- It runs the shop from its worktree
+  `rempire-web/.claude/worktrees/booking-partner-api` on port 3300 and booking
+  on 3400, each on an empty PGlite database in the temp folder.
+- Each process gets a clean environment built from a short list. It refuses
+  to start on the main shop checkout, on `main`, beside any `.env*` file, or
+  when a live-looking variable (`DATABASE_URL`, Montonio, R2, Telegram,
+  Resend…) would leak in. So run it from a booking worktree.
+- Secrets are random per run and stay in memory. The shop gets fake
+  barcodes, stock 10 and purchase prices on three products.
+- It walks the phone (Playwright, 390 px): a client sale by search, a self
+  sale at purchase × 1.24, a camera scan, the cron, a retry with the same
+  `ref`, the shop down and back, then the shop's orders and stock, the
+  «Барбер» badge, no letter or ping, `/b/money` and Renat's invoice draft.
+- Not covered: photo match (it needs the shop's OpenAI key), real phones,
+  real e-mail.
+
+`--keep` leaves both servers up at the end. A failed run keeps its logs and
+prints the folder.
 
 ## Data
 

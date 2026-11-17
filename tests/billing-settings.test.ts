@@ -8,7 +8,7 @@ import { dmy, pickMonth, shift } from "@/app/admin/(app)/invoices/common";
 import { getBusiness, type Business } from "@/lib/availability";
 import { cleanMoneySettings, saveMoneySettings } from "@/lib/billing/settings";
 import { closeDb, query } from "@/lib/db";
-import { newRef, recordSale } from "@/lib/sales";
+import { newRef, recordSale, saleMinuteMs } from "@/lib/sales";
 import { FAKE_PRODUCTS } from "@/lib/shop";
 import { freshDemo, type Demo } from "./helpers";
 
@@ -36,6 +36,17 @@ describe("month helpers", () => {
     expect(shift("2026-01", -1)).toBe("2025-12");
     expect(dmy("2026-11-03")).toBe("03.11.2026");
     expect(dmy(null)).toBe("");
+  });
+});
+
+describe("sales timers", () => {
+  it("run on a real minute, except in a local test that asks for less", () => {
+    expect(saleMinuteMs({})).toBe(60_000);
+    expect(saleMinuteMs({ NODE_ENV: "development", SALES_MINUTE_MS: "1000" })).toBe(1000);
+    // never in production, and never absurdly short
+    expect(saleMinuteMs({ NODE_ENV: "production", SALES_MINUTE_MS: "1000" })).toBe(60_000);
+    expect(saleMinuteMs({ NODE_ENV: "development", SALES_MINUTE_MS: "5" })).toBe(60_000);
+    expect(saleMinuteMs({ NODE_ENV: "development", SALES_MINUTE_MS: "1.5" })).toBe(60_000);
   });
 });
 

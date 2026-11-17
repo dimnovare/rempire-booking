@@ -42,6 +42,18 @@ export const SALES = {
   budgetMs: 40_000,
 };
 
+/**
+ * How long one «minute» of the timers above is (the undo window, the lock,
+ * the backoff). Always 60 s, except in a local `next dev` that sets
+ * SALES_MINUTE_MS: the shop-link test (tools/shop-link-local.mjs) runs on
+ * one second, so it doesn't wait 5 minutes for each sale. Never read in
+ * production.
+ */
+export function saleMinuteMs(env: Env = process.env): number {
+  const v = Number(env.SALES_MINUTE_MS);
+  return env.NODE_ENV !== "production" && Number.isInteger(v) && v >= 100 && v < 60_000 ? v : 60_000;
+}
+
 export type Sale = {
   id: string;
   ref: string;
@@ -207,7 +219,7 @@ export async function recordSale(
         mode === "client" ? business.settings.commission_basis : null,
         q.commissionCents,
         q.totalCents,
-        new Date(now + SALES.undoMin * 60_000),
+        new Date(now + SALES.undoMin * saleMinuteMs()),
         actorUserId,
         new Date(now),
       ],
@@ -236,7 +248,7 @@ export async function undoSale(staffId: string, ref: string, actorUserId: string
         where ref = $1 and staff_id = $2 and status = 'done' and reverses_id is null
           and sync_status = 'queued' and sync_attempts = 0 and created_at > $4
         returning id`,
-      [ref, staffId, new Date(now), new Date(now - SALES.undoMin * 60_000)],
+      [ref, staffId, new Date(now), new Date(now - SALES.undoMin * saleMinuteMs())],
     );
     if (!row) {
       const [exists] = await tx("select 1 from product_sales where ref = $1 and staff_id = $2", [ref, staffId]);
@@ -337,7 +349,7 @@ export async function syncShopSales(q: Querier, now = Date.now(), env: Env = pro
                where (sync_status = 'queued' and sync_after <= $1) or (sync_status = 'sending' and sync_locked < $1)
                order by sync_after limit $3 for update skip locked)
       returning p.*, s.display_name as staff_name`,
-    [new Date(now), new Date(now + SALES.lockMin * 60_000), SALES.batch],
+    [new Date(now), new Date(now + SALES.lockMin * saleMinuteMs()), SALES.batch],
   );
   for (const [i, r] of rows.entries()) {
     if (Date.now() >= stopAt) {
@@ -366,7 +378,7 @@ export async function syncShopSales(q: Querier, now = Date.now(), env: Env = pro
         await q(`update product_sales set sync_status = 'failed', sync_locked = null, sync_error = $2 where id = $1`, [r.id, error]);
         res.failed++;
       } else {
-        await q(`update product_sales set sync_status = 'queued', sync_locked = null, sync_after = $2, sync_error = $3 where id = $1`, [r.id, new Date(now + 2 ** r.sync_attempts * 60_000), error]);
+        await q(`update product_sales set sync_status = 'queued', sync_locked = null, sync_after = $2, sync_error = $3 where id = $1`, [r.id, new Date(now + 2 ** r.sync_attempts * saleMinuteMs()), error]);
         res.retry++;
       }
     }
