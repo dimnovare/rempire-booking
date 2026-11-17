@@ -28,7 +28,8 @@ export type VisitView = {
   location: { name: string; address: string; phone: string };
 };
 
-const TOKEN_RE = /^[A-Za-z0-9_-]{20,100}$/;
+// 16 characters (96 bits) is the SMS short link's; letters and the booking screen use 32
+const TOKEN_RE = /^[A-Za-z0-9_-]{16,100}$/;
 
 // the visit a token opens: the booking screen's link or a message's own
 const BY_TOKEN = `(select id from appointments where manage_token_hash = $1
@@ -48,10 +49,11 @@ export async function visitById(q: Querier, id: string): Promise<VisitView | nul
 
 /**
  * A new change-or-cancel link for a visit, for one message. Only its hash
- * is stored; the token goes out in the message and nowhere else.
+ * is stored; the token goes out in the message and nowhere else. An SMS
+ * uses 12 bytes (16 characters) so the reminder stays 2 parts.
  */
-export async function mintVisitLink(q: Querier, appointmentId: string, purpose: string): Promise<string> {
-  const token = randomBytes(24).toString("base64url");
+export async function mintVisitLink(q: Querier, appointmentId: string, purpose: string, bytes = 24): Promise<string> {
+  const token = randomBytes(bytes).toString("base64url");
   await q("insert into visit_links (token_hash, appointment_id, purpose) values ($1, $2, $3)", [hashToken(token), appointmentId, purpose]);
   return token;
 }

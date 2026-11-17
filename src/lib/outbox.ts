@@ -7,11 +7,12 @@
  *   - a booked visit with reminder_min and a phone gets one SMS row, due at
  *     starts_at − reminder_min;
  *   - a visit that moved, was cancelled or lost its reminder gets its queued
- *     row cancelled (and, if still booked, a new one at the new time).
+ *     row cancelled (and, if still booked, a new one at the new time);
+ *   - at send time it gets a short change link of its own (/v/…).
  *
- * The e-mail confirmation is queued by the booking itself (src/lib/booking.ts)
- * and sent by sendForVisit right after the response; the cron picks it up if
- * that try fails. Its letter is built at send time from the visit as it is
+ * The e-mail confirmation is queued by the booking itself (src/lib/booking.ts,
+ * online and admin) and, for online bookings, sent by sendForVisit right
+ * after the response; the cron sends the rest and retries. Its letter is built at send time from the visit as it is
  * then (a visit cancelled meanwhile gets no letter), with a change link of
  * its own (visit_links, 006) and the .ics attached.
  *
@@ -25,7 +26,7 @@ import type { Querier } from "./db";
 import { emailTransport, sendEmail, type LetterBody } from "./email";
 import { confirmationLetter } from "./letters";
 import { siteUrl } from "./site";
-import { sendSms, smsTransport } from "./sms";
+import { sendSms, smsSegments, smsTransport } from "./sms";
 import { localParts } from "./tz";
 import { mintVisitLink, visitById } from "./visits";
 
@@ -149,8 +150,15 @@ function enabledChannels(env: Env): Channel[] {
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
-/** The text of a message, built at send time from its payload. */
-export function messageText(row: Pick<OutboxRow, "kind" | "locale" | "payload">): string | null {
+// the reminder's change link label; Estonian avoids «õ», which would make the whole SMS UCS-2
+const LINK_LABEL: Record<Locale, string> = { ru: "Перенести/отменить", et: "Muuda/tühista", en: "Change or cancel" };
+
+/**
+ * The text of a message, built at send time from its payload. A reminder
+ * with a change link (Dim, 17.11.2026: a short link, 2 parts) drops the
+ * address when the link would otherwise cost a third SMS part.
+ */
+export function messageText(row: Pick<OutboxRow, "kind" | "locale" | "payload">, link = ""): string | null {
   const p = row.payload as { startsAt?: string; staff?: string; business?: string; address?: string; tz?: string; text?: string };
   if (row.kind === "reminder" && p.startsAt) {
     const when = localParts(Date.parse(p.startsAt), p.tz || "Europe/Tallinn");
@@ -159,9 +167,16 @@ export function messageText(row: Pick<OutboxRow, "kind" | "locale" | "payload">)
     const name = p.business || "REMPIRE";
     const place = p.address ? ` ${p.address}.` : "";
     const staff = p.staff ? p.staff : "";
-    if (row.locale === "et") return `${name}: meeldetuletus, Teie aeg ${day} kell ${when.time}${staff ? `, ${staff}` : ""}.${place}`;
-    if (row.locale === "en") return `${name}: reminder of your visit on ${day} at ${when.time}${staff ? ` with ${staff}` : ""}.${place}`;
-    return `${name}: напоминаем о записи ${day} в ${when.time}${staff ? `, барбер ${staff}` : ""}.${place}`;
+    const head =
+      row.locale === "et"
+        ? `${name}: meeldetuletus, Teie aeg ${day} kell ${when.time}${staff ? `, ${staff}` : ""}.`
+        : row.locale === "en"
+          ? `${name}: reminder of your visit on ${day} at ${when.time}${staff ? ` with ${staff}` : ""}.`
+          : `${name}: напоминаем о записи ${day} в ${when.time}${staff ? `, барбер ${staff}` : ""}.`;
+    const tail = link ? ` ${LINK_LABEL[row.locale] ?? LINK_LABEL.ru}: ${link}` : "";
+    const full = `${head}${place}${tail}`;
+    if (tail && place && smsSegments(full).segments > 2) return `${head}${tail}`;
+    return full;
   }
   if (typeof p.text === "string" && p.text) return p.text;
   return null;
@@ -193,8 +208,13 @@ async function compose(q: Querier, row: OutboxRow, now: number, env: Env): Promi
     const letter = confirmationLetter(v, { business, origin: siteUrl(env).origin, token, locale: row.locale, now });
     return { subject: letter.subject, body: letter };
   }
-  if (row.kind === "reminder" && Date.parse(String(p.startsAt)) <= now) return { skip: "visit already started" };
-  const text = messageText(row);
+  let link = "";
+  if (row.kind === "reminder") {
+    if (Date.parse(String(p.startsAt)) <= now) return { skip: "visit already started" };
+    // a short link of this SMS's own: /v/<16 characters> (src/app/v/[token])
+    if (row.appointment_id) link = `${siteUrl(env).origin}/v/${await mintVisitLink(q, row.appointment_id, "sms", 12)}`;
+  }
+  const text = messageText(row, link);
   if (!text) return { skip: "no text" };
   return { subject: String(p.subject || "REMPIRE"), body: text };
 }

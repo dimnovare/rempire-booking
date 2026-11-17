@@ -14,7 +14,9 @@
  * and leaves an audit row with who did it.
  */
 import type { Business } from "../availability";
+import { queueConfirmation } from "../booking";
 import { query, withTx, type Querier } from "../db";
+import { isLocale } from "../i18n";
 import { normalizePhone } from "../phone";
 import { pricedWindows, workWindows, type HoursRow, type Interval, type Special } from "../slots";
 import { addDays, localParts, startOfDay } from "../tz";
@@ -248,6 +250,11 @@ export async function adminCreateVisit(business: Business, input: AdminVisitInpu
         );
         await insertLines(tx, row.id, lines);
         await audit(tx, actor, row.id, "create", null, { staff_id: input.staffId, starts_at: new Date(start).toISOString(), forced: !!input.force });
+        // The confirmation letter, if the client left an e-mail on an earlier
+        // online booking (Dim, 17.11.2026). The 5-minute cron sends it, in the
+        // language the client booked in before.
+        const [mail] = await tx<{ email: string | null; locale: string | null }>("select email, locale from clients where id = $1", [cid]);
+        if (mail?.email) await queueConfirmation(tx, business.id, row.id, mail.email, isLocale(mail.locale) ? mail.locale : "ru");
         return { ok: true as const, id: row.id, start, end, totalCents: total, extraCents: extra };
       }),
     );

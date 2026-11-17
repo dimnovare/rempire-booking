@@ -270,25 +270,30 @@ async function insertVisit(tx: Querier, business: Business, c: Clean, staffId: s
      values ($1, 'appointment', $2, 'create', $3::jsonb)`,
     [c.source === "admin" ? "admin" : "client", row.id, JSON.stringify({ staff_id: staffId, starts_at: new Date(c.start).toISOString(), any_staff: anyStaff, extra_cents: extra })],
   );
-  // A6: the confirmation letter, queued with the visit so neither is ever
-  // without the other. Its text, link and .ics are built at send time
-  // (src/lib/outbox.ts); the route sends it right after the response.
-  // The form is open to anyone, so one address gets at most
-  // CONFIRMATIONS_PER_DAY letters a day; the visit is booked either way.
-  if (c.email) {
-    // parallel bookings to one address count one after another (held to commit)
-    await tx("select pg_advisory_xact_lock(hashtext('confirm:' || $1))", [c.email]);
-    const [recent] = await tx<{ n: number }>(
-      "select count(*)::int as n from notifications where kind = 'confirmation' and recipient = $1 and created_at > $2",
-      [c.email, new Date(now - 24 * 3_600_000)],
-    );
-    if (recent.n < CONFIRMATIONS_PER_DAY) {
-      await tx(
-        `insert into notifications (business_id, appointment_id, channel, kind, recipient, locale, send_at, created_at)
-         values ($1, $2, 'email', 'confirmation', $3, $4, $5, $5)`,
-        [business.id, row.id, c.email, c.locale, new Date(now)],
-      );
-    }
-  }
+  // the route sends it right after the response
+  if (c.email) await queueConfirmation(tx, business.id, row.id, c.email, c.locale, now);
   return { visit: visitOf(row), token };
+}
+
+/**
+ * A6: queue the confirmation letter in the visit's own transaction, so
+ * neither is ever without the other. Its text, link and .ics are built at
+ * send time (src/lib/outbox.ts). Online and admin bookings both use it.
+ * The booking form is open to anyone, so one address gets at most
+ * CONFIRMATIONS_PER_DAY letters a day; the visit is booked either way.
+ */
+export async function queueConfirmation(tx: Querier, businessId: string, appointmentId: string, email: string, locale: Locale, now = Date.now()): Promise<boolean> {
+  // parallel bookings to one address count one after another (held to commit)
+  await tx("select pg_advisory_xact_lock(hashtext('confirm:' || $1))", [email]);
+  const [recent] = await tx<{ n: number }>(
+    "select count(*)::int as n from notifications where kind = 'confirmation' and recipient = $1 and created_at > $2",
+    [email, new Date(now - 24 * 3_600_000)],
+  );
+  if (recent.n >= CONFIRMATIONS_PER_DAY) return false;
+  await tx(
+    `insert into notifications (business_id, appointment_id, channel, kind, recipient, locale, send_at, created_at)
+     values ($1, $2, 'email', 'confirmation', $3, $4, $5, $5)`,
+    [businessId, appointmentId, email, locale, new Date(now)],
+  );
+  return true;
 }

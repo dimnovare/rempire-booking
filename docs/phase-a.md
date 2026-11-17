@@ -13,7 +13,7 @@ Screens: `docs/client-flow.md` and the approved mock.*
 | A3 | **Staging database:** a Postgres for staging; migrations and the demo seed run on every deploy (`postbuild`). | nothing | done 17.11: Postgres `rempire-booking-staging` on the shop's Railway (docs/staging-setup.md). First deploy applied `001_core.sql` and the demo seed; on staging a booking, the same tap again, a taken slot (409), the change link, the calendar file and a cancel all work |
 | A4 | **Staff login:** password, 6-digit e-mail code, Google. | Resend API key; Google OAuth client in the shop's Google account (Dim, 17.11); `ADMIN_BOOTSTRAP_*` in Vercel | done 17.11 except the outside parts: `003_staff_auth.sql`, password login, sessions (httpOnly cookie, only the token's hash stored, 90 days idle), roles owner / admin / barber, `/admin` locked, rate limits. The e-mail code works with the console transport; in production it says «not set up» until `RESEND_API_KEY`. Google login is built (code + PKCE; links the first Google login to the login with that e-mail, never creates one) and shows once `GOOGLE_CLIENT_*` are set. The first owner login comes from `ADMIN_BOOTSTRAP_EMAIL` / `ADMIN_BOOTSTRAP_PASSWORD` on deploy |
 | A5 | **Renat's admin:** day and week calendar, one column per barber; add, move, cancel; barbers; services with each barber's price and time; hours, breaks, vacations. | | done 17.11: `/admin` in Russian, phone first. Day view (a column per barber) and week view (one barber); tap a free time to add a visit or a block; open a visit to mark arrived / done / no-show, move (tap the new time, or drag with a mouse), edit or cancel. Barbers: profile, prices and times per service, weekly hours with breaks, single days, vacation and sick days, special time. Services: list and edit. Access: password, logins for barbers and the front desk |
-| A6 | **Messages:** e-mail confirmation with `.ics` and the change link; the 2-hour SMS behind `sendSms(to, text)`; a cron for the outbox. | Resend; SMS provider account; `CRON_SECRET` and a cron schedule | groundwork done 17.11: `004_notifications.sql` outbox, `sendSms` with a console transport and SMS part counting, reminders planned from the visits, `/api/cron/outbox` (locked rows, retries with backoff). No provider is called; in production SMS rows wait until one is wired. E-mail confirmation done 17.11: a branded letter (`src/lib/letters.ts`) with its own change link (`006_visit_links.sql`) and the `.ics` attached, queued with the booking and sent right after it; the staff login code uses the same layout. Waits on: the SMS provider, `CRON_SECRET` |
+| A6 | **Messages:** e-mail confirmation with `.ics` and the change link; the 2-hour SMS behind `sendSms(to, text)`; a cron for the outbox. | Resend; SMS provider account; `CRON_SECRET` and a cron schedule | groundwork done 17.11: `004_notifications.sql` outbox, `sendSms` with a console transport and SMS part counting, reminders planned from the visits, `/api/cron/outbox` (locked rows, retries with backoff). No provider is called; in production SMS rows wait until one is wired. E-mail confirmation done 17.11: a branded letter (`src/lib/letters.ts`) with its own change link (`006_visit_links.sql`) and the `.ics` attached, queued with the booking and sent right after it; the staff login code uses the same layout. Admin bookings get it too, and SMS reminders carry a short change link (`/v/…`). Cron runs since 17.11. Waits on: the SMS provider |
 | A7 | **Altegio import:** staff, services, clients, future visits. | Altegio login | |
 | A8 | **My visits (client area):** an account icon top right; log in with a 6-digit SMS code to the phone used for booking, no password; upcoming and past visits; cancel or move until the cutoff; «book again» from any visit. Added by Dim, 17.11.2026. | A6's SMS provider | |
 | A9 | **Special time + design v2:** barbers' own higher-priced hours, booked at once; the client flow with one bottom bar at every width. | nothing | done 17.11: `002_special_time.sql`, slots and «Book» with the extra, the bottom bar at every width, «My visits» to the latest visit on the device; demo special time on staging for the next 14 days |
@@ -95,15 +95,21 @@ other devices' sessions.
 **Reminders** (`src/lib/outbox.ts`): planned on every cron run from
 `appointments.reminder_min`, up to 48 hours ahead; a moved visit gets a new
 one, a cancelled one loses it; none closer than 15 minutes to the visit.
-They carry no change link yet. A link is now cheap to add (each message
-mints its own, `visit_links`), but in Russian it makes the SMS 3 parts
-instead of 2: Dim decides.
+Each one carries a short change link of its own, `/v/<16 characters>`
+(Dim, 17.11: «short link»), minted at send time; `src/app/v/[token]`
+forwards to the visit page in the visit's language. When the link would
+make the Russian SMS a third part, the address is left out; on
+`broneeri.rempire.ee` it stays 2 parts (tested). On the staging address
+it can be 3.
 
-**Confirmation** (`src/lib/booking.ts`, `src/lib/outbox.ts`): an online
-booking with an e-mail queues one in its own transaction; a double tap adds
-none. It is sent right after the response, else by the cron. It is built
-at send time, so a visit cancelled meanwhile gets no letter. Admin bookings
-send none yet.
+**Confirmation** (`src/lib/booking.ts` `queueConfirmation`,
+`src/lib/outbox.ts`): a booking queues one in its own transaction, at most
+5 a day per address; a double tap adds none. Online bookings send it right
+after the response. Admin bookings queue one when the client has an e-mail
+on file from an earlier online booking, in that booking's language (Dim,
+17.11); the 5-minute cron sends it. The letter is built at send time, so a
+visit cancelled meanwhile gets none, and it carries no client name. Moving
+or cancelling a visit in the admin sends nothing yet.
 
 ### Waiting on outside accounts
 
@@ -113,9 +119,9 @@ Every account in use, and what switches at the move: `docs/accounts.md`.
 |---|---|---|
 | Owner logins on staging: done 17.11, all 5 listed addresses have the shared password | A4 | `ADMIN_BOOTSTRAP_EMAIL`, `ADMIN_BOOTSTRAP_PASSWORD` (sensitive) |
 | Resend: done 17.11. New free account; key set; domain `rempire-booking.diipsolutions.eu` (EU) with its DNS in Dim's Cloudflare; rempire.ee at the move | A4 codes, A6 e-mail | `RESEND_API_KEY` (sensitive), `EMAIL_FROM` |
-| Google OAuth client in the shop's Google account (Web application; redirect URIs in `src/lib/auth/google.ts`) | A4 Google login | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (sensitive) |
-| SMS provider: Dim asked for a price comparison first (17.11) | A6 reminders, A8 codes | added with the provider |
-| Cron secret (the schedule, every 5 minutes, is in `vercel.json`; Dim, 17.11) | A6 | `CRON_SECRET` (sensitive); until set, each run answers 503 and does nothing |
+| Google OAuth client: done 17.11, project «REMPIRE Booking» (`docs/accounts.md` § Google Cloud); `/api/auth/google` sends to Google | A4 Google login | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (sensitive) |
+| SMS provider: Dim asks Renat whether he has his own Messaggio account (17.11); otherwise Messente | A6 reminders, A8 codes | added with the provider |
+| Cron secret: done 17.11 (every 5 minutes, `vercel.json`); a call without it answers 401 | A6 | `CRON_SECRET` (sensitive) |
 | Altegio login | A7 import | |
 
 ## Answers that change the build

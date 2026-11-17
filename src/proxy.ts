@@ -30,6 +30,8 @@ function admin(request: NextRequest): NextResponse {
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return admin(request);
+  // the SMS reminder's short link picks the visit's own language (src/app/v)
+  if (pathname.startsWith("/v/")) return NextResponse.next();
   if (isLocale(pathname.split("/")[1])) return NextResponse.next();
   const url = request.nextUrl.clone();
   url.pathname = `/${pickLocale(request.headers.get("accept-language"))}${pathname === "/" ? "" : pathname}`;

@@ -10,6 +10,6 @@ export default function robots(): MetadataRoute.Robots {
       ],
     };
   }
-  // the admin and the API stay out even on rempire.ee
-  return { rules: { userAgent: "*", allow: "/", disallow: ["/admin", "/api/"] } };
+  // the admin, the API and the SMS change links stay out even on rempire.ee
+  return { rules: { userAgent: "*", allow: "/", disallow: ["/admin", "/api/", "/v/"] } };
 }
