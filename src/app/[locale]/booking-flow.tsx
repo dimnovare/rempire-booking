@@ -11,6 +11,7 @@
  * (https://claude.ai/artifact/Dg7tYCfjpba275Q5GWatFA).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { InstallOffer } from "./install-offer";
 import { BackIcon, CalendarIcon, CheckIcon, Logo, PersonIcon, PlusIcon, TowerMark } from "@/components/brand";
 import type { Catalog, CatalogStaff } from "@/lib/catalog";
 import { COPY, duration, eur, euroRange, INTL, LOCALES, pick, type Locale } from "@/lib/i18n";
@@ -30,6 +31,8 @@ type Tuple = [number, string, number?];
 type Day = { d: string; open: boolean; s: Tuple[] };
 type Avail = { key: string; offered: boolean; days: Day[] };
 type Slot = { t: number; staffId: string; extra: number };
+/** The visit this device booked, as remembered here and checked against the server (/api/visit/<token>). */
+type NextVisit = { url: string; start: number; end: number; staffId: string; services: string[] };
 type Done = { start: number; end: number; staffId: string; totalCents: number; extraCents: number; manageUrl: string | null };
 
 /** What the bottom bar shows: who and what, the price, and the one next step. */
@@ -80,6 +83,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
   const [remembered, setRemembered] = useState(false);
   const [last, setLast] = useState<{ barber: string; services: string[] } | null>(null);
   const [mine, setMine] = useState<string | null>(null); // the latest visit's own link
+  const [next, setNext] = useState<NextVisit | null>(null); // that visit itself: «Ваша запись» on the first screen
   const [calMonth, setCalMonth] = useState<string | null>(null); // "YYYY-MM" the calendar shows
   const [calOpen, setCalOpen] = useState(false); // phones: the month instead of the strip
   const [showComment, setShowComment] = useState(false);
@@ -116,6 +120,29 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
       const v = JSON.parse(localStorage.getItem(VISIT) || "null");
       if (v && typeof v.url === "string" && /^\/(ru|et|en)\/visit\/[A-Za-z0-9_-]+$/.test(v.url) && typeof v.end === "number" && v.end > Date.now()) {
         setMine(v.url);
+        if (typeof v.start === "number" && typeof v.staffId === "string" && Array.isArray(v.services)) {
+          setNext({ url: v.url, start: v.start, end: v.end, staffId: v.staffId, services: v.services.filter((id: unknown): id is string => typeof id === "string") });
+        }
+        // as it stands now: moved or cancelled since, maybe on another device
+        const url: string = v.url;
+        fetch(`/api/visit/${url.split("/").pop()}`, { cache: "no-store" })
+          .then((r) => (r.status === 404 ? { status: "cancelled" } : r.ok ? r.json() : null))
+          .then((j) => {
+            if (!j) return;
+            const end = Date.parse(j.endsAt);
+            if (["cancelled", "no_show", "done"].includes(j.status) || !(end > Date.now())) {
+              setMine(null);
+              setNext(null);
+              localStorage.removeItem(VISIT);
+              return;
+            }
+            const now: NextVisit = { url, start: Date.parse(j.startsAt), end, staffId: String(j.staffId), services: Array.isArray(j.serviceIds) ? j.serviceIds.map(String) : [] };
+            setNext(now);
+            localStorage.setItem(VISIT, JSON.stringify(now));
+          })
+          .catch(() => {
+            /* offline: what the device remembers stays */
+          });
       }
     } catch {
       /* private mode: nothing remembered */
@@ -325,11 +352,14 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
         try {
           localStorage.setItem(STORE, JSON.stringify({ name: form.name.trim(), phone: form.phone.trim(), email: form.email.trim() }));
           if (barber) localStorage.setItem(LAST, JSON.stringify({ barber, services }));
-          if (j.manageUrl) localStorage.setItem(VISIT, JSON.stringify({ url: j.manageUrl, end }));
+          if (j.manageUrl) localStorage.setItem(VISIT, JSON.stringify({ url: j.manageUrl, start, end, staffId: j.visit.staffId, services }));
         } catch {
           /* not remembered: fine */
         }
-        if (j.manageUrl) setMine(j.manageUrl);
+        if (j.manageUrl) {
+          setMine(j.manageUrl);
+          setNext({ url: j.manageUrl, start, end, staffId: j.visit.staffId, services });
+        }
         setDone({ start, end, staffId: j.visit.staffId, totalCents: j.visit.totalCents, extraCents: j.visit.extraCents ?? 0, manageUrl: j.manageUrl });
         setSlot({ t: start, staffId: j.visit.staffId, extra: j.visit.extraCents ?? 0 });
         setAvail(null); // the chair is taken now
@@ -484,6 +514,22 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
   );
 
   /* ---------- screens ---------- */
+  /** The visit this device booked and still has ahead: when, with whom, and the way to change it. */
+  const nextVisit = () => {
+    if (!next || !myLink) return null;
+    const what = [staffById.get(next.staffId)?.name, names(next.services.filter((id) => svcById.has(id)))].filter(Boolean).join(" · ");
+    return (
+      <a className="next" href={myLink}>
+        <span className="eyebrow">{c.yourVisit}</span>
+        <b>
+          {cap(dLong(localParts(next.start, tz).date))}, {fmtTime(next.start)}
+        </b>
+        {what && <span className="what">{what}</span>}
+        <span className="lk">{c.changeCancel}</span>
+      </a>
+    );
+  };
+
   const screen1 = () => {
     const b = barber && barber !== "any" ? staffById.get(barber) ?? null : null;
     const list = b ? catalog.services.filter((s) => b.offers[s.id]) : catalog.services;
@@ -494,6 +540,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
           <div className="eyebrow">{c.loc}</div>
           <h1 className="h1">{c.title}</h1>
         </div>
+        {nextVisit()}
         <section>
           <h2 className="label">{c.barber}</h2>
           <div className="bleed">
@@ -887,6 +934,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
             {c.again}
           </button>
         </div>
+        <InstallOffer c={c.install} />
       </div>
     );
   };

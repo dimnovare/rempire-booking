@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   referrer: "same-origin",
   manifest: "/b/manifest.webmanifest",
   // iPhone: full screen from the home screen, the status bar over the black top bar
-  appleWebApp: { capable: true, title: "REMPIRE", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "REMPIRE Team", statusBarStyle: "black-translucent" },
   formatDetection: { telephone: false },
 };
 

@@ -196,6 +196,18 @@ textarea.input { min-height: 84px; resize: vertical; }
 .taken h3 { margin: 0; font: 800 19px/1.05 var(--display); text-transform: uppercase; color: var(--warn); letter-spacing: .03em; }
 .taken p { margin: 0; color: var(--mute); font-size: 14px; }
 .taken .slots { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* «Ваша запись» on the first screen: the visit this device booked (docs/apps.md) */
+.next { display: flex; flex-direction: column; gap: 7px; padding: 14px 16px; border: 1px solid var(--line-2); border-left: 2px solid var(--lime); color: var(--fg); text-decoration: none; }
+.next:hover { border-color: var(--lime); }
+.next b { font: 800 22px/1.15 var(--display); letter-spacing: .04em; text-transform: uppercase; }
+.next .what { color: var(--mute); font-size: 15px; }
+.next .lk { color: var(--lime); font-size: 15px; text-decoration: underline; text-underline-offset: 3px; }
+/* the install offer under the confirmation (install-offer.tsx) */
+.install { display: flex; flex-direction: column; gap: 10px; padding-top: 20px; border-top: 1px solid var(--line); }
+.install .label { margin: 0; color: var(--fg); }
+.install p, .install ol { margin: 0; color: var(--mute); font-size: 15px; }
+.install ol { padding-left: 22px; display: flex; flex-direction: column; gap: 4px; list-style: decimal; }
+.install-later { align-self: flex-start; min-height: 44px; padding: 0; color: var(--mute); font-size: 15px; text-decoration: underline; text-underline-offset: 3px; }
 .welcome { color: var(--lime); font-size: 14px; margin: 0; }
 .alert { color: var(--warn); font-size: 14px; margin: 0; }
 

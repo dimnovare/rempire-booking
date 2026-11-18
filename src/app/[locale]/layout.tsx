@@ -36,6 +36,9 @@ export async function generateMetadata({ params }: LayoutProps<"/[locale]">): Pr
     title: m.title,
     description: m.description,
     robots: robotsMeta(),
+    // the client app (docs/apps.md): the booking site on the home screen
+    manifest: `/${locale}/manifest.webmanifest`,
+    appleWebApp: { capable: true, title: "REMPIRE", statusBarStyle: "black" },
     openGraph: {
       title: m.title,
       description: m.description,

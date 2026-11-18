@@ -19,7 +19,8 @@ export function GET() {
   const manifest = {
     id: "/b",
     name: "REMPIRE · Team",
-    short_name: "REMPIRE",
+    // the client app is «REMPIRE» (src/app/[locale]/manifest.webmanifest)
+    short_name: "REMPIRE Team",
     description: "REMPIRE staff app",
     lang: "ru",
     start_url: START_PATH,

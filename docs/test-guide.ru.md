@@ -36,7 +36,7 @@ Every label quoted is the app's own, checked in `src/app/b/copy.ru.ts` and
 2. Установите на телефон
 iPhone: в Safari «Поделиться» → «На экран „Домой“» → «Добавить».
 Android: в Chrome «Установить».
-Дальше открывайте REMPIRE с экрана телефона.
+Дальше открывайте REMPIRE Team с экрана телефона.
 
 3. Уведомления
 «Ещё» → «Включить уведомления» → «Прислать пробное».

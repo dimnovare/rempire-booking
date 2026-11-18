@@ -1,7 +1,8 @@
 # The apps: one for staff, one for clients
 
-*Decided with Dim in chat, 18.11.2026. Steps 1 and 2 (the staff app) were
-built the same day; steps 3 and 4 (the client app) are not built yet.*
+*Decided with Dim in chat, 18.11.2026. Steps 1 to 3 (the staff app and the
+client app) were built the same day; step 4 (client notifications) is not
+built yet.*
 
 ## Decisions (Dim, 18.11.2026)
 
@@ -56,9 +57,37 @@ the admin at `/admin`.
 Not checked on a real phone yet: the installed app's start, and the switch
 inside an installed app.
 
+## The client app, as built (18.11)
+
+The booking site itself, installable. No separate pages.
+
+- **Its own manifest**, `/<locale>/manifest.webmanifest`, linked from every
+  client page: one app in three languages (id `/`), named «REMPIRE», opening
+  on the booking page of the language it was added in.
+- **Its own icon:** the tower, white on black (`/icons/…`,
+  `src/app/[locale]/apple-icon.tsx`). The staff app is the other way round,
+  dark on white, and is named «REMPIRE Team», so one phone tells them apart.
+- **«Ваш визит» on top of the booking page** (`.next` in
+  `booking-flow.tsx`): the visit this device booked, with the day, the time,
+  the barber and the services, and the link to move or cancel it.
+  - The device remembers it; `GET /api/visit/<token>` says how it stands
+    now, so a visit cancelled or moved elsewhere is not shown stale. The
+    answer holds no name and no phone.
+  - Under it, as before: «Как в прошлый раз» in the bottom bar.
+- **The install offer** (`install-offer.tsx`): on the confirmation screen
+  only, after a booking, on a phone, never inside the installed app.
+  - Android: Chrome's own prompt behind «Добавить на экран», when Chrome
+    offers it; else one line about the browser's menu.
+  - iPhone: the two Share steps.
+  - «Не сейчас» hides it on that device for good.
+- **Tests:** `tests/client-app.test.ts`, `e2e/app.spec.ts` (both phones:
+  book, the offer, the visit on top, cancel, gone).
+
+Not checked on a real phone yet: the install itself, on an iPhone and on
+Android.
+
 ## The rest, today (checked 18.11)
 
-- The client pages have no app manifest.
 - The booking page has no staff link, and the admin has no link to the
   booking page.
 - The client flow already remembers, on the device: name, phone and e-mail,
@@ -73,11 +102,7 @@ inside an installed app.
 1. **Staff: one app, by role.** *Built 18.11, above.*
 2. **Renat's combination.** *Built 18.11, above.* Dim tries it on staging,
    on his own phone and PC; then we adjust.
-3. **Client app.**
-   - An icon and an app name.
-   - It opens on the upcoming visit, or on «как в прошлый раз».
-   - The install offer comes on the confirmation screen, after a booking,
-     never before.
+3. **Client app.** *Built 18.11, above.*
 4. **Client notifications.**
    - The client opts in after booking.
    - One setting: SMS, notification or both. The default is decided later.

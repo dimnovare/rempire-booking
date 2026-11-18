@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false, nocache: true, googleBot: { index: false, follow: false } },
   referrer: "same-origin",
   manifest: "/b/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "REMPIRE", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "REMPIRE Team", statusBarStyle: "black-translucent" },
   formatDetection: { telephone: false },
 };
 
