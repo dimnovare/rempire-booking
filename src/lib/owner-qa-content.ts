@@ -23,9 +23,31 @@ export type Question = { id: string; title: string; lead: string; fields: Field[
 
 export const INTRO =
   "Ренат, мы делаем для REMPIRE свою систему записи вместо Altegio и свои счета барберам вместо Isolta. " +
-  "Здесь 7 коротких вопросов. Ответы сохраняются сами: можно закрыть страницу, вернуться и дописать.";
+  "Здесь 9 коротких вопросов. Ответы сохраняются сами: можно закрыть страницу, вернуться и дописать.";
 
 export const QUESTIONS: Question[] = [
+  /* 18.11.2026, for the test run (docs/test-run.md): the two things the test
+     days wait on, first on the page so a returning Renat sees them. */
+  {
+    id: "access",
+    title: "Доступ к Altegio и Isolta",
+    lead:
+      "Чтобы перенести барберов, услуги, цены и график из Altegio, а данные для счетов из Isolta, " +
+      "добавь info@diipsolutions.eu пользователем в обе системы. Хватит прав только на просмотр, если они есть.",
+    fields: [
+      { id: "altegio", kind: "one", label: "Altegio", options: ["Добавил", "Добавлю на этой неделе", "Не получается, нужна помощь"] },
+      { id: "isolta", kind: "one", label: "Isolta", options: ["Добавил", "Добавлю на этой неделе", "Не получается, нужна помощь"] },
+      { id: "note", kind: "text", label: "Если что-то мешает, напиши" },
+    ],
+  },
+  {
+    id: "emails",
+    title: "E-mail барберов для входа",
+    lead:
+      "Каждый барбер входит в своё приложение по e-mail: туда приходит код для входа. " +
+      "Напиши тот e-mail, который барбер открывает на телефоне.",
+    fields: [{ id: "list", kind: "text", label: "Имя барбера и e-mail, по одному в строке", rows: 6 }],
+  },
   {
     id: "commission",
     title: "17 % барберу от продажи товара",

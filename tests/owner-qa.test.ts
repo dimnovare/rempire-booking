@@ -28,6 +28,11 @@ describe("the questions", () => {
     for (const key of FIELDS.keys()) expect(key).toMatch(/^[a-z_]{1,30}\.[a-z_]{1,30}$/);
     expect(FIELDS.has("telegram.how")).toBe(true);
     expect(FIELDS.has("decided.note")).toBe(true);
+    // 18.11: what the test run waits on, first on the page
+    expect(QUESTIONS.slice(0, 2).map((q) => q.id)).toEqual(["access", "emails"]);
+    expect(cleanValue("access.altegio", "Добавил")).toBe("Добавил");
+    expect(cleanValue("access.isolta", "Да")).toBeNull();
+    expect(cleanValue("emails.list", "Valentin — valentin@example.test")).toBe("Valentin — valentin@example.test");
   });
 
   it("take only what the page offers", () => {
