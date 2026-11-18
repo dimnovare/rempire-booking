@@ -124,7 +124,7 @@ live only with Dim's OK, after he has seen the exact diff.
 | R2 | Booking: `SHOP_SALES` off, test sales, the missing purchase price, the banner, the mail guard, «ТЕСТ» PDFs, staging invoice numbers, the feedback button | Claude |
 | R3 | **Dim's OK** on R1's diff. Then: the push to the live shop, `BOOKING_API_SECRET` in the shop's Vercel (Production only, Sensitive), `SHOP_API_URL` and `SHOP_API_SECRET` in booking's Vercel. **Done 18.11** | Dim |
 | R4 | A7, the Altegio import | Claude, once Dim has the login |
-| R5 | The guide in Russian | Claude writes it, Dim forwards it |
+| R5 | The guide in Russian. **Drafted 18.11:** `docs/test-guide.ru.md`, with what has to be true before Dim sends it | Claude writes it, Dim forwards it |
 | R6 | The test days, then the wipe and the fix list | Renat and the barbers; Claude reads the reports |
 
 **Status, 18.11:** R1, R2 and R3 are done. R4 waits on Altegio.
