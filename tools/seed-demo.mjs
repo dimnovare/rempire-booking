@@ -169,9 +169,9 @@ export async function seedDemoMoney(db, businessId) {
 
 /** Demo products for the demo sales: the fake shop's (src/lib/shop.ts FAKE_PRODUCTS). */
 const DEMO_SALE_ITEMS = [
-  { id: "demo-matte-paste", variant: "100ml", name: "Demo Grooming Matte Paste 100 ml", price: 2490, purchase: 1150, barcode: "2000000000017" },
-  { id: "demo-beard-oil", variant: "30ml", name: "Demo Beard Co Beard Oil Cedar 30 ml", price: 2190, purchase: 900, barcode: "2000000000031" },
-  { id: "demo-sea-salt", variant: "200ml", name: "Demo Grooming Sea Salt Spray 200 ml", price: 1990, purchase: 840, barcode: "2000000000024" },
+  { id: "demo-matte-paste", variant: "100ml", name: "Demo Grooming Matte Paste 100 ml", price: 2490, purchase: 1150, barcode: "2000000000015" },
+  { id: "demo-beard-oil", variant: "30ml", name: "Demo Beard Co Beard Oil Cedar 30 ml", price: 2190, purchase: 900, barcode: "2000000000039" },
+  { id: "demo-sea-salt", variant: "200ml", name: "Demo Grooming Sea Salt Spray 200 ml", price: 1990, purchase: 840, barcode: "2000000000022" },
 ];
 
 /**

@@ -87,7 +87,7 @@ describe("the fake shop", () => {
   it("is on without SHOP_API_URL, and finds by barcode, name and id", async () => {
     expect(shopMode(FAKE)).toBe("fake");
     expect(shopMode({ SHOP_API_URL: "https://shop.example.test" })).toBe("live");
-    expect((await lookupBarcode("2000000000017", FAKE))?.productId).toBe("demo-matte-paste");
+    expect((await lookupBarcode("2000000000015", FAKE))?.productId).toBe("demo-matte-paste");
     expect(await lookupBarcode("999", FAKE)).toBeNull();
     expect((await searchProducts("beard", 10, FAKE)).map((p) => p.productId)).toEqual(["demo-beard-oil", "demo-shampoo", "demo-aftershave"]);
     expect(await searchProducts("b", 10, FAKE)).toEqual([]);

@@ -79,14 +79,14 @@ const P = (productId: string, variant: string, name: string, variantLabel: strin
 
 /** Made-up products and barcodes (the 200… in-store range): no real shop data. */
 export const FAKE_PRODUCTS: ShopProduct[] = [
-  P("demo-matte-paste", "100ml", "Matte Paste", "100 ml", "Demo Grooming", 2490, 1150, 12, "2000000000017"),
-  P("demo-sea-salt", "200ml", "Sea Salt Spray", "200 ml", "Demo Grooming", 1990, 840, 8, "2000000000024"),
-  P("demo-beard-oil", "30ml", "Beard Oil Cedar", "30 ml", "Demo Beard Co", 2190, 900, 15, "2000000000031"),
-  P("demo-shampoo", "250ml", "Daily Shampoo", "250 ml", "Demo Beard Co", 1790, 720, 20, "2000000000048"),
-  P("demo-pomade", "100ml", "Shine Pomade", "100 ml", "Demo Grooming", 2290, null, 6, "2000000000055"),
-  P("demo-comb", "", "Pocket Comb", "", "Demo Tools", 990, 310, 30, "2000000000062"),
-  P("demo-aftershave", "100ml", "Aftershave Balm", "100 ml", "Demo Beard Co", 2690, 1240, 5, "2000000000079"),
-  P("demo-powder", "20g", "Texture Powder", "20 g", "Demo Grooming", 1890, 790, 9, "2000000000086"),
+  P("demo-matte-paste", "100ml", "Matte Paste", "100 ml", "Demo Grooming", 2490, 1150, 12, "2000000000015"),
+  P("demo-sea-salt", "200ml", "Sea Salt Spray", "200 ml", "Demo Grooming", 1990, 840, 8, "2000000000022"),
+  P("demo-beard-oil", "30ml", "Beard Oil Cedar", "30 ml", "Demo Beard Co", 2190, 900, 15, "2000000000039"),
+  P("demo-shampoo", "250ml", "Daily Shampoo", "250 ml", "Demo Beard Co", 1790, 720, 20, "2000000000046"),
+  P("demo-pomade", "100ml", "Shine Pomade", "100 ml", "Demo Grooming", 2290, null, 6, "2000000000053"),
+  P("demo-comb", "", "Pocket Comb", "", "Demo Tools", 990, 310, 30, "2000000000060"),
+  P("demo-aftershave", "100ml", "Aftershave Balm", "100 ml", "Demo Beard Co", 2690, 1240, 5, "2000000000077"),
+  P("demo-powder", "20g", "Texture Powder", "20 g", "Demo Grooming", 1890, 790, 9, "2000000000084"),
 ];
 
 const fold = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");

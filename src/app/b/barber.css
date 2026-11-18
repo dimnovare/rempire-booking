@@ -259,9 +259,22 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-sale .end { flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .bx-sale.is-off .txt, .bx-sale.is-off .end { opacity: .5; text-decoration: line-through; }
 .bx-scan { position: fixed; inset: 0; z-index: 60; background: #000; display: flex; flex-direction: column; }
-.bx-scan-video { flex: 1; min-height: 0; width: 100%; object-fit: cover; }
-.bx-scan-frame { position: absolute; left: 12%; right: 12%; top: 34%; height: 22%; border: 2px solid var(--lime); pointer-events: none; }
-.bx-scan-bar { display: flex; align-items: center; gap: 12px; padding: 14px max(16px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); background: var(--raise); }
-.bx-scan-bar p { flex: 1; margin: 0; font-size: 15px; }
+/* the picture: a pinch or a double tap here is the lens's zoom, not the page's */
+.bx-scan-box { position: relative; flex: 1; min-height: 0; overflow: hidden; touch-action: none; }
+.bx-scan-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* centred on the picture, inside the band the engine reads (0.92 × 0.60 of the short side): a code in the box always reads */
+.bx-scan-frame { position: absolute; left: 12%; right: 12%; top: 50%; aspect-ratio: 2 / 1; transform: translateY(-50%); border: 2px solid var(--lime); pointer-events: none; }
+.bx-scan-zoom { position: absolute; top: calc(16px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); padding: 4px 10px; background: rgba(0, 0, 0, .6); font-size: 15px; font-variant-numeric: tabular-nums; pointer-events: none; }
+/* × top left, as in a phone's own camera; the torch top right, only on a lens that has one */
+.bx-scan-close, .bx-scan-torch { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); width: 48px; height: 48px; display: grid; place-items: center; background: rgba(0, 0, 0, .55); border: 1px solid var(--line-2); }
+.bx-scan-close { left: max(12px, env(safe-area-inset-left, 0px)); }
+.bx-scan-torch { right: max(12px, env(safe-area-inset-right, 0px)); }
+.bx-scan-torch[aria-pressed="true"] { background: var(--lime); border-color: var(--lime); color: var(--on-lime); }
+.bx-scan-bar { display: flex; flex-direction: column; gap: 10px; padding: 14px max(16px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); background: var(--raise); }
+.bx-scan-bar p { margin: 0; font-size: 15px; }
+.bx-scan-bar p.is-err { color: var(--warn); }
+.bx-scan-manual { display: flex; align-items: center; gap: 8px; }
+.bx-scan-manual input { flex: 1; }
+.bx-scan-manual .adm-btn { flex: none; }
 /* five sections in the bottom bar */
 .bx-nav:has(a:nth-child(5)) a { font-size: 10px; letter-spacing: .04em; }
