@@ -40,13 +40,23 @@ export const QUESTIONS: Question[] = [
       { id: "note", kind: "text", label: "Если что-то мешает, напиши" },
     ],
   },
+  /* «emails» stays the id so the field keys never change; Dim, 18.11: Renat
+     may test alone first, the barbers' logins only if he wants them in. */
   {
     id: "emails",
-    title: "E-mail барберов для входа",
+    title: "Кто тестирует",
     lead:
-      "Каждый барбер входит в своё приложение по e-mail: туда приходит код для входа. " +
-      "Напиши тот e-mail, который барбер открывает на телефоне.",
-    fields: [{ id: "list", kind: "text", label: "Имя барбера и e-mail, по одному в строке", rows: 6 }],
+      "Новую систему можно сначала попробовать самому, а можно сразу с барберами. " +
+      "Каждый барбер входит в своё приложение по e-mail: туда приходит код для входа.",
+    fields: [
+      { id: "who", kind: "one", label: "Кто тестирует?", options: ["Сначала я сам", "Я и барберы"] },
+      {
+        id: "list",
+        kind: "text",
+        label: "Если с барберами: имя барбера и e-mail, который он открывает на телефоне, по одному в строке",
+        rows: 6,
+      },
+    ],
   },
   {
     id: "commission",

@@ -25,7 +25,7 @@ out only with Dim's OK.
 | Shape | **A read-only link to the live shop.** It needs a small deploy of new code to the live shop, but no data changes |
 | Photo match | **The shop's own OpenAI key**, about a cent a photo |
 | Staging e-mail | **Only to staff addresses.** Login codes reach the person; the rest is redirected to the shop inbox |
-| Who tests | **Everyone at once**: Renat and all the barbers |
+| Who tests | **Everyone at once**: Renat and all the barbers. *Changed 18.11 (Dim): Renat may test alone first; he chooses on his Q&A page (question 2)* |
 | Real barbers, services, prices | **From the Altegio import (A7).** It waits on the Altegio login; until then staging has demo data |
 | Problem reports | **A «Сообщить о проблеме» button** |
 | The live shop's preview risk | **Ask the shop's session first** (below) |
@@ -104,7 +104,9 @@ live only with Dim's OK, after he has seen the exact diff.
 - **When:** once A7 has imported the real barbers, services, prices and
   hours. That needs the Altegio login: Renat adds info@diipsolutions.eu as a
   user.
-- **Who:** Renat and all the barbers at once.
+- **Who:** Renat alone first, or Renat and all the barbers, as he answers on
+  his Q&A page. He already has an owner login; the barbers' logins need
+  their e-mails, which he writes on the same page.
 - **For them:** a one-screen guide in Russian, which Dim forwards.
   - **Barber:** install the app, his day, a walk-in, move a visit, block an
     hour, ask for a day off. Find a product by barcode, search and photo, and

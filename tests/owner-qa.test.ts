@@ -32,6 +32,8 @@ describe("the questions", () => {
     expect(QUESTIONS.slice(0, 2).map((q) => q.id)).toEqual(["access", "emails"]);
     expect(cleanValue("access.altegio", "Добавил")).toBe("Добавил");
     expect(cleanValue("access.isolta", "Да")).toBeNull();
+    expect(cleanValue("emails.who", "Сначала я сам")).toBe("Сначала я сам");
+    expect(cleanValue("emails.who", "Все")).toBeNull();
     expect(cleanValue("emails.list", "Valentin — valentin@example.test")).toBe("Valentin — valentin@example.test");
   });
 

@@ -7,7 +7,7 @@ plain text, ready to paste into WhatsApp or Telegram.*
 **Before Dim sends them:**
 
 - **A7 is in.** Staging shows the real barbers, services, prices and hours. Until then it shows demo data.
-- **Every barber has a login** in «Доступ», with his own e-mail, role «Барбер», linked to himself. That needs the barbers' e-mails from Renat.
+- **If the barbers test too** (Renat's Q&A page, question 2): every barber has a login in «Доступ», with his own e-mail, role «Барбер», linked to himself. If Renat tests alone first, send only message 2.
 - **Renat has his login** (role «Владелец»).
 - **Login codes arrive by e-mail on staging.** Try it with one address first.
 - **Fill in the test dates** in both messages («с … по …»).
