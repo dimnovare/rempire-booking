@@ -11,6 +11,7 @@ import { coversDay, freeGaps, hoursText, nextVisit } from "@/lib/barber/gaps";
 import { closeDb, query } from "@/lib/db";
 import { zonedToUtc } from "@/lib/tz";
 import { freshDemo, type Demo } from "./helpers";
+import { seedDemoVisits } from "../tools/seed-demo.mjs";
 
 const TZ = "Europe/Tallinn";
 const at = (date: string, time: string) => zonedToUtc(date, time, TZ);
@@ -127,4 +128,24 @@ describe("status from the barber app", () => {
     const rows = await query<{ id: string; status: string }>("select id, status from appointments where id = any($1::uuid[])", [[mine.id, theirs.id]]);
     expect(Object.fromEntries(rows.map((r) => [r.id, r.status]))).toEqual({ [mine.id]: "arrived", [theirs.id]: "booked" });
   });
+});
+
+describe("the demo day (a local run and e2e, tools/seed-demo.mjs)", () => {
+  const db = { query: async (sql: string, params?: unknown[]) => ({ rows: await query(sql, params) }) };
+  // 09:22, 13:57, 16:57: the client in 20 minutes would sit on the next
+  // demo visit, which is itself more than 30 minutes away
+  for (const time of ["07:00", "09:22", "09:35", "10:40", "13:57", "16:57"]) {
+    it(`started at ${time}: «Дальше» is at most 30 minutes away, so «Пришёл» shows; nothing overlaps`, async () => {
+      const now = at(TUE, time);
+      await seedDemoVisits(db, now);
+      for (const slug of ["valentin", "jevgeni"]) {
+        const [day] = await loadBarberDays(query, demo.business, demo.staff[slug], TUE, 1);
+        const next = nextVisit(day.visits, now);
+        expect(next && next.start - now).toBeLessThanOrEqual(30 * MIN);
+        const live = day.visits.filter((v) => v.status !== "cancelled").sort((a, b) => a.start - b.start);
+        for (let i = 1; i < live.length; i++) expect(live[i].start).toBeGreaterThanOrEqual(live[i - 1].blockedUntil);
+        expect(live.length).toBeGreaterThanOrEqual(4);
+      }
+    });
+  }
 });
