@@ -11,5 +11,8 @@ export default defineConfig({
     // with 20 files at once on a busy laptop that set-up can pass 10 s
     hookTimeout: 30_000,
     testTimeout: 30_000,
+    // tests run as the real thing (rempire.ee): the staging test-run guards
+    // (src/lib/test-run.ts) are tested on their own, with ALLOW_INDEXING unset
+    env: { ALLOW_INDEXING: "yes" },
   },
 });

@@ -76,6 +76,15 @@ for (const width of [320, 360]) {
       }
       await page.locator(".bx-rows button.bx-row").first().click();
       await check(page, "price");
+      await sheet(page).getByRole("button", { name: B.close }).click();
+      await expect(sheet(page)).toHaveCount(0);
+
+      // the staging test line (Phase C, docs/test-run.md): «Сообщить о проблеме»
+      await page.locator(".test-banner").getByRole("button", { name: B.test.report }).click();
+      await expect(sheet(page).getByRole("textbox")).toBeVisible();
+      await check(page, "report");
+      await sheet(page).getByRole("button", { name: B.close }).click();
+      await expect(sheet(page)).toHaveCount(0);
     });
 
     test("the login, logged out", async ({ page }) => {

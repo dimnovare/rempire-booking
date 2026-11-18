@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { Logo } from "@/components/brand";
+import { TestBanner } from "@/components/test-banner";
 import { currentStaffUser } from "@/lib/auth/current";
 import { dbConfigured, dbKind } from "@/lib/db";
 import { OutIcon } from "../icons";
@@ -16,6 +17,7 @@ import { AccountLink, Nav, NavLinks } from "./nav";
 export default function AdminApp({ children }: { children: React.ReactNode }) {
   return (
     <div className="adm-app">
+      <TestBanner app="admin" report />
       <header className="adm-top">
         <a href="/admin" className="adm-brand" aria-label="REMPIRE">
           <Logo />

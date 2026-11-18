@@ -12,7 +12,7 @@ import { freshDemo, type Demo } from "./helpers";
 // The admin works on the real clock, so these visits are a week or more ahead.
 const TZ = "Europe/Tallinn";
 const at = (date: string, time: string) => zonedToUtc(date, time, TZ);
-const ENV = { NODE_ENV: "test", VITEST: "true", SITE_URL: "https://broneeri.rempire.ee" };
+const ENV = { NODE_ENV: "test", VITEST: "true", SITE_URL: "https://broneeri.rempire.ee", ALLOW_INDEXING: "yes" };
 
 /** the first Tuesday at least a week from today */
 function tuesday(): string {

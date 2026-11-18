@@ -38,8 +38,9 @@ import { freshDemo, type Demo } from "./helpers";
 
 const TZ = "Europe/Tallinn";
 const at = (date: string, time: string) => zonedToUtc(date, time, TZ);
-const FAKE = { NODE_ENV: "test", VITEST: "true" } as Record<string, string>;
-const DEV = { NODE_ENV: "development", VITEST: "true" } as Record<string, string>;
+// the real thing: sales go to the (fake) shop; the test run with SHOP_SALES off is tested on its own
+const FAKE = { NODE_ENV: "test", VITEST: "true", ALLOW_INDEXING: "yes", SHOP_SALES: "on" } as Record<string, string>;
+const DEV = { NODE_ENV: "development", VITEST: "true", ALLOW_INDEXING: "yes" } as Record<string, string>;
 const OCT = "2026-10";
 
 let demo: Demo;

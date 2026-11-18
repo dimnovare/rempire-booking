@@ -24,6 +24,8 @@ export type SellProduct = {
   clientCents: number;
   /** what one unit for himself costs (purchase price with VAT), or null */
   selfCents: number | null;
+  /** the test run: no purchase price in the shop, so for himself it is 0 €, marked */
+  selfNoPurchase: boolean;
   /** the barber's share of one unit, unrounded: the sheet rounds qty × it as the server does */
   shareCents: number;
 };
@@ -41,6 +43,7 @@ function view(business: Business, p: ShopProduct): SellProduct {
     stock: p.stock,
     clientCents: p.priceCents,
     selfCents: unitPriceFor(p, "self"),
+    selfNoPurchase: p.purchaseCents == null,
     shareCents: per,
   };
 }

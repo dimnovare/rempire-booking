@@ -17,7 +17,7 @@ import { barcodeAction, photoAction, searchAction, sellAction, undoAction, type 
 import { Scanner, shrinkPhoto } from "./scanner";
 
 type Mode = "client" | "self";
-type Today = { ref: string; name: string; qty: number; mode: string; totalCents: number; commissionCents: number; status: string; sync: string; at: string; reversal: boolean };
+type Today = { ref: string; name: string; qty: number; mode: string; totalCents: number; commissionCents: number; status: string; sync: string; noPurchase: boolean; at: string; reversal: boolean };
 type Pending = { ref: string; productId: string; variant: string; mode: Mode; qty: number; expectCents: number; name: string; totalCents: number; at: number };
 type Look = "idle" | "looking" | "photo" | "shop_down" | "empty" | "photo_none" | "not_found" | "photo_pick";
 
@@ -279,6 +279,7 @@ export function SellView({
             <p className="adm-err">{S.noPurchaseHint}</p>
           ) : (
             <>
+              {mode === "self" && pick.selfNoPurchase && <p className="adm-err">{S.noPurchaseZero}</p>}
               <div className="bx-step" role="group" aria-label={S.qty}>
                 <button type="button" className="adm-ibtn" aria-label="−" disabled={qty <= 1} onClick={() => setQty(qty - 1)}>
                   −
@@ -351,7 +352,7 @@ export function SellView({
                       <Thumb src={p.photo} />
                       <span className="txt">
                         <span className="plain">{p.title}</span>
-                        <small>{u == null ? S.noPurchase : p.stock == null ? "" : S.stock(p.stock)}</small>
+                        <small>{u == null ? S.noPurchase : mode === "self" && p.selfNoPurchase ? S.noPurchaseZero : p.stock == null ? "" : S.stock(p.stock)}</small>
                       </span>
                       <span className="end price">{u == null ? "—" : euroText(u)}</span>
                     </button>
@@ -391,7 +392,7 @@ export function SellView({
             {today.map((t) => {
               // the page clock can be older than a sale just made: never more than the window
               const left = Math.min(undoMin, Math.ceil((Date.parse(t.at) + undoMin * 60_000 - clock) / 60_000));
-              const canUndo = t.status === "done" && !t.reversal && t.sync === "queued" && left > 0;
+              const canUndo = t.status === "done" && !t.reversal && (t.sync === "queued" || t.sync === "test") && left > 0;
               return (
                 <li key={t.ref} className={`bx-sale${t.status === "undone" ? " is-off" : ""}`}>
                   <span className="txt">
@@ -401,6 +402,8 @@ export function SellView({
                     <small>
                       {B.money.mode[t.mode] ?? t.mode}
                       {t.commissionCents ? ` · ${S.yours(pct, euroText(t.commissionCents))}` : ""}
+                      {t.noPurchase ? ` · ${S.noPurchaseZero}` : ""}
+                      {t.sync === "test" ? ` · ${S.testSale}` : ""}
                       {t.status === "undone" ? ` · ${S.undone}` : canUndo ? ` · ${S.undoLeft(left)}` : ""}
                     </small>
                   </span>

@@ -607,3 +607,13 @@ button.cal-head:hover b { color: var(--lime); }
 @media (max-width: 899px) {
   .adm-two-cols { display: flex; flex-direction: column; gap: 14px; }
 }
+
+/* ---------- the test line (staging only; src/components/test-banner.tsx, Phase C) ----------
+ * Its place and height are in the shell block above; this is its look. Loud
+ * yellow, so nobody takes staging for the real thing. One row: the words
+ * give way (ellipsis), the button never does, and it stays a 28px target.
+ */
+.test-banner { display: flex; align-items: center; justify-content: center; gap: 12px; padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); background: #f5c400; color: #000; font: 600 13px/1.2 var(--body); letter-spacing: .02em; }
+.test-banner > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.test-banner > button { flex: none; display: inline-flex; align-items: center; min-height: 28px; padding: 0 6px; margin: 0 -6px; background: none; border: 0; color: #000; font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.test-banner > button:focus-visible { outline: 2px solid #000; outline-offset: -2px; }

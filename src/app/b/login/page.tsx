@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { Logo } from "@/components/brand";
+import { TestBanner } from "@/components/test-banner";
 import { safeBarberPath } from "@/lib/auth/cookie";
 import { googleLoginConfigured } from "@/lib/auth/google";
 import { getB } from "../lang-server";
@@ -11,12 +12,15 @@ const LINK_ERRORS = ["role", "nostaff", "bad", "google", "googleUnknown", "googl
 
 export default function LoginPage({ searchParams }: PageProps<"/b/login">) {
   return (
-    <main className="adm-login">
-      <Logo />
-      <Suspense fallback={null}>
-        <Form searchParams={searchParams} />
-      </Suspense>
-    </main>
+    <>
+      <TestBanner app="b" />
+      <main className="adm-login">
+        <Logo />
+        <Suspense fallback={null}>
+          <Form searchParams={searchParams} />
+        </Suspense>
+      </main>
+    </>
   );
 }
 

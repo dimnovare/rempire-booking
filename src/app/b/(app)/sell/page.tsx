@@ -52,6 +52,7 @@ async function Sell() {
           commissionCents: s.commissionCents,
           status: s.status,
           sync: s.syncStatus,
+          noPurchase: s.noPurchase,
           at: s.createdAt,
           reversal: s.reversesId !== null,
         }))}

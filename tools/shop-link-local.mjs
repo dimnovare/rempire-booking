@@ -288,6 +288,8 @@ async function main() {
     SHOP_API_SECRET: partnerSecret,
     CRON_SECRET: cronSecret,
     SALES_MINUTE_MS: String(MINUTE_MS),
+    // the full branch takes sales; on staging (docs/test-run.md) this stays off
+    SHOP_SALES: "on",
   }, ["SHOP_API_URL", "SHOP_API_SECRET", "CRON_SECRET"]);
   must(!("DATABASE_URL" in shopEnv) && !("DATABASE_URL" in bookingEnv), "DATABASE_URL in a server's environment");
 

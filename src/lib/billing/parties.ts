@@ -121,7 +121,7 @@ const issuerOf = (r: IssuerRow): Issuer => ({
 export async function listIssuers(q: Querier, businessId: string, year = new Date().getUTCFullYear()): Promise<Issuer[]> {
   const rows = await q<IssuerRow>(
     `select i.*, c.last from invoice_issuers i
-       left join invoice_counters c on c.issuer_id = i.id and c.year = case when i.yearly then $2 else 0 end
+       left join invoice_counters c on c.issuer_id = i.id and c.year = case when i.yearly then $2 else 0 end and not c.test
       where i.business_id = $1 order by i.is_default desc, i.active desc, i.legal_name`,
     [businessId, year],
   );
@@ -232,7 +232,7 @@ export async function setLastNumber(business: Business, issuerId: string, last: 
     const y = counterYear(issuer, year);
     const [row] = await tx<{ last: number }>(
       `insert into invoice_counters (issuer_id, year, last) values ($1, $2, $3)
-       on conflict (issuer_id, year) do update set last = excluded.last where invoice_counters.last <= excluded.last
+       on conflict (issuer_id, year, test) do update set last = excluded.last where invoice_counters.last <= excluded.last
        returning last`,
       [issuerId, y, last],
     );

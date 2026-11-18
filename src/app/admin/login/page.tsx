@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { Logo } from "@/components/brand";
+import { TestBanner } from "@/components/test-banner";
 import { safeAdminPath } from "@/lib/auth/cookie";
 import { googleLoginConfigured } from "@/lib/auth/google";
 import { Wait } from "../lang";
@@ -10,15 +11,18 @@ const LINK_ERRORS = ["role", "bad", "google", "googleUnknown", "googleOther"];
 
 export default function LoginPage({ searchParams }: PageProps<"/admin/login">) {
   return (
-    <main className="adm-login">
-      <Logo />
-      <LoginTitle />
-      <Suspense fallback={<Wait />}>
-        <Form searchParams={searchParams} />
-      </Suspense>
-      {/* each language under its own name: whoever cannot read this page still finds theirs */}
-      <LoginLang />
-    </main>
+    <>
+      <TestBanner app="admin" />
+      <main className="adm-login">
+        <Logo />
+        <LoginTitle />
+        <Suspense fallback={<Wait />}>
+          <Form searchParams={searchParams} />
+        </Suspense>
+        {/* each language under its own name: whoever cannot read this page still finds theirs */}
+        <LoginLang />
+      </main>
+    </>
   );
 }
 

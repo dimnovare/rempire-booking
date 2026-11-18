@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { Logo } from "@/components/brand";
+import { TestBanner } from "@/components/test-banner";
 import { VIEW_AS_COOKIE } from "@/lib/auth/cookie";
 import { currentStaffUser } from "@/lib/auth/current";
 import { dbConfigured, dbKind, query } from "@/lib/db";
@@ -18,6 +19,7 @@ import { BNav } from "./nav";
 export default function BarberApp({ children }: { children: React.ReactNode }) {
   return (
     <div className="adm-app bx-app">
+      <TestBanner app="b" report />
       <header className="adm-top bx-top">
         <Link href="/b" className="adm-brand" aria-label="REMPIRE" prefetch={false}>
           <Logo />

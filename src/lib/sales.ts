@@ -18,6 +18,12 @@
  * shop's shelf is a «Склад» move in the shop's admin.
  *
  * The 17 % is computed and stored here, never in the shop (kickoff §7.3).
+ *
+ * SHOP_SALES (docs/test-run.md): only "on" sends sales to the shop. Off (the
+ * staging test run, reading the live shop's products) a sale is booking's
+ * own, sync_status 'test': never sent, still on the statement and the invoice
+ * draft. A sale for himself with no purchase price then books 0 €, marked
+ * (mode 'self', purchase_cents null); with SHOP_SALES on it is refused.
  */
 import { randomBytes } from "node:crypto";
 import type { Business } from "./availability";
@@ -26,6 +32,11 @@ import { commissionFor, grossOfNet } from "./money";
 import { productById, sendBarberSale, ShopError, type ShopProduct } from "./shop";
 
 type Env = Record<string, string | undefined>;
+
+/** Sales go to the shop only with SHOP_SALES=on (the move, with the full partner API). */
+export function shopSales(env: Env = process.env): boolean {
+  return env.SHOP_SALES === "on";
+}
 
 export const SALES = {
   /** a barber may take a sale back this long after the tap */
@@ -69,7 +80,9 @@ export type Sale = {
   commissionCents: number;
   totalCents: number;
   status: "done" | "undone";
-  syncStatus: "queued" | "sending" | "synced" | "failed" | "none";
+  syncStatus: "queued" | "sending" | "synced" | "failed" | "none" | "test";
+  /** a sale for himself booked at 0 € because the shop has no purchase price for it (test run only) */
+  noPurchase: boolean;
   syncError: string | null;
   shopOrderRef: string | null;
   reversesId: string | null;
@@ -96,6 +109,7 @@ type SaleRow = {
   sync_status: Sale["syncStatus"];
   sync_error: string | null;
   shop_order_ref: string | null;
+  purchase_cents: number | null;
   reverses_id: string | null;
   reversed_by?: string | null;
   note: string;
@@ -120,6 +134,7 @@ const saleOf = (r: SaleRow): Sale => ({
   syncStatus: r.sync_status,
   syncError: r.sync_error,
   shopOrderRef: r.shop_order_ref,
+  noPurchase: r.mode === "self" && r.purchase_cents == null,
   reversesId: r.reverses_id,
   reversedBy: r.reversed_by ?? null,
   note: r.note,
@@ -136,15 +151,19 @@ export function productTitle(p: Pick<ShopProduct, "brand" | "name" | "variantLab
   return [p.brand, p.name, p.variantLabel].filter(Boolean).join(" ").replace(/\s+/g, " ").trim().slice(0, 200);
 }
 
-/** What the barber pays per unit, VAT inside; null when the purchase price is not set yet. */
-export function unitPriceFor(p: ShopProduct, mode: "client" | "self"): number | null {
+/**
+ * What the barber pays per unit, VAT inside. With no purchase price in the
+ * shop: null (he can't take it for himself yet), or 0 during the test run.
+ */
+export function unitPriceFor(p: ShopProduct, mode: "client" | "self", env: Env = process.env): number | null {
   if (mode === "client") return p.priceCents;
-  return p.purchaseCents == null ? null : grossOfNet(p.purchaseCents, p.vatBp);
+  if (p.purchaseCents != null) return grossOfNet(p.purchaseCents, p.vatBp);
+  return shopSales(env) ? null : 0;
 }
 
 /** The price and the barber's share, as the sale sheet shows it before the tap. */
-export function quote(business: Business, p: ShopProduct, mode: "client" | "self", qty: number): { unitCents: number; totalCents: number; commissionCents: number } | null {
-  const unit = unitPriceFor(p, mode);
+export function quote(business: Business, p: ShopProduct, mode: "client" | "self", qty: number, env: Env = process.env): { unitCents: number; totalCents: number; commissionCents: number } | null {
+  const unit = unitPriceFor(p, mode, env);
   if (unit === null) return null;
   const commission =
     mode === "client" ? commissionFor({ qty, unitCents: unit, listCents: p.priceCents, vatBp: p.vatBp, basis: business.settings.commission_basis, bp: business.settings.commission_bp }) : 0;
@@ -188,7 +207,7 @@ export async function recordSale(
     return { ok: false, code: "shop_down" };
   }
   if (!product) return { ok: false, code: "not_found" };
-  const q = quote(business, product, mode, qty);
+  const q = quote(business, product, mode, qty, env);
   if (!q) return { ok: false, code: "no_purchase_price" };
   // the barber saw a price: if the shop's moved since, he sees the new one first
   if (input.expectCents != null && Number(input.expectCents) !== q.unitCents) return { ok: false, code: "price_changed", unitCents: q.unitCents };
@@ -196,8 +215,8 @@ export async function recordSale(
   return withTx(async (tx) => {
     const [row] = await tx<SaleRow>(
       `insert into product_sales (business_id, ref, staff_id, mode, shop_product_id, shop_variant, name, barcode, qty, unit_cents, list_cents,
-                                  purchase_cents, vat_bp, commission_bp, commission_basis, commission_cents, total_cents, sync_after, created_by, created_at)
-       select $1, $2, s.id, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
+                                  purchase_cents, vat_bp, commission_bp, commission_basis, commission_cents, total_cents, sync_after, created_by, created_at, sync_status)
+       select $1, $2, s.id, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
          from staff s where s.id = $3 and s.business_id = $1
        on conflict (ref) do nothing
        returning *, null::uuid as reversed_by`,
@@ -222,6 +241,7 @@ export async function recordSale(
         new Date(now + SALES.undoMin * saleMinuteMs()),
         actorUserId,
         new Date(now),
+        shopSales(env) ? "queued" : "test",
       ],
     );
     if (!row) {
@@ -246,7 +266,7 @@ export async function undoSale(staffId: string, ref: string, actorUserId: string
     const [row] = await tx<{ id: string }>(
       `update product_sales set status = 'undone', undone_at = $3, sync_status = 'none'
         where ref = $1 and staff_id = $2 and status = 'done' and reverses_id is null
-          and sync_status = 'queued' and sync_attempts = 0 and created_at > $4
+          and sync_status in ('queued', 'test') and sync_attempts = 0 and created_at > $4
         returning id`,
       [ref, staffId, new Date(now), new Date(now - SALES.undoMin * saleMinuteMs())],
     );
@@ -278,7 +298,7 @@ export async function reverseSale(business: Business, saleId: string, actor: str
                                   reverses_id, note, sync_status, created_by)
        select business_id, $2, staff_id, mode, shop_product_id, shop_variant, name, barcode, -qty, unit_cents, list_cents,
               purchase_cents, vat_bp, commission_bp, commission_basis, -commission_cents, -total_cents,
-              id, $3, 'none', $4
+              id, $3, case when sync_status = 'test' then 'test' else 'none' end, $4
          from product_sales where id = $1
        returning id`,
       [saleId, `r_${randomBytes(12).toString("base64url")}`, String(note ?? "").trim().slice(0, 300), /^[0-9a-f-]{36}$/i.test(actor) ? actor : null],
@@ -340,6 +360,8 @@ export type SyncResult = { sent: number; retry: number; failed: number; left?: n
  */
 export async function syncShopSales(q: Querier, now = Date.now(), env: Env = process.env, send = sendBarberSale, budgetMs = SALES.budgetMs): Promise<SyncResult> {
   const res: SyncResult = { sent: 0, retry: 0, failed: 0 };
+  // the test run reads the live shop but never sells into it, not even a sale queued before the switch went off
+  if (!shopSales(env)) return res;
   const stopAt = Date.now() + budgetMs;
   const rows = await q<SaleRow & { staff_name: string; sync_attempts: number }>(
     `update product_sales p set sync_status = 'sending', sync_locked = $2, sync_attempts = p.sync_attempts + 1

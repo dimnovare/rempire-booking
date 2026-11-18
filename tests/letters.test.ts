@@ -13,7 +13,7 @@ const at = (date: string, time: string) => zonedToUtc(date, time, TZ);
 // Monday 16.11.2026, 10:00 in Tallinn
 const NOW = at("2026-11-16", "10:00");
 const TUE = "2026-11-17";
-const DEV = { NODE_ENV: "test", VITEST: "true" };
+const DEV = { NODE_ENV: "test", VITEST: "true", ALLOW_INDEXING: "yes" };
 const PROD = { NODE_ENV: "production", VITEST: "true" };
 const ORIGIN = "https://rempire-booking.diipsolutions.eu";
 

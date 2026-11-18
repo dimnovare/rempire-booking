@@ -18,8 +18,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import fontkit from "@pdf-lib/fontkit";
-import { PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
+import { degrees, PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { amountText } from "../money";
+import { TEST_NUMBER_PREFIX, testRun } from "../test-run";
 import type { Party } from "./invoices";
 
 export type PdfLang = "ru" | "et" | "en";
@@ -43,6 +44,8 @@ export type InvoicePdfData = {
   vatCents: number;
   grossCents: number;
   note: string;
+  /** staging (src/lib/test-run.ts): the «ТЕСТ / NÄIDIS» stamp on every page; a TEST- number gets it too */
+  test?: boolean;
 };
 
 export function invoicePdfFilename(number: string): string {
@@ -190,6 +193,23 @@ function wordmark(page: PDFPage, text: string, x: number, y: number, font: PDFFo
 }
 
 /** The invoice, as bytes. */
+/** Across the middle of the page, so no test invoice passes for a real one. */
+function testStamp(page: PDFPage, font: PDFFont) {
+  const text = "ТЕСТ / NÄIDIS";
+  const size = 72;
+  const a = (35 * Math.PI) / 180;
+  const w = font.widthOfTextAtSize(text, size);
+  page.drawText(text, {
+    x: A4_W / 2 - (w / 2) * Math.cos(a) + (size / 3) * Math.sin(a),
+    y: A4_H / 2 - (w / 2) * Math.sin(a) - (size / 3) * Math.cos(a),
+    size,
+    font,
+    color: rgb(0.8, 0.1, 0.1),
+    opacity: 0.22,
+    rotate: degrees(35),
+  });
+}
+
 export async function renderInvoicePdf(data: InvoicePdfData): Promise<Uint8Array> {
   const L = data.lang;
   const number = clean(data.number, 40);
@@ -387,6 +407,7 @@ export async function renderInvoicePdf(data: InvoicePdfData): Promise<Uint8Array
     }
   }
   footer();
+  if (data.test || number.startsWith(TEST_NUMBER_PREFIX)) for (const p of pages) testStamp(p, F.display);
   if (pages.length > 1) pages.forEach((p, i) => right(p, `${lab(W.page, L)} ${i + 1} / ${pages.length}`, A4_W - M, 20, F.body, 7.5, MUTED));
   return doc.save();
 }
@@ -413,5 +434,6 @@ export function pdfDataOf(
     vatCents: inv.vatCents,
     grossCents: inv.grossCents,
     note: inv.note,
+    test: testRun(),
   };
 }

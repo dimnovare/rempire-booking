@@ -6,6 +6,7 @@ import { isLocale, LOCALES, type Locale } from "@/lib/i18n";
 import { robotsMeta } from "@/lib/indexing";
 import { OG_CARDS, OG_SIZE } from "@/lib/og-cards";
 import { siteUrl } from "@/lib/site";
+import { ClientTestBanner } from "@/components/test-banner";
 import "../globals.css";
 
 // rempire.ee's faces: Akrobat ExtraBold for headings, Questrial for text.
@@ -63,7 +64,10 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[lo
   if (!isLocale(locale)) notFound();
   return (
     <html lang={locale} className={`${display.variable} ${body.variable}`}>
-      <body>{children}</body>
+      <body>
+        <ClientTestBanner locale={locale} />
+        {children}
+      </body>
     </html>
   );
 }

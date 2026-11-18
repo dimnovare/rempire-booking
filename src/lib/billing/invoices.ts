@@ -26,7 +26,10 @@ import { getBusinessById, type Business } from "../availability";
 import { query, withTx, type Querier } from "../db";
 import { lineAmounts } from "../money";
 import { addDays, localParts, startOfDay, todayIn } from "../tz";
+import { TEST_NUMBER_PREFIX, testRun } from "../test-run";
 import { counterYear, formatNumber, issuerById, listReceivers, receiverById, rentOn, type Issuer, type Receiver } from "./parties";
+
+type Env = Record<string, string | undefined>;
 
 export type InvoiceStatus = "draft" | "issued" | "paid" | "credited" | "discarded";
 export type LineKind = "rent" | "product" | "self" | "other";
@@ -266,6 +269,8 @@ const LIVE = "('draft', 'issued', 'paid')";
 /** Estonian with an English line, as the PDF (the accountant reads Estonian). */
 const RENT_TEXT = (month: string) => `Töökoha üür ${month.slice(5, 7)}.${month.slice(0, 4)} / Chair rent`;
 const SELF_TEXT = (name: string) => `${name} (enda tarbeks / for own use)`.slice(0, 200);
+/** the test run: the shop had no purchase price, so the line is 0 € and says so */
+const SELF_NO_PURCHASE_TEXT = (name: string) => `${name} (enda tarbeks, ostuhind puudub / for own use, no purchase price)`.slice(0, 200);
 
 type NewLine = { kind: LineKind; text: string; qty: number; unitCents: number; discountCents: number; vatBp: number; saleId?: string | null; rentMonth?: string | null };
 
@@ -327,8 +332,8 @@ export async function buildDraft(business: Business, receiverId: string, month: 
         lines.push({ kind: "rent", text: RENT_TEXT(range.from), qty: 1, unitCents: rent.amountCents, discountCents: 0, vatBp: vatFor(issuer, receiver), rentMonth: range.from });
       }
       const end = new Date(startOfDay(addDays(range.to, 1), business.timezone));
-      const sales = await tx<{ id: string; mode: "client" | "self"; name: string; qty: number; unit_cents: number; vat_bp: number; commission_cents: number }>(
-        `select p.id, p.mode, p.name, p.qty, p.unit_cents, p.vat_bp, p.commission_cents from product_sales p
+      const sales = await tx<{ id: string; mode: "client" | "self"; name: string; qty: number; unit_cents: number; vat_bp: number; commission_cents: number; purchase_cents: number | null }>(
+        `select p.id, p.mode, p.name, p.qty, p.unit_cents, p.vat_bp, p.commission_cents, p.purchase_cents from product_sales p
           where p.staff_id = $1 and p.status = 'done' and p.created_at < $2
             and not exists (select 1 from invoice_lines l join invoices i on i.id = l.invoice_id
                              where l.sale_id = p.id and not l.dropped and i.status in ${LIVE})
@@ -338,7 +343,7 @@ export async function buildDraft(business: Business, receiverId: string, month: 
       for (const s of sales) {
         lines.push({
           kind: s.mode === "self" ? "self" : "product",
-          text: s.mode === "self" ? SELF_TEXT(s.name) : s.name,
+          text: s.mode === "self" ? (s.purchase_cents == null ? SELF_NO_PURCHASE_TEXT(s.name) : SELF_TEXT(s.name)) : s.name,
           qty: s.qty,
           unitCents: s.unit_cents,
           discountCents: s.commission_cents,
@@ -510,15 +515,20 @@ const partyOfIssuer = (i: Issuer): Party => ({
 });
 const partyOfReceiver = (r: Receiver): Party => ({ name: r.legalName, regCode: r.regCode, vatNumber: r.vatNumber, address: r.address, email: r.email });
 
-/** The next number in the issuer's series: one row lock, so no gaps and no twins. */
-async function nextNumber(tx: Querier, issuer: Issuer, year: number): Promise<string> {
+/**
+ * The next number in the issuer's series: one row lock, so no gaps and no twins.
+ * On staging (src/lib/test-run.ts) a counter of its own and a TEST- prefix,
+ * so a test never uses up a real number.
+ */
+async function nextNumber(tx: Querier, issuer: Issuer, year: number, env: Env = process.env): Promise<string> {
+  const test = testRun(env);
   const [c] = await tx<{ last: number }>(
-    `insert into invoice_counters (issuer_id, year, last) values ($1, $2, 1)
-     on conflict (issuer_id, year) do update set last = invoice_counters.last + 1
+    `insert into invoice_counters (issuer_id, year, test, last) values ($1, $2, $3, 1)
+     on conflict (issuer_id, year, test) do update set last = invoice_counters.last + 1
      returning last`,
-    [issuer.id, counterYear(issuer, year)],
+    [issuer.id, counterYear(issuer, year), test],
   );
-  return formatNumber(issuer, year, c.last);
+  return (test ? TEST_NUMBER_PREFIX : "") + formatNumber(issuer, year, c.last);
 }
 
 /** The letter with the PDF, built at send time by the outbox (src/lib/outbox.ts). */

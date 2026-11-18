@@ -40,6 +40,7 @@ import { pushConfigured, sendPushToUser, type PushSendResult } from "./push";
 import { DEFAULT_ON, pushText, type PushText } from "./push-kinds";
 import { siteUrl } from "./site";
 import { sendSms, smsSegments, smsTransport } from "./sms";
+import { mailGuard } from "./test-run";
 import { addDays, localParts, startOfDay } from "./tz";
 import { mintVisitLink, visitById } from "./visits";
 
@@ -167,6 +168,13 @@ function enabledChannels(env: Env): Channel[] {
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
+
+/** A redirected staging letter says on top who it was for (the text part has the same line). */
+function withTestNote(html: string, note: string): string {
+  const esc = note.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const bar = '<div style="background:#fff3c4;color:#000;padding:8px 12px;font:14px sans-serif">' + esc + "</div>";
+  return /<body[^>]*>/i.test(html) ? html.replace(/<body[^>]*>/i, (m) => m + bar) : bar + html;
+}
 
 // the reminder's change link label; Estonian avoids «õ», which would make the whole SMS UCS-2
 const LINK_LABEL: Record<Locale, string> = { ru: "Перенести/отменить", et: "Muuda/tühista", en: "Change or cancel" };
@@ -320,7 +328,11 @@ async function deliver(q: Querier, rows: OutboxRow[], now: number, env: Env, sen
           `${r.sent}/${r.devices}`,
         ]);
       } else if (row.channel === "email" && "subject" in msg) {
-        const r = await senders.email(row.recipient, msg.subject, msg.body, env);
+        // staging: a letter reaches only staff; the rest goes to the shop inbox (src/lib/test-run.ts)
+        const body = typeof msg.body === "string" ? { text: msg.body } : msg.body;
+        const g = await mailGuard(q, row.recipient, msg.subject, body.text, env);
+        const html = g.redirected && body.html ? withTestNote(body.html, g.text.split("\n")[0]) : body.html;
+        const r = await senders.email(g.to, g.subject, { text: g.text, ...(html ? { html } : {}), ...(body.attachments ? { attachments: body.attachments } : {}) }, env);
         await q(`update notifications set status = 'sent', sent_at = $2, provider = $3, provider_ref = $4, locked_until = null, last_error = null where id = $1`, [
           row.id,
           new Date(now),

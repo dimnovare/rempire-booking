@@ -15,7 +15,7 @@ const at = (date: string, time: string) => zonedToUtc(date, time, TZ);
 const NOW = at("2026-11-16", "10:00");
 const TUE = "2026-11-17";
 // the final address is not chosen yet; this is the longer of the two candidates
-const LIVE = { NODE_ENV: "test", VITEST: "true", SITE_URL: "https://broneeri.rempire.ee" };
+const LIVE = { NODE_ENV: "test", VITEST: "true", SITE_URL: "https://broneeri.rempire.ee", ALLOW_INDEXING: "yes" };
 const LINK_RE = /https:\/\/broneeri\.rempire\.ee\/v\/([A-Za-z0-9_-]{16})(?![A-Za-z0-9_-])/;
 
 let demo: Demo;

@@ -208,6 +208,40 @@ staging test run (that is `docs/test-run.md`).
 `--keep` leaves both servers up at the end. A failed run keeps its logs and
 prints the folder.
 
+## The staging test run in code (R2, 18.11.2026)
+
+The plan is `docs/test-run.md`. What booking does for it:
+
+- **`SHOP_SALES`** (`src/lib/sales.ts`): only `on` sends sales to the shop.
+  - Off, a sale is saved with `sync_status = 'test'` and the cron never
+    sends it, not even one queued before.
+  - The statement and the invoice drafts count it. The barber's list and
+    Renat's show «тест».
+  - A sale «себе» with no purchase price books 0 €, marked «закупочная цена
+    не указана» (`mode = 'self'`, `purchase_cents` null). With `on` it is
+    refused, as before.
+- **One staging switch**, `testRun()` in `src/lib/test-run.ts`: on until
+  `ALLOW_INDEXING=yes`, the same switch noindex reads. It drives:
+  - **the line** `src/components/test-banner.tsx`: client pages, the
+    admin and `/b`. In the admin and `/b` it sits above the top bar, in the
+    room admin.css keeps for `.test-banner`;
+  - **the mail guard** (`mailGuard`, used by the outbox): a staff login's
+    address gets the letter marked «[ТЕСТ]»; anyone else's goes to the
+    shop inbox (`TEST_MAIL_TO` overrides it), with who it was for on top.
+    Login codes go straight to the person;
+  - **invoices**: numbers `TEST-…` from their own counter
+    (`invoice_counters.test`), and a «ТЕСТ / NÄIDIS» stamp on every page of
+    the PDF;
+  - **«Сообщить о проблеме»**: saved to `problem_reports` (text, screen,
+    login, time). Renat reads them at `/admin/reports`; the banner links
+    there with the open count.
+- Migration `011_test_run.sql`. Tests: `tests/test-run.test.ts`. Every
+  other test file runs as production (`vitest.config.mts` sets
+  `ALLOW_INDEXING=yes`).
+- **At the move:** set `ALLOW_INDEXING=yes`, and `SHOP_SALES=on` once the
+  full partner API is live. The test sales, invoices and reports get wiped
+  (R6). The real invoice series was never used.
+
 ## Data
 
 Built as `db/migrations/010_sales_invoices.sql`, after the outline in
