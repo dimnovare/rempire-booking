@@ -51,6 +51,9 @@ export const en: Copy = {
     install: "How to install it on your phone",
   },
 
+  /** The staff app's two sides (docs/apps.md), for Renat and the front desk. */
+  side: { label: "My day or salon", mine: "My day", barber: "Barber", salon: "Salon", waiting: (n: number) => `Requests waiting: ${n}` },
+
   pick: {
     title: "Whose day to see",
     lead: "You see the app the way that barber sees it.",
@@ -58,6 +61,7 @@ export const en: Copy = {
     change: "Change",
     none: "No barbers.",
     off: "not working",
+    mine: "this is you",
   },
 
   install: {

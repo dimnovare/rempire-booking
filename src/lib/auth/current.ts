@@ -46,32 +46,48 @@ export type BarberCtx = {
   business: Business;
   /** the one column this request may see and change */
   staff: { id: string; name: string; photoUrl: string | null };
-  /** Renat or the front desk looking at the barber app as this barber */
+  /** Renat or the front desk in the barber app: on a barber's column, or on Renat's own. What they change applies at once. */
   viewing: boolean;
 };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Whose column the barber app shows this login:
+ *   - a barber: his own, always;
+ *   - Renat or the front desk: the barber they picked (/b/pick), else the
+ *     barber their own login is linked to (Renat cuts too), else none yet.
+ */
+export async function barberAppStaffId(user: Pick<StaffUser, "role" | "staffId">): Promise<string | null> {
+  if (user.role === "staff") return user.staffId;
+  const picked = (await cookies()).get(VIEW_AS_COOKIE)?.value ?? "";
+  return UUID_RE.test(picked) ? picked : user.staffId;
+}
 
 /**
  * The barber app (Phase B): a barber gets his own column and nothing else;
  * every barber page and Server Action calls this and works only on
- * `staff.id`. An owner or admin picks a barber first (/b/pick), so Renat
- * sees what that barber sees.
+ * `staff.id`. An owner or admin who is a barber too lands on his own
+ * column; any other picks a barber first (/b/pick), so Renat sees what that
+ * barber sees.
  */
 export async function requireStaff(): Promise<BarberCtx> {
   const { user, business } = await requireStaffUser();
-  let staffId: string | null = null;
-  if (user.role === "staff") {
-    if (!user.staffId) redirect("/b/login?e=nostaff");
-    staffId = user.staffId;
-  } else {
-    staffId = (await cookies()).get(VIEW_AS_COOKIE)?.value ?? null;
-    if (!staffId || !/^[0-9a-f-]{36}$/i.test(staffId)) redirect("/b/pick");
-  }
-  const [s] = await query<{ id: string; display_name: string; photo_url: string | null; active: boolean }>(
-    "select id, display_name, photo_url, active from staff where id = $1 and business_id = $2",
-    [staffId, business.id],
-  );
-  if (!s || (user.role === "staff" && !s.active)) redirect(user.role === "staff" ? "/b/login?e=nostaff" : "/b/pick");
-  return { user, business, staff: { id: s.id, name: s.display_name, photoUrl: s.photo_url }, viewing: user.role !== "staff" };
+  const mine = user.role === "staff";
+  if (mine && !user.staffId) redirect("/b/login?e=nostaff");
+  const find = (id: string | null) =>
+    id
+      ? query<{ id: string; display_name: string; photo_url: string | null; active: boolean }>(
+          "select id, display_name, photo_url, active from staff where id = $1 and business_id = $2",
+          [id, business.id],
+        )
+      : Promise.resolve([]);
+  const staffId = await barberAppStaffId(user);
+  let [s] = await find(staffId);
+  // a picked barber who is gone: back to Renat's own column, if he has one
+  if (!s && !mine && staffId !== user.staffId) [s] = await find(user.staffId);
+  if (!s || (mine && !s.active)) redirect(mine ? "/b/login?e=nostaff" : "/b/pick");
+  return { user, business, staff: { id: s.id, name: s.display_name, photoUrl: s.photo_url }, viewing: !mine };
 }
 
 export async function requireOwner(): Promise<{ user: StaffUser; business: Business }> {

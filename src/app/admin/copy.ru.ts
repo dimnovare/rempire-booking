@@ -252,6 +252,9 @@ export const ru = {
     needName: "Введите название: без него не сохранить.",
   },
 
+  /** The staff app's two sides (docs/apps.md), for Renat and the front desk. */
+  side: { label: "Мой день или салон", mine: "Мой день", barber: "Барбер", salon: "Салон", waiting: (n: number) => `Запросов ждёт: ${n}` },
+
   account: {
     title: "Доступ",
     me: "Мой вход",
@@ -269,6 +272,9 @@ export const ru = {
     role: "Роль",
     roles: { owner: "Владелец", admin: "Администратор", staff: "Барбер" } as Record<string, string>,
     linkStaff: "Барбер",
+    alsoBarber: "Он же барбер",
+    notBarber: "Нет",
+    alsoHint: "Тогда приложение открывается на его дне.",
     firstPassword: "Пароль (можно пусто: войдёт по коду из письма)",
     noPassword: "без пароля",
     lastLogin: "Последний вход",

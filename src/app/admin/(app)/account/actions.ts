@@ -3,7 +3,7 @@
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { setUserLocale } from "@/lib/auth/locale";
-import { changePassword, createUser, setUserActive } from "@/lib/auth/login";
+import { changePassword, createUser, setUserActive, setUserStaff } from "@/lib/auth/login";
 import { endSession, requireAdmin, requireOwner } from "@/lib/auth/current";
 import { query } from "@/lib/db";
 import { isUuid } from "@/lib/admin/visits";
@@ -27,13 +27,13 @@ export async function changeMyPassword(form: FormData): Promise<"ok" | "short" |
   return changePassword(query, user.id, user.sessionId, current || null, field(form, "next"));
 }
 
-/** Owner only: add a login for a barber or the front desk. */
+/** Owner only: add a login for a barber or the front desk. An owner or admin who cuts too is linked to his barber. */
 export async function addUser(form: FormData): Promise<{ ok: true } | { ok: false; field: string }> {
   const { business } = await requireOwner();
   const u = { email: field(form, "email"), name: field(form, "name"), role: field(form, "role"), staffId: field(form, "staffId"), password: field(form, "password"), locale: field(form, "locale") };
   const role = u.role === "owner" || u.role === "admin" || u.role === "staff" ? u.role : "staff";
   const staffId = isUuid(u.staffId) ? u.staffId : null;
-  if (role === "staff" && staffId) {
+  if (staffId) {
     const [s] = await query<{ id: string }>("select id from staff where id = $1 and business_id = $2", [staffId, business.id]);
     if (!s) return { ok: false, field: "staff" };
   }
@@ -52,6 +52,15 @@ export async function setMyLang(lang: Locale): Promise<void> {
   await setUserLocale(query, business.id, user.id, lang);
   await rememberLang(lang);
   refresh();
+}
+
+/** Owner only: link an owner's or admin's login (his own too) to the barber he is, or unlink it (""). */
+export async function linkUserStaff(id: string, staffId: string): Promise<boolean> {
+  const { business } = await requireOwner();
+  if (!isUuid(id) || (staffId !== "" && !isUuid(staffId))) return false;
+  if (!(await setUserStaff(query, business.id, id, staffId === "" ? null : staffId))) return false;
+  refresh();
+  return true;
 }
 
 /** Owner only: switch a login off (its sessions end) or on. Never your own. */

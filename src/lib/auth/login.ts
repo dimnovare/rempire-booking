@@ -158,7 +158,12 @@ export async function changePassword(
 
 export type UserInput = { email: string; name: string; role: Role; staffId: string | null; password?: string | null };
 
-/** The owner adds a login (a barber, the front desk). A password is optional: the code works without one. */
+/**
+ * The owner adds a login (a barber, the front desk). A password is optional:
+ * the code works without one. `staffId` is the barber the login is: always
+ * for a barber's login, and for an owner or admin who cuts too (Renat), so
+ * the app opens on his own day and his column's pushes reach him.
+ */
 export async function createUser(q: Querier, businessId: string, input: UserInput): Promise<{ ok: true; id: string } | { ok: false; field: string }> {
   const email = normalizeEmail(input.email);
   if (!isEmail(email)) return { ok: false, field: "email" };
@@ -169,9 +174,25 @@ export async function createUser(q: Querier, businessId: string, input: UserInpu
   const [row] = await q<{ id: string }>(
     `insert into users (business_id, email, name, role, staff_id, password_hash)
      values ($1, $2, $3, $4, $5, $6) on conflict (email) do nothing returning id`,
-    [businessId, email, name, input.role, input.role === "staff" ? input.staffId : null, pw ? await hashPassword(pw) : null],
+    [businessId, email, name, input.role, input.staffId || null, pw ? await hashPassword(pw) : null],
   );
   return row ? { ok: true, id: row.id } : { ok: false, field: "email_taken" };
+}
+
+/**
+ * Link an owner's or admin's login to the barber he is, or unlink it
+ * (`staffId` null). Only a barber of the same business. A barber's own
+ * login keeps its barber: that one is switched off and added anew.
+ */
+export async function setUserStaff(q: Querier, businessId: string, userId: string, staffId: string | null): Promise<boolean> {
+  const rows = await q<{ id: string }>(
+    `update users u set staff_id = $3::uuid, updated_at = now()
+      where u.id = $1 and u.business_id = $2 and u.role in ('owner', 'admin')
+        and ($3::uuid is null or exists (select 1 from staff s where s.id = $3::uuid and s.business_id = $2))
+      returning u.id`,
+    [userId, businessId, staffId],
+  );
+  return rows.length > 0;
 }
 
 /** Switch a login on or off. Off ends its sessions. */

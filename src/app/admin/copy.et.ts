@@ -250,6 +250,9 @@ export const et: typeof ru = {
     needName: "Sisestage nimetus: ilma selleta ei saa salvestada.",
   },
 
+  /** The staff app's two sides (docs/apps.md), for Renat and the front desk. */
+  side: { label: "Minu päev või salong", mine: "Minu päev", barber: "Barber", salon: "Salong", waiting: (n: number) => `Ootel taotlusi: ${n}` },
+
   account: {
     title: "Ligipääs",
     me: "Minu konto",
@@ -267,6 +270,9 @@ export const et: typeof ru = {
     role: "Roll",
     roles: { owner: "Omanik", admin: "Administraator", staff: "Barber" } as Record<string, string>,
     linkStaff: "Barber",
+    alsoBarber: "On ka barber",
+    notBarber: "Ei",
+    alsoHint: "Siis avaneb rakendus tema päevaga.",
     firstPassword: "Parool (võib jätta tühjaks: logib sisse e-kirja koodiga)",
     noPassword: "paroolita",
     lastLogin: "Viimane sisselogimine",

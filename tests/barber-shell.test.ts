@@ -7,7 +7,8 @@ import { describe, expect, it } from "vitest";
 import { COPY } from "@/app/b/copy";
 import { GET as manifest } from "@/app/b/manifest.webmanifest/route";
 import { detectPlatform } from "@/app/b/use-install";
-import { loginPageFor, safeBarberPath, safeStaffPath, SESSION_COOKIE } from "@/lib/auth/cookie";
+import { afterLogin, loginPageFor, safeBarberPath, safeStaffPath, SESSION_COOKIE, START_PATH } from "@/lib/auth/cookie";
+import { SIDE_COOKIE, sideOf, startPath } from "@/lib/auth/side";
 import { proxy } from "@/proxy";
 
 describe("login «next» paths", () => {
@@ -27,6 +28,43 @@ describe("login «next» paths", () => {
     expect(loginPageFor("/b?d=2026-11-17")).toBe("/b/login");
     expect(loginPageFor("/admin")).toBe("/admin/login");
     expect(loginPageFor("/bogus")).toBe("/admin/login");
+  });
+});
+
+describe("the staff app's start (docs/apps.md)", () => {
+  it("a barber lands on his day, whatever the device remembers", () => {
+    expect(startPath({ role: "staff", staffId: "x" })).toBe("/b");
+    expect(startPath({ role: "staff", staffId: "x" }, "admin")).toBe("/b");
+  });
+
+  it("Renat and the front desk: the side open last; the first time, his own day if he cuts too", () => {
+    expect(startPath({ role: "owner", staffId: null })).toBe("/admin");
+    expect(startPath({ role: "admin", staffId: null }, "")).toBe("/admin");
+    expect(startPath({ role: "owner", staffId: "x" })).toBe("/b");
+    expect(startPath({ role: "owner", staffId: "x" }, "admin")).toBe("/admin");
+    expect(startPath({ role: "owner", staffId: null }, "b")).toBe("/b");
+    expect(startPath({ role: "owner", staffId: null }, "elsewhere")).toBe("/admin");
+  });
+
+  it("a login with no page in mind goes to the start; a real page is kept", () => {
+    for (const none of ["/admin", "/b", "", null, "/bogus", "//evil.example"]) expect(afterLogin(none)).toBe(START_PATH);
+    expect(afterLogin("/admin/staff")).toBe("/admin/staff");
+    expect(afterLogin("/b/week?d=2026-11-17")).toBe("/b/week?d=2026-11-17");
+  });
+
+  it("the proxy notes the side a device has open, but not on the start or a login page", () => {
+    const side = (path: string, cookie = `${SESSION_COOKIE}=x`) => proxy(new NextRequest(`http://localhost:3400${path}`, { headers: { cookie } })).cookies.get(SIDE_COOKIE)?.value;
+    expect(sideOf("/admin/staff")).toBe("admin");
+    expect(sideOf("/b/week")).toBe("b");
+    expect(side("/admin/requests")).toBe("admin");
+    expect(side("/b/time")).toBe("b");
+    // the page a phone was after, even before it is logged in
+    expect(side("/admin", "")).toBe("admin");
+    // nothing to say: already noted, the start itself, a login page
+    expect(side("/admin", `${SESSION_COOKIE}=x; ${SIDE_COOKIE}=admin`)).toBeUndefined();
+    expect(side(START_PATH)).toBeUndefined();
+    expect(side("/b/login")).toBeUndefined();
+    expect(side("/admin/login")).toBeUndefined();
   });
 });
 
@@ -54,11 +92,12 @@ describe("proxy: /b", () => {
 });
 
 describe("manifest", () => {
-  it("is the barber app, scoped to /b, standalone, with the three icons", async () => {
+  it("is the one staff app: starts at /b/start, covers both sides, standalone, with the three icons", async () => {
     const res = manifest();
     expect(res.headers.get("content-type")).toMatch(/application\/manifest\+json/);
     const m = await res.json();
-    expect(m).toMatchObject({ id: "/b", start_url: "/b", scope: "/b", display: "standalone" });
+    // the id stays /b, so a phone that installed the barber app keeps its app
+    expect(m).toMatchObject({ id: "/b", start_url: "/b/start", scope: "/", display: "standalone" });
     expect(m.icons.map((i: { sizes: string; purpose: string }) => `${i.sizes} ${i.purpose}`)).toEqual(["192x192 any", "512x512 any", "512x512 maskable"]);
   });
 });

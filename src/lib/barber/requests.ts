@@ -462,6 +462,12 @@ export type RequestRow = {
   visitsInside: number;
 };
 
+/** How many requests wait for Renat's answer: the dot on «Салон» in the staff app's side switch. */
+export async function countWaitingRequests(q: Querier, businessId: string): Promise<number> {
+  const [r] = await q<{ n: number }>("select count(*)::int as n from staff_requests where business_id = $1 and status = 'requested'", [businessId]);
+  return r?.n ?? 0;
+}
+
 /**
  * The requests: every one still waiting, then the rest of the last `days`
  * days, newest first. `staffId` narrows it to one barber (his own list).

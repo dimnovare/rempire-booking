@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { changePassword, createUser, LIMITS, listUsers, loginWithCode, loginWithPassword, sendLoginCode, setUserActive } from "@/lib/auth/login";
+import { changePassword, createUser, LIMITS, listUsers, loginWithCode, loginWithPassword, sendLoginCode, setUserActive, setUserStaff } from "@/lib/auth/login";
 import { canUseAdmin, createSession, readSession, revokeSession, SESSION_IDLE_DAYS } from "@/lib/auth/sessions";
 import { closeDb, query } from "@/lib/db";
 import { EmailDisabled, emailTransport, sendEmail, sentToConsole } from "@/lib/email";
@@ -273,6 +273,34 @@ describe("password change and logins", () => {
     expect(await createUser(query, demo.business.id, { email: "Owner@example.test", name: "", role: "admin", staffId: null })).toEqual({ ok: false, field: "email_taken" });
     expect(await createUser(query, demo.business.id, { email: "not-an-email", name: "", role: "admin", staffId: null })).toEqual({ ok: false, field: "email" });
     expect((await listUsers(query, demo.business.id)).map((u) => u.email)).toEqual(["owner@example.test"]);
+  });
+});
+
+describe("an owner who cuts too (docs/apps.md)", () => {
+  const staffOf = async (id: string) => (await listUsers(query, demo.business.id)).find((u) => u.id === id)?.staffId;
+
+  it("a new owner or admin login may be linked to its barber", async () => {
+    const r = await createUser(query, demo.business.id, { email: "renat@example.test", name: "Renat", role: "owner", staffId: demo.staff.slava });
+    if (!r.ok) throw new Error(r.field);
+    expect(await staffOf(r.id)).toBe(demo.staff.slava);
+  });
+
+  it("an existing owner or admin login is linked and unlinked; a barber's login keeps its barber", async () => {
+    const id = await owner();
+    expect(await staffOf(id)).toBeNull();
+    expect(await setUserStaff(query, demo.business.id, id, demo.staff.slava)).toBe(true);
+    expect(await staffOf(id)).toBe(demo.staff.slava);
+    // a barber that is not this business's, and a login that is not
+    expect(await setUserStaff(query, demo.business.id, id, "00000000-0000-4000-8000-000000000000")).toBe(false);
+    expect(await setUserStaff(query, "00000000-0000-4000-8000-000000000000", id, null)).toBe(false);
+    expect(await staffOf(id)).toBe(demo.staff.slava);
+    expect(await setUserStaff(query, demo.business.id, id, null)).toBe(true);
+    expect(await staffOf(id)).toBeNull();
+
+    const b = await createUser(query, demo.business.id, { email: "barber@example.test", name: "B", role: "staff", staffId: demo.staff.slava });
+    if (!b.ok) throw new Error(b.field);
+    expect(await setUserStaff(query, demo.business.id, b.id, null)).toBe(false);
+    expect(await staffOf(b.id)).toBe(demo.staff.slava);
   });
 });
 

@@ -64,6 +64,26 @@ html, body { background: var(--ink); }
 .adm .test-banner { position: sticky; top: 0; z-index: 31; box-sizing: border-box; height: var(--test-h); padding-top: env(safe-area-inset-top, 0px); overflow: hidden; white-space: nowrap; }
 .adm:has(.test-banner) .adm-top { top: var(--test-h); height: var(--top-h); padding-top: 0; }
 .adm-brand { display: flex; align-items: center; min-height: 44px; }
+/* The staff app's side switch, «Мой день | Салон» (src/components/side-switch.tsx): for Renat and the
+   front desk, the same in the admin and in the barber app. A row under the top bar on a phone and a
+   tablet upright; beside the logo from 900px. The row's height joins --head-h, so the calendar still
+   fills the screen exactly. */
+.adm-side { display: flex; }
+.adm-side a { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 14px; border: 1px solid var(--line-2); color: var(--mute); font: 800 12px/1 var(--display); letter-spacing: .12em; text-transform: uppercase; text-decoration: none; white-space: nowrap; }
+.adm-side a + a { border-left: 0; }
+.adm-side a[aria-current="page"] { background: var(--lime); border-color: var(--lime); color: var(--on-lime); }
+.adm-side-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--lime); }
+.adm-side a[aria-current="page"] .adm-side-dot { background: var(--on-lime); }
+.adm-side-bar { display: none; }
+.adm-side-row { padding: 8px max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); background: var(--ink); border-bottom: 1px solid var(--line); }
+.adm:has(.adm-side-row) { --side-h: 57px; --head-h: calc(var(--top-h) + env(safe-area-inset-top, 0px) + var(--side-h)); }
+.adm:has(.test-banner):has(.adm-side-row) { --head-h: calc(var(--top-h) + var(--test-h) + var(--side-h)); }
+@media (min-width: 900px) {
+  .adm-side-row { display: none; }
+  .adm-side-bar { display: flex; flex: none; }
+  .adm-side-bar a { flex: none; min-height: 36px; }
+  .adm:has(.adm-side-row) { --side-h: 0px; }
+}
 .adm-me { margin-left: auto; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .adm-me form { display: contents; }
 .adm-email { display: none; color: var(--mute); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
@@ -542,6 +562,8 @@ button.cal-head:hover b { color: var(--lime); }
 .adm-users .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .adm-users .tx > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .adm-users li.is-off { opacity: .55; }
+.adm-linkstaff { display: flex; align-items: center; gap: 8px; margin-top: 3px; color: var(--mute); font-size: 13px; }
+.adm-linkstaff select { width: auto; min-width: 0; max-width: 60%; min-height: 40px; padding: 0 28px 0 10px; font-size: 14px; }
 
 /* ---------- «Запросы»: the barbers' requests (Phase B, B4) ---------- */
 .adm-req > li { padding: 12px 0; }

@@ -51,6 +51,9 @@ export const et: Copy = {
     install: "Kuidas telefoni paigaldada",
   },
 
+  /** The staff app's two sides (docs/apps.md), for Renat and the front desk. */
+  side: { label: "Minu päev või salong", mine: "Minu päev", barber: "Barber", salon: "Salong", waiting: (n: number) => `Ootel taotlusi: ${n}` },
+
   pick: {
     title: "Kelle päeva vaadata",
     lead: "Näed rakendust nii, nagu see barber seda näeb.",
@@ -58,6 +61,7 @@ export const et: Copy = {
     change: "Vaheta",
     none: "Barbereid pole.",
     off: "ei tööta",
+    mine: "see olete teie",
   },
 
   install: {

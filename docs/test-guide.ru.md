@@ -8,7 +8,7 @@ plain text, ready to paste into WhatsApp or Telegram.*
 
 - **A7 is in.** Staging shows the real barbers, services, prices and hours. Until then it shows demo data.
 - **If the barbers test too** (Renat's Q&A page, question 2): every barber has a login in «Доступ», with his own e-mail, role «Барбер», linked to himself. If Renat tests alone first, send only message 2.
-- **Renat has his login** (role «Владелец»).
+- **Renat has his login** (role «Владелец»), linked to his own barber: «Доступ» → «Входы» → «Он же барбер» → Renat. Then his app opens on his own day.
 - **Login codes arrive by e-mail on staging.** Try it with one address first.
 - **Fill in the test dates** in both messages («с … по …»).
 
@@ -73,8 +73,8 @@ https://rempire-booking.diipsolutions.eu/admin
 – «Календарь»: записи всех барберов. Создайте запись и перенесите её.
 – «Запросы»: в «Что барберы меняют сами» поставьте «С моего ОК» для перерывов и отпусков. Когда барбер попросит отпуск, нажмите «Согласовать» или «Отклонить».
 – «Счета» → «Месяц»: тестовые продажи барберов, их 17 % и аренда. Нажмите «Сделать черновики» и откройте счёт. На нём печать «ТЕСТ», платить не нужно. Если попросит, заполните «Компания» (данные REMPIRE) и «Получатели» (FIE или OÜ барберов).
-– Приложение барбера: https://rempire-booking.diipsolutions.eu/b — можно открыть день любого барбера.
-– Уведомления на телефон: в приложении барбера «Ещё» → «Включить уведомления», и отметьте, что присылать.
+– «Мой день | Салон»: переключатель вверху. «Мой день» — ваши записи как у барбера, «Салон» — весь салон. Чтобы открыть день другого барбера, в «Мой день» нажмите на своё имя вверху.
+– Уведомления на телефон: «Мой день» → «Ещё» → «Включить уведомления», и отметьте, что присылать.
 
 Что-то не так — «Сообщить о проблеме» вверху экрана. Там же «Все сообщения»: всё, что прислали барберы.
 

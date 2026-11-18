@@ -30,6 +30,19 @@ export function safeStaffPath(next: unknown): string {
   return typeof next === "string" && /^\/b([/?]|$)/.test(next) ? safeBarberPath(next) : safeAdminPath(next);
 }
 
+/** The staff app's own address: the installed app and a login with no page in mind start here (src/app/b/start). */
+export const START_PATH = "/b/start";
+
+/**
+ * Where a login goes once it is in: the page it was asked from. A bare
+ * /admin or /b is «no page in mind», so the app's start decides by the
+ * role and the side this device had open last (src/lib/auth/side.ts).
+ */
+export function afterLogin(next: unknown): string {
+  const path = safeStaffPath(next);
+  return path === "/admin" || path === "/b" ? START_PATH : path;
+}
+
 /** The login page that belongs to a «next» path. */
 export const loginPageFor = (next: string) => (/^\/b([/?]|$)/.test(next) ? "/b/login" : "/admin/login");
 

@@ -11,9 +11,14 @@
  * /b is the barber app (Phase B), the same way: no cookie → /b/login. Its
  * manifest, icons and service worker have a file extension, so they never
  * come here and need no login.
+ *
+ * The two are one staff app with two sides (docs/apps.md). Each request
+ * notes which side this device has open, so the app's start, /b/start,
+ * comes back to it.
  */
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE } from "@/lib/auth/cookie";
+import { SESSION_COOKIE, SESSION_COOKIE_MAX_AGE, START_PATH } from "@/lib/auth/cookie";
+import { SIDE_COOKIE, sideOf } from "@/lib/auth/side";
 import { isLocale, pickLocale } from "@/lib/i18n";
 import { indexingAllowed, NOINDEX_HEADER } from "@/lib/indexing";
 
@@ -30,6 +35,12 @@ function staffArea(request: NextRequest, root: "/admin" | "/b"): NextResponse {
     url.search = pathname === root && !search ? "" : `?next=${encodeURIComponent(pathname + search)}`;
     res = NextResponse.redirect(url, 307);
   } else res = NextResponse.next();
+  // which side of the staff app this device has open, for the app's start
+  // (/b/start reads it, so it never writes it; a login page is no side yet)
+  const side = sideOf(pathname);
+  if (!open && pathname !== START_PATH && request.cookies.get(SIDE_COOKIE)?.value !== side) {
+    res.cookies.set(SIDE_COOKIE, side, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: SESSION_COOKIE_MAX_AGE });
+  }
   res.headers.set("X-Robots-Tag", NOINDEX_HEADER);
   return res;
 }

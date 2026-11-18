@@ -8,7 +8,7 @@ import { Wait } from "../../lang";
 import { getA } from "../../lang-server";
 import { Fold } from "../fold";
 import { logout } from "./actions";
-import { AddUserForm, MyLang, PasswordForm, ToggleUser } from "./forms";
+import { AddUserForm, LinkStaff, MyLang, PasswordForm, ToggleUser } from "./forms";
 
 export default function AccountPage() {
   return (
@@ -28,6 +28,8 @@ async function Loaded() {
   const { user, business } = await requireAdmin();
   const owner = user.role === "owner";
   const [users, staff] = owner ? await Promise.all([listUsers(query, business.id), listStaff(query, business.id)]) : [[], []];
+  // the barbers a login can be: the working ones, and the one it already is
+  const linkable = (staffId: string | null) => staff.filter((s) => s.active || s.id === staffId).map((s) => ({ id: s.id, name: s.name }));
   const when = new Intl.DateTimeFormat(A.intl, { timeZone: business.timezone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   return (
     <>
@@ -65,11 +67,13 @@ async function Loaded() {
                       <span>{u.email}</span>
                       <small>
                         {A.account.roles[u.role]}
-                        {u.staffId ? ` ${staff.find((s) => s.id === u.staffId)?.name ?? "?"}` : ""}
+                        {u.role === "staff" && u.staffId ? ` ${staff.find((s) => s.id === u.staffId)?.name ?? "?"}` : ""}
                         {u.id === user.id ? ` · ${A.account.you}` : ""}
                         {!u.hasPassword ? ` · ${A.account.noPassword}` : ""} · {u.lastLoginAt ? when.format(Date.parse(u.lastLoginAt)) : A.account.never}
                         {!u.active ? ` · ${A.account.disabled}` : ""}
                       </small>
+                      {/* Renat cuts too: his login is linked to his barber, so the app opens on his own day */}
+                      {u.role !== "staff" && u.active && <LinkStaff key={u.staffId ?? ""} id={u.id} email={u.email} staffId={u.staffId} staff={linkable(u.staffId)} />}
                     </span>
                     {u.id !== user.id && <ToggleUser id={u.id} active={u.active} />}
                   </li>

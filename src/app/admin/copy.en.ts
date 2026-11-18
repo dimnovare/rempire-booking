@@ -248,6 +248,9 @@ export const en: typeof ru = {
     needName: "Enter a name: it cannot be saved without one.",
   },
 
+  /** The staff app's two sides (docs/apps.md), for Renat and the front desk. */
+  side: { label: "My day or salon", mine: "My day", barber: "Barber", salon: "Salon", waiting: (n: number) => `Requests waiting: ${n}` },
+
   account: {
     title: "Access",
     me: "My login",
@@ -265,6 +268,9 @@ export const en: typeof ru = {
     role: "Role",
     roles: { owner: "Owner", admin: "Administrator", staff: "Barber" } as Record<string, string>,
     linkStaff: "Barber",
+    alsoBarber: "Also a barber",
+    notBarber: "No",
+    alsoHint: "Then the app opens on his own day.",
     firstPassword: "Password (may be empty: they log in with a code by e-mail)",
     noPassword: "no password",
     lastLogin: "Last login",

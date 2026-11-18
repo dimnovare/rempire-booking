@@ -35,6 +35,11 @@ export async function viewAs(staffId: string): Promise<void> {
   const { user, business } = await requireStaffUser();
   if (user.role === "staff") redirect("/b");
   if (!(await isStaffOf(query, business.id, String(staffId)))) return;
+  // back to his own day (Renat cuts too): nothing to remember
+  if (String(staffId) === user.staffId) {
+    (await cookies()).delete(VIEW_AS_COOKIE);
+    redirect("/b");
+  }
   (await cookies()).set(VIEW_AS_COOKIE, String(staffId), {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

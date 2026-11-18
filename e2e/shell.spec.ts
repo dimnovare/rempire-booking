@@ -35,7 +35,7 @@ test.describe("shell, logged out", () => {
     }
   });
 
-  test("the manifest: scoped to /b, standalone, with icons that load", async ({ page, request }) => {
+  test("the manifest: one staff app for both sides, standalone, with icons that load", async ({ page, request }) => {
     await page.goto("/b/login");
     const href = await page.locator('link[rel="manifest"]').getAttribute("href");
     expect(href).toBeTruthy();
@@ -43,8 +43,8 @@ test.describe("shell, logged out", () => {
     expect(res.status()).toBe(200);
     expect(res.headers()["content-type"]).toMatch(/manifest\+json|application\/json/);
     const m = await res.json();
-    expect(m.scope).toBe("/b");
-    expect(m.start_url).toMatch(/^\/b/);
+    expect(m.scope).toBe("/");
+    expect(m.start_url).toBe("/b/start");
     expect(m.display).toBe("standalone");
     expect(m.icons.length).toBeGreaterThanOrEqual(3);
     for (const icon of m.icons) {

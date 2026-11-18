@@ -54,6 +54,9 @@ export const ru = {
     install: "Как установить на телефон",
   },
 
+  /** The staff app's two sides (docs/apps.md), for Renat and the front desk. */
+  side: { label: "Мой день или салон", mine: "Мой день", barber: "Барбер", salon: "Салон", waiting: (n: number) => `Запросов ждёт: ${n}` },
+
   pick: {
     title: "Чей день смотреть",
     lead: "Вы видите приложение так же, как его видит барбер.",
@@ -61,6 +64,7 @@ export const ru = {
     change: "Сменить",
     none: "Нет барберов.",
     off: "не работает",
+    mine: "это вы",
   },
 
   install: {

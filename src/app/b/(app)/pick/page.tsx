@@ -21,7 +21,9 @@ async function Pick() {
   if (!dbConfigured()) return <p className="adm-wait">{B.noDb}</p>;
   const { user, business } = await requireStaffUser();
   if (user.role === "staff") redirect("/b");
-  const list = await staffToPick(query, business.id);
+  // his own day first, if this login is a barber too
+  const all = await staffToPick(query, business.id);
+  const list = [...all.filter((s) => s.id === user.staffId), ...all.filter((s) => s.id !== user.staffId)];
   return (
     <main className="adm-page">
       <title>{`${B.pick.title} · REMPIRE`}</title>
@@ -38,6 +40,7 @@ async function Pick() {
                 <Ava src={s.photoUrl} name={s.name} />
                 <span className="bx-row-main">
                   <b>{s.name}</b>
+                  {s.id === user.staffId && <small>{B.pick.mine}</small>}
                   {!s.active && <small>{B.pick.off}</small>}
                 </span>
               </button>

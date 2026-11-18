@@ -5,7 +5,8 @@ import { authFile } from "./env";
 import { loginByCode } from "./helpers";
 
 /** One login each for the whole run, by e-mail code as on a phone. */
-for (const who of ["owner", "valentin", "jevgeni"]) {
+// boss: an owner who cuts too, as Renat does (tools/seed-demo.mjs)
+for (const who of ["owner", "boss", "valentin", "jevgeni"]) {
   setup(`log in ${who}`, async ({ page }) => {
     await loginByCode(page, `${who}@example.test`);
     mkdirSync(path.dirname(authFile(who)), { recursive: true });

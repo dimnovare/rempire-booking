@@ -441,6 +441,8 @@ export async function seedDemoLogins(db) {
     added += r.rows.length;
   };
   await add("owner@example.test", "Owner (demo)", "owner", null);
+  // an owner who cuts too, as Renat does: his login is linked to his barber (docs/apps.md)
+  await add("boss@example.test", "Owner and barber (demo)", "owner", demoId("staff", DEMO.staff[0].slug));
   for (const st of DEMO.staff) await add(`${st.slug}@example.test`, st.name, "staff", demoId("staff", st.slug));
   return added;
 }

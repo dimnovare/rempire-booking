@@ -4,6 +4,10 @@
  * indexed, even after the move to rempire.ee. Its language is the login's
  * own (Russian, Estonian or English): read once here, handed to every
  * component below.
+ *
+ * The admin is the «Салон» side of the staff app (docs/apps.md), so it
+ * carries the same manifest and home-screen tags as the barber app: added
+ * to the home screen from here, it is the same one app.
  */
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
@@ -27,6 +31,9 @@ const body = Questrial({ weight: "400", subsets: ["latin", "latin-ext"], display
 export const metadata: Metadata = {
   robots: { index: false, follow: false, nocache: true, googleBot: { index: false, follow: false } },
   referrer: "same-origin",
+  manifest: "/b/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "REMPIRE", statusBarStyle: "black-translucent" },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {

@@ -6,7 +6,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-import { GOOGLE_COOKIE, loginPageFor, safeStaffPath } from "@/lib/auth/cookie";
+import { afterLogin, GOOGLE_COOKIE, loginPageFor, safeStaffPath } from "@/lib/auth/cookie";
 import { startSession } from "@/lib/auth/current";
 import { exchangeGoogleCode, googleLoginConfigured, loginWithGoogle, readGoogleIdToken, sameState, unpackAttempt } from "@/lib/auth/google";
 import { dbConfigured, query } from "@/lib/db";
@@ -42,5 +42,5 @@ export async function GET(request: Request) {
   }
   if (!userId) redirect(`${login}?e=${reason}`);
   await startSession(userId);
-  redirect(safeStaffPath(attempt.next));
+  redirect(afterLogin(attempt.next));
 }

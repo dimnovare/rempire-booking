@@ -169,6 +169,8 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 /* room under the last row for the «+» */
 .bx-day { padding-bottom: 96px; }
 .bx-fab { position: fixed; z-index: 25; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom, 0px)); width: 58px; height: 58px; display: grid; place-items: center; background: var(--lime); color: var(--on-lime); box-shadow: 0 0 0 1px #000; }
+/* on a wide screen the app is a 640px column in the middle: the button stays inside it */
+@media (min-width: 672px) { .bx-fab { right: calc(50vw - 320px + 16px); } }
 .bx-daypick { display: flex; align-items: center; gap: 6px; }
 .bx-daypick .adm-ibtn { flex: none; width: 48px; height: 48px; }
 .bx-daypick .adm-ibtn:disabled { opacity: .35; }
