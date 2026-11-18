@@ -1,8 +1,8 @@
 # The apps: one for staff, one for clients
 
-*Decided with Dim in chat, 18.11.2026. Steps 1 to 3 (the staff app and the
-client app) were built the same day; step 4 (client notifications) is not
-built yet.*
+*Decided with Dim in chat, 18.11.2026. All four steps were built the same
+day. Open: the two apps need two addresses (below), found on Dim's Android
+phone that evening.*
 
 ## Decisions (Dim, 18.11.2026)
 
@@ -86,6 +86,45 @@ The booking site itself, installable. No separate pages.
 Not checked on a real phone yet: the install itself, on an iPhone and on
 Android.
 
+## Client notifications, as built (18.11)
+
+The reminder before a visit as a notification on the client's own phone.
+
+- **Renat's switch**, «Запросы» → «Напоминание клиенту перед визитом»
+  (`settings.client_reminder`):
+  - **SMS:** every client gets the SMS; clients are not offered the
+    notification.
+  - **Уведомление:** a client who turned it on gets the notification and no
+    SMS; everyone else gets the SMS.
+  - **Оба** (the default until Dim and Renat choose): everyone gets the
+    SMS; a client who turned the notification on gets that as well.
+- **The client turns it on** with «Напомнить уведомлением» on the
+  confirmation screen and on the visit page (`remind-me.tsx`), and off
+  again on the visit page.
+  - No client account: the visit's own link says whose phone it is
+    (`POST` and `DELETE /api/visit/<token>/push`). The phone then belongs to
+    that client, for every later visit too
+    (`client_push_subscriptions`, migration 012).
+  - An iPhone gets notifications only in the installed app; in Safari one
+    line says to add REMPIRE to the home screen first.
+  - Shown only when the server has the push keys and the switch is not on
+    «SMS».
+- **Sending** (`src/lib/outbox.ts`, `src/lib/client-push.ts`): an outbox row
+  per visit, kind `client_reminder`, a minute before the SMS's time.
+  - On «Уведомление» the SMS of a visit whose notification went out is
+    skipped. If the phone is gone or the push fails, the SMS still goes.
+  - A visit booked without the SMS reminder is still reminded by the
+    notification.
+  - A tap opens the client's own change link (`/v/…`).
+- **The worker** is `public/sw.js`: push only, started when a client turns
+  the reminder on. The keys are the staff app's (`VAPID_*`).
+- **Tests:** `tests/client-push.test.ts`; `e2e/app.spec.ts` (the switch;
+  the block itself only with `E2E_VAPID=yes`, which gives the test server a
+  throwaway key pair).
+
+Not checked: a real notification on a real phone. No test subscribes a
+phone, because that needs a real push service.
+
 ## The rest, today (checked 18.11)
 
 - The booking page has no staff link, and the admin has no link to the
@@ -103,11 +142,7 @@ Android.
 2. **Renat's combination.** *Built 18.11, above.* Dim tries it on staging,
    on his own phone and PC; then we adjust.
 3. **Client app.** *Built 18.11, above.*
-4. **Client notifications.**
-   - The client opts in after booking.
-   - One setting: SMS, notification or both. The default is decided later.
-   - On an iPhone a notification works only once the app is installed; on
-     Android also from the browser.
+4. **Client notifications.** *Built 18.11, above.*
 
 **Not now:** the QR page (Renat's answer first), the final addresses.
 
@@ -132,4 +167,11 @@ What each costs:
   Android may not offer the second install, and links can open in the wrong
   app.
 - **On staging** both apps share one address for now. That is fine on an
-  iPhone; on Android, both apps installed on one phone may behave oddly.
+  iPhone. **On Android it is not** (Dim's phone, 18.11): with the client app
+  installed, Chrome says the staff app is installed already, and the other
+  way round. Until the staff app has its own address, an Android phone holds
+  one of the two.
+- **Next:** a second staging address for the staff app, so the two apps can
+  be tested side by side. It needs a DNS line and a domain in Vercel (Dim's
+  OK), the address added to the Google login, and the proxy sending each
+  address its own pages.

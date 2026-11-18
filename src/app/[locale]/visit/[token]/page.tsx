@@ -7,11 +7,14 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { CheckIcon, CrossIcon, Logo } from "@/components/brand";
 import { currentBusiness } from "@/lib/business";
+import { clientPushOffered } from "@/lib/client-push";
 import { dbConfigured, dbKind, query } from "@/lib/db";
 import { COPY, duration, eur, INTL, isLocale, LOCALES, pick, type Locale } from "@/lib/i18n";
+import { pushPublicKey } from "@/lib/push";
 import { canChange, findVisit } from "@/lib/visits";
 import { cancelVisit } from "./actions";
 import { CancelButton } from "./cancel-button";
+import { RemindMe } from "../../remind-me";
 
 export const metadata = { title: "REMPIRE · Visit", referrer: "no-referrer" as const };
 
@@ -157,6 +160,8 @@ async function Visit({ params }: { params: PageProps<"/[locale]/visit/[token]">[
             </a>
           )}
         </div>
+        {/* the reminder as a notification on this phone: on or off, while the visit is ahead */}
+        {!cancelled && !past && clientPushOffered(business.settings) && <RemindMe token={token} publicKey={pushPublicKey()} c={c.remind} />}
       </div>
     </>
   );

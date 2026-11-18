@@ -4,8 +4,10 @@ import { Suspense } from "react";
 import { Logo } from "@/components/brand";
 import { currentBusiness } from "@/lib/business";
 import { loadCatalog } from "@/lib/catalog";
+import { clientPushOffered } from "@/lib/client-push";
 import { dbConfigured, dbKind, query } from "@/lib/db";
 import { COPY, isLocale, LOCALES, type Locale } from "@/lib/i18n";
+import { pushPublicKey } from "@/lib/push";
 import { BookingFlow } from "./booking-flow";
 
 export default async function Page({ params }: PageProps<"/[locale]">) {
@@ -54,6 +56,7 @@ async function Booking({ locale }: { locale: Locale }) {
       horizonDays={business.settings.horizon_days}
       cutoffHours={Math.round(business.settings.cancel_cutoff_min / 60)}
       demo={dbKind() === "pglite"}
+      pushKey={clientPushOffered(business.settings) ? pushPublicKey() : ""}
     />
   );
 }

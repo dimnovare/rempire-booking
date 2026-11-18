@@ -202,6 +202,11 @@ textarea.input { min-height: 84px; resize: vertical; }
 .next b { font: 800 22px/1.15 var(--display); letter-spacing: .04em; text-transform: uppercase; }
 .next .what { color: var(--mute); font-size: 15px; }
 .next .lk { color: var(--lime); font-size: 15px; text-decoration: underline; text-underline-offset: 3px; }
+/* «Напомнить уведомлением» on the confirmation and the visit page (remind-me.tsx) */
+.remind { display: flex; flex-direction: column; gap: 10px; padding-top: 20px; border-top: 1px solid var(--line); }
+.remind p { margin: 0; color: var(--mute); font-size: 15px; }
+.remind .remind-on { color: var(--lime); }
+.remind .remind-err { color: var(--warn); }
 /* the install offer under the confirmation (install-offer.tsx) */
 .install { display: flex; flex-direction: column; gap: 10px; padding-top: 20px; border-top: 1px solid var(--line); }
 .install .label { margin: 0; color: var(--fg); }

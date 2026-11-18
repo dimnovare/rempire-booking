@@ -31,7 +31,22 @@ export type BusinessSettings = {
   commission_bp: number;
   commission_basis: Basis;
   billing_day: number;
+  /**
+   * The reminder before a visit (docs/apps.md, step 4): by SMS, by a
+   * notification on the client's phone, or both.
+   *   sms   SMS only; clients are not offered the notification.
+   *   push  the notification for a client who turned it on, and no SMS for
+   *         him; everyone else still gets the SMS.
+   *   both  the SMS as before, and the notification as well for a client
+   *         who turned it on.
+   * Until Dim and Renat choose: both, so nobody loses the SMS.
+   */
+  client_reminder: ReminderChannel;
 };
+
+export type ReminderChannel = "sms" | "push" | "both";
+export const REMINDER_CHANNELS = ["sms", "push", "both"] as const;
+export const isReminderChannel = (v: unknown): v is ReminderChannel => v === "sms" || v === "push" || v === "both";
 
 export type SelfMode = "now" | "ask";
 export const SELF_KEYS = ["barber_self_time", "barber_self_price"] as const;
@@ -49,9 +64,10 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   commission_bp: 1700,
   commission_basis: "net-paid",
   billing_day: 1,
+  client_reminder: "both",
 };
 
-const LIMITS: Record<Exclude<keyof BusinessSettings, SelfKey | "commission_basis">, [number, number]> = {
+const LIMITS: Record<Exclude<keyof BusinessSettings, SelfKey | "commission_basis" | "client_reminder">, [number, number]> = {
   slot_step_min: [5, 120],
   horizon_days: [1, 366],
   min_notice_min: [0, 7 * 24 * 60],
@@ -76,5 +92,7 @@ export function readSettings(raw: unknown): BusinessSettings {
   }
   const basis = (raw as Record<string, unknown>).commission_basis;
   if (isBasis(basis)) out.commission_basis = basis;
+  const reminder = (raw as Record<string, unknown>).client_reminder;
+  if (isReminderChannel(reminder)) out.client_reminder = reminder;
   return out;
 }

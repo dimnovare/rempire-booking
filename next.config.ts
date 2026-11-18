@@ -44,9 +44,12 @@ const nextConfig: NextConfig = {
         { key: "Cache-Control", value: "no-cache" },
       ],
     };
-    if (indexingAllowed()) return [sw];
+    // The client app's worker (public/sw.js, push only): the same rule.
+    const clientSw = { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache" }] };
+    if (indexingAllowed()) return [sw, clientSw];
     return [
       sw,
+      clientSw,
       {
         source: "/:path*",
         headers: [{ key: "X-Robots-Tag", value: NOINDEX_HEADER }],

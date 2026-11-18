@@ -41,6 +41,9 @@ const SW_HEADERS = {
   ],
 };
 
+// the client app's worker (public/sw.js): push only, never cached by the browser
+const CLIENT_SW_HEADERS = { source: "/sw.js", headers: [{ key: "Cache-Control", value: "no-cache" }] };
+
 describe("signals", () => {
   let saved: string | undefined;
   beforeEach(() => {
@@ -58,6 +61,7 @@ describe("signals", () => {
 
     expect(headers).toEqual([
       SW_HEADERS,
+      CLIENT_SW_HEADERS,
       {
         source: "/:path*",
         headers: [{ key: "X-Robots-Tag", value: NOINDEX_HEADER }],
@@ -79,7 +83,7 @@ describe("signals", () => {
     const { headers, robots, metadata, redirect } = await load();
 
     // only the barber app's service-worker header stays
-    expect(headers).toEqual([SW_HEADERS]);
+    expect(headers).toEqual([SW_HEADERS, CLIENT_SW_HEADERS]);
     expect(robots).toEqual({ rules: { userAgent: "*", allow: "/", disallow: ["/admin", "/b", "/api/", "/v/"] } });
     expect(metadata.robots).toMatchObject({ index: true, follow: true });
     expect(redirect.headers.get("x-robots-tag")).toBeNull();

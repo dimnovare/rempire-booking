@@ -310,6 +310,7 @@ export const en: Copy = {
     searchHint: "2 letters or more",
     scan: "Scan",
     photo: "Photo",
+    gallery: "Choose from the gallery",
     scanning: "Point the camera at the barcode",
     noCamera: "The camera is not available. Type the code or find the product by name.",
     cameraDenied: "No access to the camera. Allow it, or type the code.",

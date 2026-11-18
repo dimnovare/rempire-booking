@@ -12,6 +12,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { InstallOffer } from "./install-offer";
+import { RemindMe } from "./remind-me";
 import { BackIcon, CalendarIcon, CheckIcon, Logo, PersonIcon, PlusIcon, TowerMark } from "@/components/brand";
 import type { Catalog, CatalogStaff } from "@/lib/catalog";
 import { COPY, duration, eur, euroRange, INTL, LOCALES, pick, type Locale } from "@/lib/i18n";
@@ -24,6 +25,8 @@ type Props = {
   horizonDays: number;
   cutoffHours: number;
   demo: boolean;
+  /** the key a phone subscribes with, when the salon offers the reminder as a notification; "" when not */
+  pushKey: string;
 };
 
 /** [start ms, the barber «anyone» gets, his special-time extra in cents] */
@@ -63,7 +66,7 @@ const dateOf = (d: string) => {
 };
 const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}-${Math.random()}`);
 
-export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, demo }: Props) {
+export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, demo, pushKey }: Props) {
   const [lang, setLang] = useState<Locale>(locale);
   const c = COPY[lang];
   const [screen, setScreen] = useState<1 | 2 | 3 | 4>(1);
@@ -934,6 +937,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, dem
             {c.again}
           </button>
         </div>
+        {pushKey && token && <RemindMe token={token} publicKey={pushKey} c={c.remind} />}
         <InstallOffer c={c.install} />
       </div>
     );

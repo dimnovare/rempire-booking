@@ -82,6 +82,7 @@ export function SellView({
   const [clock, setClock] = useState(now);
   const seq = useRef(0);
   const file = useRef<HTMLInputElement>(null);
+  const gallery = useRef<HTMLInputElement>(null);
   const flying = useRef(new Set<string>());
 
   /* ---------- the phone's waiting sales ---------- */
@@ -311,8 +312,14 @@ export function SellView({
             <button type="button" className="adm-btn adm-btn-ghost adm-btn-auto" onClick={() => file.current?.click()}>
               {S.photo}
             </button>
-            <input ref={file} type="file" accept="image/*" hidden onChange={(e) => void onPhoto(e.target.files?.[0]).finally(() => (e.target.value = ""))} />
+            {/* capture: the phone opens its back camera at once, not the gallery (Dim, 18.11) */}
+            <input ref={file} type="file" accept="image/*" capture="environment" hidden onChange={(e) => void onPhoto(e.target.files?.[0]).finally(() => (e.target.value = ""))} />
           </div>
+          {/* a picture taken before, or a screenshot of the product */}
+          <button type="button" className="adm-txt bx-sell-gallery" onClick={() => gallery.current?.click()}>
+            {S.gallery}
+          </button>
+          <input ref={gallery} type="file" accept="image/*" hidden onChange={(e) => void onPhoto(e.target.files?.[0]).finally(() => (e.target.value = ""))} />
           <label className="adm-field">
             <span>{S.search}</span>
             <input

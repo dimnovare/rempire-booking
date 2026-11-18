@@ -310,6 +310,7 @@ export const et: Copy = {
     searchHint: "Vähemalt 2 tähte",
     scan: "Skanni",
     photo: "Foto",
+    gallery: "Vali galeriist",
     scanning: "Suuna kaamera vöötkoodile",
     noCamera: "Kaamera pole saadaval. Sisesta kood või otsi toodet nime järgi.",
     cameraDenied: "Kaamerale pole ligipääsu — luba see või sisesta kood käsitsi.",

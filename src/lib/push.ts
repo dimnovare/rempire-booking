@@ -238,25 +238,23 @@ const isGone = (err: unknown) => {
 
 export type PushSendResult = { devices: number; sent: number; failed: number; gone: number };
 
+export type PushTarget = { endpoint: string; p256dh: string; auth: string };
+export type PushOutcome = "sent" | "gone" | "failed";
+
 /**
- * Send one message to every live phone of one login. Throws when nothing
- * could be sent but something may still work later (the outbox retries);
- * a login with no live phone sends nothing and does not throw.
+ * One message to each of these phones: what its push service answered.
+ * Shared by the logins' phones (below) and the clients' (client-push.ts).
+ * «gone» is for good (404/410, or a row that is no push service at all);
+ * «failed» may work on a later try.
  */
-export async function sendPushToUser(q: Querier, userId: string, msg: PushText, env: Env = process.env): Promise<PushSendResult> {
+export async function pushToPhones(subs: PushTarget[], msg: PushText, env: Env = process.env): Promise<PushOutcome[]> {
   const details = vapid(env);
   if (!details) throw new Error("push is not configured");
-  // a login switched off since the push was queued gets nothing
-  const subs = await q<{ endpoint: string; p256dh: string; auth: string }>(
-    `select p.endpoint, p.p256dh, p.auth from push_subscriptions p join users u on u.id = p.user_id
-      where p.user_id = $1 and p.retired_at is null and u.active order by p.created_at`,
-    [userId],
-  );
-  if (!subs.length) return { devices: 0, sent: 0, failed: 0, gone: 0 };
+  if (!subs.length) return [];
   const wp = await loadWebPush();
   const payload = JSON.stringify({ title: msg.title.slice(0, 100), body: msg.body.slice(0, 300), url: msg.url.slice(0, 500), tag: msg.tag.slice(0, 100) });
-  const outcomes = await Promise.all(
-    subs.map(async (s): Promise<"sent" | "gone" | "failed"> => {
+  return Promise.all(
+    subs.map(async (s): Promise<PushOutcome> => {
       // a row that is not a push service is never called, only retired
       if (!isPushEndpoint(s.endpoint)) return "gone";
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -278,6 +276,23 @@ export async function sendPushToUser(q: Querier, userId: string, msg: PushText, 
       }
     }),
   );
+}
+
+/**
+ * Send one message to every live phone of one login. Throws when nothing
+ * could be sent but something may still work later (the outbox retries);
+ * a login with no live phone sends nothing and does not throw.
+ */
+export async function sendPushToUser(q: Querier, userId: string, msg: PushText, env: Env = process.env): Promise<PushSendResult> {
+  if (!vapid(env)) throw new Error("push is not configured");
+  // a login switched off since the push was queued gets nothing
+  const subs = await q<{ endpoint: string; p256dh: string; auth: string }>(
+    `select p.endpoint, p.p256dh, p.auth from push_subscriptions p join users u on u.id = p.user_id
+      where p.user_id = $1 and p.retired_at is null and u.active order by p.created_at`,
+    [userId],
+  );
+  if (!subs.length) return { devices: 0, sent: 0, failed: 0, gone: 0 };
+  const outcomes = await pushToPhones(subs, msg, env);
   const ok = subs.filter((_, i) => outcomes[i] === "sent").map((s) => s.endpoint);
   const gone = subs.filter((_, i) => outcomes[i] === "gone").map((s) => s.endpoint);
   if (ok.length) await q("update push_subscriptions set last_ok_at = now() where endpoint = any($1::text[])", [ok]);

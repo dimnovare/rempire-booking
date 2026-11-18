@@ -292,6 +292,13 @@ export const et: typeof ru = {
     now: "Kohe",
     ask: "Minu loal",
     switchHint: "«Minu loal»: muudatus ootab siin, barber saab vastuse tõukega. Ootel puhkus on veebibroneeringule juba suletud.",
+    reminder: "Kliendi meeldetuletus enne külastust",
+    reminderBy: { sms: "SMS", push: "Teavitus", both: "Mõlemad" } as Record<string, string>,
+    reminderHint: {
+      sms: "Kõik kliendid saavad SMS-i. Teavitust klientidele ei pakuta.",
+      push: "Klient, kes lülitas teavituse oma telefonis sisse, saab selle SMS-i asemel. Teised saavad SMS-i.",
+      both: "Kõik kliendid saavad SMS-i. Klient, kes lülitas teavituse oma telefonis sisse, saab lisaks ka selle.",
+    } as Record<string, string>,
     open: "Ootavad vastust",
     none: "Uusi taotlusi pole.",
     recent: "14 päeva",

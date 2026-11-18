@@ -290,6 +290,13 @@ export const en: typeof ru = {
     now: "At once",
     ask: "With my OK",
     switchHint: "«With my OK»: the change waits here and the barber gets the answer by push. A vacation that waits is already closed to online booking.",
+    reminder: "The client's reminder before a visit",
+    reminderBy: { sms: "SMS", push: "Notification", both: "Both" } as Record<string, string>,
+    reminderHint: {
+      sms: "Every client gets an SMS. Clients are not offered the notification.",
+      push: "A client who turned the notification on on his phone gets it instead of the SMS. Everyone else gets the SMS.",
+      both: "Every client gets an SMS. A client who turned the notification on on his phone gets that as well.",
+    } as Record<string, string>,
     open: "Waiting",
     none: "No new requests.",
     recent: "Last 14 days",

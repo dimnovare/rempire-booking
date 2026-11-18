@@ -36,6 +36,7 @@ async function Loaded() {
         recent={rows.filter((r) => r.status !== "requested")}
         owner={user.role === "owner"}
         modes={{ barber_self_time: business.settings.barber_self_time, barber_self_price: business.settings.barber_self_price }}
+        reminder={business.settings.client_reminder}
         tz={business.timezone}
       />
     </>

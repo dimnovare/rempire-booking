@@ -30,9 +30,18 @@
  * in that login's language (src/lib/push-kinds.ts); a push more than two
  * hours late is dropped, not sent. From 20:00 the cron also queues each
  * login's plan for tomorrow (planEveningPush), once per day.
+ *
+ * The client's reminder as a notification (docs/apps.md, step 4;
+ * src/lib/client-push.ts): a push row of kind «client_reminder» to the
+ * client's own phone, planned like the SMS for every visit of a client who
+ * turned it on, a minute before the SMS's time. The business's switch
+ * (settings.client_reminder) says how the two go together: «sms» plans no
+ * notification; «both» sends both; «push» skips the SMS of a visit whose
+ * notification went out, so only clients without it cost an SMS.
  */
 import { after } from "next/server";
 import { getBusinessById } from "./availability";
+import { sendPushToClient } from "./client-push";
 import { query, type Querier } from "./db";
 import { emailTransport, sendEmail, type LetterBody } from "./email";
 import { confirmationLetter, visitLetter } from "./letters";
@@ -103,6 +112,44 @@ const REMINDER_AT = "a.starts_at - make_interval(mins => a.reminder_min)";
 // the time a reminder was planned for; send_at moves on retries, this does not
 const PLANNED_AT = "(n.payload->>'dueAt')::timestamptz";
 
+// the business's switch as SQL: anything but «sms» or «push» is the default, «both» (src/lib/settings.ts)
+const REMINDER_MODE = "(case when b.settings->>'client_reminder' in ('sms', 'push') then b.settings->>'client_reminder' else 'both' end)";
+// a visit booked without the SMS reminder is still reminded by a notification, the business's usual time before
+const PUSH_LEAD_MIN = "coalesce(a.reminder_min, case when jsonb_typeof(b.settings->'reminder_min') = 'number' then (b.settings->>'reminder_min')::numeric::int else 120 end)";
+const PUSH_REMINDER_AT = `a.starts_at - make_interval(mins => ${PUSH_LEAD_MIN})`;
+
+/** The same for the clients' notifications: a row per visit of a client with a live phone. */
+async function planClientPush(q: Querier, now: number): Promise<{ added: number; cancelled: number }> {
+  const cancelled = await q<{ id: string }>(
+    `update notifications n set status = 'cancelled', locked_until = null
+       from appointments a, businesses b
+      where n.appointment_id = a.id and b.id = a.business_id and n.kind = 'client_reminder' and n.status = 'queued'
+        and (a.status not in ('booked', 'pending') or ${REMINDER_MODE} = 'sms' or ${PLANNED_AT} is distinct from ${PUSH_REMINDER_AT})
+      returning n.id`,
+  );
+  const added = await q<{ id: string }>(
+    `insert into notifications (business_id, appointment_id, channel, kind, recipient, locale, payload, send_at)
+     select a.business_id, a.id, 'push', 'client_reminder', a.client_id::text, a.locale,
+            jsonb_build_object('startsAt', a.starts_at, 'dueAt', ${PUSH_REMINDER_AT}, 'staff', s.display_name,
+                               'business', b.name, 'address', l.address, 'tz', l.timezone),
+            ${PUSH_REMINDER_AT} - interval '1 minute'
+       from appointments a
+       join staff s on s.id = a.staff_id
+       join businesses b on b.id = a.business_id
+       join locations l on l.id = a.location_id
+      where a.status in ('booked', 'pending') and ${REMINDER_MODE} <> 'sms'
+        and exists (select 1 from client_push_subscriptions p where p.client_id = a.client_id and p.retired_at is null)
+        and a.starts_at > $1
+        and ${PUSH_REMINDER_AT} < $2
+        and not exists (select 1 from notifications n
+                         where n.appointment_id = a.id and n.kind = 'client_reminder'
+                           and n.status <> 'cancelled' and ${PLANNED_AT} = ${PUSH_REMINDER_AT})
+     returning id`,
+    [new Date(now + OUTBOX.reminderMinLeadMin * 60_000), new Date(now + OUTBOX.planAheadHours * 3_600_000)],
+  );
+  return { added: added.length, cancelled: cancelled.length };
+}
+
 /** Bring the queued reminders in line with the visits. */
 export async function planReminders(q: Querier, now = Date.now()): Promise<{ added: number; cancelled: number }> {
   const cancelled = await q<{ id: string }>(
@@ -133,7 +180,8 @@ export async function planReminders(q: Querier, now = Date.now()): Promise<{ add
      returning id`,
     [new Date(now + OUTBOX.reminderMinLeadMin * 60_000), new Date(now + OUTBOX.planAheadHours * 3_600_000)],
   );
-  return { added: added.length, cancelled: cancelled.length };
+  const push = await planClientPush(q, now);
+  return { added: added.length + push.added, cancelled: cancelled.length + push.cancelled };
 }
 
 /** Claim due rows of the given channels for this run, or for one visit only. */
@@ -145,7 +193,7 @@ export async function claimDue(
   appointmentId: string | null = null,
 ): Promise<OutboxRow[]> {
   if (!channels.length) return [];
-  return q<OutboxRow>(
+  const rows = await q<OutboxRow>(
     `update notifications set status = 'sending', locked_until = $2, attempts = attempts + 1
       where id in (select id from notifications
                     where channel = any($3::text[]) and send_at <= $1
@@ -157,6 +205,9 @@ export async function claimDue(
       returning id, business_id, appointment_id, channel, kind, recipient, locale, payload, send_at, attempts`,
     [new Date(now), new Date(now + OUTBOX.lockMin * 60_000), channels, limit, appointmentId],
   );
+  // an UPDATE returns its rows in no promised order; they go out oldest first,
+  // so a visit's notification (due a minute earlier) is sent before its SMS decides
+  return rows.sort((a, b) => new Date(a.send_at).getTime() - new Date(b.send_at).getTime());
 }
 
 function enabledChannels(env: Env): Channel[] {
@@ -184,6 +235,23 @@ const LINK_LABEL: Record<Locale, string> = { ru: "Перенести/отмен�
  * with a change link (Dim, 17.11.2026: a short link, 2 parts) drops the
  * address when the link would otherwise cost a third SMS part.
  */
+/** The reminder as a notification: the salon's name is the title, so the line starts with the visit. */
+export function clientReminderText(row: Pick<OutboxRow, "locale" | "payload" | "appointment_id">, url: string): PushText | null {
+  const p = row.payload as { startsAt?: string; staff?: string; business?: string; address?: string; tz?: string };
+  if (!p.startsAt) return null;
+  const when = localParts(Date.parse(p.startsAt), p.tz || "Europe/Tallinn");
+  const [, m, d] = when.date.split("-").map(Number);
+  const day = `${pad(d)}.${pad(m)}`;
+  const staff = p.staff ? p.staff : "";
+  const head =
+    row.locale === "et"
+      ? `Meeldetuletus: Teie aeg ${day} kell ${when.time}${staff ? `, ${staff}` : ""}.`
+      : row.locale === "en"
+        ? `Reminder: your visit on ${day} at ${when.time}${staff ? ` with ${staff}` : ""}.`
+        : `Напоминаем о записи ${day} в ${when.time}${staff ? `, барбер ${staff}` : ""}.`;
+  return { title: p.business || "REMPIRE", body: `${head}${p.address ? ` ${p.address}.` : ""}`, url, tag: `visit-${row.appointment_id ?? "x"}` };
+}
+
 export function messageText(row: Pick<OutboxRow, "kind" | "locale" | "payload">, link = ""): string | null {
   const p = row.payload as { startsAt?: string; staff?: string; business?: string; address?: string; tz?: string; text?: string };
   if (row.kind === "reminder" && p.startsAt) {
@@ -213,6 +281,8 @@ export type Senders = {
   email: typeof sendEmail;
   /** optional: left out, the real one is used */
   push?: (q: Querier, userId: string, msg: PushText, env: Env) => Promise<PushSendResult>;
+  /** the same for a client's phones (kind «client_reminder») */
+  pushClient?: (q: Querier, clientId: string, msg: PushText, env: Env) => Promise<PushSendResult>;
 };
 
 export type OutboxResult = { planned: number; cancelled: number; sent: number; retry: number; failed: number; skipped: number; waiting: number };
@@ -269,6 +339,16 @@ async function compose(q: Querier, row: OutboxRow, now: number, env: Env): Promi
   let link = "";
   if (row.kind === "reminder") {
     if (Date.parse(String(p.startsAt)) <= now) return { skip: "visit already started" };
+    // «push» mode: this visit's notification went out, so the SMS is not needed
+    if (row.appointment_id) {
+      const [told] = await q<{ id: string }>(
+        `select n.id from notifications n join businesses b on b.id = n.business_id
+          where n.appointment_id = $1 and n.kind = 'client_reminder' and n.status = 'sent'
+            and ${PLANNED_AT} = ($2::text)::timestamptz and ${REMINDER_MODE} = 'push' limit 1`,
+        [row.appointment_id, String((row.payload as { dueAt?: unknown }).dueAt ?? "")],
+      );
+      if (told) return { skip: "sent as a notification" };
+    }
     // a short link of this SMS's own: /v/<16 characters> (src/app/v/[token])
     if (row.appointment_id) link = `${siteUrl(env).origin}/v/${await mintVisitLink(q, row.appointment_id, "sms", 12)}`;
   }
@@ -316,7 +396,9 @@ async function deliver(q: Querier, rows: OutboxRow[], now: number, env: Env, sen
           [row.id, new Date(now), r.provider, r.ref, r.segments],
         );
       } else if (row.channel === "push" && "push" in msg) {
-        const r = await (senders.push ?? sendPushToUser)(q, row.recipient, msg.push, env);
+        // a login's phones, or a client's for his reminder
+        const send = row.kind === "client_reminder" ? (senders.pushClient ?? sendPushToClient) : (senders.push ?? sendPushToUser);
+        const r = await send(q, row.recipient, msg.push, env);
         if (!r.devices) {
           await q(`update notifications set status = 'skipped', locked_until = null, last_error = 'no phone' where id = $1`, [row.id]);
           res.skipped++;
@@ -367,6 +449,16 @@ const VISIT_KINDS = new Set(["visit_new", "visit_moved", "own_online"]);
 /** A push row's words, built now; or why it is not sent. */
 async function composePush(q: Querier, row: OutboxRow, now: number): Promise<Composed> {
   if (now - new Date(row.send_at).getTime() > OUTBOX.pushStaleMin * 60_000) return { skip: "stale" };
+  if (row.kind === "client_reminder") {
+    // the visit as it is now; the notification opens the client's own change link
+    if (!row.appointment_id) return { skip: "no visit" };
+    const [a] = await q<{ status: string; starts_at: Date }>("select status, starts_at from appointments where id = $1", [row.appointment_id]);
+    if (!a) return { skip: "visit gone" };
+    if (!LIVE.has(a.status)) return { skip: `visit ${a.status}` };
+    if (new Date(a.starts_at).getTime() <= now) return { skip: "visit already started" };
+    const text = clientReminderText(row, `/v/${await mintVisitLink(q, row.appointment_id, "push", 12)}`);
+    return text ? { push: text } : { skip: "no text" };
+  }
   let payload = row.payload;
   if (VISIT_KINDS.has(row.kind) && row.appointment_id) {
     // a visit cancelled since: no «new visit» about it

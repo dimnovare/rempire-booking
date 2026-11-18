@@ -20,6 +20,11 @@ const log = createWriteStream(path.join(out, "server.log"), { flags: "w" });
 const port = process.env.E2E_PORT || "3420";
 const prod = process.env.E2E_PROD === "yes";
 const next = path.join(root, "node_modules", "next", "dist", "bin", "next");
+// E2E_VAPID=yes: a key pair made here and now and kept nowhere, so the
+// pages that offer notifications can be looked at (e2e/app.spec.ts). No test
+// subscribes a phone with it, so nothing is ever sent.
+const vapid = process.env.E2E_VAPID === "yes" ? (await import("web-push")).default.generateVAPIDKeys() : null;
+
 const env = {
   ...process.env,
   DB_DRIVER: "pglite",
@@ -28,8 +33,8 @@ const env = {
   EMAIL_TRANSPORT: "console",
   SMS_TRANSPORT: "console",
   // no push keys: the e2e server must never call a push service
-  VAPID_PUBLIC_KEY: "",
-  VAPID_PRIVATE_KEY: "",
+  VAPID_PUBLIC_KEY: vapid?.publicKey ?? "",
+  VAPID_PRIVATE_KEY: vapid?.privateKey ?? "",
   VAPID_SUBJECT: "",
   DATABASE_URL: "",
   NEXT_TELEMETRY_DISABLED: "1",
