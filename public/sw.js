@@ -6,6 +6,7 @@
  *
  * Push only. There is no fetch handler: the booking pages always come from
  * the network, and nothing of a client is kept on the phone by this file.
+ * A phone is reminded only of the visits it was turned on for (013).
  * The staff app has its own worker (public/b/sw.js, scope /b), which keeps
  * running its pages; this one, at the root, never touches them.
  */

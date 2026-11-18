@@ -3,9 +3,15 @@
  * reminder before a visit as a notification on the client's own phone.
  *
  * A client has no login. He turns the notification on after a booking, on
- * the confirmation or the visit page, and the visit's own link says whose
- * phone it is (src/app/api/visit/[token]/push). The phone then belongs to
- * that client: every later visit of his is reminded there too.
+ * the confirmation or the visit page, and the visit's own link says which
+ * visit this phone is for (src/app/api/visit/[token]/push).
+ *
+ * A phone is tied to that one visit, never to the client (013): a visit
+ * link opens one visit, and the reminder carries that visit's change link,
+ * so it may only reach a phone that already held a link to the same visit.
+ * Anyone can book with someone else's phone number; that must not hand him
+ * the reminders of that person's other visits. A phone that is on already
+ * is added to a new booking by the booking page itself, with no extra tap.
  *
  * The reminder is an outbox row (channel 'push', kind 'client_reminder'),
  * planned and sent by src/lib/outbox.ts with the staff's pushes. Which way
@@ -37,45 +43,47 @@ export async function setClientReminder(business: Pick<Business, "id">, actor: s
 }
 
 /**
- * This phone is this client's now. The same endpoint is the same browser:
- * if another client booked on it before, the reminders follow the newer one.
+ * This phone is reminded of this visit. The same browser may be on for
+ * several visits, a row each; turned on again for the same visit, it is the
+ * same row, brought back if it was off.
  */
-export async function saveClientSubscription(q: Querier, businessId: string, clientId: string, s: PushSubscriptionInput): Promise<void> {
+export async function saveClientSubscription(q: Querier, businessId: string, appointmentId: string, s: PushSubscriptionInput): Promise<void> {
   await q(
-    `insert into client_push_subscriptions (endpoint, business_id, client_id, p256dh, auth, label) values ($1, $2, $3, $4, $5, $6)
-     on conflict (endpoint) do update
-        set business_id = excluded.business_id, client_id = excluded.client_id, p256dh = excluded.p256dh, auth = excluded.auth,
+    `insert into client_push_subscriptions (endpoint, appointment_id, business_id, p256dh, auth, label) values ($1, $2, $3, $4, $5, $6)
+     on conflict (endpoint, appointment_id) do update
+        set p256dh = excluded.p256dh, auth = excluded.auth,
             label = case when excluded.label = '' then client_push_subscriptions.label else excluded.label end,
             retired_at = null, retired_reason = null`,
-    [s.endpoint, businessId, clientId, s.p256dh, s.auth, s.label],
+    [s.endpoint, appointmentId, businessId, s.p256dh, s.auth, s.label],
   );
 }
 
-/** The client turned it off on this phone. False when it was not on. */
-export async function removeClientSubscription(q: Querier, clientId: string, endpoint: string): Promise<boolean> {
+/** The client turned it off on this phone, for this visit. False when it was not on. */
+export async function removeClientSubscription(q: Querier, appointmentId: string, endpoint: string): Promise<boolean> {
   const rows = await q<{ endpoint: string }>(
-    "update client_push_subscriptions set retired_at = now(), retired_reason = 'user' where endpoint = $1 and client_id = $2 and retired_at is null returning endpoint",
-    [String(endpoint).slice(0, 2000), clientId],
+    "update client_push_subscriptions set retired_at = now(), retired_reason = 'user' where endpoint = $1 and appointment_id = $2 and retired_at is null returning endpoint",
+    [String(endpoint).slice(0, 2000), appointmentId],
   );
   return rows.length > 0;
 }
 
 /**
- * Send one message to every live phone of one client. Throws when nothing
- * could be sent but something may still work later (the outbox retries); a
- * client with no live phone sends nothing and does not throw.
+ * Send one message to every live phone that was turned on for this visit.
+ * Throws when nothing could be sent but something may still work later (the
+ * outbox retries); a visit with no live phone sends nothing and does not
+ * throw. A phone the push service disowns is off for all its visits.
  */
-export async function sendPushToClient(q: Querier, clientId: string, msg: PushText, env: Env = process.env): Promise<PushSendResult> {
+export async function sendPushToClient(q: Querier, appointmentId: string, msg: PushText, env: Env = process.env): Promise<PushSendResult> {
   if (!pushConfigured(env)) throw new Error("push is not configured");
   const subs = await q<{ endpoint: string; p256dh: string; auth: string }>(
-    "select endpoint, p256dh, auth from client_push_subscriptions where client_id = $1 and retired_at is null order by created_at",
-    [clientId],
+    "select endpoint, p256dh, auth from client_push_subscriptions where appointment_id = $1 and retired_at is null order by created_at",
+    [appointmentId],
   );
   if (!subs.length) return { devices: 0, sent: 0, failed: 0, gone: 0 };
   const outcomes = await pushToPhones(subs, msg, env);
   const ok = subs.filter((_, i) => outcomes[i] === "sent").map((s) => s.endpoint);
   const gone = subs.filter((_, i) => outcomes[i] === "gone").map((s) => s.endpoint);
-  if (ok.length) await q("update client_push_subscriptions set last_ok_at = now() where endpoint = any($1::text[])", [ok]);
+  if (ok.length) await q("update client_push_subscriptions set last_ok_at = now() where endpoint = any($1::text[]) and appointment_id = $2", [ok, appointmentId]);
   if (gone.length) await q("update client_push_subscriptions set retired_at = now(), retired_reason = 'gone' where endpoint = any($1::text[]) and retired_at is null", [gone]);
   const res = { devices: subs.length, sent: ok.length, failed: subs.length - ok.length - gone.length, gone: gone.length };
   if (!res.sent && res.failed) throw new Error(`push failed on ${res.failed} phone(s)`);

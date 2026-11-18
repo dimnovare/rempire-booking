@@ -1,7 +1,8 @@
 /**
  * The client's reminder as a notification (docs/apps.md, step 4;
- * 012_client_push.sql): turning it on by the visit's own link, the outbox
- * row per visit, and the switch that says how it goes with the SMS.
+ * migrations 012 and 013): turning it on by the visit's own link, for that
+ * visit only; the outbox row per visit; and the switch that says how it
+ * goes with the SMS.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { DELETE as pushOff, POST as pushOn } from "@/app/api/visit/[token]/push/route";
@@ -12,14 +13,24 @@ import { clientReminderText, planReminders, runOutbox, type Senders } from "@/li
 import type { PushText } from "@/lib/push-kinds";
 import { DEFAULT_SETTINGS, readSettings } from "@/lib/settings";
 import { sentSms } from "@/lib/sms";
-import { zonedToUtc } from "@/lib/tz";
+import { addDays, todayIn, zonedToUtc } from "@/lib/tz";
 import { cancelByClient, findVisit } from "@/lib/visits";
 import { freshDemo, type Demo } from "./helpers";
 
 const TZ = "Europe/Tallinn";
 const at = (date: string, time: string) => zonedToUtc(date, time, TZ);
-const NOW = at("2026-11-16", "10:00");
-const TUE = "2026-11-17";
+// The route asks the real clock whether a visit is still ahead, so the visits
+// here are on a real day to come: the first Monday to Saturday three or more days on.
+const NOW = Date.now();
+const DAY = (() => {
+  let d = addDays(todayIn(TZ, NOW), 3);
+  if (new Date(`${d}T12:00:00Z`).getUTCDay() === 0) d = addDays(d, 1);
+  return d;
+})();
+const DDMM = `${DAY.slice(8, 10)}.${DAY.slice(5, 7)}`;
+// when the 12:00 visits are reminded: two hours before. Reminders are planned at most 48 hours ahead.
+const DUE = at(DAY, "10:00");
+const SOON = DUE - 3_600_000;
 // test values only: pushConfigured() needs both to be there, nothing is sent with them
 const KEYS = { VAPID_PUBLIC_KEY: "test-public-key", VAPID_PRIVATE_KEY: "test-private-key" };
 const ENV = { NODE_ENV: "test", VITEST: "true", ...KEYS };
@@ -46,7 +57,7 @@ async function visit(o: Partial<BookingInput> = {}) {
     {
       serviceIds: [demo.services.clip],
       staffId: demo.staff.slava,
-      startsAt: new Date(at(TUE, "12:00")).toISOString(),
+      startsAt: new Date(at(DAY, "12:00")).toISOString(),
       name: "Test Client",
       phone: "+372 5555 0501",
       email: null,
@@ -70,11 +81,12 @@ const mode = async (value: string) => {
   expect(await setClientReminder(demo.business, "test", value)).toBe(true);
 };
 const rows = (kind: string) =>
-  query<{ status: string; channel: string; recipient: string; send_at: Date; last_error: string | null; payload: { dueAt: string } }>(
-    "select status, channel, recipient, send_at, last_error, payload from notifications where kind = $1 order by created_at",
+  query<{ status: string; channel: string; appointment_id: string; send_at: Date; last_error: string | null }>(
+    "select status, channel, appointment_id, send_at, last_error from notifications where kind = $1 order by created_at",
     [kind],
   );
-const phones = () => query<{ endpoint: string; client_id: string; retired_at: Date | null; label: string }>("select endpoint, client_id, retired_at, label from client_push_subscriptions");
+const phones = () =>
+  query<{ endpoint: string; appointment_id: string; retired_at: Date | null; label: string }>("select endpoint, appointment_id, retired_at, label from client_push_subscriptions order by created_at");
 
 describe("the switch", () => {
   it("is «both» until someone chooses, and takes only its three values", async () => {
@@ -99,13 +111,12 @@ describe("the switch", () => {
 });
 
 describe("turning it on: /api/visit/<token>/push", () => {
-  it("the visit's link says whose phone it is; off again; never without a real link or a real phone", async () => {
+  it("the phone is on for the link's own visit; off again; never without a real link or a real phone", async () => {
     const v = await visit();
     const res = await turnOn(v.token);
     expect(res.status).toBe(200);
     expect(res.headers.get("cache-control")).toBe("no-store");
-    const [a] = await query<{ client_id: string }>("select client_id from appointments where id = $1", [v.id]);
-    expect(await phones()).toMatchObject([{ endpoint: PHONE.endpoint, client_id: a.client_id, retired_at: null, label: "Android" }]);
+    expect(await phones()).toMatchObject([{ endpoint: PHONE.endpoint, appointment_id: v.id, retired_at: null, label: "Android" }]);
 
     // the same phone again: still one row
     expect((await turnOn(v.token)).status).toBe(200);
@@ -122,63 +133,82 @@ describe("turning it on: /api/visit/<token>/push", () => {
     expect(await phones()).toMatchObject([{ retired_at: null }]);
   });
 
-  it("is refused on «SMS only» and on a server without keys", async () => {
+  it("is refused on «SMS only», on a server without keys, and for a visit that is over", async () => {
     const v = await visit();
     await mode("sms");
     expect((await turnOn(v.token)).status).toBe(409);
     await mode("both");
     delete process.env.VAPID_PUBLIC_KEY;
     expect((await turnOn(v.token)).status).toBe(409);
+    Object.assign(process.env, KEYS);
+    expect(await cancelByClient(demo.business, v.token, NOW)).toBe("cancelled");
+    const res = await turnOn(v.token);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ error: "over" });
     expect(await phones()).toHaveLength(0);
   });
 
-  it("a shared phone follows whoever booked on it last", async () => {
-    const first = await visit();
-    const second = await visit({ phone: "+372 5555 0502", name: "Other Client", startsAt: new Date(at(TUE, "15:00")).toISOString() });
-    await turnOn(first.token);
-    await turnOn(second.token);
-    const [b] = await query<{ client_id: string }>("select client_id from appointments where id = $1", [second.id]);
-    expect(await phones()).toMatchObject([{ client_id: b.client_id }]);
+  // A visit link opens one visit. Anyone can book with someone else's phone
+  // number, and so hold a link «of» that client: it must not reach further.
+  it("one visit's link never turns the phone on for another visit of the same client", async () => {
+    const mine = await visit();
+    const other = await visit({ startsAt: new Date(at(DAY, "15:00")).toISOString() });
+    const client = await query<{ client_id: string }>("select client_id from appointments where id = any($1::uuid[])", [[mine.id, other.id]]);
+    expect(new Set(client.map((c) => c.client_id)).size).toBe(1);
+
+    await turnOn(mine.token);
+    expect(await phones()).toMatchObject([{ appointment_id: mine.id }]);
+    await planReminders(query, SOON);
+    expect((await rows("client_reminder")).map((r) => r.appointment_id)).toEqual([mine.id]);
+
+    // with the other visit's own link the same phone is on for both, a row each
+    await turnOn(other.token);
+    expect((await phones()).map((p) => p.appointment_id).sort()).toEqual([mine.id, other.id].sort());
+    await planReminders(query, SOON);
+    expect((await rows("client_reminder")).map((r) => r.appointment_id).sort()).toEqual([mine.id, other.id].sort());
+    // off for one leaves the other on
+    await turnOff(mine.token, PHONE.endpoint);
+    expect((await phones()).filter((p) => !p.retired_at).map((p) => p.appointment_id)).toEqual([other.id]);
   });
 });
 
 describe("the reminder in the outbox", () => {
-  // what the push service would be asked to show, per client
-  const told: { clientId: string; msg: PushText }[] = [];
+  // what the push service would be asked to show, per visit
+  const told: { visitId: string; msg: PushText }[] = [];
   const senders = (devices = 1): Senders => ({
     sms: async (to, text) => {
       sentSms.push({ to, text });
       return { provider: "console" as const, ref: null, segments: 1 };
     },
     email: async () => ({ provider: "console" as const, ref: null }),
-    pushClient: async (_q, clientId, msg) => {
-      if (devices) told.push({ clientId, msg });
+    pushClient: async (_q, visitId, msg) => {
+      if (devices) told.push({ visitId, msg });
       return { devices, sent: devices, failed: 0, gone: 0 };
     },
   });
   beforeEach(() => {
     told.length = 0;
   });
-  const DUE = at(TUE, "10:00"); // two hours before 12:00
 
   it("«both»: a notification a minute before the SMS's time, and the SMS too", async () => {
     const v = await visit();
     await turnOn(v.token);
-    expect(await planReminders(query, NOW)).toEqual({ added: 2, cancelled: 0 });
+    expect(await planReminders(query, SOON)).toEqual({ added: 2, cancelled: 0 });
     const [push] = await rows("client_reminder");
     const [sms] = await rows("reminder");
-    expect(push).toMatchObject({ status: "queued", channel: "push" });
+    expect(push).toMatchObject({ status: "queued", channel: "push", appointment_id: v.id });
     expect(new Date(push.send_at).getTime()).toBe(DUE - 60_000);
     expect(new Date(sms.send_at).getTime()).toBe(DUE);
     // planning again adds nothing
-    expect(await planReminders(query, NOW)).toEqual({ added: 0, cancelled: 0 });
+    expect(await planReminders(query, SOON)).toEqual({ added: 0, cancelled: 0 });
 
     await runOutbox(query, DUE + 60_000, ENV, senders());
     expect(told).toHaveLength(1);
+    expect(told[0].visitId).toBe(v.id);
     expect(told[0].msg.title).toBe("REMPIRE");
-    expect(told[0].msg.body).toBe("Напоминаем о записи 17.11 в 12:00, барбер Slava. Mardi 1, Tallinn.");
+    expect(told[0].msg.body).toBe(`Напоминаем о записи ${DDMM} в 12:00, барбер Slava. Mardi 1, Tallinn.`);
     expect(told[0].msg.tag).toBe(`visit-${v.id}`);
-    // the notification opens the client's own link
+    // the notification opens this visit's own link
     const token = /^\/v\/([A-Za-z0-9_-]{16})$/.exec(told[0].msg.url)?.[1] ?? "";
     expect((await findVisit(query, demo.business.id, token))?.id).toBe(v.id);
     expect(sentSms).toHaveLength(1);
@@ -189,14 +219,14 @@ describe("the reminder in the outbox", () => {
   it("«push»: the notification went out, so no SMS for that visit; a client without it still gets the SMS", async () => {
     await mode("push");
     const withPhone = await visit();
-    await visit({ phone: "+372 5555 0502", name: "Other Client", startsAt: new Date(at(TUE, "12:00")).toISOString(), staffId: demo.staff.renat });
+    await visit({ phone: "+372 5555 0502", name: "Other Client", staffId: demo.staff.renat });
     await turnOn(withPhone.token);
     await runOutbox(query, DUE + 60_000, ENV, senders());
-    expect(told).toHaveLength(1);
+    expect(told.map((t) => t.visitId)).toEqual([withPhone.id]);
     expect(sentSms.map((s) => s.to)).toEqual(["+37255550502"]);
     const sms = await rows("reminder");
     expect(sms.map((r) => r.status).sort()).toEqual(["sent", "skipped"]);
-    expect(sms.find((r) => r.status === "skipped")?.last_error).toBe("sent as a notification");
+    expect(sms.find((r) => r.status === "skipped")).toMatchObject({ appointment_id: withPhone.id, last_error: "sent as a notification" });
   });
 
   it("«push», but the phone is gone: the SMS goes after all", async () => {
@@ -211,10 +241,10 @@ describe("the reminder in the outbox", () => {
   it("«sms»: no notification is planned, and one already queued is taken back", async () => {
     const v = await visit();
     await turnOn(v.token);
-    await planReminders(query, NOW);
+    await planReminders(query, SOON);
     expect((await rows("client_reminder"))[0].status).toBe("queued");
     await mode("sms");
-    await planReminders(query, NOW);
+    await planReminders(query, SOON);
     expect((await rows("client_reminder")).map((r) => r.status)).toEqual(["cancelled"]);
     await runOutbox(query, DUE + 60_000, ENV, senders());
     expect(told).toHaveLength(0);
@@ -233,7 +263,7 @@ describe("the reminder in the outbox", () => {
   it("a cancelled visit reminds nobody", async () => {
     const v = await visit();
     await turnOn(v.token);
-    await planReminders(query, NOW);
+    await planReminders(query, SOON);
     expect(await cancelByClient(demo.business, v.token, NOW)).toBe("cancelled");
     await runOutbox(query, DUE + 60_000, ENV, senders());
     expect(told).toHaveLength(0);
@@ -254,17 +284,16 @@ describe("the reminder in the outbox", () => {
     const row = (locale: "ru" | "et" | "en") => ({
       locale,
       appointment_id: "v1",
-      payload: { startsAt: new Date(at(TUE, "12:00")).toISOString(), staff: "Slava", business: "REMPIRE", address: "Mardi 1, Tallinn", tz: TZ },
+      payload: { startsAt: new Date(at("2026-11-17", "12:00")).toISOString(), staff: "Slava", business: "REMPIRE", address: "Mardi 1, Tallinn", tz: TZ },
     });
     expect(clientReminderText(row("et"), "/v/x")?.body).toBe("Meeldetuletus: Teie aeg 17.11 kell 12:00, Slava. Mardi 1, Tallinn.");
     expect(clientReminderText(row("en"), "/v/x")).toEqual({ title: "REMPIRE", body: "Reminder: your visit on 17.11 at 12:00 with Slava. Mardi 1, Tallinn.", url: "/v/x", tag: "visit-v1" });
     expect(clientReminderText({ locale: "ru", appointment_id: "v1", payload: {} }, "/v/x")).toBeNull();
   });
 
-  it("a client with no live phone sends nothing and does not throw", async () => {
+  it("a visit with no live phone sends nothing and does not throw", async () => {
     const v = await visit();
-    const [a] = await query<{ client_id: string }>("select client_id from appointments where id = $1", [v.id]);
-    expect(await sendPushToClient(query, a.client_id, { title: "t", body: "b", url: "/", tag: "x" }, ENV)).toEqual({ devices: 0, sent: 0, failed: 0, gone: 0 });
-    await expect(sendPushToClient(query, a.client_id, { title: "t", body: "b", url: "/", tag: "x" }, { NODE_ENV: "test" })).rejects.toThrow("not configured");
+    expect(await sendPushToClient(query, v.id, { title: "t", body: "b", url: "/", tag: "x" }, ENV)).toEqual({ devices: 0, sent: 0, failed: 0, gone: 0 });
+    await expect(sendPushToClient(query, v.id, { title: "t", body: "b", url: "/", tag: "x" }, { NODE_ENV: "test" })).rejects.toThrow("not configured");
   });
 });

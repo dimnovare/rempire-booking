@@ -33,8 +33,9 @@
  *
  * The client's reminder as a notification (docs/apps.md, step 4;
  * src/lib/client-push.ts): a push row of kind «client_reminder» to the
- * client's own phone, planned like the SMS for every visit of a client who
- * turned it on, a minute before the SMS's time. The business's switch
+ * client's own phone, planned like the SMS for every visit some phone was
+ * turned on for (a phone is tied to one visit, never to the client: 013), a
+ * minute before the SMS's time. The business's switch
  * (settings.client_reminder) says how the two go together: «sms» plans no
  * notification; «both» sends both; «push» skips the SMS of a visit whose
  * notification went out, so only clients without it cost an SMS.
@@ -118,7 +119,7 @@ const REMINDER_MODE = "(case when b.settings->>'client_reminder' in ('sms', 'pus
 const PUSH_LEAD_MIN = "coalesce(a.reminder_min, case when jsonb_typeof(b.settings->'reminder_min') = 'number' then (b.settings->>'reminder_min')::numeric::int else 120 end)";
 const PUSH_REMINDER_AT = `a.starts_at - make_interval(mins => ${PUSH_LEAD_MIN})`;
 
-/** The same for the clients' notifications: a row per visit of a client with a live phone. */
+/** The same for the clients' notifications: a row per visit that a live phone was turned on for. */
 async function planClientPush(q: Querier, now: number): Promise<{ added: number; cancelled: number }> {
   const cancelled = await q<{ id: string }>(
     `update notifications n set status = 'cancelled', locked_until = null
@@ -129,7 +130,7 @@ async function planClientPush(q: Querier, now: number): Promise<{ added: number;
   );
   const added = await q<{ id: string }>(
     `insert into notifications (business_id, appointment_id, channel, kind, recipient, locale, payload, send_at)
-     select a.business_id, a.id, 'push', 'client_reminder', a.client_id::text, a.locale,
+     select a.business_id, a.id, 'push', 'client_reminder', a.id::text, a.locale,
             jsonb_build_object('startsAt', a.starts_at, 'dueAt', ${PUSH_REMINDER_AT}, 'staff', s.display_name,
                                'business', b.name, 'address', l.address, 'tz', l.timezone),
             ${PUSH_REMINDER_AT} - interval '1 minute'
@@ -138,7 +139,7 @@ async function planClientPush(q: Querier, now: number): Promise<{ added: number;
        join businesses b on b.id = a.business_id
        join locations l on l.id = a.location_id
       where a.status in ('booked', 'pending') and ${REMINDER_MODE} <> 'sms'
-        and exists (select 1 from client_push_subscriptions p where p.client_id = a.client_id and p.retired_at is null)
+        and exists (select 1 from client_push_subscriptions p where p.appointment_id = a.id and p.retired_at is null)
         and a.starts_at > $1
         and ${PUSH_REMINDER_AT} < $2
         and not exists (select 1 from notifications n
@@ -281,8 +282,8 @@ export type Senders = {
   email: typeof sendEmail;
   /** optional: left out, the real one is used */
   push?: (q: Querier, userId: string, msg: PushText, env: Env) => Promise<PushSendResult>;
-  /** the same for a client's phones (kind «client_reminder») */
-  pushClient?: (q: Querier, clientId: string, msg: PushText, env: Env) => Promise<PushSendResult>;
+  /** the same for the phones turned on for one visit (kind «client_reminder») */
+  pushClient?: (q: Querier, appointmentId: string, msg: PushText, env: Env) => Promise<PushSendResult>;
 };
 
 export type OutboxResult = { planned: number; cancelled: number; sent: number; retry: number; failed: number; skipped: number; waiting: number };
@@ -396,9 +397,11 @@ async function deliver(q: Querier, rows: OutboxRow[], now: number, env: Env, sen
           [row.id, new Date(now), r.provider, r.ref, r.segments],
         );
       } else if (row.channel === "push" && "push" in msg) {
-        // a login's phones, or a client's for his reminder
-        const send = row.kind === "client_reminder" ? (senders.pushClient ?? sendPushToClient) : (senders.push ?? sendPushToUser);
-        const r = await send(q, row.recipient, msg.push, env);
+        // a login's phones, or the phones turned on for this one visit
+        const r =
+          row.kind === "client_reminder"
+            ? await (senders.pushClient ?? sendPushToClient)(q, row.appointment_id ?? "", msg.push, env)
+            : await (senders.push ?? sendPushToUser)(q, row.recipient, msg.push, env);
         if (!r.devices) {
           await q(`update notifications set status = 'skipped', locked_until = null, last_error = 'no phone' where id = $1`, [row.id]);
           res.skipped++;

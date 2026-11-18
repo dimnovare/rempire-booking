@@ -101,10 +101,18 @@ The reminder before a visit as a notification on the client's own phone.
 - **The client turns it on** with «Напомнить уведомлением» on the
   confirmation screen and on the visit page (`remind-me.tsx`), and off
   again on the visit page.
-  - No client account: the visit's own link says whose phone it is
-    (`POST` and `DELETE /api/visit/<token>/push`). The phone then belongs to
-    that client, for every later visit too
-    (`client_push_subscriptions`, migration 012).
+  - No client account: the visit's own link turns the phone on
+    (`POST` and `DELETE /api/visit/<token>/push`), for a visit still ahead.
+  - **A phone is tied to that one visit, never to the client**
+    (`client_push_subscriptions`, migrations 012 and 013; security review,
+    18.11). The reminder carries the visit's change link, and anyone can
+    book with someone else's phone number, so one visit's link must not
+    reach that person's other visits.
+  - A regular client still taps once: a phone that is on already is added
+    to each new booking by the confirmation screen itself.
+  - On «Уведомление», whoever holds a visit's link can move its reminder
+    from SMS to a notification on his own phone. That is the visit he could
+    already change or cancel.
   - An iPhone gets notifications only in the installed app; in Safari one
     line says to add REMPIRE to the home screen first.
   - Shown only when the server has the push keys and the switch is not on

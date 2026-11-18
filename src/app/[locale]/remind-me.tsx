@@ -7,9 +7,9 @@
  * not on «SMS only»: the page passes the key, or nothing).
  *
  * One tap asks the phone's permission, starts the client app's worker
- * (public/sw.js) and tells the server whose phone this is, by the visit's
- * own link (/api/visit/<token>/push). A phone that is on already is
- * handed to this visit's client without asking again. An iPhone gets
+ * (public/sw.js) and turns this phone on for this one visit, by the visit's
+ * own link (/api/visit/<token>/push). A phone that is on already is added
+ * to this visit without asking again, so a regular client taps once. An iPhone gets
  * notifications only in the installed app, so in Safari one line says so.
  */
 import { useEffect, useState } from "react";
@@ -45,7 +45,7 @@ export function RemindMe({ token, publicKey, c }: { token: string; publicKey: st
     (async () => {
       if (detectPlatform(navigator.userAgent, navigator.maxTouchPoints) === "ios" && !isStandalone()) return setEnv("ios");
       if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return setEnv("none");
-      // a phone that is on already: this visit's client is its owner now
+      // a phone that is on already: it is reminded of this visit too
       const reg = Notification.permission === "granted" ? await navigator.serviceWorker.getRegistration("/") : undefined;
       const sub = await reg?.pushManager.getSubscription();
       const ok = sub
