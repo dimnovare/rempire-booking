@@ -27,6 +27,10 @@
   --body: var(--font-body), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --nav-h: 64px;
   --top-h: 52px;
+  /* the test-run line above the top bar (staging and local only): 0 when it is not there */
+  --test-h: 0px;
+  /* everything that stays at the top of the screen: the test line, the top bar, the notch */
+  --head-h: calc(var(--top-h) + env(safe-area-inset-top, 0px));
   --panel-w: 400px;
   color-scheme: dark;
 }
@@ -50,6 +54,15 @@ html, body { background: var(--ink); }
 /* ---------- shell ---------- */
 .adm-app { min-height: 100dvh; }
 .adm-top { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 10px; height: calc(var(--top-h) + env(safe-area-inset-top, 0px)); padding: env(safe-area-inset-top, 0px) max(8px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px)); background: var(--ink); border-bottom: 1px solid var(--line); }
+/*
+ * «Тестовая версия» (src/components/test-banner.tsx): one row above the top bar.
+ * Its place and height are set here, its look by its own block below. Whatever
+ * is measured from the top of the screen uses --head-h, so nothing else needs
+ * to know about the line; it takes the notch's inset over from the top bar.
+ */
+.adm:has(.test-banner) { --test-h: calc(36px + env(safe-area-inset-top, 0px)); --head-h: calc(var(--top-h) + var(--test-h)); }
+.adm .test-banner { position: sticky; top: 0; z-index: 31; box-sizing: border-box; height: var(--test-h); padding-top: env(safe-area-inset-top, 0px); overflow: hidden; white-space: nowrap; }
+.adm:has(.test-banner) .adm-top { top: var(--test-h); height: var(--top-h); padding-top: 0; }
 .adm-brand { display: flex; align-items: center; min-height: 44px; }
 .adm-me { margin-left: auto; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .adm-me form { display: contents; }
@@ -208,7 +221,7 @@ html, body { background: var(--ink); }
 .adm-or::before, .adm-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 
 /* ---------- calendar ---------- */
-.cal { display: flex; flex-direction: column; height: calc(100dvh - var(--top-h) - var(--nav-h) - env(safe-area-inset-bottom, 0px) - env(safe-area-inset-top, 0px)); }
+.cal { display: flex; flex-direction: column; height: calc(100dvh - var(--head-h) - var(--nav-h) - env(safe-area-inset-bottom, 0px)); }
 .cal.is-pending .cal-scroll { opacity: .55; transition: opacity .2s .15s; }
 .cal-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; padding: 6px max(8px, env(safe-area-inset-right, 0px)) 8px max(8px, env(safe-area-inset-left, 0px)); border-bottom: 1px solid var(--line); }
 .cal-nav { display: flex; align-items: center; gap: 2px; min-width: 0; }
@@ -289,7 +302,7 @@ button.cal-head:hover b { color: var(--lime); }
 .cal.is-week .cal-head b { font-size: 12px; letter-spacing: .02em; }
 .cal.is-week .cal-head small { font-size: 10px; }
 @media (min-width: 900px) {
-  .cal { height: calc(100dvh - var(--top-h) - env(safe-area-inset-top, 0px)); }
+  .cal { height: calc(100dvh - var(--head-h)); }
   .cal.has-panel { padding-right: var(--panel-w); }
   .cal-bar { flex-wrap: nowrap; gap: 12px; padding: 10px 16px 10px 20px; }
   .cal-title { min-width: 250px; font-size: 24px; }
@@ -330,7 +343,7 @@ button.cal-head:hover b { color: var(--lime); }
   .adm-grab { display: none; }
 }
 @media (min-width: 900px) {
-  .adm-sheet-wrap { top: calc(var(--top-h) + env(safe-area-inset-top, 0px)); left: auto; width: var(--panel-w); background: none; align-items: stretch; }
+  .adm-sheet-wrap { top: var(--head-h); left: auto; width: var(--panel-w); background: none; align-items: stretch; }
   .adm-sheet { max-width: none; max-height: none; height: 100%; border-top: 0; border-left: 1px solid var(--line-2); }
   .adm-grab { display: none; }
   .adm-sheet-head { padding-top: 12px; }
@@ -412,7 +425,7 @@ button.cal-head:hover b { color: var(--lime); }
 .adm-rail:not(.is-index) { display: none; }
 @media (min-width: 900px) {
   .adm-split { display: grid; grid-template-columns: 264px minmax(0, 1fr); align-items: start; }
-  .adm-rail, .adm-rail:not(.is-index) { display: flex; position: sticky; top: var(--top-h); max-width: none; height: calc(100dvh - var(--top-h)); margin: 0; padding: 20px 12px 24px 16px; gap: 10px; overflow-y: auto; border-right: 1px solid var(--line); }
+  .adm-rail, .adm-rail:not(.is-index) { display: flex; position: sticky; top: var(--head-h); max-width: none; height: calc(100dvh - var(--head-h)); margin: 0; padding: 20px 12px 24px 16px; gap: 10px; overflow-y: auto; border-right: 1px solid var(--line); }
   .adm-rail .adm-page-head { padding: 0 4px 0 8px; }
   .adm-rail .adm-h1 { font: 800 13px/1 var(--display); letter-spacing: .14em; color: var(--mute); }
   .adm-rail .adm-btn-sm { min-height: 36px; }
@@ -432,7 +445,7 @@ button.cal-head:hover b { color: var(--lime); }
 .adm-svc .c { display: none; }
 @media (min-width: 900px) {
   .adm-page.adm-two { display: grid; grid-template-columns: minmax(0, 1fr) clamp(380px, 32vw, 520px); gap: 24px; align-items: start; }
-  .adm-two > .adm-pane-wrap { position: sticky; top: calc(var(--top-h) + 24px); }
+  .adm-two > .adm-pane-wrap { position: sticky; top: calc(var(--head-h) + 24px); }
   .adm-two .adm-pane > .adm-sheet-head h2 { font-size: 22px; letter-spacing: .03em; }
   .adm-svc { padding: 10px 12px; border-left: 2px solid transparent; }
   .adm-svc[aria-current="true"] { background: var(--raise); border-left-color: var(--lime); }
