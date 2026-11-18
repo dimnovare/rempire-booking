@@ -35,6 +35,10 @@ describe("the questions", () => {
     expect(cleanValue("emails.who", "Сначала я сам")).toBe("Сначала я сам");
     expect(cleanValue("emails.who", "Все")).toBeNull();
     expect(cleanValue("emails.list", "Valentin — valentin@example.test")).toBe("Valentin — valentin@example.test");
+    // 18.11: a possible addition, asked before it is built; «Что ещё важно» stays last
+    expect(QUESTIONS.slice(-2).map((q) => q.id)).toEqual(["qr", "extra"]);
+    expect(cleanValue("qr.want", "Пока не нужна")).toBe("Пока не нужна");
+    expect(cleanValue("qr.want", "Да")).toBeNull();
   });
 
   it("take only what the page offers", () => {

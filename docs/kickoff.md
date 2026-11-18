@@ -36,6 +36,7 @@ moved to rempire.ee.
 | 19 | Invoice format | **PDF by e-mail** is enough (Dim, 17.11). |
 | 20 | Special-time extra | **Goes to the barber whole** (Dim, 17.11). |
 | 21 | What we read ourselves | Altegio and Isolta access answer the rest (services, prices, hours, the cancel rule; the invoicing company, VAT, chair rent, invoice layout). Renat is not asked those. |
+| 22 | Apps | **Two** (Dim, 18.11): one staff app where the role decides what opens, and the client booking site, installable. Renat is owner and barber at once. The final addresses are open. See `docs/apps.md`. |
 
 ### Round 1 answers (Dim, decisions page, 17.11.2026)
 
