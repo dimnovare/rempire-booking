@@ -122,12 +122,22 @@ live only with Dim's OK, after he has seen the exact diff.
 |---|---|---|
 | R1 | The shop branch `booking-partner-read`: the two routes, the secret check, the photo limits and the rate limit, with tests. **Not pushed.** | Claude |
 | R2 | Booking: `SHOP_SALES` off, test sales, the missing purchase price, the banner, the mail guard, «ТЕСТ» PDFs, staging invoice numbers, the feedback button | Claude |
-| R3 | **Dim's OK** on R1's diff. Then: the push to the live shop, `BOOKING_API_SECRET` in the shop's Vercel (Production only, Sensitive), `SHOP_API_URL` and `SHOP_API_SECRET` in booking's Vercel | Dim |
+| R3 | **Dim's OK** on R1's diff. Then: the push to the live shop, `BOOKING_API_SECRET` in the shop's Vercel (Production only, Sensitive), `SHOP_API_URL` and `SHOP_API_SECRET` in booking's Vercel. **Done 18.11** | Dim |
 | R4 | A7, the Altegio import | Claude, once Dim has the login |
 | R5 | The guide in Russian | Claude writes it, Dim forwards it |
 | R6 | The test days, then the wipe and the fix list | Renat and the barbers; Claude reads the reports |
 
-R1 and R2 can run side by side now. R4 waits on Altegio.
+**Status, 18.11:** R1, R2 and R3 are done. R4 waits on Altegio.
+
+- **The shop:** `main` = `production` = `3dbe539d`. CI, the promote and the smoke test passed.
+- **The shop session's check:** it walked the live shop before and after the push and found no change: pages, search, cart, checkout up to Pay, the admin login page, sitemaps and the Merchant feeds.
+- **The first build answered 503 `not_configured`.** The secret was fixed and both apps were redeployed. Now `/api/partner/products/lookup` without the secret answers 401.
+- **From staging's barber app (`/b/sell`):**
+  - search «shampoo» lists the live products with photo, price and stock;
+  - a photo of System 4 Bio Botanical Shampoo matched that product at 9,00 €.
+  - No sale was made.
+  - The barcode scan needs a phone camera, so it is tested on the test days.
+- `SHOP_API_URL` is `https://rempireshop.com`, without www. www answers 308, and booking refuses redirects.
 
 ## The live shop's preview risk (ask the shop's session)
 
@@ -166,6 +176,10 @@ from reading code only; nothing was changed):
   - then delete or redeploy the old previews (`test-cleanup/*`,
     `feat/cpu-cut`, `ci/weekly-e2e-not-cancelled`, `r27-*`), which keep the
     values they were built with.
+- **Done 18.11:**
+  - Dim set the listed vars and `SESSION_SECRET` to Production only;
+  - all 6 old previews were deleted;
+  - Development is left as Dim has it.
 - **For R1:** after the fix, its preview has no database, so `/lookup` is
   tested on production after the merge. That is safe: it reads only, and it
   answers 503 until the secret is set. R1 has no migration, so its
