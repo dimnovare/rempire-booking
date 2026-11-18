@@ -90,6 +90,11 @@ describe("google: the answer", () => {
     });
     const failing = (async () => new Response("{}", { status: 400 })) as unknown as typeof fetch;
     await expect(exchangeGoogleCode({ code: "x", verifier: "y", redirectUri: "z" }, env, failing)).rejects.toThrow("400");
+    // Google's short reason goes into the log; anything else it sends does not
+    const grant = (async () => new Response(JSON.stringify({ error: "invalid_grant", error_description: "Bad Request" }), { status: 400 })) as unknown as typeof fetch;
+    await expect(exchangeGoogleCode({ code: "x", verifier: "y", redirectUri: "z" }, env, grant)).rejects.toThrow("Google token endpoint answered 400 (invalid_grant)");
+    const odd = (async () => new Response(JSON.stringify({ error: "<b>not a code</b>" }), { status: 400 })) as unknown as typeof fetch;
+    await expect(exchangeGoogleCode({ code: "x", verifier: "y", redirectUri: "z" }, env, odd)).rejects.toThrow(/answered 400$/);
   });
 
   it("reads the ID token only if it is ours, fresh and verified", () => {

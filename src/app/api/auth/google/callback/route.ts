@@ -6,8 +6,8 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-import { afterLogin, GOOGLE_COOKIE, loginPageFor, safeStaffPath } from "@/lib/auth/cookie";
-import { startSession } from "@/lib/auth/current";
+import { afterLogin, GOOGLE_COOKIE, loginPageFor, safeStaffPath, START_PATH } from "@/lib/auth/cookie";
+import { currentStaffUser, startSession } from "@/lib/auth/current";
 import { exchangeGoogleCode, googleLoginConfigured, loginWithGoogle, readGoogleIdToken, sameState, unpackAttempt } from "@/lib/auth/google";
 import { dbConfigured, query } from "@/lib/db";
 
@@ -24,8 +24,10 @@ export async function GET(request: Request) {
   const state = url.searchParams.get("state") ?? "";
   // the login page the attempt started from: the admin's or the barber app's
   const login = loginPageFor(attempt ? safeStaffPath(attempt.next) : "");
-  // «Cancel» on Google's screen, an old tab, or a forged request
-  if (!attempt || !code || !sameState(state, attempt.state)) redirect(`${login}?e=google`);
+  // «Cancel» on Google's screen, an old tab, or a forged request. Google's
+  // answer opened a second time («Back», a reload, the installed app taking
+  // the same link) finds the login already done: on into the app, no error.
+  if (!attempt || !code || !sameState(state, attempt.state)) redirect((await currentStaffUser()) ? START_PATH : `${login}?e=google`);
 
   let userId: string | null = null;
   let reason = "google";
@@ -40,6 +42,8 @@ export async function GET(request: Request) {
   } catch (err) {
     console.error("google login:", err instanceof Error ? err.message : err);
   }
+  // Google takes a code once: a second copy of the same answer fails there, though the first one logged in
+  if (!userId && reason === "google" && (await currentStaffUser())) redirect(afterLogin(attempt.next));
   if (!userId) redirect(`${login}?e=${reason}`);
   await startSession(userId);
   redirect(afterLogin(attempt.next));

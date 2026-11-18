@@ -109,7 +109,13 @@ export async function exchangeGoogleCode(
       code_verifier: o.verifier,
     }).toString(),
   });
-  if (!res.ok) throw new Error(`Google token endpoint answered ${res.status}`);
+  if (!res.ok) {
+    // Google's own reason, for the server log: a short code such as invalid_grant
+    // (a code used twice or too old) or redirect_uri_mismatch; never a secret
+    const why = (await res.json().catch(() => ({}))) as { error?: unknown };
+    const reason = typeof why.error === "string" && /^[a-z_]{1,40}$/.test(why.error) ? ` (${why.error})` : "";
+    throw new Error(`Google token endpoint answered ${res.status}${reason}`);
+  }
   const body = (await res.json().catch(() => ({}))) as { id_token?: unknown };
   if (typeof body.id_token !== "string") throw new Error("Google sent no ID token");
   return body.id_token;
