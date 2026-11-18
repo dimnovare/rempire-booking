@@ -140,6 +140,33 @@ The build's `postbuild` migrates that database. So:
   merged;
 - a preview can use the live payment keys.
 
-Dim's choice is to ask the shop's session first. No shop session was running
-on 18.11; the question for it is in Dim's hands. R1 has no migration, so it
-is safe on a preview either way.
+**The shop session's answer** («Rempire e-shop prototype Q&A page», 18.11,
+from reading code only; nothing was changed):
+
+- Nothing relies on previews having production values. The shop's CI uses no
+  secrets. Production is promoted from `main` through the `production`
+  branch, not through previews. `tools/migrate.mjs` expects previews to have
+  no `DATABASE_URL`.
+- So Production-only is safe. Previews become code-only: the catalogue
+  file's own products, no blog or set pages, and a demo admin and checkout.
+- The risk today is bigger than migrations:
+  - a checkout on a preview creates a real, live Montonio payment and writes
+    the order to the live database;
+  - code on a preview writes the live database and the live R2 bucket.
+  - On 18.11 no remote branch adds a migration, so nothing has leaked yet.
+- **To fix, in Vercel `rempire-web`** (Dim's own change):
+  - set to **Production only**: `DATABASE_URL`, `MONTONIO_*`, `R2_*`,
+    `TELEGRAM_BOT_TOKEN`, `CRON_SECRET`, `GSC_SERVICE_ACCOUNT_JSON`, and
+    `DEPLOY_HOOK_URL` (All Environments on 17.11: a panel save on a preview
+    would rebuild production);
+  - check the scopes of `RESEND_API_KEY`, `OPENAI_API_KEY` and the admin or
+    session secret too;
+  - leave Development unticked, or `vercel env pull` puts live keys on a
+    laptop;
+  - then delete or redeploy the old previews (`test-cleanup/*`,
+    `feat/cpu-cut`, `ci/weekly-e2e-not-cancelled`, `r27-*`), which keep the
+    values they were built with.
+- **For R1:** after the fix, its preview has no database, so `/lookup` is
+  tested on production after the merge. That is safe: it reads only, and it
+  answers 503 until the secret is set. R1 has no migration, so its
+  `postbuild` changes nothing either way.
