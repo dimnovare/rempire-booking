@@ -2,6 +2,7 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { requireStaffUser } from "@/lib/auth/current";
+import { can } from "@/lib/auth/rights";
 import { staffToPick } from "@/lib/barber/account";
 import { dbConfigured, query } from "@/lib/db";
 import { Ava } from "../../../admin/icons";
@@ -22,7 +23,7 @@ async function Pick() {
   const { user, business } = await requireStaffUser();
   if (user.role === "staff") redirect("/b");
   // his own day first, if this login is a barber too
-  const all = await staffToPick(query, business.id);
+  const all = (await staffToPick(query, business.id)).filter((s) => can(user, "journal.staff", { staffId: s.id }));
   const list = [...all.filter((s) => s.id === user.staffId), ...all.filter((s) => s.id !== user.staffId)];
   return (
     <main className="adm-page">

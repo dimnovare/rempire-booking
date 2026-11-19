@@ -3,9 +3,11 @@
  * times still free in his column, and his own clients. Everything here is
  * read for ONE barber (the staffId requireStaff() gave). The booking, move
  * and cancel themselves go through src/lib/admin/visits.ts with that
- * column as the scope, so the rules are the admin's.
+ * column as the scope, so the rules are the admin's. The login (`who`) goes
+ * with it: its rights are asked there (src/lib/auth/rights.ts).
  */
 import { adminCancelVisit, adminCreateVisit, adminUpdateVisit, isUuid, type AdminOutcome } from "../admin/visits";
+import { can, maskPhone, seenClients, type Holder } from "../auth/rights";
 import type { Business } from "../availability";
 import type { L10n } from "../catalog";
 import { query, type Querier } from "../db";
@@ -85,13 +87,20 @@ export type MyClient = { id: string; name: string; phone: string | null; visits:
 
 /**
  * His clients by phone digits or by name: only people who have had a visit
- * in his column. Another barber's clients never show up here.
+ * in his column. Another barber's clients never show up here. With `who`:
+ * only with the right to the clients' list, only if this column's clients
+ * are the login's to see, and without the list's phones right the phones
+ * are masked and digits find nobody.
  */
-export async function searchMyClients(q: Querier, businessId: string, staffId: string, text: string): Promise<MyClient[]> {
+export async function searchMyClients(q: Querier, businessId: string, staffId: string, text: string, who?: Holder): Promise<MyClient[]> {
+  if (who && !can(who, "visit.client_list")) return [];
+  if (who && !columnClientsSeen(who, staffId)) return [];
+  const phones = !who || can(who, "visit.client_list.phones");
   const s = String(text ?? "").trim().slice(0, 60);
   if (s.length < 2) return [];
   const digits = s.replace(/\D/g, "");
   const byPhone = digits.length >= 3 && digits.length >= s.replace(/[\s+()-]/g, "").length - 1;
+  if (byPhone && !phones) return [];
   const rows = await q<{ id: string; name: string; phone_e164: string | null; visits: number; last_visit: Date | null }>(
     `select c.id, c.name, c.phone_e164,
             count(a.id) filter (where a.status <> 'cancelled')::int as visits,
@@ -104,7 +113,13 @@ export async function searchMyClients(q: Querier, businessId: string, staffId: s
       limit 8`,
     [businessId, byPhone ? digits : s.replace(/[%_\\]/g, (m) => "\\" + m), staffId],
   );
-  return rows.map((r) => ({ id: r.id, name: r.name, phone: r.phone_e164, visits: r.visits, lastVisit: r.last_visit ? new Date(r.last_visit).getTime() : null }));
+  return rows.map((r) => ({ id: r.id, name: r.name, phone: phones ? r.phone_e164 : maskPhone(r.phone_e164), visits: r.visits, lastVisit: r.last_visit ? new Date(r.last_visit).getTime() : null }));
+}
+
+/** Are the clients of this column ones the login sees («Показывать клиентов»: all, or this barber's)? */
+export function columnClientsSeen(who: Holder, staffId: string): boolean {
+  const seen = seenClients(who);
+  return seen === "all" || seen.includes(staffId);
 }
 
 /** Has this client had a visit in his column? (A client id from the phone is checked before it is used.) */
@@ -131,7 +146,7 @@ export type NewVisitInput = {
 };
 
 /** A walk-in or the client's next visit, in his own column. */
-export async function barberBook(business: Business, staffId: string, actor: string, v: NewVisitInput): Promise<AdminOutcome> {
+export async function barberBook(business: Business, staffId: string, actor: string, v: NewVisitInput, who?: Holder): Promise<AdminOutcome> {
   const clientId = v?.clientId ? String(v.clientId) : null;
   // a client id from the phone must be one of his own clients
   if (clientId && !(await isMyClient(query, business.id, staffId, clientId))) return { ok: false, code: "invalid", field: "client" };
@@ -151,13 +166,13 @@ export async function barberBook(business: Business, staffId: string, actor: str
       force: v?.force === true,
     },
     actor,
-    { onlyStaffId: staffId },
+    { onlyStaffId: staffId, who },
   );
 }
 
 /** Move one of his visits to another time; never to another barber. */
-export async function barberMove(business: Business, staffId: string, actor: string, visitId: string, start: number, force = false): Promise<AdminOutcome> {
-  return adminUpdateVisit(business, String(visitId), { start: Number(start), force: force === true }, actor, { onlyStaffId: staffId });
+export async function barberMove(business: Business, staffId: string, actor: string, visitId: string, start: number, force = false, who?: Holder): Promise<AdminOutcome> {
+  return adminUpdateVisit(business, String(visitId), { start: Number(start), force: force === true }, actor, { onlyStaffId: staffId, who });
 }
 
 /** The shortest reason that says something («заболел» and up). */
@@ -167,8 +182,8 @@ export const MIN_REASON = 3;
  * The emergency cancel: only with a reason, which Renat gets by push and
  * the audit keeps. The client gets the «cancelled» letter.
  */
-export async function barberCancel(business: Business, staffId: string, actor: string, visitId: string, reason: string): Promise<"cancelled" | "already" | "not_found" | "reason"> {
+export async function barberCancel(business: Business, staffId: string, actor: string, visitId: string, reason: string, who?: Holder): Promise<"cancelled" | "already" | "not_found" | "reason" | "forbidden"> {
   const why = String(reason ?? "").trim().replace(/\s+/g, " ");
   if (why.length < MIN_REASON) return "reason";
-  return adminCancelVisit(business, String(visitId), actor, { onlyStaffId: staffId, reason: why });
+  return adminCancelVisit(business, String(visitId), actor, { onlyStaffId: staffId, reason: why, who });
 }

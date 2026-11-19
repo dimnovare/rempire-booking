@@ -7,6 +7,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { requireAdmin } from "@/lib/auth/current";
+import { can, canGroup } from "@/lib/auth/rights";
 import { dbConfigured } from "@/lib/db";
 import { NextIcon } from "../../icons";
 import { Wait } from "../../lang";
@@ -27,12 +28,14 @@ export default function MorePage() {
 async function Loaded() {
   const A = await getA();
   if (!dbConfigured()) return <p className="adm-wait">{A.noDb}</p>;
-  await requireAdmin();
+  const { user } = await requireAdmin();
+  // a section the login has no right to is not listed
+  const shown = (key: string) => (key === "clients" || key === "staff" || key === "services" ? canGroup(user, key) : true);
   return (
     <>
       <h1 className="adm-h1">{A.more.title}</h1>
       <ul className="adm-list">
-        {SECTIONS.filter((s) => !s.bar).map((s) => (
+        {SECTIONS.filter((s) => !s.bar && shown(s.key)).map((s) => (
           <li key={s.href}>
             <Link className="adm-item" href={s.href} prefetch={false}>
               <span className="adm-more-ico">
@@ -47,9 +50,11 @@ async function Loaded() {
             </Link>
           </li>
         ))}
-        <li>
-          <SaleRow />
-        </li>
+        {can(user, "visit.sell") && can(user, "visit.sell.create") && (
+          <li>
+            <SaleRow />
+          </li>
+        )}
       </ul>
     </>
   );

@@ -11,6 +11,7 @@ import { setClientColumns } from "@/lib/admin/client-columns";
 import { exportClients, type ExportWords } from "@/lib/admin/client-export";
 import { saveClient, type ClientInput } from "@/lib/admin/clients";
 import { adminCreateVisit, adminSetStatus } from "@/lib/admin/visits";
+import { legacyHolder } from "@/lib/auth/rights-store";
 import { closeDb, query } from "@/lib/db";
 import { zonedToUtc } from "@/lib/tz";
 import { excelSerial, readXlsx, serialToLocal, writeXlsx } from "@/lib/xlsx";
@@ -33,9 +34,10 @@ async function add(input: ClientInput): Promise<string> {
   return r.id;
 }
 
-async function login(role: "owner" | "admin" | "staff", name: string): Promise<{ id: string; role: string }> {
+/** A login with the rights its role had before there were rights (src/lib/auth/rights-store.ts). */
+async function login(role: "owner" | "admin" | "staff", name: string) {
   const [u] = await query<{ id: string }>("insert into users (business_id, email, name, role) values ($1, $2, $3, $4) returning id", [demo.business.id, `${name}@example.test`, name, role]);
-  return { id: u.id, role };
+  return legacyHolder(role, u.id);
 }
 
 let n = 0;

@@ -48,10 +48,12 @@ export type JournalBarProps = {
   onSide: () => void;
   /** «Запись»; null while there is nothing to book with */
   onAdd: (() => void) | null;
+  /** «Продать» is offered: the login may sell products */
+  sell: boolean;
   go: (date: string, view?: "day" | "week", staffId?: string | null) => void;
 };
 
-export function JournalBar({ view, date, today, title, dayText, staff, staffId, numbers, hidden, onHidden, zoom, onZoom, side, onSide, onAdd, go }: JournalBarProps) {
+export function JournalBar({ view, date, today, title, dayText, staff, staffId, numbers, hidden, onHidden, zoom, onZoom, side, onSide, onAdd, sell, go }: JournalBarProps) {
   const A = useA();
   const C = A.cal;
   const frame = useFrame();
@@ -90,9 +92,11 @@ export function JournalBar({ view, date, today, title, dayText, staff, staffId, 
       </h1>
       <div className="jr-space" />
 
-      <button type="button" className="jr-btn" onClick={() => frame.open("sale")}>
-        {C.sell}
-      </button>
+      {sell && (
+        <button type="button" className="jr-btn" onClick={() => frame.open("sale")}>
+          {C.sell}
+        </button>
+      )}
 
       {numbers && (
         <Pop

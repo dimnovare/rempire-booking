@@ -44,7 +44,6 @@ export function CardTab({
   limits,
   photoV,
   comments,
-  canDeleteComments,
   numbers,
   today,
   onSaved,
@@ -54,7 +53,6 @@ export function CardTab({
   limits: CardLimits;
   photoV: string | null;
   comments: ClientComment[];
-  canDeleteComments: boolean;
   numbers: CardNumbers;
   today: string;
   onSaved: (name: string) => void;
@@ -92,9 +90,12 @@ export function CardTab({
   /** What cannot be saved, said before the server is asked. */
   const check = (v: CardFields): string | null => {
     if (!v.name.trim()) return A.auto.needName;
-    if (v.phone.trim() && !normalizePhone(v.phone)) return A.visit.invalid("phone");
-    if (v.phone2.trim() && !normalizePhone(v.phone2)) return A.visit.invalid("phone2");
-    if (v.email.trim() && !EMAIL_RE.test(v.email.trim())) return A.visit.invalid("email");
+    // masked for this login (no right to the card's phones and e-mail): shown, not changed, so not checked
+    if (card.may.contacts) {
+      if (v.phone.trim() && !normalizePhone(v.phone)) return A.visit.invalid("phone");
+      if (v.phone2.trim() && !normalizePhone(v.phone2)) return A.visit.invalid("phone2");
+      if (v.email.trim() && !EMAIL_RE.test(v.email.trim())) return A.visit.invalid("email");
+    }
     if (!parseBirthday(v.birthday, today).ok) return A.visit.invalid("birthday");
     const pct = v.discount.trim();
     if (pct && (!WHOLE_RE.test(pct) || Number(pct) > 100)) return A.visit.invalid("discount");
@@ -152,15 +153,15 @@ export function CardTab({
             <div className="cc-pair">
               <label className="cc-field">
                 <span>{A.visit.phone}</span>
-                <input type="tel" inputMode="tel" autoComplete="off" maxLength={40} placeholder="+372" value={d.phone} onChange={(e) => set({ phone: e.target.value })} />
+                <input type="tel" inputMode="tel" autoComplete="off" maxLength={40} placeholder="+372" value={d.phone} readOnly={!card.may.contacts} onChange={(e) => set({ phone: e.target.value })} />
               </label>
               <label className="cc-field">
                 <span>{K.phone2}</span>
-                <input type="tel" inputMode="tel" autoComplete="off" maxLength={40} value={d.phone2} onChange={(e) => set({ phone2: e.target.value })} />
+                <input type="tel" inputMode="tel" autoComplete="off" maxLength={40} value={d.phone2} readOnly={!card.may.contacts} onChange={(e) => set({ phone2: e.target.value })} />
               </label>
               <label className="cc-field">
                 <span>{C.email}</span>
-                <input type="email" inputMode="email" autoComplete="off" maxLength={254} value={d.email} onChange={(e) => set({ email: e.target.value })} />
+                <input type="email" inputMode="email" autoComplete="off" maxLength={254} value={d.email} readOnly={!card.may.contacts} onChange={(e) => set({ email: e.target.value })} />
               </label>
               <label className="cc-field">
                 <span>{K.birthday}</span>
@@ -216,7 +217,7 @@ export function CardTab({
 
           <div className="cc-right">
             <Photo v={photoV} name={base.name} />
-            <Comments comments={comments} max={limits.comment} canDelete={canDeleteComments} />
+            {card.may.comments && <Comments comments={comments} max={limits.comment} />}
             <Numbers n={numbers} />
             <button type="button" className="cc-link" onClick={() => card.go("history")}>
               {K.seeHistory}
@@ -226,9 +227,13 @@ export function CardTab({
       </div>
 
       <footer className="cc-foot">
-        <button type="button" className="cc-btn" disabled={busy} onClick={() => setAsking(true)}>
-          {A.remove}
-        </button>
+        {card.may.del ? (
+          <button type="button" className="cc-btn" disabled={busy} onClick={() => setAsking(true)}>
+            {A.remove}
+          </button>
+        ) : (
+          <span />
+        )}
         <div className="cc-foot-end">
           {err ? (
             <p className="adm-err" role="alert">
@@ -247,9 +252,11 @@ export function CardTab({
               {done && !changed ? A.saved : ""}
             </p>
           )}
-          <button type="submit" form={form} className="cc-btn cc-btn-main" disabled={busy}>
-            {A.save}
-          </button>
+          {(card.may.edit || card.may.note) && (
+            <button type="submit" form={form} className="cc-btn cc-btn-main" disabled={busy}>
+              {A.save}
+            </button>
+          )}
         </div>
       </footer>
       {asking && <Ask title={K.deleteTitle} text={K.deleteAsk(base.name)} yes={K.deleteYes} onYes={remove} onClose={() => setAsking(false)} />}
@@ -386,7 +393,7 @@ function Photo({ v, name }: { v: string | null; name: string }) {
 }
 
 /** The comments: a new one on top, then the history, newest first. Each is kept or deleted at once. */
-function Comments({ comments, max, canDelete }: { comments: ClientComment[]; max: number; canDelete: boolean }) {
+function Comments({ comments, max }: { comments: ClientComment[]; max: number }) {
   const A = useA();
   const K = A.clients.card;
   const card = useCard();
@@ -413,13 +420,17 @@ function Comments({ comments, max, canDelete }: { comments: ClientComment[]; max
   return (
     <section className="cc-comments" aria-label={K.comments}>
       <h2 className="cc-h">{K.comments}</h2>
-      <label className="cc-field">
-        <span>{K.commentNew}</span>
-        <textarea rows={3} maxLength={max} value={text} onChange={(e) => setText(e.target.value)} />
-      </label>
-      <button type="button" className="cc-btn cc-btn-start" disabled={busy} onClick={() => void add()}>
-        {A.add}
-      </button>
+      {card.may.commentAdd && (
+        <>
+          <label className="cc-field">
+            <span>{K.commentNew}</span>
+            <textarea rows={3} maxLength={max} value={text} onChange={(e) => setText(e.target.value)} />
+          </label>
+          <button type="button" className="cc-btn cc-btn-start" disabled={busy} onClick={() => void add()}>
+            {A.add}
+          </button>
+        </>
+      )}
       {err && (
         <p className="adm-err" role="alert">
           {err}
@@ -436,7 +447,7 @@ function Comments({ comments, max, canDelete }: { comments: ClientComment[]; max
                   {c.author ? `${c.author} · ` : ""}
                   {fmt.moment(c.at)}
                 </span>
-                {canDelete && (
+                {(c.mine ? card.may.commentDelOwn : card.may.commentDelOthers) && (
                   <button type="button" aria-label={K.commentDelete} title={K.commentDelete} onClick={() => setAsking(c.id)}>
                     <XIcon size={14} />
                   </button>

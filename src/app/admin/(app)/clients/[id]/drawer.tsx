@@ -23,6 +23,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ClientComment, ClientFile, ClientMessage, ClientReach, ClientStats } from "@/lib/admin/client-card";
+import type { CardMay } from "@/lib/admin/client-scope";
 import type { ClientVisit } from "@/lib/admin/clients";
 import { PrevIcon, XIcon } from "../../../icons";
 import { useA } from "../../../lang";
@@ -47,7 +48,8 @@ export type DrawerProps = {
   limits: CardLimits;
   photoV: string | null;
   comments: ClientComment[];
-  canDeleteComments: boolean;
+  /** what the login may do on this card (its rights); a tab it has no right to is not drawn */
+  may: CardMay;
   numbers: CardNumbers;
   history: ClientVisit[];
   /** the history is cut at this many visits; 0: it is whole */
@@ -70,7 +72,12 @@ export function ClientDrawer(p: DrawerProps) {
   const box = useRef<HTMLElement>(null);
   // the open tab is the address's (?tab=…): go() below changes it there
   const asked = useSearchParams().get("tab");
-  const tab: TabKey = isTab(asked) ? asked : "card";
+  // the tabs this login has: history and statistics, files, a message and the notification settings each need a right
+  const tabs = useMemo(
+    () => TABS.filter((t) => ((t === "history" || t === "stats") ? p.may.history : t === "files" ? p.may.files : t === "send" ? p.may.send : t === "notify" ? p.may.edit : true)),
+    [p.may],
+  );
+  const tab: TabKey = isTab(asked) && tabs.includes(asked) ? asked : "card";
   // the tabs drawn so far: each stays once it has been opened
   const [seen, setSeen] = useState<readonly TabKey[]>([tab]);
   if (!seen.includes(tab)) setSeen([...seen, tab]);
@@ -114,7 +121,7 @@ export function ClientDrawer(p: DrawerProps) {
     [p.id],
   );
 
-  const card = useMemo<Card>(() => ({ id: p.id, tz: p.tz, guard, go, close, gone }), [p.id, p.tz, guard, go, close, gone]);
+  const card = useMemo<Card>(() => ({ id: p.id, tz: p.tz, guard, go, close, gone, may: p.may }), [p.id, p.tz, guard, go, close, gone, p.may]);
 
   // the keyboard starts inside the card (before the first paint, so it takes no focus from a field in use)
   useLayoutEffect(() => {
@@ -191,7 +198,7 @@ export function ClientDrawer(p: DrawerProps) {
             </button>
           </div>
           <div className="cc-tabs" role="tablist" aria-label={K.tabsLabel}>
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <button
                 key={t}
                 type="button"
@@ -211,7 +218,7 @@ export function ClientDrawer(p: DrawerProps) {
           </div>
         </header>
 
-        {panel("card", <CardTab initial={p.card} used={p.used} limits={p.limits} photoV={p.photoV} comments={p.comments} canDeleteComments={p.canDeleteComments} numbers={p.numbers} today={p.today} onSaved={setName} />)}
+        {panel("card", <CardTab initial={p.card} used={p.used} limits={p.limits} photoV={p.photoV} comments={p.comments} numbers={p.numbers} today={p.today} onSaved={setName} />)}
         {panel("history", <HistoryTab visits={p.history} capped={p.capped} />)}
         {panel("stats", <StatsTab initial={p.stats} today={p.today} />)}
         {panel("messages", <MessagesTab messages={p.messages} />)}

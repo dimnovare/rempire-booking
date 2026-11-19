@@ -14,14 +14,13 @@ export type BusinessSettings = {
   cancel_cutoff_min: number;
   /** The SMS reminder goes this long before the visit. */
   reminder_min: number;
-  /**
-   * A barber's own changes from his app (Phase B, B4; Renat Q2): «now»
-   * applies at once, «ask» waits for Renat in the admin's «Запросы».
-   * time: breaks, days off, special time, weekly hours. price: his price
-   * or time for a service. Until Renat answers: time now, prices ask.
+  /*
+   * Not here any more: barber_self_time and barber_self_price, the two
+   * salon-wide switches for a barber's own changes. Since 19.11.2026 each
+   * login has its own rights («Доступ» → the login), started from those
+   * two as they stood. The keys stay in businesses.settings and are read
+   * once, by the backfill alone (src/lib/auth/rights-store.ts).
    */
-  barber_self_time: SelfMode;
-  barber_self_price: SelfMode;
   /**
    * Phase C (docs/phase-c.md). The barber's share of a client sale, in
    * basis points (1700 = 17 %), and what it is taken from (Renat Q1; until
@@ -48,26 +47,19 @@ export type ReminderChannel = "sms" | "push" | "both";
 export const REMINDER_CHANNELS = ["sms", "push", "both"] as const;
 export const isReminderChannel = (v: unknown): v is ReminderChannel => v === "sms" || v === "push" || v === "both";
 
-export type SelfMode = "now" | "ask";
-export const SELF_KEYS = ["barber_self_time", "barber_self_price"] as const;
-export type SelfKey = (typeof SELF_KEYS)[number];
-const isSelfMode = (v: unknown): v is SelfMode => v === "now" || v === "ask";
-
 export const DEFAULT_SETTINGS: BusinessSettings = {
   slot_step_min: 15,
   horizon_days: 60,
   min_notice_min: 30,
   cancel_cutoff_min: 0,
   reminder_min: 120,
-  barber_self_time: "now",
-  barber_self_price: "ask",
   commission_bp: 1700,
   commission_basis: "net-paid",
   billing_day: 1,
   client_reminder: "both",
 };
 
-const LIMITS: Record<Exclude<keyof BusinessSettings, SelfKey | "commission_basis" | "client_reminder">, [number, number]> = {
+const LIMITS: Record<Exclude<keyof BusinessSettings, "commission_basis" | "client_reminder">, [number, number]> = {
   slot_step_min: [5, 120],
   horizon_days: [1, 366],
   min_notice_min: [0, 7 * 24 * 60],
@@ -85,10 +77,6 @@ export function readSettings(raw: unknown): BusinessSettings {
     const v = (raw as Record<string, unknown>)[key];
     const [min, max] = LIMITS[key];
     if (typeof v === "number" && Number.isInteger(v) && v >= min && v <= max) out[key] = v;
-  }
-  for (const key of SELF_KEYS) {
-    const v = (raw as Record<string, unknown>)[key];
-    if (isSelfMode(v)) out[key] = v;
   }
   const basis = (raw as Record<string, unknown>).commission_basis;
   if (isBasis(basis)) out.commission_basis = basis;

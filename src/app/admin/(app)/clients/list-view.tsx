@@ -36,6 +36,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { ClientColumn } from "@/lib/admin/client-columns";
 import { cleanCond, PAGE_SIZE, PAGE_SIZES, segmentConds, type ClientSort, type CondInput, type Join, type Segment } from "@/lib/admin/client-filter";
+import type { ListMay } from "@/lib/admin/client-scope";
 import type { ClientList } from "@/lib/admin/clients";
 import { todayIn } from "@/lib/tz";
 import { eur } from "../../copy";
@@ -70,8 +71,8 @@ function SearchIcon() {
 export type ClientsViewProps = {
   initial: ClientList;
   tz: string;
-  /** the login is the owner's: the export and «Удалить из базы» are his alone */
-  owner: boolean;
+  /** what the login may do with the list (its rights): the export, adding, a mass message, «Удалить из базы» */
+  may: ListMay;
   /** the columns this login keeps in the table */
   columns: ClientColumn[];
   /** what the conditions pick from: the barbers and the services */
@@ -79,7 +80,7 @@ export type ClientsViewProps = {
   services: CondOptions["services"];
 };
 
-export function ClientsView({ initial, tz, owner, columns, staff, services }: ClientsViewProps) {
+export function ClientsView({ initial, tz, may, columns, staff, services }: ClientsViewProps) {
   const A = useA();
   const C = A.clients;
   const B = C.base;
@@ -236,9 +237,9 @@ export function ClientsView({ initial, tz, owner, columns, staff, services }: Cl
         </div>
         <div className="cb-head-btns">
           <div className="only-wide">
-            <ExcelMenu owner={owner} question={f} />
+            <ExcelMenu owner={may.export} question={f} />
           </div>
-          <AddClient />
+          {may.edit && <AddClient />}
         </div>
       </div>
       {data.total === 0 && !filtered && !busy ? (
@@ -356,7 +357,7 @@ export function ClientsView({ initial, tz, owner, columns, staff, services }: Cl
               <Pager page={data.page} pages={data.pages} busy={busy} onTurn={turn} />
               <span className="cb-space" />
               <span className="cb-shown">{B.shown(from, from + data.rows.length - 1, data.total)}</span>
-              <ActionsMenu ticked={data.rows.filter((c) => ticks.has(c.id)).map((c) => c.id)} total={data.total} question={f} owner={owner} onStart={setStarted} />
+              <ActionsMenu ticked={data.rows.filter((c) => ticks.has(c.id)).map((c) => c.id)} total={data.total} question={f} may={may} onStart={setStarted} />
             </div>
           )}
         </>

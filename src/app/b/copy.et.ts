@@ -19,6 +19,8 @@ export const et: Copy = {
   h: "t",
   demo: "Demo",
 
+  /** What a page says to a login that has no right to it (src/lib/auth/rights.ts). */
+  rights: { none: "Ligipääs puudub", noneLead: "See jaotis on teie kontole suletud. Õigusi muudab salongi omanik." },
   nav: { label: "Jaotised", day: "Päev", week: "Nädal", time: "Minu aeg", sell: "Müü", more: "Veel" },
 
   login: {

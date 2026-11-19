@@ -11,7 +11,10 @@
  *   - one line that says a thing is done.
  *
  * The layout hands it the login's starred pages; a star is shown changed at
- * once and saved by an action.
+ * once and saved by an action. It also hands it `off`: the sections and
+ * tiles this login has no right to («clients», «staff», «services»,
+ * «sale»), which the menus then leave out. The pages themselves refuse on
+ * the server; this only keeps a dead link off the screen.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { FavPage } from "@/lib/admin/favourites";
@@ -27,14 +30,16 @@ type Frame = {
   star: (page: FavPage, on: boolean) => void;
   open: (drawer: DrawerName) => void;
   say: (text: string, bad?: boolean) => void;
+  /** what this login has no right to: section keys, and «sale» */
+  off: readonly string[];
 };
 
-const NONE: Frame = { favs: [], star: () => {}, open: () => {}, say: () => {} };
+const NONE: Frame = { favs: [], star: () => {}, open: () => {}, say: () => {}, off: [] };
 const Ctx = createContext<Frame>(NONE);
 
 export const useFrame = () => useContext(Ctx);
 
-export function FrameProvider({ favs: sent, children }: { favs: FavPage[]; children: React.ReactNode }) {
+export function FrameProvider({ favs: sent, off = NONE.off, children }: { favs: FavPage[]; off?: readonly string[]; children: React.ReactNode }) {
   const A = useA();
   const [favs, setFavs] = useState<readonly FavPage[]>(sent);
   // the server sent the list anew (the page was refreshed): that is the list
@@ -71,7 +76,9 @@ export function FrameProvider({ favs: sent, children }: { favs: FavPage[]; child
     [A.error, say],
   );
 
-  const frame = useMemo<Frame>(() => ({ favs, star, open: setDrawer, say }), [favs, star, say]);
+  const offKey = off.join(",");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const frame = useMemo<Frame>(() => ({ favs: favs.filter((p) => !off.includes(p)), star, open: setDrawer, say, off }), [favs, star, say, offKey]);
   const close = useCallback(() => setDrawer(null), []);
 
   return (

@@ -13,6 +13,7 @@ import type { Business } from "../availability";
 import { currentBusiness } from "../business";
 import { query } from "../db";
 import { SESSION_COOKIE, SESSION_COOKIE_MAX_AGE, VIEW_AS_COOKIE } from "./cookie";
+import { can } from "./rights";
 import { canUseAdmin, createSession, readSession, revokeSession, type StaffUser } from "./sessions";
 
 export const currentStaffUser = cache(async (): Promise<StaffUser | null> => {
@@ -83,7 +84,9 @@ export async function requireStaff(): Promise<BarberCtx> {
         )
       : Promise.resolve([]);
   const staffId = await barberAppStaffId(user);
-  let [s] = await find(staffId);
+  // a picked barber the login may not see (its rights: «Просматривать расписание и записи сотрудников») is not picked
+  const seen = mine || staffId === user.staffId || (!!staffId && can(user, "journal.staff", { staffId }));
+  let [s] = seen ? await find(staffId) : [];
   // a picked barber who is gone: back to Renat's own column, if he has one
   if (!s && !mine && staffId !== user.staffId) [s] = await find(user.staffId);
   if (!s || (mine && !s.active)) redirect(mine ? "/b/login?e=nostaff" : "/b/pick");

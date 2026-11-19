@@ -1,11 +1,13 @@
 /**
  * /admin/requests «Запросы» (Phase B, B4): what the barbers changed or ask
  * for from their app. Waiting ones on top with «Согласовать» / «Отклонить»;
- * the last 14 days under them. The owner also sets his two switches here:
- * what barbers change themselves and what waits for his OK.
+ * the last 14 days under them. What barbers change themselves, and what
+ * waits for an OK, was two switches here; since 19.11.2026 it is a right of
+ * each barber's login («Доступ» → the login), and this page says so.
  */
 import { Suspense } from "react";
 import { requireAdmin } from "@/lib/auth/current";
+import { can } from "@/lib/auth/rights";
 import { listRequests } from "@/lib/barber/requests";
 import { dbConfigured, query } from "@/lib/db";
 import { Title, Wait } from "../../lang";
@@ -37,8 +39,8 @@ async function Loaded() {
       <RequestsView
         open={rows.filter((r) => r.status === "requested")}
         recent={rows.filter((r) => r.status !== "requested")}
-        owner={user.role === "owner"}
-        modes={{ barber_self_time: business.settings.barber_self_time, barber_self_price: business.settings.barber_self_price }}
+        rightsNote={can(user, "settings.users.rights")}
+        system={can(user, "settings.system")}
         reminder={business.settings.client_reminder}
         tz={business.timezone}
       />

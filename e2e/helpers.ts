@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { test as base, expect, type Browser, type Page, type TestInfo } from "@playwright/test";
 import { ru as A } from "../src/app/admin/copy.ru";
 import { ru as B } from "../src/app/b/copy.ru";
+import { GROUPS, rightDef, type RightKey } from "../src/lib/auth/rights-catalogue";
 import { addDays, demoWorkday } from "../tools/demo-structure.mjs";
 import { authFile, SERVER_LOG } from "./env";
 
@@ -43,19 +44,61 @@ export async function phoneOf(browser: Browser, info: TestInfo, who: string): Pr
   return ctx.newPage();
 }
 
+/** The rights page of a login: «Доступ» → «Права» beside its e-mail (src/app/admin/(app)/account/[id]/). */
+export async function openRights(owner: Page, email: string): Promise<void> {
+  await owner.goto("/admin/account");
+  await hydrated(owner);
+  await owner.getByRole("link", { name: `${A.rights.open}: ${email}` }).click();
+  await owner.waitForURL((u) => /^\/admin\/account\/[0-9a-f-]{36}$/.test(u.pathname));
+  await expect(owner.locator("h1:visible", { hasText: A.rights.title })).toBeVisible();
+  await hydrated(owner);
+}
+
+/** A group's block on the rights page, opened. */
+export async function rightsGroup(page: Page, group: keyof typeof GROUPS) {
+  const block = page.locator(`.rt-group[data-group="${group}"]:visible`);
+  const head = block.locator(".rt-gtitle");
+  if ((await head.getAttribute("aria-expanded")) !== "true") await head.click();
+  await expect(head).toHaveAttribute("aria-expanded", "true");
+  return block;
+}
+
+/** «Сохранить» on the rights page, and the line that says it is saved. */
+export async function saveRights(page: Page): Promise<void> {
+  await page.locator(".rt-save:visible").getByRole("button", { name: A.save, exact: true }).click();
+  await expect(page.locator(".rt-save:visible .rt-note")).toHaveText(A.saved);
+}
+
 /**
- * Renat sets one of his two switches on /admin/requests; it saves by itself.
+ * Switch one right of a login on or off on its rights page, and save. With
+ * it on, its group's switch goes on first. Nothing is saved when it is as
+ * asked already.
+ */
+export async function setRight(owner: Page, email: string, right: RightKey, on: boolean): Promise<void> {
+  await openRights(owner, email);
+  const def = rightDef(right)!;
+  const block = await rightsGroup(owner, def.group);
+  const groupSwitch = block.getByRole("switch", { name: A.rights.groupOn(GROUPS[def.group].ru) });
+  if (on && def.group !== "single" && !(await groupSwitch.isChecked())) await groupSwitch.check();
+  const sw = block.locator(`[data-right="${right}"]`).getByRole("switch");
+  if ((await sw.isChecked()) === on) {
+    // as asked already; a group switched on just now is not kept either
+    return;
+  }
+  await sw.setChecked(on);
+  await saveRights(owner);
+}
+
+/**
+ * What a barber changes himself, «Сразу» or «С моего ОК». Until 19.11.2026
+ * these were Renat's two switches on /admin/requests; now each barber's own
+ * login has a right for each (src/lib/barber/requests.ts), so this sets the
+ * right of this phone's barber on his rights page.
  * `which`: A.req.time or A.req.price; `to`: A.req.now or A.req.ask.
  */
 export async function setSwitch(owner: Page, which: string, to: string): Promise<void> {
-  await owner.goto("/admin/requests");
-  await hydrated(owner);
-  const group = owner.getByRole("group", { name: which });
-  const button = group.getByRole("button", { name: to, exact: true });
-  if ((await button.getAttribute("aria-pressed")) === "true") return;
-  await button.click();
-  await expect(button).toHaveAttribute("aria-pressed", "true");
-  await expect(owner.locator(".adm-card", { has: group }).getByText(B.saved, { exact: true }).first()).toBeVisible();
+  const barber = barberOf(base.info());
+  await setRight(owner, barber.email, which === A.req.price ? "services.staff" : "journal.schedule", to === A.req.now);
 }
 
 /** Log this file's tests in as this phone's barber. */

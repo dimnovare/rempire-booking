@@ -64,9 +64,40 @@ erDiagram
 | `staff` | `business_id`, `location_id`, `slug`, `display_name`, `role jsonb`, `photo_url`, `bio jsonb`, `bookable`, `sort`, `active` | `role` is the label: «Барбер» / «Tattoo artist». `slug` gives each rempire.ee card its own link with the barber pre-selected (kickoff §3, the free win). |
 | `staff_photo` | PK `staff_id`; `mime`, `bytes bytea` (≤ 600 KB), `updated_at` | A portrait uploaded in the admin (Dim, 17.11.2026; migration 007). The browser shrinks it to a JPEG that fits 800×1000, about 100 KB. Kept in the database: a handful of barbers, no storage service, no keys. An upload sets `staff.photo_url` to `/api/staff-photo/<id>?v=<when>`; old links to files in `/public` keep working. Move to a bucket only if photos grow (galleries). |
 | `client_push_subscriptions` | (`endpoint`, `appointment_id`) key, `business_id`, `p256dh`, `auth`, `label`, `retired_at` | One browser for one visit, for the reminder as a notification (012, 013, docs/apps.md). Turned on by the visit's own link; never tied to the client; no client account. |
-| `users` | `email` unique, `password_hash`, `google_sub` unique, `role` (`owner`/`admin`/`staff`), `staff_id`, `locale`, `active`, `favourites text[]`, `client_columns text[]` | Logins for Renat and barbers. Clients are not users. `favourites` (017): the admin pages this login has starred, by the section's key, in the order added; the sidebar's «Избранное» (`src/lib/admin/favourites.ts`). `client_columns` (019): the columns this login keeps in the client table, of `phone`, `email`, `sold`, `visits`, `discount`, `last`, `first` (the name is always shown); null until the login chooses, which means all of them (`src/lib/admin/client-columns.ts`). The export to Excel has the same columns. Dim's choice: a password, or Google, with an e-mail code as the backup. `password_hash` is scrypt (built into Node, no native module). `google_sub` is Google's stable user id, never the e-mail. |
+| `users` | `email` unique, `password_hash`, `google_sub` unique, `role` (`owner`/`admin`/`staff`), `staff_id`, `locale`, `active`, `favourites text[]`, `client_columns text[]`, `rights_preset`, `rights text[]`, `rights_values jsonb` | Logins for Renat and barbers. Clients are not users. What a login may do is the three `rights…` columns (020), under «Access rights» below; `role` is only which side of the app opens. `favourites` (017): the admin pages this login has starred, by the section's key, in the order added; the sidebar's «Избранное» (`src/lib/admin/favourites.ts`). `client_columns` (019): the columns this login keeps in the client table, of `phone`, `email`, `sold`, `visits`, `discount`, `last`, `first` (the name is always shown); null until the login chooses, which means all of them (`src/lib/admin/client-columns.ts`). The export to Excel has the same columns. Dim's choice: a password, or Google, with an e-mail code as the backup. `password_hash` is scrypt (built into Node, no native module). `google_sub` is Google's stable user id, never the e-mail. |
 | `login_codes` | `email`, `code_hash`, `expires_at`, `attempts`, `used_at` | The 6-digit backup code by e-mail: a forgotten password, or Google not working. 10 minutes, 5 tries. |
 | `sessions` | `token_hash`, `user_id`, `expires_at`, `device` | Long-lived for the barber PWA. |
+
+### Access rights (020; the owner, 19.11.2026: «add all switches»)
+
+Three columns on `users` hold what one login may do. The list of rights
+itself is not in the database: it is `src/lib/auth/rights-catalogue.ts`
+(213 rights in 13 groups and 4 single ones, from `docs/altegio-rights.md`).
+
+| Column | Holds | Notes |
+|---|---|---|
+| `rights_preset` | `SM`, `VW`, `SP`, `AD`, `CC`, `AC`, `MG` or `OW` | The role preset the set was last filled from. **`users.role` follows it on save:** `OW` → `owner`, `SP` → `staff` (the login must be a barber), the other six → `admin`. `role` stays the coarse gate: which side of the app opens. |
+| `rights` | `text[]`, null until the login has a set | The switches that are on: a right's key (`journal.phones`) or a group's switch (`group:journal`). Stored as it counts: a right under a group or a parent that is off is dropped; a right with a value is on exactly while its group is (`normalizeRights` in `src/lib/auth/rights.ts`). |
+| `rights_values` | `jsonb`, by right key | Only the rights that carry a value. **Whose** (`journal.staff`: whose columns; `clients.show`: whose clients): `"all"`, or an array of `staff.id`. **How far back** (`journal.history`): `null` for no limit, or whole days (`0`: no past days). **A period** (`visit.edit`, `visit.sell.create`, `visit.sell.edit`): `"all"`, or `"today"` (nothing dated before today). |
+
+- **One door.** `can(user, right, scope?)` in `src/lib/auth/rights.ts` reads
+  these three and nothing else. A session carries them (`StaffUser.rights`,
+  `src/lib/auth/sessions.ts`), read on every request, so a change takes
+  hold at the login's next click.
+- **The backfill, once.** A login whose `rights` is null gets the set its
+  role had before the rights (`legacyRights` in
+  `src/lib/auth/rights-store.ts`): on the first read of any login of the
+  business after the migration, and when a login is added. A barber's set
+  also reads `businesses.settings.barber_self_time` and
+  `barber_self_price` as they stand; nothing else reads those two keys any
+  more, and they have no control left in the app.
+- **The history is the audit log.** Every save writes one `audit` row:
+  `entity` «user», `entity_id` the login, `action` «rights», `actor` who
+  saved, `before` `{preset, role}`, `after` `{preset, role, on: [keys],
+  off: [keys], values: {key: new value}}`. «История изменений прав» on the
+  login's page lists those rows; there is no table of its own.
+- **No rows are copied.** «Скопировать права» fills the form from another
+  login's three columns; the save is then an ordinary one.
 
 **Google login, to test early:** an iPhone home-screen PWA opens Google's
 sign-in page outside the app. Check on a real iPhone that the session

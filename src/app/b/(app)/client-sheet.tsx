@@ -11,6 +11,7 @@ import type { CardVisit, ClientCard } from "@/lib/barber/clients";
 import { localParts } from "@/lib/tz";
 import { cap, dateWords, eur, hm, pick3 } from "../copy.shared";
 import { useB } from "../lang";
+import { useMay } from "./may";
 import { BSheet } from "./sheet";
 import { loadClientCard, saveClientNote } from "./visit-actions";
 
@@ -20,7 +21,7 @@ const NOTE_MAX = 1000;
  * A note shown as text with «Изменить», or a box to write it. `onSave`
  * answers whether the server took it; the parent shows the saved text.
  */
-export function NoteEditor({ label, hint, value, onSave }: { label: string; hint?: string; value: string; onSave: (text: string) => Promise<boolean> }) {
+export function NoteEditor({ label, hint, value, onSave, canEdit = true }: { label: string; hint?: string; value: string; onSave: (text: string) => Promise<boolean>; canEdit?: boolean }) {
   const B = useB();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -38,6 +39,14 @@ export function NoteEditor({ label, hint, value, onSave }: { label: string; hint
       setBusy(false);
     }
   };
+  // with no right to change it: the note alone, and nothing at all when there is none
+  if (!canEdit)
+    return value ? (
+      <div className="bx-noteblk">
+        <small>{label}</small>
+        <p className="adm-note">{value}</p>
+      </div>
+    ) : null;
   if (!editing)
     return (
       <div className="bx-noteblk">
@@ -120,6 +129,7 @@ export function ClientSheet({
 }) {
   const B = useB();
   const C = B.client;
+  const may = useMay();
   const [card, setCard] = useState<ClientCard | null | undefined>(undefined);
   useEffect(() => {
     let live = true;
@@ -156,9 +166,13 @@ export function ClientSheet({
       ) : (
         <>
           {card.phone ? (
-            <a className="adm-phone" href={`tel:${card.phone}`}>
-              {card.phone} · {B.visit.call}
-            </a>
+            card.callable ? (
+              <a className="adm-phone" href={`tel:${card.phone}`}>
+                {card.phone} · {B.visit.call}
+              </a>
+            ) : (
+              <span className="adm-phone">{card.phone}</span>
+            )
           ) : (
             <p className="adm-meta">{B.visit.noPhone}</p>
           )}
@@ -170,6 +184,7 @@ export function ClientSheet({
             label={B.visit.clientNote}
             hint={B.visit.clientNoteHint}
             value={card.note}
+            canEdit={may.clientNote}
             onSave={async (text) => {
               const ok = await saveClientNote(card.id, text);
               if (ok) {

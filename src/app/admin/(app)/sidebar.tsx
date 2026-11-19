@@ -118,14 +118,19 @@ export function Sidebar({ user, demo, today, load, report, side }: SidebarProps)
           <>
             <MiniMonth today={today} initial={load} />
             <div className="sb-tiles" role="group" aria-label={F.tiles}>
-              <button type="button" className="sb-tile" onClick={() => frame.open("sale")}>
-                <SectionIcon name="bag" />
-                <TwoLines text={A.sale.title} />
-              </button>
-              <button type="button" className="sb-tile" onClick={() => frame.open("services")}>
-                <SectionIcon name="svc" />
-                <TwoLines text={A.svcList.title} />
-              </button>
+              {/* a tile the login has no right to is not drawn */}
+              {!frame.off.includes("sale") && (
+                <button type="button" className="sb-tile" onClick={() => frame.open("sale")}>
+                  <SectionIcon name="bag" />
+                  <TwoLines text={A.sale.title} />
+                </button>
+              )}
+              {!frame.off.includes("services") && (
+                <button type="button" className="sb-tile" onClick={() => frame.open("services")}>
+                  <SectionIcon name="svc" />
+                  <TwoLines text={A.svcList.title} />
+                </button>
+              )}
               <Link className="sb-tile" href="/admin/catalogue" prefetch={false} aria-current={sectionOpen("/admin/catalogue", path) ? "page" : undefined}>
                 <SectionIcon name="box" />
                 <TwoLines text={A.nav.catalogue} />
@@ -214,13 +219,15 @@ function TwoLines({ text }: { text: string }) {
 
 function Menu({ path }: { path: string }) {
   const A = useA();
+  // a section the login has no right to is not listed (frame.tsx)
+  const { off } = useFrame();
   // the group with the open page is open; a tap opens another one or shuts it, until the page changes
   const here = MENU.find((row) => row.pages?.some((p) => sectionOpen(p.href, path)))?.key ?? null;
   const [picked, setPicked] = useState<{ path: string; key: string | null } | null>(null);
   const open = picked && picked.path === path ? picked.key : here;
   return (
     <nav className="sb-menu" aria-label={A.sections}>
-      {MENU.map((row) => {
+      {MENU.filter((row) => !off.includes(row.key)).map((row) => {
         if (!row.pages) {
           const on = sectionOpen(row.href!, path);
           return (

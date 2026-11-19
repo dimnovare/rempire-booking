@@ -18,6 +18,7 @@ import type { Querier } from "../db";
 import { EmailDisabled, sendEmail } from "../email";
 import { loginCodeLetter } from "../letters";
 import { siteUrl } from "../site";
+import { backfillRights } from "./rights-store";
 import { revokeOtherSessions, type Role } from "./sessions";
 
 const MIN = 60_000;
@@ -163,6 +164,10 @@ export type UserInput = { email: string; name: string; role: Role; staffId: stri
  * the code works without one. `staffId` is the barber the login is: always
  * for a barber's login, and for an owner or admin who cuts too (Renat), so
  * the app opens on his own day and his column's pushes reach him.
+ *
+ * The new login starts with the rights its role had before there were
+ * rights (src/lib/auth/rights-store.ts): written here, at once. They are
+ * then changed on its own page under «Доступ».
  */
 export async function createUser(q: Querier, businessId: string, input: UserInput): Promise<{ ok: true; id: string } | { ok: false; field: string }> {
   const email = normalizeEmail(input.email);
@@ -176,7 +181,9 @@ export async function createUser(q: Querier, businessId: string, input: UserInpu
      values ($1, $2, $3, $4, $5, $6) on conflict (email) do nothing returning id`,
     [businessId, email, name, input.role, input.staffId || null, pw ? await hashPassword(pw) : null],
   );
-  return row ? { ok: true, id: row.id } : { ok: false, field: "email_taken" };
+  if (!row) return { ok: false, field: "email_taken" };
+  await backfillRights(q, businessId);
+  return { ok: true, id: row.id };
 }
 
 /**
@@ -195,8 +202,11 @@ export async function setUserStaff(q: Querier, businessId: string, userId: strin
   return rows.length > 0;
 }
 
-/** Switch a login on or off. Off ends its sessions. */
-/** Switch a login of this business on or off; off ends its sessions. False if no such login here. */
+/**
+ * Switch a login of this business on or off; off ends its sessions. False if no such login here.
+ * (That an owner always stays is the door's rule, account/actions.ts: nobody
+ * switches himself off, and an owner's login is switched only by an owner.)
+ */
 export async function setUserActive(q: Querier, businessId: string, userId: string, active: boolean): Promise<boolean> {
   const hit = await q<{ id: string }>("update users set active = $3, updated_at = now() where id = $1 and business_id = $2 returning id", [userId, businessId, active]);
   if (!hit.length) return false;

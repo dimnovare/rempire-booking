@@ -7,7 +7,11 @@
  * Plain data with moments as epoch milliseconds, safe to hand to the
  * browser. The phone number is in it: Dim, 17.11.2026, «shown, tap to call,
  * for his own visits only».
+ *
+ * What a login may see of it is its rights (src/lib/auth/rights.ts), cut
+ * on the server by barberDaysFor before a page gets the days.
  */
+import { can, historyFrom, maskPhone, type Holder } from "../auth/rights";
 import type { Business } from "../availability";
 import type { L10n } from "../catalog";
 import type { Querier } from "../db";
@@ -54,6 +58,76 @@ export type BDay = {
 };
 
 const ms = (v: unknown) => (v instanceof Date ? v.getTime() : Date.parse(String(v)));
+
+/**
+ * What the barber app offers a login in one column, each a right of its
+ * own. The screens only hide by these; the actions ask the same rights.
+ */
+export type BMay = {
+  /** the column is the login's to see at all (journal.staff) */
+  see: boolean;
+  /** phones in full, so they can be called */
+  call: boolean;
+  /** «Карточка клиента» from a visit */
+  card: boolean;
+  create: boolean;
+  newClient: boolean;
+  pickClient: boolean;
+  /** a visit's status; one the client has come to */
+  edit: boolean;
+  editCame: boolean;
+  /** the visit's own note; the client's shared note */
+  note: boolean;
+  clientNote: boolean;
+  move: boolean;
+  cancel: boolean;
+  /** the day's and the week's sums */
+  stats: boolean;
+  /** the earliest day the login may look at; null: no limit */
+  from: string | null;
+};
+
+export function barberMay(who: Holder, staffId: string, today: string): BMay {
+  return {
+    see: can(who, "journal.staff", { staffId }),
+    call: can(who, "visit.client_data") && can(who, "journal.phones"),
+    card: can(who, "visit.client_data"),
+    create: can(who, "visit.create"),
+    newClient: can(who, "visit.client_create"),
+    pickClient: can(who, "visit.client_list"),
+    edit: can(who, "visit.edit"),
+    editCame: can(who, "visit.edit.arrived"),
+    note: can(who, "visit.edit.comment"),
+    clientNote: can(who, "clients.note.edit"),
+    move: can(who, "journal.move") || can(who, "visit.edit.staff_time"),
+    cancel: can(who, "visit.delete"),
+    stats: can(who, "journal.stats"),
+    from: historyFrom(who, today),
+  };
+}
+
+/**
+ * A barber's days as one login may see them: nothing of a column it does
+ * not see, nothing before its history limit, phones and the client's note
+ * by its rights (as the admin's calendar: src/lib/admin/calendar.ts), and
+ * the day's sum only with «Показывать статистику».
+ */
+export function barberDaysFor(who: Holder, staffId: string, days: BDay[], today: string): BDay[] {
+  const sees = can(who, "journal.staff", { staffId });
+  const from = historyFrom(who, today);
+  const clientData = can(who, "visit.client_data");
+  const phones = clientData && can(who, "journal.phones");
+  const note = clientData && can(who, "clients.note");
+  const stats = can(who, "journal.stats");
+  return days.map((d) => {
+    if (!sees || (from !== null && d.date < from)) return { ...d, windows: [], visits: [], blocks: [], special: [], count: 0, totalCents: 0 };
+    return {
+      ...d,
+      visits: d.visits.map((v) => ({ ...v, clientPhone: !clientData ? null : phones ? v.clientPhone : maskPhone(v.clientPhone), clientNote: note ? v.clientNote : "" })),
+      totalCents: stats ? d.totalCents : 0,
+    };
+  });
+}
 
 
 /** `days` local days from `from`, for one barber. */

@@ -9,6 +9,7 @@ import { redirect } from "next/navigation";
 import { refresh } from "next/cache";
 import { VIEW_AS_COOKIE } from "@/lib/auth/cookie";
 import { currentStaffUser, endSession, requireStaffUser } from "@/lib/auth/current";
+import { can } from "@/lib/auth/rights";
 import { setUserLocale } from "@/lib/auth/locale";
 import { isStaffOf } from "@/lib/barber/account";
 import { query } from "@/lib/db";
@@ -35,6 +36,8 @@ export async function viewAs(staffId: string): Promise<void> {
   const { user, business } = await requireStaffUser();
   if (user.role === "staff") redirect("/b");
   if (!(await isStaffOf(query, business.id, String(staffId)))) return;
+  // his own column always; another barber's by «Просматривать расписание и записи сотрудников»
+  if (String(staffId) !== user.staffId && !can(user, "journal.staff", { staffId: String(staffId) })) return;
   // back to his own day (Renat cuts too): nothing to remember
   if (String(staffId) === user.staffId) {
     (await cookies()).delete(VIEW_AS_COOKIE);

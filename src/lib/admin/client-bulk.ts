@@ -26,14 +26,22 @@
  * says who sent it, to how many and by which channels, never the words.
  *
  * Every function is scoped to the business it is handed.
+ *
+ * Rights (src/lib/auth/rights.ts): a mass message is «Совершать SMS
+ * рассылки клиентам»; a category is «Редактировать данные клиента», and a
+ * word nobody has yet also «Настройка списка категорий клиентов»; deleting
+ * is «Удалять клиентов», and many at once stays the owner's as it was. The
+ * chosen clients are always among the ones the login sees.
  */
 import { randomUUID } from "node:crypto";
+import { can, type Holder } from "../auth/rights";
 import type { Business } from "../availability";
 import { CLIENT_CHANNELS, type ClientChannel } from "../client-notify";
 import { clientPushOffered } from "../client-push";
 import { withTx, type Querier } from "../db";
 import { smsSegments } from "../sms";
 import { MESSAGE_MAX } from "./client-card";
+import { seenClientsSql } from "./client-scope";
 import { cleanLabels, clientLabels, clientWhere, LABELS_MAX, type ClientFilter } from "./clients";
 import { isUuid } from "./visits";
 
@@ -61,13 +69,18 @@ export function cleanTarget(raw: unknown): BulkTarget | null {
   return null;
 }
 
-/** The target as a WHERE over `clients c`, with its values. */
-function targetWhere(business: Business, target: BulkTarget, now: number): { where: string; params: unknown[] } {
-  if ("ids" in target) return { where: "c.business_id = $1 and c.merged_into is null and c.id = any($2::uuid[])", params: [business.id, target.ids] };
-  return clientWhere(business.id, target.filter, now, business.timezone);
+/** The target as a WHERE over `clients c`, with its values: with a login, only among the clients it sees. */
+function targetWhere(business: Business, target: BulkTarget, now: number, who?: Holder): { where: string; params: unknown[] } {
+  if ("ids" in target) {
+    const params: unknown[] = [business.id, target.ids];
+    const only = seenClientsSql(who, (value) => {
+      params.push(value);
+      return `$${params.length}`;
+    });
+    return { where: `c.business_id = $1 and c.merged_into is null and c.id = any($2::uuid[])${only}`, params };
+  }
+  return clientWhere(business.id, target.filter, now, business.timezone, who);
 }
-
-const canSend = (role: string) => role === "owner" || role === "admin";
 
 /* ---------- a mass message ---------- */
 
@@ -89,8 +102,8 @@ const PUSH_VISIT = (nowAt: string) => `left join lateral (
   ) pv on true`;
 
 /** Who a mass message to these clients would reach, by channel. Nothing is queued. */
-export async function massPreview(q: Querier, business: Business, target: BulkTarget, now = Date.now(), env: Env = process.env): Promise<MassPreview> {
-  const t = targetWhere(business, target, now);
+export async function massPreview(q: Querier, business: Business, target: BulkTarget, now = Date.now(), env: Env = process.env, who?: Holder): Promise<MassPreview> {
+  const t = targetWhere(business, target, now, who);
   const nowAt = `$${t.params.length + 1}`;
   const push = `$${t.params.length + 2}::boolean`;
   const count = (cond: string) => `(count(*) filter (where not c.marketing_opt_out and ${cond}))::int`;
@@ -126,12 +139,12 @@ export type MassQueued =
 
 /**
  * Queue a mass message: one outbox row per client and channel, kind «mass».
- * Only for Renat and the front desk (`by.role` owner or admin). The chosen
- * clients are locked first, so the rows, the mark and the counts are of the
- * same clients.
+ * Only for a login with «Совершать SMS рассылки клиентам» (Renat and the
+ * front desk started with it). The chosen clients are locked first, so the
+ * rows, the mark and the counts are of the same clients.
  */
-export async function queueMassMessage(business: Business, target: BulkTarget | null, input: MassInput, by: { id: string; role: string }, now = Date.now(), env: Env = process.env): Promise<MassQueued> {
-  if (!canSend(by.role)) return { ok: false, code: "forbidden" };
+export async function queueMassMessage(business: Business, target: BulkTarget | null, input: MassInput, by: Holder & { id: string }, now = Date.now(), env: Env = process.env): Promise<MassQueued> {
+  if (!can(by, "single.bulk_sms")) return { ok: false, code: "forbidden" };
   if (!target) return { ok: false, code: "target" };
   const text = String(input?.text ?? "").replace(/\r\n/g, "\n").trim();
   if (!text || text.length > MESSAGE_MAX) return { ok: false, code: "text" };
@@ -144,7 +157,7 @@ export async function queueMassMessage(business: Business, target: BulkTarget | 
   const payload = JSON.stringify({ text, subject: business.name, batch });
 
   return withTx<MassQueued>(async (tx) => {
-    const t = targetWhere(business, target, now);
+    const t = targetWhere(business, target, now, by);
     const chosen = (await tx<{ id: string }>(`select c.id from clients c where ${t.where} order by c.id for update of c`, t.params)).map((r) => r.id);
     const HEAD = `insert into notifications (business_id, appointment_id, client_id, channel, kind, recipient, locale, payload, send_at, created_at)`;
     // $1 the business, $2 the chosen clients, $3 the words, $4 now
@@ -191,21 +204,25 @@ export async function queueMassMessage(business: Business, target: BulkTarget | 
 /* ---------- a category ---------- */
 
 /** `added`: who has it now and had not; `had`: who had it already; `full`: who has no room for one more. */
-export type BulkLabeled = { ok: true; label: string; clients: number; added: number; had: number; full: number } | { ok: false; field: "label" | "target" };
+export type BulkLabeled = { ok: true; label: string; clients: number; added: number; had: number; full: number } | { ok: false; field: "label" | "target" | "forbidden" };
 
 /**
  * Add one category to every chosen client. A category is a free word
  * (016); one that is in use already is written as it is there, whatever
  * capitals were typed. The audit row says who, the word and how many.
  */
-export async function bulkAddLabel(business: Business, target: BulkTarget | null, label: unknown, actor: string, now = Date.now()): Promise<BulkLabeled> {
+export async function bulkAddLabel(business: Business, target: BulkTarget | null, label: unknown, actor: string, now = Date.now(), who?: Holder): Promise<BulkLabeled> {
+  if (who && !can(who, "clients.edit")) return { ok: false, field: "forbidden" };
   if (!target) return { ok: false, field: "target" };
   const cleaned = cleanLabels([label]);
   if (!cleaned || cleaned.length !== 1) return { ok: false, field: "label" };
   return withTx<BulkLabeled>(async (tx) => {
     const typed = cleaned[0];
-    const word = (await clientLabels(tx, business.id)).find((l) => l.toLocaleLowerCase() === typed.toLocaleLowerCase()) ?? typed;
-    const t = targetWhere(business, target, now);
+    const inUse = (await clientLabels(tx, business.id)).find((l) => l.toLocaleLowerCase() === typed.toLocaleLowerCase());
+    // a word nobody has yet makes the list of categories longer
+    if (who && !inUse && !can(who, "settings.categories")) return { ok: false, field: "forbidden" };
+    const word = inUse ?? typed;
+    const t = targetWhere(business, target, now, who);
     const rows = await tx<{ id: string; labels: string[] }>(`select c.id, c.labels from clients c where ${t.where} order by c.id for update of c`, t.params);
     const key = word.toLocaleLowerCase();
     const has = (r: { labels: string[] }) => (r.labels ?? []).some((l) => l.toLocaleLowerCase() === key);
@@ -233,15 +250,17 @@ const pgCode = (err: unknown) => (err as { code?: string })?.code;
 /**
  * Delete the chosen clients who have no history: exactly the ones the
  * card's own «Удалить» would delete (clients.ts, deleteClient). Everybody
- * else stays, and the answer says how many and why. Only the owner. Each
+ * else stays, and the answer says how many and why. Only an owner's login
+ * with «Удалять клиентов» (the right alone deletes one client from his
+ * card; many at once was the owner's before the rights and stays so). Each
  * deleted client gets the audit row a single delete writes, marked `bulk`.
  */
-export async function bulkDelete(business: Business, target: BulkTarget | null, by: { id: string; role: string }, now = Date.now()): Promise<BulkDeleted> {
-  if (by.role !== "owner") return { ok: false, code: "forbidden" };
+export async function bulkDelete(business: Business, target: BulkTarget | null, by: Holder & { id: string }, now = Date.now()): Promise<BulkDeleted> {
+  if (!can(by, "clients.delete", { bulk: true })) return { ok: false, code: "forbidden" };
   if (!target) return { ok: false, code: "target" };
   const run = () =>
     withTx<BulkDeleted>(async (tx) => {
-      const t = targetWhere(business, target, now);
+      const t = targetWhere(business, target, now, by);
       const rows = await tx<{ id: string; visits: boolean; sales: boolean; merged: boolean }>(
         `select c.id,
                 exists (select 1 from appointments a where a.client_id = c.id) as visits,

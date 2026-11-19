@@ -6,6 +6,7 @@ import type { Locale } from "@/lib/i18n";
 import type { ru } from "./copy.ru";
 import { cap, minsText, pl, type Text3 } from "./copy.shared";
 
+const NO_RIGHT = "Teie kontol pole selleks õigust.";
 const FIELD: Record<string, string> = {
   phone: "telefon",
   name: "nimi",
@@ -182,7 +183,7 @@ export const et: typeof ru = {
     anywayMove: "Muuda aega ikkagi",
     overlap: "See aeg on juba teise broneeringuga hõivatud.",
     notOffered: "See barber ei tee valitud teenust.",
-    invalid: (f?: string) => `Kontrollige välja${f ? `: ${FIELD[f] ?? f}` : ""}.`,
+    invalid: (f?: string) => (f === "forbidden" ? NO_RIGHT : `Kontrollige välja${f ? `: ${FIELD[f] ?? f}` : ""}.`),
     status: { booked: "Broneeritud", arrived: "Kohal", done: "Valmis", no_show: "Ei tulnud", pending: "Ootel", cancelled: "Tühistatud" } as Record<string, string>,
     move: "Muuda aega",
     // beside «Muuda aega» a bare «Muuda» reads the same: this one changes the rest (services, barber, note)
@@ -637,6 +638,67 @@ export const et: typeof ru = {
     logoutHere: "Logi selles seadmes välja",
     you: "see olete teie",
   },
+  /**
+   * A login's access rights («Доступ» → the login) and what a login sees
+   * where it has none. A right's own label comes from the catalogue
+   * (src/lib/auth/rights-catalogue.ts), not from here.
+   */
+  rights: {
+    none: "Ligipääs puudub",
+    noneLead: "See jaotis on teie kontole suletud. Õigusi muudetakse: «Ligipääs» → konto.",
+    refused: NO_RIGHT,
+    pickOnly: "Uusi kliente lisada ei saa: valige klient leitute seast.",
+    title: "Ligipääsuõigused",
+    open: "Õigused",
+    role: "Roll",
+    roleHint: "Roll täidab vaikimisi õigused; seejärel saab iga õigust eraldi muuta. Hallid õigused märkega «süsteemis puudub» hakkavad tööle, kui nende funktsioon valmib.",
+    roleAsk: (role: string) => `Kas täita õigused rolli «${role}» järgi?`,
+    roleYes: "Täida",
+    replaceText: "Selle konto praegune õiguste komplekt asendatakse. Muudatused salvestuvad pärast nuppu «Salvesta».",
+    copy: "Kopeeri õigused",
+    copyFrom: "Milliselt kontolt kopeerida",
+    copyAsk: (from: string) => `Kas kopeerida õigused kontolt «${from}»?`,
+    copyYes: "Kopeeri",
+    copied: "Õigused on kopeeritud. Vajutage «Salvesta».",
+    search: "Otsi õiguste seast",
+    searchPh: "Näiteks telefon",
+    nothing: "Selliseid õigusi pole.",
+    count: (n: number, m: number) => `${n} / ${m} õigust`,
+    groupOn: (g: string) => `Jaotis «${g}»`,
+    menu: (g: string) => `Jaotise «${g}» kõik õigused`,
+    giveAll: "Anna kõik",
+    takeAll: "Eemalda kõik",
+    locked: "süsteemis puudub",
+    lockedHint: "Seda funktsiooni süsteemis veel pole. Õigus hakkab tööle, kui see valmib.",
+    notYours: "Teil endal seda õigust pole, seega ei saa seda anda.",
+    staffAll: "Kõik töötajad",
+    staffChosen: "Valitud töötajad",
+    clientsAll: "Kõikide töötajate kliendid",
+    clientsChosen: "Valitud töötajate kliendid",
+    historyAll: "Piiranguta",
+    historyNone: "Möödunud päevi ei näidata",
+    historyDays: (n: number) => `${n} ${pl(n, "päev", "päeva")} tagasi`,
+    period: "Periood",
+    periodAll: "Piiranguta",
+    periodToday: "Tänane päev",
+    unsaved: "Muudatused on salvestamata.",
+    history: "Õiguste muutmise ajalugu",
+    historyEmpty: "Selle konto õigusi pole veel muudetud.",
+    turnedOn: "Sisse lülitatud:",
+    turnedOff: "Välja lülitatud:",
+    valueChanged: "Väärtus muudetud:",
+    roleChanged: (a: string, b: string) => `Roll: ${a} → ${b}`,
+    errors: {
+      forbidden: "Teie kontol pole õigust õigusi hallata.",
+      not_found: "Sellist kontot pole.",
+      preset: "Valige roll.",
+      owner_only: "Omaniku õigusi muudab ainult omanik ja omanikuks määrab ainult tema.",
+      own_right: "Endalt ei saa ära võtta õigust õigusi hallata.",
+      last_owner: "See on viimane omanik. Määrake enne omanikuks mõni teine konto.",
+      needs_barber: "Roll «Spetsialist» avab barberi rakenduse, kuid sellel kontol pole barberit. Siduge see enne jaotises «Ligipääs».",
+      beyond: (list: string) => `Anda saab ainult neid õigusi, mis teil endal on. Teil puudub: ${list}`,
+    },
+  },
   req: {
     title: "Taotlused",
     switches: "Mida barberid ise muudavad",
@@ -644,7 +706,11 @@ export const et: typeof ru = {
     price: "Teenuste hinnad ja ajad",
     now: "Kohe",
     ask: "Minu loal",
-    switchHint: "«Minu loal»: muudatus ootab siin, barber saab vastuse tõukega. Ootel puhkus on veebibroneeringule juba suletud.",
+    switchHint: "Ilma õiguseta ootab muudatus siin teie vastust, barber saab vastuse tõukega. Ootel puhkus on veebibroneeringule juba suletud.",
+    movedLead: "Nüüd otsustavad seda iga barberi konto õigused, mitte üks lüliti kogu salongile: «Ligipääs» → barberi konto → «Õigused».",
+    movedTime: "Õigus «Muuta kalendris töötaja töögraafikut ja broneerimisaega», jaotis «Broneeringute kalender».",
+    movedPrice: "Õigus «Muuta töötajate teenuseid ja nende kestust», jaotis «Teenused».",
+    movedGo: "Ava «Ligipääs»",
     reminder: "Kliendi meeldetuletus enne külastust",
     reminderBy: { sms: "SMS", push: "Teavitus", both: "Mõlemad" } as Record<string, string>,
     reminderHint: {

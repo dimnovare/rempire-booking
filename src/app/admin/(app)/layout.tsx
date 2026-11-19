@@ -5,6 +5,7 @@ import { TestBanner } from "@/components/test-banner";
 import { listFavourites } from "@/lib/admin/favourites";
 import { monthLoad } from "@/lib/admin/month-load";
 import { currentStaffUser } from "@/lib/auth/current";
+import { can, canGroup } from "@/lib/auth/rights";
 import { canUseAdmin } from "@/lib/auth/sessions";
 import { currentBusiness } from "@/lib/business";
 import { dbConfigured, dbKind, query } from "@/lib/db";
@@ -49,8 +50,12 @@ async function Framed({ children }: { children: React.ReactNode }) {
   const user = dbConfigured() ? await currentStaffUser() : null;
   // (a list that cannot be read is an empty one: the stars are an extra, the page is not)
   const favs = user && canUseAdmin(user) ? await listFavourites(query, user.id).catch(() => []) : [];
+  // what the login has no right to is left out of the menus (each page refuses by itself as well)
+  const off = user
+    ? [...(["clients", "staff", "services"] as const).filter((g) => !canGroup(user, g)), ...(can(user, "visit.sell") && can(user, "visit.sell.create") ? [] : ["sale"])]
+    : [];
   return (
-    <FrameProvider favs={favs}>
+    <FrameProvider favs={favs} off={off}>
       <header className="adm-top">
         <a href="/admin" className="adm-brand" aria-label="REMPIRE">
           <Logo />

@@ -8,7 +8,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { weekStart } from "@/lib/admin/grid";
 import { requireStaff } from "@/lib/auth/current";
-import { loadBarberDays } from "@/lib/barber/day";
+import { barberDaysFor, barberMay, loadBarberDays } from "@/lib/barber/day";
 import { COUNTED, coversDay, hoursText } from "@/lib/barber/gaps";
 import { dbConfigured, query } from "@/lib/db";
 import { addDays, isLocalDate, todayIn } from "@/lib/tz";
@@ -16,6 +16,7 @@ import { NextIcon, PrevIcon } from "../../../admin/icons";
 import { cap, dateWords, eur, hm, pick3 } from "../../copy.shared";
 import { Wait } from "../../lang";
 import { getB } from "../../lang-server";
+import { NoRights } from "../may";
 import { Title } from "../title";
 
 export default function WeekPage({ searchParams }: PageProps<"/b/week">) {
@@ -29,12 +30,15 @@ export default function WeekPage({ searchParams }: PageProps<"/b/week">) {
 async function Week({ searchParams }: { searchParams: PageProps<"/b/week">["searchParams"] }) {
   const B = await getB();
   if (!dbConfigured()) return <p className="adm-wait">{B.noDb}</p>;
-  const { business, staff } = await requireStaff();
+  const { user, business, staff } = await requireStaff();
   const sp = await searchParams;
   const tz = business.timezone;
   const today = todayIn(tz);
+  const may = barberMay(user, staff.id, today);
+  if (!may.see) return <NoRights />;
   const from = weekStart(isLocalDate(sp.d) ? sp.d : today);
-  const days = await loadBarberDays(query, business, staff.id, from, 7);
+  // cut to what the login may see: its history limit, and sums only with «Показывать статистику»
+  const days = barberDaysFor(user, staff.id, await loadBarberDays(query, business, staff.id, from, 7), today);
   const count = days.reduce((n, d) => n + d.count, 0);
   const total = days.reduce((n, d) => n + d.totalCents, 0);
   const range = `${dateWords(from, B.lang, { day: "numeric", month: "short" })} – ${dateWords(addDays(from, 6), B.lang, { day: "numeric", month: "short" })}`;
@@ -63,7 +67,13 @@ async function Week({ searchParams }: { searchParams: PageProps<"/b/week">["sear
       <p className="bx-sum">
         <span>{B.week.total}</span>
         <span>
-          {B.day.visits(count)} · <b>{eur(total)}</b>
+          {B.day.visits(count)}
+          {may.stats && (
+            <>
+              {" "}
+              · <b>{eur(total)}</b>
+            </>
+          )}
         </span>
       </p>
       <ol className="bx-wk">
@@ -76,7 +86,7 @@ async function Week({ searchParams }: { searchParams: PageProps<"/b/week">["sear
               <Link href={d.date === today ? "/b" : `/b?d=${d.date}`} prefetch={false}>
                 <span className="bx-wk-head">
                   <b>{cap(dateWords(d.date, B.lang))}</b>
-                  {d.count > 0 && <span>{eur(d.totalCents)}</span>}
+                  {d.count > 0 && may.stats && <span>{eur(d.totalCents)}</span>}
                 </span>
                 <small>
                   {whole ? `${B.day.kinds[whole.kind] ?? whole.kind} · ${B.day.allDay}` : hours || B.week.off}

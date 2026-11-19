@@ -4,6 +4,10 @@
  * The calendar's changes. Every action checks the login itself (never
  * trusts the page), copies each argument by name, and refreshes the
  * calendar on success.
+ *
+ * Rights (src/lib/auth/rights.ts): a visit's own are asked by
+ * src/lib/admin/visits.ts, which is handed the login (`who`); blocking
+ * time in the calendar is «Изменять график работы… в журнале», asked here.
  */
 import { refresh } from "next/cache";
 import { searchClients, type ClientHit } from "@/lib/admin/calendar";
@@ -18,6 +22,7 @@ import {
   type BlockResult,
 } from "@/lib/admin/visits";
 import { requireAdmin } from "@/lib/auth/current";
+import { can } from "@/lib/auth/rights";
 import { query } from "@/lib/db";
 
 const num = (v: unknown) => (typeof v === "number" ? v : Number(v));
@@ -47,8 +52,9 @@ export async function createVisit(v: NewVisit): Promise<AdminOutcome> {
       start: num(v?.start),
       serviceIds: ids(v?.serviceIds),
       clientId: str(v?.clientId),
-      name: str(v?.name),
-      phone: str(v?.phone),
+      // a picked client is his id: what the form shows of him (a masked phone, maybe) is not read
+      name: v?.clientId ? null : str(v?.name),
+      phone: v?.clientId ? null : str(v?.phone),
       comment: str(v?.comment),
       staffNote: str(v?.staffNote),
       smsReminder: v?.smsReminder === true,
@@ -56,6 +62,7 @@ export async function createVisit(v: NewVisit): Promise<AdminOutcome> {
       force: v?.force === true,
     },
     user.id,
+    { who: user },
   );
   if (r.ok) refresh();
   return r;
@@ -76,6 +83,7 @@ export async function updateVisit(id: string, p: Patch): Promise<AdminOutcome> {
       force: p?.force === true,
     },
     user.id,
+    { who: user },
   );
   if (r.ok) refresh();
   return r;
@@ -83,25 +91,26 @@ export async function updateVisit(id: string, p: Patch): Promise<AdminOutcome> {
 
 export async function cancelVisit(id: string): Promise<string> {
   const { user, business } = await requireAdmin();
-  const r = await adminCancelVisit(business, String(id), user.id);
+  const r = await adminCancelVisit(business, String(id), user.id, { who: user });
   refresh();
   return r;
 }
 
 export async function setVisitStatus(id: string, status: string): Promise<boolean> {
   const { user, business } = await requireAdmin();
-  const ok = await adminSetStatus(business, String(id), String(status), user.id);
+  const ok = await adminSetStatus(business, String(id), String(status), user.id, { who: user });
   if (ok) refresh();
   return ok;
 }
 
 export async function findClients(text: string): Promise<ClientHit[]> {
-  const { business } = await requireAdmin();
-  return searchClients(query, business.id, String(text ?? ""));
+  const { user, business } = await requireAdmin();
+  return searchClients(query, business.id, String(text ?? ""), user);
 }
 
 export async function addBlock(b: { staffId: string; from: number; to: number; kind: string; note: string }): Promise<BlockResult> {
   const { user, business } = await requireAdmin();
+  if (!can(user, "journal.schedule") || !can(user, "journal.staff", { staffId: String(b?.staffId ?? "") })) return { ok: false, field: "forbidden" };
   const r = await addTimeOff(business, { staffId: String(b?.staffId ?? ""), from: num(b?.from), to: num(b?.to), kind: String(b?.kind ?? ""), note: str(b?.note) }, user.id);
   if (r.ok) refresh();
   return r;
@@ -109,7 +118,8 @@ export async function addBlock(b: { staffId: string; from: number; to: number; k
 
 export async function deleteBlock(id: string): Promise<boolean> {
   const { user, business } = await requireAdmin();
-  const ok = await removeTimeOff(business, String(id), user.id);
+  if (!can(user, "journal.schedule")) return false;
+  const ok = await removeTimeOff(business, String(id), user.id, { who: user });
   if (ok) refresh();
   return ok;
 }

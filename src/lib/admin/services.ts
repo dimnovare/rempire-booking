@@ -2,7 +2,14 @@
  * Services in the admin. A service has a default time and price; each
  * barber may have his own (src/lib/admin/staff.ts saveStaffOffers).
  * Services are switched off, never deleted: past visits point at them.
+ *
+ * Rights (src/lib/auth/rights.ts), asked by saveService when it is handed
+ * a login: a new service is «Создание услуг» (with «Редактирование услуг»);
+ * a change is «Редактирование услуг», and its name, its price and «online»
+ * each have a right of their own under it; switching a service off is our
+ * «Удаление услуг».
  */
+import { can, type Holder } from "../auth/rights";
 import type { Business } from "../availability";
 import type { L10n } from "../catalog";
 import { withTx, type Querier } from "../db";
@@ -120,7 +127,9 @@ export type ServiceInput = {
 
 const int = (v: unknown, lo: number, hi: number) => (Number.isInteger(v) && (v as number) >= lo && (v as number) <= hi ? (v as number) : null);
 
-export async function saveService(business: Business, id: string | null, input: ServiceInput, actor: string): Promise<{ ok: true; id: string } | { ok: false; field: string }> {
+export async function saveService(business: Business, id: string | null, input: ServiceInput, actor: string, who?: Holder): Promise<{ ok: true; id: string } | { ok: false; field: string }> {
+  // a new service needs both rights, as in the list we follow; a change, the second
+  if (who && !(id ? can(who, "services.edit") : can(who, "services.create") && can(who, "services.edit"))) return { ok: false, field: "forbidden" };
   const name: L10n = {};
   for (const k of ["ru", "et", "en"] as const) {
     const s = String(input.name?.[k] ?? "").trim().slice(0, 120);
@@ -140,6 +149,20 @@ export async function saveService(business: Business, id: string | null, input: 
   return withTx(async (tx) => {
     if (id) {
       if (!isUuid(id)) return { ok: false as const, field: "id" };
+      if (who) {
+        const [cur] = await tx<{ name: L10n; price_cents: number; price_max_cents: number | null; online: boolean; active: boolean }>(
+          "select name, price_cents, price_max_cents, online, active from services where id = $1 and business_id = $2 for update",
+          [id, business.id],
+        );
+        if (!cur) return { ok: false as const, field: "id" };
+        const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+        const names = (n: L10n) => [n.ru ?? "", n.et ?? "", n.en ?? ""];
+        if (!same(names(cur.name ?? {}), names(name)) && !can(who, "services.edit.name")) return { ok: false as const, field: "forbidden" };
+        if ((cur.price_cents !== price || !same(cur.price_max_cents, priceMax === price ? null : priceMax)) && !can(who, "services.edit.price")) return { ok: false as const, field: "forbidden" };
+        if (cur.online !== !!input.online && !can(who, "services.edit.online")) return { ok: false as const, field: "forbidden" };
+        // a service is never deleted: switching it off is the list's «Удаление услуг»
+        if (cur.active && !input.active && !can(who, "services.delete")) return { ok: false as const, field: "forbidden" };
+      }
       const [row] = await tx<{ id: string }>(
         `update services set name = $3::jsonb, duration_min = $4, price_cents = $5, price_max_cents = $6, buffer_after_min = $7,
                 online = $8, active = $9, sort = coalesce($10, sort)

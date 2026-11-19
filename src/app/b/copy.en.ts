@@ -19,6 +19,8 @@ export const en: Copy = {
   h: "h",
   demo: "Demo",
 
+  /** What a page says to a login that has no right to it (src/lib/auth/rights.ts). */
+  rights: { none: "No access", noneLead: "This section is closed to your login. The salon's owner changes rights." },
   nav: { label: "Sections", day: "Day", week: "Week", time: "My time", sell: "Sell", more: "More" },
 
   login: {

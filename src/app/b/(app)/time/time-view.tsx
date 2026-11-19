@@ -74,8 +74,9 @@ export function TimeView({ data, tz, today, viewing }: { data: MyTime; tz: strin
   const [confirm, setConfirm] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [all, setAll] = useState(false);
-  const timeMode = viewing ? "now" : data.modes.barber_self_time;
-  const priceMode = viewing ? "now" : data.modes.barber_self_price;
+  // by the login's rights (src/lib/barber/requests.ts, whoOf): at once, or a request for Renat
+  const timeMode = data.modes.time === "now" ? "now" : "ask";
+  const priceMode = data.modes.price === "now" ? "now" : "ask";
 
   useEffect(() => {
     if (!toast) return;

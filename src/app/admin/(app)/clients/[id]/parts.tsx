@@ -7,6 +7,7 @@
  * and the tick in the drawer's look, and the dates as the card writes them.
  */
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import type { CardMay } from "@/lib/admin/client-scope";
 import { useA } from "../../../lang";
 import type { TabKey } from "../card-fields";
 
@@ -24,6 +25,8 @@ export type Card = {
   close: () => void;
   /** back to the list without asking: this client is gone */
   gone: () => void;
+  /** what the login may do on this card (its rights): a control it has no right to is not drawn */
+  may: CardMay;
 };
 
 const Ctx = createContext<Card | null>(null);

@@ -6,11 +6,13 @@
  * The grid maths that needs no database (bounds, snapping, the week) is in
  * src/lib/admin/grid.ts, so the browser uses the same rules.
  */
+import { can, historyFrom, maskPhone, seenStaff, type Holder } from "../auth/rights";
 import type { Business } from "../availability";
 import type { L10n } from "../catalog";
 import type { Querier } from "../db";
 import { workWindows, type HoursRow, type Interval } from "../slots";
 import { addDays, startOfDay } from "../tz";
+import { seenClientsSql } from "./client-scope";
 
 export type CalStaff = {
   id: string;
@@ -222,6 +224,102 @@ export async function loadCalendar(q: Querier, business: Business, from: string,
 }
 
 /**
+ * What the calendar's screen offers a login, each a right of its own
+ * (src/lib/auth/rights.ts). The screen only hides by these; the actions
+ * and src/lib/admin/visits.ts ask the same rights again.
+ */
+export type CalMay = {
+  /** «Запись»: a new visit */
+  create: boolean;
+  /** …for a client typed in anew, …for one picked from the search */
+  newClient: boolean;
+  pickClient: boolean;
+  /** change a visit: its status, and with the three below its time and barber, services, note */
+  edit: boolean;
+  /** …also one the client has come to */
+  editCame: boolean;
+  moveWindow: boolean;
+  services: boolean;
+  note: boolean;
+  /** drag a visit, or «Перенести» */
+  move: boolean;
+  /** cancel a visit; one the client has come to */
+  cancel: boolean;
+  cancelCame: boolean;
+  /** block time in a column, and take a block away */
+  schedule: boolean;
+  /** the day's numbers */
+  stats: boolean;
+  /** «Продать» */
+  sell: boolean;
+  /** the phone is shown in full, so it can be called */
+  call: boolean;
+  /** the earliest day the login may look at; null: no limit */
+  from: string | null;
+};
+
+export function calendarMay(who: Holder, today: string): CalMay {
+  return {
+    create: can(who, "visit.create"),
+    newClient: can(who, "visit.client_create"),
+    pickClient: can(who, "visit.client_list"),
+    edit: can(who, "visit.edit"),
+    editCame: can(who, "visit.edit.arrived"),
+    moveWindow: can(who, "visit.edit.staff_time"),
+    services: can(who, "visit.edit.services"),
+    note: can(who, "visit.edit.comment"),
+    move: can(who, "journal.move"),
+    cancel: can(who, "visit.delete"),
+    cancelCame: can(who, "visit.delete.arrived"),
+    schedule: can(who, "journal.schedule"),
+    stats: can(who, "journal.stats"),
+    sell: can(who, "visit.sell") && can(who, "visit.sell.create"),
+    call: can(who, "visit.client_data") && can(who, "journal.phones"),
+    from: historyFrom(who, today),
+  };
+}
+
+/**
+ * The calendar as one login may see it:
+ *   - only the columns of the barbers it sees (journal.staff);
+ *   - nothing before its history limit (journal.history);
+ *   - a client's phone only with «Доступ к данным клиентов», and in full
+ *     only with «Показывать номера телефонов» (else «+3725•••••45»);
+ *   - the client's note only with the client's data and «Просматривать
+ *     примечание».
+ * The data leaves the server already cut: the screen cannot show more.
+ */
+export function calendarFor(who: Holder, data: CalendarData, today: string): CalendarData {
+  const seen = seenStaff(who);
+  const sees = (staffId: string) => seen === "all" || seen.includes(staffId);
+  const from = historyFrom(who, today);
+  const fromMs = from ? startOfDay(from, data.tz) : null;
+  const clientData = can(who, "visit.client_data");
+  const phones = clientData && can(who, "journal.phones");
+  const note = clientData && can(who, "clients.note");
+  const staff = data.staff.filter((s) => sees(s.id));
+  const work: CalendarData["work"] = {};
+  for (const s of staff) work[s.id] = Object.fromEntries(Object.entries(data.work[s.id] ?? {}).map(([date, w]) => [date, from && date < from ? [] : w]));
+  return {
+    ...data,
+    staff,
+    work,
+    services: data.services.map((sv) => ({ ...sv, offers: Object.fromEntries(Object.entries(sv.offers).filter(([id]) => sees(id))) })),
+    visits: data.visits
+      .filter((v) => sees(v.staffId) && (fromMs === null || v.start >= fromMs))
+      .map((v) => ({ ...v, clientPhone: !clientData ? null : phones ? v.clientPhone : maskPhone(v.clientPhone), clientNote: note ? v.clientNote : "" })),
+    blocks: data.blocks.filter((b) => sees(b.staffId) && (fromMs === null || b.to > fromMs)),
+    special: data.special.filter((x) => sees(x.staffId) && (fromMs === null || x.to > fromMs)),
+  };
+}
+
+/** The local day a login may open: the asked one, or the earliest it may look at when that is later. */
+export function clampDay(who: Holder, date: string, today: string): string {
+  const from = historyFrom(who, today);
+  return from && date < from ? from : date;
+}
+
+/**
  * «Товаров на сумму» in the journal's day numbers: what the barbers' product
  * sales made on one local day come to, in cents. A sale that was taken back
  * (undone by the barber, or reversed by Renat on any later day) is not in
@@ -243,23 +341,36 @@ export async function dayGoodsCents(q: Querier, business: Business, date: string
 
 export type ClientHit = { id: string; name: string; phone: string | null; visits: number; lastVisit: number | null };
 
-/** Clients by phone digits or by name, for the «new visit» form. */
-export async function searchClients(q: Querier, businessId: string, text: string): Promise<ClientHit[]> {
+/**
+ * Clients by phone digits or by name, for the «new visit» form. With `who`
+ * (a login): only with «Доступ к выпадающему списку с данными о клиентах»,
+ * only the clients it sees (clients.show), and without «Показывать номера
+ * телефонов» of that list the phones are masked and digits find nobody.
+ */
+export async function searchClients(q: Querier, businessId: string, text: string, who?: Holder): Promise<ClientHit[]> {
+  if (who && !can(who, "visit.client_list")) return [];
+  const phones = !who || can(who, "visit.client_list.phones");
   const s = String(text ?? "").trim().slice(0, 60);
   if (s.length < 2) return [];
   const digits = s.replace(/\D/g, "");
   const byPhone = digits.length >= 3 && digits.length >= s.replace(/[\s+()-]/g, "").length - 1;
+  if (byPhone && !phones) return [];
+  const params: unknown[] = [businessId, byPhone ? digits : s.replace(/[%_\\]/g, (m) => "\\" + m)];
+  const only = seenClientsSql(who, (v) => {
+    params.push(v);
+    return `$${params.length}`;
+  });
   const rows = await q<{ id: string; name: string; phone_e164: string | null; visits: number; last_visit: Date | null }>(
     `select c.id, c.name, c.phone_e164,
             count(a.id) filter (where a.status <> 'cancelled')::int as visits,
             max(a.starts_at) filter (where a.status <> 'cancelled') as last_visit
        from clients c left join appointments a on a.client_id = c.id
       where c.business_id = $1 and c.merged_into is null
-        and (${byPhone ? "replace(coalesce(c.phone_e164, ''), '+', '') like '%' || $2 || '%'" : "c.name ilike '%' || $2 || '%'"})
+        and (${byPhone ? "replace(coalesce(c.phone_e164, ''), '+', '') like '%' || $2 || '%'" : "c.name ilike '%' || $2 || '%'"})${only}
       group by c.id
       order by max(a.starts_at) desc nulls last, c.name
       limit 8`,
-    [businessId, byPhone ? digits : s.replace(/[%_\\]/g, (m) => "\\" + m)],
+    params,
   );
-  return rows.map((r) => ({ id: r.id, name: r.name, phone: r.phone_e164, visits: r.visits, lastVisit: r.last_visit ? ms(r.last_visit) : null }));
+  return rows.map((r) => ({ id: r.id, name: r.name, phone: phones ? r.phone_e164 : maskPhone(r.phone_e164), visits: r.visits, lastVisit: r.last_visit ? ms(r.last_visit) : null }));
 }

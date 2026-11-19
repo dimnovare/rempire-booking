@@ -4,7 +4,8 @@
  * «Моё время» (B4): the barber's own breaks, days off, special time, weekly
  * hours and prices. Each action asks requireStaff() for the one column this
  * login may change and builds its own input from plain strings and numbers;
- * the rules and Renat's switches are src/lib/barber/requests.ts.
+ * the rules are src/lib/barber/requests.ts. Whether a change applies at
+ * once or waits for Renat is the login's rights (whoOf there).
  */
 import { refresh } from "next/cache";
 import { requireStaff } from "@/lib/auth/current";
@@ -16,10 +17,10 @@ import {
   barberSetPrice,
   barberTimeOff,
   barberWithdraw,
+  whoOf,
   type ChangeCode,
   type ChangeResult,
   type TimeOffInput,
-  type Who,
 } from "@/lib/barber/requests";
 import { sendPushSoon } from "@/lib/outbox";
 
@@ -28,8 +29,7 @@ const int = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? Math.
 
 async function ctx() {
   const c = await requireStaff();
-  const who: Who = { userId: c.user.id, staffId: c.staff.id, staffName: c.staff.name, viewing: c.viewing };
-  return { business: c.business, who };
+  return { business: c.business, who: whoOf(c.user, c.staff, c.viewing) };
 }
 
 function after<T extends { ok: boolean }>(r: T): T {

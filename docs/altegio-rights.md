@@ -380,3 +380,109 @@ Sources: https://alteg.io/ru/support/knowledge-base/19029472943261/ and https://
 - An "Analytics" right: the calendar article says day statistics need "access to Analytics", but the PDF has no such right.
 - The chain-level rights (chain interface, Settings > Users). I did not collect them; the article is https://alteg.io/ru/support/knowledge-base/4905456904861/
 - A PDF for YCLIENTS' own role defaults; I did not look further once Altegio's was found.
+
+## Ours
+
+*Built 19.11.2026. Every right above is a row of `src/lib/auth/rights-catalogue.ts` (key, group, parent, RU / ET / EN, the eight roles' defaults, `built`). A login's set is in `users.rights_preset`, `rights`, `rights_values` (`docs/data-model.md`, «Access rights»). One function answers every question: `can(user, right, scope?)` in `src/lib/auth/rights.ts`. The screen is «Доступ» → the login → «Права» (`src/app/admin/(app)/account/[id]/`).*
+
+**Enforced** means our system has the function and the server asks the right before it does it. **Locked** means we have no such function: the switch is shown grey with «нет в системе», keeps the role's default, and `can()` answers no until `built` is set and a check is wired.
+
+| Group | Rights | Enforced | Locked |
+|---|---|---|---|
+| 1. Журнал записей | 8 | 6 | 2 |
+| 2. Окно записи | 31 | 15 | 16 |
+| 3. Финансы | 38 | 0 | 38 |
+| 4. Товары | 39 | 0 | 39 |
+| 5. Сотрудники | 8 | 4 | 4 |
+| 6. Услуги | 12 | 7 | 5 |
+| 7. Уведомления | 2 | 0 | 2 |
+| 8. Настройки | 10 | 6 | 4 |
+| 9. Клиентская база | 26 | 16 | 10 |
+| 10. Отчёты | 25 | 0 | 25 |
+| 11. Лояльность | 8 | 0 | 8 |
+| 12. Лицензия | 1 | 0 | 1 |
+| 13. Онлайн-запись | 1 | 0 | 1 |
+| Single rights | 4 | 1 | 3 |
+| **Total** | **213** | **55** | **158** |
+
+A group's switch works in the six groups that have an enforced right: with it off, everything inside answers no, and for «Сотрудники», «Услуги» and «Клиентская база» the section itself is closed (its page says «Нет доступа», the menus leave it out).
+
+### Each enforced right, and the file that asks
+
+Paths are under `src/`. «→» names the function.
+
+| Right | Key | Asked in |
+|---|---|---|
+| **1. Журнал записей** | | |
+| Просматривать расписание и записи сотрудников (all, or chosen barbers) | `journal.staff` | `lib/admin/calendar.ts` → `calendarFor` (the columns shown); `lib/admin/visits.ts` → every change, for the visit's column; `app/admin/(app)/actions.ts` → `addBlock`; `app/admin/(app)/frame-actions.ts` → the sale's barber; `lib/barber/day.ts` → `barberDaysFor`; `lib/auth/current.ts` → `requireStaff`, `app/b/(app)/pick/page.tsx` and `app/b/(app)/actions.ts` → `viewAs` (whose column an admin may open); `app/admin/(app)/page.tsx` (a login that sees no column gets «Нет доступа») |
+| Ограничить доступ к истории расписания и записей (no limit, or days back) | `journal.history` | `lib/admin/calendar.ts` → `calendarFor`, `clampDay`; `lib/barber/day.ts` → `barberDaysFor` |
+| Изменять график работы и время для записи сотрудника в журнале | `journal.schedule` | `app/admin/(app)/actions.ts` → `addBlock`, `deleteBlock`; `lib/barber/requests.ts` → `whoOf` (a barber's own break, day off, special time, weekly hours: at once with it, a request without) and `answerRequest` |
+| Показывать номера телефонов | `journal.phones` | `lib/admin/calendar.ts` → `calendarFor`; `lib/barber/day.ts` → `barberDaysFor` (masked without it) |
+| Перенос записи | `journal.move` | `lib/admin/visits.ts` → `adminUpdateVisit` (a move needs this or «Изменять сотрудника и время записи») |
+| Показывать статистику | `journal.stats` | `app/admin/(app)/page.tsx` (the day's numbers); `lib/barber/day.ts` → `barberDaysFor` (the day's sum); `app/b/(app)/week/page.tsx` |
+| **2. Окно записи** | | |
+| Доступ к данным клиентов | `visit.client_data` | `lib/admin/calendar.ts` → `calendarFor`; `lib/barber/day.ts` → `barberDaysFor`; `lib/barber/clients.ts` → `clientCard` |
+| Доступ к созданию новых клиентов в записи | `visit.client_create` | `lib/admin/visits.ts` → `adminCreateVisit` |
+| Доступ к выпадающему списку с данными о клиентах | `visit.client_list` | `lib/admin/calendar.ts` → `searchClients`; `lib/barber/book.ts` → `searchMyClients` |
+| ↳ Показывать номера телефонов | `visit.client_list.phones` | the same two (masked, and digits find nobody) |
+| Создавать записи | `visit.create` | `lib/admin/visits.ts` → `adminCreateVisit` |
+| Изменять записи (period: no limit, or today on) | `visit.edit` | `lib/admin/visits.ts` → `adminUpdateVisit`, `adminSetStatus` |
+| ↳ Изменять записи со статусом визита «Клиент пришел» (our «пришёл» and «готово») | `visit.edit.arrived` | `lib/admin/visits.ts` → `adminUpdateVisit`, `adminSetStatus`; `lib/barber/clients.ts` → `setVisitNote` |
+| ↳ Изменять сотрудника и время записи | `visit.edit.staff_time` | `lib/admin/visits.ts` → `adminUpdateVisit` |
+| ↳ Изменять комментарий | `visit.edit.comment` | `lib/admin/visits.ts` → `adminUpdateVisit`; `lib/barber/clients.ts` → `setVisitNote` |
+| ↳ Изменять состав услуг | `visit.edit.services` | `lib/admin/visits.ts` → `adminUpdateVisit` |
+| Удалять записи (ours: cancel; a visit is never deleted) | `visit.delete` | `lib/admin/visits.ts` → `adminCancelVisit` |
+| ↳ Удаление записей со статусом «Клиент пришел» | `visit.delete.arrived` | `lib/admin/visits.ts` → `adminCancelVisit` |
+| Проводить продажу товаров | `visit.sell` | `app/b/(app)/sell/actions.ts` → `searchAction`, `barcodeAction`, `photoAction`; `app/b/(app)/sell/page.tsx` |
+| ↳ Создание товарных транзакций (period: a sale dated before today) | `visit.sell.create` | `app/admin/(app)/frame-actions.ts` → `sellAction`; `app/b/(app)/sell/actions.ts` → `sellAction` |
+| ↳ Редактирование товарных транзакций (period: a sale made before today) | `visit.sell.edit` | `app/b/(app)/sell/actions.ts` → `undoAction`; `app/admin/(app)/invoices/actions.ts` → `reverseSaleAction`, `retrySaleAction` |
+| **5. Сотрудники** | | |
+| Создание сотрудников | `staff.create` | `lib/admin/staff.ts` → `saveStaffProfile` |
+| Редактирование сотрудников | `staff.edit` | `lib/admin/staff.ts` → `saveStaffProfile`; `app/admin/(app)/staff/actions.ts` → `uploadPhoto` |
+| Увольнение сотрудников (ours: the barber's «active» switch) | `staff.dismiss` | `lib/admin/staff.ts` → `saveStaffProfile` |
+| Редактирование графика работы | `staff.schedule` | `app/admin/(app)/staff/actions.ts` → `saveHours`, `saveDay`, `addOff`, `removeOff`, `addSpecial`, `removeSpecial` |
+| **6. Услуги** | | |
+| Создание услуг (with «Редактирование услуг») | `services.create` | `lib/admin/services.ts` → `saveService` |
+| Редактирование услуг | `services.edit` | `lib/admin/services.ts` → `saveService` |
+| ↳ Название услуги и Название для онлайн-записи | `services.edit.name` | the same, when the name changes |
+| ↳ Цена услуги | `services.edit.price` | the same, when the price changes |
+| ↳ Отображение услуги в виджете | `services.edit.online` | the same, when «online» changes |
+| Изменять услуги сотрудников и их длительность | `services.staff` | `app/admin/(app)/staff/actions.ts` → `saveOffers`; `lib/barber/requests.ts` → `whoOf` (a barber's own price and time: at once with it, a request without) and `answerRequest` |
+| Удаление услуг (ours: switching a service off) | `services.delete` | `lib/admin/services.ts` → `saveService` |
+| **8. Настройки** | | |
+| Доступ к системным настройкам | `settings.system` | `app/admin/(app)/requests/actions.ts` → `setReminder` |
+| Управлять пользователями | `settings.users` | `app/admin/(app)/account/page.tsx` (the logins); `account/actions.ts` → `linkUserStaff` |
+| ↳ Удалять пользователей (ours: switch a login off or on) | `settings.users.remove` | `account/actions.ts` → `toggleUser` |
+| ↳ Приглашение пользователей к управлению локацией | `settings.users.invite` | `account/actions.ts` → `addUser`; `lib/auth/rights-store.ts` → `mayAddLogin` |
+| ↳ Управлять правами пользователей | `settings.users.rights` | `account/[id]/page.tsx`; `account/actions.ts` → `saveRightsAction`, `copyRightsAction`; `lib/auth/rights-store.ts` → `saveRights` |
+| Настройка списка категорий клиентов (ours: a category word nobody has yet) | `settings.categories` | `lib/admin/clients.ts` → `saveClient`; `lib/admin/client-bulk.ts` → `bulkAddLabel` |
+| **9. Клиентская база** | | |
+| Показывать номера телефонов и email в списке клиентов | `clients.list_contacts` | `lib/admin/clients.ts` → `listClients`, `clientWhere` (the search); `lib/admin/client-export.ts` (the file's columns) |
+| Показывать номер телефона и email в карточке клиента | `clients.card_contacts` | `lib/admin/clients.ts` → `clientDetail`, `saveClient`; `lib/barber/clients.ts` → `clientCard` |
+| Редактировать данные клиента в карточке клиента | `clients.edit` | `lib/admin/clients.ts` → `saveClient`; `app/admin/(app)/clients/actions.ts` → the photo; `lib/admin/client-bulk.ts` → `bulkAddLabel` |
+| Просматривать примечание | `clients.note` | `lib/admin/clients.ts` → `clientDetail`; `lib/admin/calendar.ts` → `calendarFor`; `lib/barber/day.ts` → `barberDaysFor`; `lib/barber/clients.ts` → `clientCard` |
+| ↳ Редактировать примечание | `clients.note.edit` | `lib/admin/clients.ts` → `saveClient`; `lib/barber/clients.ts` → `setClientNote` |
+| Удалять клиентов | `clients.delete` | `lib/admin/clients.ts` → `deleteClient`; `lib/admin/client-bulk.ts` → `bulkDelete` (many at once: also an owner's login, as before) |
+| Выгружать список клиентов | `clients.export` | `lib/admin/client-export.ts` → `exportClients` |
+| Просматривать комментарии | `clients.comments` | `lib/admin/client-card.ts` → `listComments` |
+| Добавлять комментарии | `clients.comments_add` | `app/admin/(app)/clients/actions.ts` → `addCommentAction` |
+| Удалять свои комментарии | `clients.comments_delete_own` | `lib/admin/client-card.ts` → `deleteComment` |
+| Удалять чужие комментарии | `clients.comments_delete_others` | `lib/admin/client-card.ts` → `deleteComment` |
+| Просматривать и скачивать файлы | `clients.files` | `lib/admin/client-card.ts` → `listFiles`; `app/admin/(app)/clients/[id]/files/[fileId]/route.ts` |
+| ↳ Загружать файлы | `clients.files.upload` | `app/admin/(app)/clients/[id]/files/route.ts` |
+| ↳ Удалять файлы | `clients.files.delete` | `app/admin/(app)/clients/actions.ts` → `deleteFileAction` |
+| Показывать клиентов (all, or those of chosen barbers) | `clients.show` | `lib/admin/client-scope.ts` → `clientSeen`, `seenClientsSql`, used by the list, the card, the export, the bulk actions, the calendar's client search and a new visit; `lib/barber/book.ts` → `columnClientsSeen` |
+| Просмотр истории посещений клиента | `clients.history` | `lib/admin/clients.ts` → `clientDetail`; `app/admin/(app)/clients/actions.ts` → `clientStatsAction`; `lib/barber/clients.ts` → `clientCard` |
+| **Single** | | |
+| Совершать SMS рассылки клиентам (ours: a mass message by any channel, and a message by hand) | `single.bulk_sms` | `lib/admin/client-bulk.ts` → `queueMassMessage`; `app/admin/(app)/clients/actions.ts` → `massPreviewAction`, `sendMessageAction` |
+
+### What is ours and not the list's
+
+- **The day this shipped nothing changed.** Each login's first set is its old role written down (`legacyRights` in `src/lib/auth/rights-store.ts`): an owner «Владелец» as it is; the front desk everything but the logins, the export, the reminder switch; a barber what his app let him do in his own column. The salon's two switches for barbers (`barber_self_time`, `barber_self_price`) became two rights of each barber's login («Изменять график работы…» and «Изменять услуги сотрудников…») and are read by that backfill alone.
+- **The role is the side of the app:** «Владелец» → owner, «Специалист» → the barber app (the login must be a barber), the other six → the salon's side. `users.role` follows the preset on save.
+- **«Клиент пришел» is two of our statuses,** «пришёл» and «готово».
+- **A period** has two values where it works here: no limit, or «today» (nothing dated before today).
+- **Hand-out limits:** a login that is not an owner hands out only the working rights it holds itself and values no wider than its own; never changes an owner's login or makes an owner. Nobody removes his own right to manage rights. The last owner stays an owner.
+- **Deleting many clients at once** needs «Удалять клиентов» and an owner's login: before the rights the front desk could delete one client from his card but not many, and that is kept.
+- **Not rights at all, still by the side of the app:** «Счета» and its company settings (the owner's), the test-run reports (the owner's), a login's own password, language, starred pages, table columns and notifications, and «Мои расчёты» in the barber app.
+- **Locked although the brief named them:** «Изменять стоимость услуг» and «Изменять длительность» (a visit's price and length are the sum of its services; nothing sets them by hand), «Удаление сотрудников» (a barber is switched off, never deleted), and «Просмотр фамилии и отчества клиента» (a client has one name field).

@@ -32,6 +32,8 @@ export async function saveServiceAction(id: string | null, f: ServiceForm): Prom
       allBarbers: f?.allBarbers === true,
     },
     user.id,
+    // the login: its rights are asked for what the save changes (src/lib/admin/services.ts)
+    user,
   );
   if (r.ok) refresh();
   return r;

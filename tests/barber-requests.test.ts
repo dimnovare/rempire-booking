@@ -1,12 +1,17 @@
 /**
  * A barber's own time and prices (B4): breaks, days off, special time,
- * weekly hours and prices, under Renat's two switches; Renat's yes or no in
- * «Запросы»; and never a step outside his own column. Fake people only.
+ * weekly hours and prices, applied at once or kept for Renat's answer;
+ * Renat's yes or no in «Запросы»; and never a step outside his own column.
+ * Fake people only.
+ *
+ * «At once or ask» was two salon-wide switches until 19.11.2026 and is each
+ * login's own rights since (src/lib/auth/rights.ts): `switchTo` below sets
+ * what those rights come to for the two barbers of these tests.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { addTimeOff } from "@/lib/admin/visits";
 import { adminCreateVisit } from "@/lib/admin/visits";
-import { readSettings } from "@/lib/settings";
+import { legacyHolder } from "@/lib/auth/rights-store";
 import {
   answerRequest,
   barberAddSpecial,
@@ -19,10 +24,10 @@ import {
   listRequests,
   myTime,
   openRequestCount,
-  setBarberSelf,
   specialSpans,
   timeOffSpan,
   weeklyHours,
+  whoOf,
   type Who,
 } from "@/lib/barber/requests";
 import { requestWords, weekWords } from "@/lib/barber/request-words";
@@ -59,8 +64,8 @@ async function login(email: string, role: string, staff: string | null): Promise
 /** The business as it is now (after a switch). */
 const biz = async (): Promise<Business> => (await getBusiness(query, "rempire"))!;
 async function switchTo(time: "now" | "ask", price: "now" | "ask") {
-  await setBarberSelf(demo.business, owner, "barber_self_time", time);
-  await setBarberSelf(demo.business, owner, "barber_self_price", price);
+  val = { ...val, time, price };
+  jev = { ...jev, time, price };
   return biz();
 }
 const pushes = () =>
@@ -72,25 +77,32 @@ const offOf = async (requestId: string) => (await reqRow(requestId)).time_off_id
 beforeEach(async () => {
   demo = await freshDemo();
   owner = await login("owner@example.test", "owner", null);
-  val = { userId: await login("valentin@example.test", "staff", "valentin"), staffId: demo.staff.valentin, staffName: "Valentin", viewing: false };
-  jev = { userId: await login("jevgeni@example.test", "staff", "jevgeni"), staffId: demo.staff.jevgeni, staffName: "Jevgeni", viewing: false };
+  // as a barber's login starts: time at once, prices ask
+  val = { userId: await login("valentin@example.test", "staff", "valentin"), staffId: demo.staff.valentin, staffName: "Valentin", viewing: false, time: "now", price: "ask" };
+  jev = { userId: await login("jevgeni@example.test", "staff", "jevgeni"), staffId: demo.staff.jevgeni, staffName: "Jevgeni", viewing: false, time: "now", price: "ask" };
 });
 afterAll(closeDb);
 
-describe("the switches", () => {
-  it("start as Dim set them until Renat answers: time at once, prices ask", () => {
-    const s = readSettings({});
-    expect([s.barber_self_time, s.barber_self_price]).toEqual(["now", "ask"]);
-    expect(readSettings({ barber_self_time: "ask", barber_self_price: "maybe" })).toMatchObject({ barber_self_time: "ask", barber_self_price: "ask" });
+describe("at once, or ask: the login's rights", () => {
+  const staff = () => ({ id: demo.staff.valentin, name: "Valentin" });
+  /** What a barber's login comes to, started from the salon's two switches as they stood. */
+  const modes = (switches: Record<string, unknown>) => {
+    const w = whoOf(legacyHolder("staff", val.userId, demo.staff.valentin, switches), staff(), false);
+    return [w.time, w.price];
+  };
+
+  it("start as Dim set the switches until Renat answered: time at once, prices ask", () => {
+    expect(modes({})).toEqual(["now", "ask"]);
+    // a switch that was neither «now» nor «ask» was the default
+    expect(modes({ barber_self_time: "ask", barber_self_price: "maybe" })).toEqual(["ask", "ask"]);
+    expect(modes({ barber_self_time: "now", barber_self_price: "now" })).toEqual(["now", "now"]);
   });
 
-  it("Renat flips them; anything else is refused", async () => {
-    expect(await setBarberSelf(demo.business, owner, "barber_self_price", "now")).toBe(true);
-    expect((await biz()).settings.barber_self_price).toBe("now");
-    expect(await setBarberSelf(demo.business, owner, "slot_step_min", "now")).toBe(false);
-    expect(await setBarberSelf(demo.business, owner, "barber_self_time", "later")).toBe(false);
-    // the other settings stay
-    expect((await biz()).settings.slot_step_min).toBe(demo.business.settings.slot_step_min);
+  it("Renat and the front desk on a barber's column: at once; without the right, refused, not asked", () => {
+    const desk = legacyHolder("admin", owner);
+    expect(whoOf(desk, staff(), true)).toMatchObject({ viewing: true, time: "now", price: "now" });
+    const bare = { ...desk, rights: { ...desk.rights, on: new Set([...desk.rights.on].filter((k) => k !== "journal.schedule" && k !== "services.staff")) } };
+    expect(whoOf(bare, staff(), true)).toMatchObject({ time: "no", price: "no" });
   });
 });
 
@@ -210,7 +222,7 @@ describe("breaks and days off", () => {
     if (!renats.ok) throw new Error("no block");
     expect(await barberRemoveTimeOff(demo.business, val, renats.id, NOW)).toEqual({ ok: false, code: "not_yours" });
     // Renat looking at the app as Valentin is the admin
-    expect(await barberRemoveTimeOff(demo.business, { ...val, userId: owner, viewing: true }, renats.id, NOW)).toEqual({ ok: true });
+    expect(await barberRemoveTimeOff(demo.business, { ...val, userId: owner, viewing: true, time: "now", price: "now" }, renats.id, NOW)).toEqual({ ok: true });
   });
 });
 
@@ -468,7 +480,7 @@ describe("the lists", () => {
 
   it("Renat looking at the app as a barber changes it at once, without pushing himself", async () => {
     const b = await switchTo("ask", "ask");
-    const r = await barberTimeOff(b, { ...val, userId: owner, viewing: true }, { offKind: "vacation", fromDate: DAY, toDate: DAY }, NOW);
+    const r = await barberTimeOff(b, { ...val, userId: owner, viewing: true, time: "now", price: "now" }, { offKind: "vacation", fromDate: DAY, toDate: DAY }, NOW);
     expect(r).toMatchObject({ ok: true, status: "applied" });
     expect(await pushes()).toEqual([]);
   });

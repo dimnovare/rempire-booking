@@ -14,16 +14,22 @@
  *
  * What is done to many clients at once (a mass message, a category,
  * deleting) names its clients as a target: the ticked rows, or the list's
- * own filter (src/lib/admin/client-bulk.ts). Who may do it is checked
- * there, by the login's role.
+ * own filter (src/lib/admin/client-bulk.ts).
+ *
+ * Rights (src/lib/auth/rights.ts): every action asks the login's own. The
+ * library is handed the login where the answer depends on the client or on
+ * what exactly changes (which clients it sees, the note against the rest
+ * of the card, a comment of one's own); the rest is asked here.
  */
 import { refresh } from "next/cache";
 import { addComment, cleanStatsPeriod, clientStats, deleteComment, deleteFile, queueClientMessage, removeClientPhoto, saveClientPhoto, type ClientStats, type MessageQueued } from "@/lib/admin/client-card";
 import { bulkAddLabel, bulkDelete, cleanTarget, massPreview, queueMassMessage, type BulkDeleted, type BulkLabeled, type MassPreview, type MassQueued } from "@/lib/admin/client-bulk";
 import { setClientColumns, type ClientColumn } from "@/lib/admin/client-columns";
-import { clientDetail, deleteClient, listClients, saveClient, type ClientDeleted, type ClientInput, type ClientList, type ClientSaved } from "@/lib/admin/clients";
+import { clientSeen } from "@/lib/admin/client-scope";
+import { clientDetail, deleteClient, listClients, PAGE_SIZE, saveClient, type ClientDeleted, type ClientInput, type ClientList, type ClientSaved } from "@/lib/admin/clients";
 import { PHOTO_MAX_BYTES } from "@/lib/admin/staff";
 import { requireAdmin } from "@/lib/auth/current";
+import { can, canGroup } from "@/lib/auth/rights";
 import { CLIENT_KINDS } from "@/lib/client-notify";
 import { query } from "@/lib/db";
 import { smsTransport } from "@/lib/sms";
@@ -34,8 +40,10 @@ export type { ClientQuery };
 
 /** One page of the list for this search, category and conditions, in this order. */
 export async function listClientsAction(f: ClientQuery): Promise<ClientList> {
-  const { business } = await requireAdmin();
-  return listClients(query, business.id, filterOf(f), Date.now(), business.timezone);
+  const { user, business } = await requireAdmin();
+  // the section itself: «Клиентская база»
+  if (!canGroup(user, "clients")) return { rows: [], total: 0, page: 1, pages: 1, size: PAGE_SIZE, labels: [] };
+  return listClients(query, business.id, filterOf(f), Date.now(), business.timezone, user);
 }
 
 /** The columns this login keeps in the table; answers with them as they are kept. */
@@ -61,16 +69,17 @@ export type MassPreviewed = (MassPreview & { smsReady: boolean }) | null;
 
 /** Who a mass message to these clients would reach, by channel. Null: no such target. */
 export async function massPreviewAction(t: TargetInput): Promise<MassPreviewed> {
-  const { business } = await requireAdmin();
+  const { user, business } = await requireAdmin();
+  if (!can(user, "single.bulk_sms")) return null;
   const target = targetOf(t);
   if (!target) return null;
-  return { ...(await massPreview(query, business, target)), smsReady: smsTransport() !== "disabled" };
+  return { ...(await massPreview(query, business, target, Date.now(), process.env, user)), smsReady: smsTransport() !== "disabled" };
 }
 
 /** Queue the mass message: one outbox row per client and channel; the cron sends them. */
 export async function massSendAction(t: TargetInput, m: { text: string; channels: string[] }): Promise<MassQueued> {
   const { user, business } = await requireAdmin();
-  const r = await queueMassMessage(business, targetOf(t), { text: str(m?.text), channels: Array.isArray(m?.channels) ? m.channels.slice(0, 10).map(String) : [] }, { id: user.id, role: user.role });
+  const r = await queueMassMessage(business, targetOf(t), { text: str(m?.text), channels: Array.isArray(m?.channels) ? m.channels.slice(0, 10).map(String) : [] }, user);
   if (r.ok) refresh();
   return r;
 }
@@ -78,7 +87,7 @@ export async function massSendAction(t: TargetInput, m: { text: string; channels
 /** «Добавить в категорию»: one category on every chosen client. */
 export async function bulkLabelAction(t: TargetInput, label: string): Promise<BulkLabeled> {
   const { user, business } = await requireAdmin();
-  const r = await bulkAddLabel(business, targetOf(t), str(label), user.id);
+  const r = await bulkAddLabel(business, targetOf(t), str(label), user.id, Date.now(), user);
   if (r.ok) refresh();
   return r;
 }
@@ -90,7 +99,7 @@ export async function bulkLabelAction(t: TargetInput, label: string): Promise<Bu
  */
 export async function bulkDeleteAction(t: TargetInput): Promise<BulkDeleted> {
   const { user, business } = await requireAdmin();
-  return bulkDelete(business, targetOf(t), { id: user.id, role: user.role });
+  return bulkDelete(business, targetOf(t), user);
 }
 
 /** What «Добавить клиента» sends. */
@@ -103,7 +112,7 @@ export async function saveClientAction(id: null, f: ClientForm): Promise<ClientS
   const input: ClientInput = { name: String(f?.name ?? "") };
   if (f?.phone !== undefined) input.phone = String(f.phone ?? "");
   if (f?.email !== undefined) input.email = String(f.email ?? "");
-  const r = await saveClient(business, null, input, user.id);
+  const r = await saveClient(business, null, input, user.id, Date.now(), user);
   if (r.ok) refresh();
   return r;
 }
@@ -140,9 +149,11 @@ export async function saveCardAction(id: string, f: CardFields): Promise<CardSav
       labels: Array.isArray(f?.labels) ? f.labels.slice(0, 100).map(String) : f?.labels,
     },
     user.id,
+    Date.now(),
+    user,
   );
   if (!r.ok) return r;
-  const d = await clientDetail(query, business, cid);
+  const d = await clientDetail(query, business, cid, Date.now(), user);
   if (!d) return { ok: false, field: "id" };
   refresh();
   return { ok: true, card: cardFieldsOf(d) };
@@ -162,6 +173,8 @@ export async function saveNotifyAction(id: string, f: NotifyFields): Promise<{ o
       notifyOff: CLIENT_KINDS.filter((k) => f?.kinds?.[k] !== true),
     },
     user.id,
+    Date.now(),
+    user,
   );
   if (!r.ok) return { ok: false, field: r.field };
   refresh();
@@ -175,11 +188,12 @@ export async function saveNotifyAction(id: string, f: NotifyFields): Promise<{ o
  */
 export async function deleteClientAction(id: string): Promise<ClientDeleted> {
   const { user, business } = await requireAdmin();
-  return deleteClient(business, str(id), user.id);
+  return deleteClient(business, str(id), user.id, user);
 }
 
 export async function addCommentAction(id: string, text: string): Promise<{ ok: true } | { ok: false; field: string }> {
   const { user, business } = await requireAdmin();
+  if (!can(user, "clients.comments_add") || !(await clientSeen(query, business.id, user, str(id)))) return { ok: false, field: "forbidden" };
   const r = await addComment(business, str(id), str(text), { id: user.id, name: user.name || user.email });
   if (!r.ok) return r;
   refresh();
@@ -188,7 +202,7 @@ export async function addCommentAction(id: string, text: string): Promise<{ ok: 
 
 export async function deleteCommentAction(id: string, commentId: string): Promise<boolean> {
   const { user, business } = await requireAdmin();
-  const ok = await deleteComment(business, str(id), str(commentId), { id: user.id, role: user.role });
+  const ok = await deleteComment(business, str(id), str(commentId), user);
   if (ok) refresh();
   return ok;
 }
@@ -196,6 +210,7 @@ export async function deleteCommentAction(id: string, commentId: string): Promis
 /** The client's photo: one image in the form's «photo» field, already shrunk by the browser. Returns its version. */
 export async function uploadClientPhotoAction(id: string, form: FormData): Promise<{ ok: true; v: string } | { ok: false; field: string }> {
   const { user, business } = await requireAdmin();
+  if (!can(user, "clients.edit") || !(await clientSeen(query, business.id, user, str(id)))) return { ok: false, field: "forbidden" };
   const file = form?.get?.("photo");
   if (!(file instanceof Blob) || file.size < 1 || file.size > PHOTO_MAX_BYTES) return { ok: false, field: "photo" };
   const r = await saveClientPhoto(business, str(id), new Uint8Array(await file.arrayBuffer()), user.id);
@@ -205,6 +220,7 @@ export async function uploadClientPhotoAction(id: string, form: FormData): Promi
 
 export async function removeClientPhotoAction(id: string): Promise<boolean> {
   const { user, business } = await requireAdmin();
+  if (!can(user, "clients.edit") || !(await clientSeen(query, business.id, user, str(id)))) return false;
   const ok = await removeClientPhoto(business, str(id), user.id);
   if (ok) refresh();
   return ok;
@@ -212,6 +228,7 @@ export async function removeClientPhotoAction(id: string): Promise<boolean> {
 
 export async function deleteFileAction(id: string, fileId: string): Promise<boolean> {
   const { user, business } = await requireAdmin();
+  if (!can(user, "clients.files.delete") || !(await clientSeen(query, business.id, user, str(id)))) return false;
   const ok = await deleteFile(business, str(id), str(fileId), user.id);
   if (ok) refresh();
   return ok;
@@ -220,6 +237,8 @@ export async function deleteFileAction(id: string, fileId: string): Promise<bool
 /** «Отправить»: one outbox row per channel; the cron sends them. */
 export async function sendMessageAction(id: string, m: { text: string; channels: string[] }): Promise<MessageQueued> {
   const { user, business } = await requireAdmin();
+  // a message by hand is the salon's SMS too: «Совершать SMS рассылки клиентам»
+  if (!can(user, "single.bulk_sms") || !(await clientSeen(query, business.id, user, str(id)))) return { ok: false, code: "not_found" };
   const r = await queueClientMessage(business, str(id), { text: str(m?.text), channels: Array.isArray(m?.channels) ? m.channels.slice(0, 10).map(String) : [] }, user.id);
   if (r.ok) refresh();
   return r;
@@ -227,6 +246,7 @@ export async function sendMessageAction(id: string, m: { text: string; channels:
 
 /** «Статистика» for another period. */
 export async function clientStatsAction(id: string, from: string, to: string): Promise<ClientStats | null> {
-  const { business } = await requireAdmin();
+  const { user, business } = await requireAdmin();
+  if (!can(user, "clients.history") || !(await clientSeen(query, business.id, user, str(id)))) return null;
   return clientStats(query, business, str(id), cleanStatsPeriod(str(from), str(to), business.timezone));
 }

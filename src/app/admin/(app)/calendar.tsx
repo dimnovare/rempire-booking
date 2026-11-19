@@ -26,11 +26,15 @@
  * One markup for both: every place on the grid is given in minutes (--t,
  * --m) and the styles turn them into pixels (--ppm), so nothing here needs
  * to know how wide the screen is.
+ *
+ * What the login may do comes as `may` (src/lib/admin/calendar.ts): a
+ * control it has no right to is not drawn. That is only tidiness: the
+ * actions ask the same rights again.
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
-import type { CalBlock, CalendarData, CalService, CalVisit } from "@/lib/admin/calendar";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import type { CalBlock, CalendarData, CalMay, CalService, CalVisit } from "@/lib/admin/calendar";
 import { daySpan, hhmm, minutesInDay, momentAt, snap, weekStart } from "@/lib/admin/grid";
 import { dayNumbers, dayStaff, isVisitState, visitLook } from "@/lib/admin/journal";
 import type { AdminOutcome } from "@/lib/admin/visits";
@@ -53,6 +57,9 @@ const timeOf = (tz: string, ms: number) => fmt("ru-RU", tz, { hour: "2-digit", m
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const noon = (date: string) => Date.parse(`${date}T12:00:00Z`);
 const MIN = 60_000;
+/** What this login may do in the calendar, for the sheets below. */
+const May = createContext<CalMay>({ create: true, newClient: true, pickClient: true, edit: true, editCame: true, moveWindow: true, services: true, note: true, move: true, cancel: true, cancelCame: true, schedule: true, stats: true, sell: true, call: true, from: null });
+const CAME = new Set(["arrived", "done"]);
 /** A place on the grid: `t` minutes from its top, `m` minutes long. */
 const at = (t: number, m?: number): React.CSSProperties => {
   const place: Record<string, number> = m == null ? { "--t": t } : { "--t": t, "--m": m };
@@ -74,9 +81,20 @@ export type CalendarProps = {
   step: number;
   /** what the day's product sales come to (a day only) */
   goodsCents: number | null;
+  /** what the login may do here (its rights) */
+  may: CalMay;
 };
 
-export function Calendar({ data, view, date, today, staffId, now: serverNow, step, goodsCents }: CalendarProps) {
+/** The calendar, with what the login may do in it handed down to its sheets. */
+export function Calendar(props: CalendarProps) {
+  return (
+    <May.Provider value={props.may}>
+      <Journal {...props} />
+    </May.Provider>
+  );
+}
+
+function Journal({ data, view, date, today, staffId, now: serverNow, step, goodsCents, may }: CalendarProps) {
   const A = useA();
   const router = useRouter();
   const tz = data.tz;
@@ -171,7 +189,7 @@ export function Calendar({ data, view, date, today, staffId, now: serverNow, ste
   };
 
   const problemText = (r: Extract<AdminOutcome, { ok: false }>) =>
-    r.code === "overlap" ? A.visit.overlap : r.code === "not_offered" ? A.visit.notOffered : r.code === "invalid" ? A.visit.invalid(r.field) : A.error;
+    r.code === "overlap" ? A.visit.overlap : r.code === "not_offered" ? A.visit.notOffered : r.code === "invalid" ? A.visit.invalid(r.field) : r.code === "forbidden" ? A.rights.refused : A.error;
 
   /** Move a visit; asks once more outside the hours or over a block. */
   const moveTo = (v: CalVisit, sid: string, start: number) => {
@@ -205,6 +223,7 @@ export function Calendar({ data, view, date, today, staffId, now: serverNow, ste
       moveTo(moving, c.staffId, momentAt(c.date, m, tz));
       return;
     }
+    if (!may.create && !may.schedule) return;
     setSheet({ kind: "new", staffId: c.staffId, date: c.date, min: m });
   };
 
@@ -239,7 +258,7 @@ export function Calendar({ data, view, date, today, staffId, now: serverNow, ste
     return el ? { el, col: cols.find((c) => c.key === el.dataset.col) ?? null } : null;
   };
   const onVisitPointerDown = (v: CalVisit, e: React.PointerEvent) => {
-    if (e.pointerType !== "mouse" || e.button !== 0) return;
+    if (e.pointerType !== "mouse" || e.button !== 0 || !may.move) return;
     const colEl = (e.currentTarget as HTMLElement).closest<HTMLElement>("[data-col]");
     if (!colEl) return;
     dragRef.current = { v, x: e.clientX, y: e.clientY, offset: minuteAt(colEl, e.clientY) - minutesInDay(v.start, colEl.dataset.date!, tz), on: false, justDropped: false };
@@ -291,7 +310,7 @@ export function Calendar({ data, view, date, today, staffId, now: serverNow, ste
   const nowMin = minutesInDay(now, today, tz);
   const nowOn = todayInView && nowMin >= lo && nowMin <= hi;
   // «Запись» works on a day nobody is at work too: the form picks the barber
-  const add = data.staff.length > 0 && (view === "day" || cols.length > 0) && !moving ? () => setSheet({ kind: "new", ...nextFree() }) : null;
+  const add = may.create && data.staff.length > 0 && (view === "day" || cols.length > 0) && !moving ? () => setSheet({ kind: "new", ...nextFree() }) : null;
   const halves: number[] = [];
   for (let m = lo; m < hi; m += 30) halves.push(m);
   /** The journal's time marks: the hour large with a small «00», the half hour as a small grey «30». */
@@ -377,7 +396,8 @@ export function Calendar({ data, view, date, today, staffId, now: serverNow, ste
         dayText={dayText}
         staff={data.staff}
         staffId={staffId}
-        numbers={view === "day" && goodsCents != null ? { ...dayNumbers(data.visits, date, tz), goodsCents } : null}
+        numbers={view === "day" && may.stats && goodsCents != null ? { ...dayNumbers(data.visits, date, tz), goodsCents } : null}
+        sell={may.sell}
         hidden={hidden}
         onHidden={(next) => setHiddenRaw(next.join(","))}
         zoom={zoom}
@@ -740,8 +760,9 @@ function BarNote({ problem, warn }: { problem: string | null; warn: string | nul
 
 function NewSheet({ data, staffId, date, min, onClose, onDone }: { data: CalendarData; staffId: string; date: string; min: number; onClose: () => void; onDone: (t: string) => void }) {
   const A = useA();
+  const may = useContext(May);
   const tz = data.tz;
-  const [tab, setTab] = useState<"visit" | "block">("visit");
+  const [tab, setTab] = useState<"visit" | "block">(may.create ? "visit" : "block");
   const [sid, setSid] = useState(staffId);
   const [day, setDay] = useState(date);
   const [time, setTime] = useState(hhmm(min));
@@ -765,7 +786,7 @@ function NewSheet({ data, staffId, date, min, onClose, onDone }: { data: Calenda
   const [bNote, setBNote] = useState("");
 
   // look up clients as Renat types (a phone or a name)
-  const lookFor = client ? "" : phone.replace(/\D/g, "").length >= 3 ? phone : name.trim().length >= 2 ? name : "";
+  const lookFor = client || !may.pickClient ? "" : phone.replace(/\D/g, "").length >= 3 ? phone : name.trim().length >= 2 ? name : "";
   useEffect(() => {
     if (!lookFor) {
       setHits([]);
@@ -794,8 +815,9 @@ function NewSheet({ data, staffId, date, min, onClose, onDone }: { data: Calenda
         start: momentAt(day, startMin, tz),
         serviceIds: picked,
         clientId: client?.id ?? null,
-        name: client ? client.name : name,
-        phone: client ? (client.phone ?? "") : phone,
+        // a client that is picked is sent by his id alone (his phone here may be a masked one)
+        name: client ? "" : name,
+        phone: client ? "" : phone,
         comment: "",
         staffNote: note,
         smsReminder: sms,
@@ -804,7 +826,7 @@ function NewSheet({ data, staffId, date, min, onClose, onDone }: { data: Calenda
       });
       if (r.ok) return onDone(`${A.cal.booked}: ${timeOf(tz, r.start)}`);
       if (r.code === "outside_hours" || r.code === "time_off") setWarn(r.code === "time_off" ? A.visit.overBlock : A.visit.outsideHours);
-      else setProblem(r.code === "overlap" ? A.visit.overlap : r.code === "not_offered" ? A.visit.notOffered : r.code === "invalid" ? A.visit.invalid(r.field) : A.error);
+      else setProblem(r.code === "overlap" ? A.visit.overlap : r.code === "not_offered" ? A.visit.notOffered : r.code === "invalid" ? A.visit.invalid(r.field) : r.code === "forbidden" ? A.rights.refused : A.error);
     } catch {
       setProblem(A.error);
     } finally {
@@ -855,7 +877,7 @@ function NewSheet({ data, staffId, date, min, onClose, onDone }: { data: Calenda
               <small>{A.visit.pickServices}</small>
             )}
           </div>
-          <button type="button" className="adm-btn adm-btn-lime" disabled={busy || !picked.length || !hasClient} onClick={() => void book(false)}>
+          <button type="button" className="adm-btn adm-btn-lime" disabled={busy || !picked.length || !hasClient || (!client && !may.newClient)} onClick={() => void book(false)}>
             {A.visit.book}
           </button>
         </div>
@@ -874,14 +896,16 @@ function NewSheet({ data, staffId, date, min, onClose, onDone }: { data: Calenda
 
   return (
     <Sheet title={tab === "visit" ? A.visit.new : A.block.save} onClose={onClose} bar={tab === "visit" ? visitBar : blockBar}>
-      <div className="adm-seg adm-seg-wide" role="group">
-        <button type="button" aria-pressed={tab === "visit"} onClick={() => setTab("visit")}>
-          {A.visit.tabVisit}
-        </button>
-        <button type="button" aria-pressed={tab === "block"} onClick={() => setTab("block")}>
-          {A.visit.tabBlock}
-        </button>
-      </div>
+      {may.create && may.schedule && (
+        <div className="adm-seg adm-seg-wide" role="group">
+          <button type="button" aria-pressed={tab === "visit"} onClick={() => setTab("visit")}>
+            {A.visit.tabVisit}
+          </button>
+          <button type="button" aria-pressed={tab === "block"} onClick={() => setTab("block")}>
+            {A.visit.tabBlock}
+          </button>
+        </div>
+      )}
 
       <StaffPicker
         data={data}
@@ -920,6 +944,8 @@ function NewSheet({ data, staffId, date, min, onClose, onDone }: { data: Calenda
             </div>
           ) : (
             <>
+              {/* with no right to add a client, the two fields only look one up */}
+              {!may.newClient && <p className="adm-meta">{A.rights.pickOnly}</p>}
               <label className="adm-field">
                 <span>{A.visit.phone}</span>
                 <input type="tel" inputMode="tel" autoComplete="off" value={phone} onChange={(e) => setPhone(e.target.value)} />
@@ -1010,6 +1036,13 @@ function NewSheet({ data, staffId, date, min, onClose, onDone }: { data: Calenda
 
 function VisitSheet({ v, data, onClose, onMove, onDone }: { v: CalVisit; data: CalendarData; onClose: () => void; onMove: () => void; onDone: (t: string) => void }) {
   const A = useA();
+  const may = useContext(May);
+  // a visit the client has come to has rights of its own
+  const came = CAME.has(v.status);
+  const canEdit = may.edit && (!came || may.editCame);
+  const canForm = canEdit && (may.moveWindow || may.services || may.note);
+  const canMove = may.move && (!came || may.editCame);
+  const canCancel = came ? may.cancelCame : may.cancel;
   const tz = data.tz;
   const [mode, setMode] = useState<"view" | "edit" | "cancel">("view");
   const [busy, setBusy] = useState(false);
@@ -1040,10 +1073,11 @@ function VisitSheet({ v, data, onClose, onMove, onDone }: { v: CalVisit; data: C
     setProblem(null);
     try {
       const m = Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
-      const r = await updateVisit(v.id, { staffId: sid, start: momentAt(day, m, tz), serviceIds: picked, staffNote: note, force });
+      // only what this login may change is sent
+      const r = await updateVisit(v.id, { ...(may.moveWindow ? { staffId: sid, start: momentAt(day, m, tz) } : {}), ...(may.services ? { serviceIds: picked } : {}), ...(may.note ? { staffNote: note } : {}), force });
       if (r.ok) return onDone(A.saved);
       if (r.code === "outside_hours" || r.code === "time_off") setWarn(r.code === "time_off" ? A.visit.overBlock : A.visit.outsideHours);
-      else setProblem(r.code === "overlap" ? A.visit.overlap : r.code === "not_offered" ? A.visit.notOffered : r.code === "invalid" ? A.visit.invalid(r.field) : A.error);
+      else setProblem(r.code === "overlap" ? A.visit.overlap : r.code === "not_offered" ? A.visit.notOffered : r.code === "invalid" ? A.visit.invalid(r.field) : r.code === "forbidden" ? A.rights.refused : A.error);
     } catch {
       setProblem(A.error);
     } finally {
@@ -1092,25 +1126,33 @@ function VisitSheet({ v, data, onClose, onMove, onDone }: { v: CalVisit; data: C
           </>
         }
       >
-        <StaffPicker data={data} value={sid} onChange={setSid} />
-        <div className="adm-row">
+        {may.moveWindow && (
+          <>
+            <StaffPicker data={data} value={sid} onChange={setSid} />
+            <div className="adm-row">
+              <label className="adm-field">
+                <span>{A.visit.date}</span>
+                <input type="date" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} />
+              </label>
+              <label className="adm-field">
+                <span>{A.visit.time}</span>
+                <input type="time" value={time} step={300} onChange={(e) => setTime(e.target.value)} />
+              </label>
+            </div>
+          </>
+        )}
+        {may.services && (
+          <div className="adm-field">
+            <span>{A.visit.services}</span>
+            <ServicePicker services={data.services} staffId={sid} picked={picked} onChange={setPicked} />
+          </div>
+        )}
+        {may.note && (
           <label className="adm-field">
-            <span>{A.visit.date}</span>
-            <input type="date" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} />
+            <span>{A.visit.note}</span>
+            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} />
           </label>
-          <label className="adm-field">
-            <span>{A.visit.time}</span>
-            <input type="time" value={time} step={300} onChange={(e) => setTime(e.target.value)} />
-          </label>
-        </div>
-        <div className="adm-field">
-          <span>{A.visit.services}</span>
-          <ServicePicker services={data.services} staffId={sid} picked={picked} onChange={setPicked} />
-        </div>
-        <label className="adm-field">
-          <span>{A.visit.note}</span>
-          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} />
-        </label>
+        )}
       </Sheet>
     );
   }
@@ -1120,14 +1162,18 @@ function VisitSheet({ v, data, onClose, onMove, onDone }: { v: CalVisit; data: C
       title={v.clientName}
       onClose={onClose}
       bar={
-        mode === "cancel" ? undefined : (
+        mode === "cancel" || (!canMove && !canForm) ? undefined : (
           <div className="adm-bar-row">
-            <button type="button" className="adm-btn adm-btn-line adm-btn-auto" onClick={onMove}>
-              {A.visit.move}
-            </button>
-            <button type="button" className="adm-btn adm-btn-ghost adm-btn-auto" onClick={() => setMode("edit")}>
-              {A.visit.edit}
-            </button>
+            {canMove && (
+              <button type="button" className="adm-btn adm-btn-line adm-btn-auto" onClick={onMove}>
+                {A.visit.move}
+              </button>
+            )}
+            {canForm && (
+              <button type="button" className="adm-btn adm-btn-ghost adm-btn-auto" onClick={() => setMode("edit")}>
+                {A.visit.edit}
+              </button>
+            )}
           </div>
         )
       }
@@ -1140,15 +1186,19 @@ function VisitSheet({ v, data, onClose, onMove, onDone }: { v: CalVisit; data: C
           {cap(date)} · {staff?.name}
         </span>
       </p>
-      {v.clientPhone && (
-        <a className="adm-phone" href={`tel:${v.clientPhone}`}>
-          {v.clientPhone} · {A.visit.call}
-        </a>
-      )}
+      {v.clientPhone &&
+        (may.call ? (
+          <a className="adm-phone" href={`tel:${v.clientPhone}`}>
+            {v.clientPhone} · {A.visit.call}
+          </a>
+        ) : (
+          // a masked number: shown, never a link to call
+          <span className="adm-phone">{v.clientPhone}</span>
+        ))}
       {v.clientNote && <p className="adm-note">{v.clientNote}</p>}
       <div className="adm-status" role="group" aria-label={A.visit.status.booked}>
         {(["arrived", "done", "no_show"] as const).map((s) => (
-          <button key={s} type="button" aria-pressed={v.status === s} disabled={busy} onClick={() => void status(v.status === s ? "booked" : s)}>
+          <button key={s} type="button" aria-pressed={v.status === s} disabled={busy || !canEdit} onClick={() => void status(v.status === s ? "booked" : s)}>
             {A.visit.status[s]}
           </button>
         ))}
@@ -1194,9 +1244,11 @@ function VisitSheet({ v, data, onClose, onMove, onDone }: { v: CalVisit; data: C
           </button>
         </div>
       ) : (
-        <button type="button" className="adm-txt warn" style={{ alignSelf: "flex-start" }} onClick={() => setMode("cancel")}>
-          {A.visit.cancelVisit}
-        </button>
+        canCancel && (
+          <button type="button" className="adm-txt warn" style={{ alignSelf: "flex-start" }} onClick={() => setMode("cancel")}>
+            {A.visit.cancelVisit}
+          </button>
+        )
       )}
     </Sheet>
   );
@@ -1204,6 +1256,7 @@ function VisitSheet({ v, data, onClose, onMove, onDone }: { v: CalVisit; data: C
 
 function BlockSheet({ b, tz, staffName, onClose, onDone }: { b: CalBlock; tz: string; staffName: string; onClose: () => void; onDone: (t: string) => void }) {
   const A = useA();
+  const may = useContext(May);
   const [busy, setBusy] = useState(false);
   const f = fmt(A.intl, tz, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   return (
@@ -1211,7 +1264,7 @@ function BlockSheet({ b, tz, staffName, onClose, onDone }: { b: CalBlock; tz: st
       title={A.block.kinds[b.kind] ?? b.kind}
       onClose={onClose}
       bar={
-        <button
+        !may.schedule ? undefined : <button
           type="button"
           className="adm-btn adm-btn-warn"
           disabled={busy}

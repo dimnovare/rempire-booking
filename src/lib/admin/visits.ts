@@ -19,7 +19,13 @@
  * under the row lock. A new, moved or cancelled visit is told by push to
  * the barber whose column it is (never to the one who made the change);
  * a barber's own move or cancel also to Renat (src/lib/push.ts).
+ *
+ * Rights (src/lib/auth/rights.ts): a Scope with `who` is asked at the door
+ * for each thing the change does, under the visit's row lock where the
+ * answer depends on the visit as it is (its column, its day, «пришёл»).
+ * Without `who` nothing is asked: the caller is the system or a test.
  */
+import { can, type Holder } from "../auth/rights";
 import type { Business } from "../availability";
 import { queueChangeLetter, queueConfirmation } from "../booking";
 import { query, withTx, type Querier } from "../db";
@@ -28,9 +34,11 @@ import { pushVisitChange } from "../push";
 import { isLocale } from "../i18n";
 import { normalizePhone } from "../phone";
 import { extraFor, pricedWindows, workWindows, type HoursRow, type Interval, type Special } from "../slots";
-import { addDays, localParts, startOfDay } from "../tz";
+import { addDays, localParts, startOfDay, todayIn } from "../tz";
+import { clientSeen } from "./client-scope";
 
-export type AdminProblem = "invalid" | "overlap" | "outside_hours" | "time_off" | "not_offered" | "not_found" | "cancelled";
+/** «forbidden»: the login has no right to it (src/lib/auth/rights.ts). */
+export type AdminProblem = "invalid" | "overlap" | "outside_hours" | "time_off" | "not_offered" | "not_found" | "cancelled" | "forbidden";
 
 export type AdminOutcome =
   | { ok: true; id: string; start: number; end: number; totalCents: number; extraCents: number; replay?: boolean }
@@ -57,6 +65,8 @@ export const isUuid = (s: unknown): s is string => typeof s === "string" && UUID
 const MIN = 60_000;
 // visits still to come; only these get a moved or cancelled letter
 const LIVE_STATUSES = new Set(["pending", "booked"]);
+// «Клиент пришел» of the rights' list: the client came, whether the visit is still running or over
+const CAME = new Set(["arrived", "done"]);
 
 class Problem extends Error {
   constructor(
@@ -198,7 +208,14 @@ async function wrap(fn: () => Promise<AdminOutcome>): Promise<AdminOutcome> {
  * staff id: a visit in another column is «not found», checked under the
  * row lock, whatever id the phone sent.
  */
-export type Scope = { onlyStaffId?: string };
+export type Scope = {
+  onlyStaffId?: string;
+  /** the login that asks: its rights are checked for what the change does */
+  who?: Holder;
+};
+
+/** The visit's local day and today's, for a right that has a period or a history limit. */
+const days = (business: Business, at: Date | number) => ({ date: localParts(new Date(at).getTime(), business.timezone).date, today: todayIn(business.timezone) });
 
 /** A new visit from the admin (or a barber in his own column). */
 export async function adminCreateVisit(business: Business, input: AdminVisitInput, actor: string, scope: Scope = {}): Promise<AdminOutcome> {
@@ -216,6 +233,13 @@ export async function adminCreateVisit(business: Business, input: AdminVisitInpu
   const name = text(input.name, 120).replace(/\s+/g, " ");
   if (!clientId && !name && !phone) return { ok: false, code: "invalid", field: "name" };
   const start = Math.round(input.start / MIN) * MIN;
+  const who = scope.who;
+  if (who) {
+    // «Создавать записи», in a column he sees; a new client needs its own right, an old one must be his to see
+    if (!can(who, "visit.create") || !can(who, "journal.staff", { staffId: input.staffId })) return { ok: false, code: "forbidden" };
+    if (!clientId && !can(who, "visit.client_create")) return { ok: false, code: "forbidden" };
+    if (clientId && !(await clientSeen(query, business.id, who, clientId))) return { ok: false, code: "invalid", field: "client" };
+  }
 
   const replay = async (): Promise<AdminOutcome | null> => {
     const [r] = await query<{ id: string; starts_at: Date; ends_at: Date; total_cents: number; extra_cents: number }>(
@@ -351,6 +375,19 @@ export async function adminUpdateVisit(business: Business, id: string, patch: Vi
       const duration = lines.reduce((n, l) => n + l.durationMin, 0);
       const buffer = Math.max(0, ...lines.map((l) => l.bufferMin));
       const moved = staffId !== cur.staff_id || start !== new Date(cur.starts_at).getTime();
+      const who = scope.who;
+      if (who) {
+        const at = days(business, cur.starts_at);
+        if (!can(who, "journal.staff", { staffId: cur.staff_id })) throw new Problem("not_found");
+        const services = newIds !== null && newIds.join() !== oldLines.map((l) => l.service_id).join();
+        const notes = (patch.staffNote != null && text(patch.staffNote, 2000) !== cur.staff_note) || (patch.comment != null && text(patch.comment, 1000) !== cur.client_comment);
+        if (CAME.has(cur.status) && !can(who, "visit.edit.arrived", at)) throw new Problem("forbidden");
+        // a move: by the calendar («Перенос записи») or from the window («Изменять сотрудника и время записи»)
+        if (moved && (!can(who, "journal.staff", { staffId }) || !(can(who, "journal.move") || can(who, "visit.edit.staff_time", at)))) throw new Problem("forbidden");
+        if (services && !can(who, "visit.edit.services", at)) throw new Problem("forbidden");
+        if (notes && !can(who, "visit.edit.comment", at)) throw new Problem("forbidden");
+        if (!moved && !services && !notes && !can(who, "visit.edit", at)) throw new Problem("forbidden");
+      }
       // the extra follows the visit: a new time, barber or services ask the
       // window at the new start again, and a percent window answers for the
       // lines as they are now (kept as booked, or the new barber's prices)
@@ -414,7 +451,7 @@ export async function adminCancelVisit(
   id: string,
   actor: string,
   scope: Scope & { reason?: string | null } = {},
-): Promise<"cancelled" | "already" | "not_found"> {
+): Promise<"cancelled" | "already" | "not_found" | "forbidden"> {
   if (!isUuid(id)) return "not_found";
   const reason = text(scope.reason, 300);
   const out = await withTx(async (tx) => {
@@ -424,7 +461,10 @@ export async function adminCancelVisit(
     );
     if (!cur) return "not_found";
     if (scope.onlyStaffId && cur.staff_id !== scope.onlyStaffId) return "not_found";
+    if (scope.who && !can(scope.who, "journal.staff", { staffId: cur.staff_id })) return "not_found";
     if (cur.status === "cancelled") return "already";
+    // a visit is never deleted here: cancelling it is the list's «Удалять записи»
+    if (scope.who && !can(scope.who, CAME.has(cur.status) ? "visit.delete.arrived" : "visit.delete")) return "forbidden";
     await tx("update appointments set status = 'cancelled', cancelled_at = now(), cancelled_by = $2, updated_at = now() where id = $1", [id, actor]);
     await audit(tx, actor, id, "cancel", { status: cur.status }, reason ? { status: "cancelled", reason } : { status: "cancelled" });
     if (LIVE_STATUSES.has(cur.status) && new Date(cur.starts_at).getTime() > Date.now()) {
@@ -455,6 +495,12 @@ export async function adminSetStatus(business: Business, id: string, status: str
     if (!cur || cur.status === "cancelled") return false;
     if (scope.onlyStaffId && cur.staff_id !== scope.onlyStaffId) return false;
     if (cur.status === status) return true;
+    const who = scope.who;
+    if (who) {
+      const [v] = await tx<{ starts_at: Date }>("select starts_at from appointments where id = $1", [id]);
+      if (!can(who, "journal.staff", { staffId: cur.staff_id })) return false;
+      if (!can(who, CAME.has(cur.status) ? "visit.edit.arrived" : "visit.edit", days(business, v.starts_at))) return false;
+    }
     await tx("update appointments set status = $2, updated_at = now() where id = $1", [id, status]);
     await audit(tx, actor, id, "status", { status: cur.status }, { status });
     return true;
@@ -496,7 +542,7 @@ export async function addTimeOff(
   });
 }
 
-export async function removeTimeOff(business: Business, id: string, actor: string): Promise<boolean> {
+export async function removeTimeOff(business: Business, id: string, actor: string, scope: Pick<Scope, "who"> = {}): Promise<boolean> {
   if (!isUuid(id)) return false;
   return withTx(async (tx) => {
     const [row] = await tx<{ staff_id: string; starts_at: Date; ends_at: Date; kind: string }>(
@@ -505,6 +551,7 @@ export async function removeTimeOff(business: Business, id: string, actor: strin
       [id, business.id],
     );
     if (!row) return false;
+    if (scope.who && !can(scope.who, "journal.staff", { staffId: row.staff_id })) return false;
     await tx("select id from staff where id = $1 for update", [row.staff_id]);
     await tx("delete from time_off where id = $1", [id]);
     await tx(`insert into audit (actor, entity, entity_id, action, before) values ($1, 'time_off', $2, 'delete', $3::jsonb)`, [actor, id, JSON.stringify(row)]);

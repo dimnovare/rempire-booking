@@ -25,7 +25,13 @@
  *
  * Every function is scoped to the business it is handed; a client of
  * another business is «not found».
+ *
+ * Rights (src/lib/auth/rights.ts): reading the comments and the files asks
+ * them here when it is handed a login, and so does deleting a comment
+ * (one's own, or someone else's); the rest of the card's rights are asked
+ * by the actions and routes that call these functions (clients/actions.ts).
  */
+import { can, type Holder } from "../auth/rights";
 import type { Business } from "../availability";
 import type { L10n } from "../catalog";
 import type { ClientChannel } from "../client-notify";
@@ -53,16 +59,20 @@ export const COMMENT_MAX = 2000;
 /** The comments a card shows, newest first. */
 export const COMMENTS_MAX = 200;
 
-export type ClientComment = { id: string; at: number; author: string; text: string };
+/** `mine`, when the list is read for a login: it wrote this one (deleting one's own comment is a right of its own). */
+export type ClientComment = { id: string; at: number; author: string; text: string; mine?: boolean };
 
-export async function listComments(q: Querier, businessId: string, clientId: string): Promise<ClientComment[]> {
+/** With a login (`who`): only with «Просматривать комментарии», and each comment says whether that login wrote it. */
+export async function listComments(q: Querier, businessId: string, clientId: string, who?: Holder): Promise<ClientComment[]> {
   if (!isUuid(clientId)) return [];
-  const rows = await q<{ id: string; created_at: Date; author_name: string; body: string }>(
-    `select id, created_at, author_name, body from client_comments
+  if (who && !can(who, "clients.comments")) return [];
+  const readerId = who?.id;
+  const rows = await q<{ id: string; created_at: Date; author_id: string | null; author_name: string; body: string }>(
+    `select id, created_at, author_id, author_name, body from client_comments
       where business_id = $1 and client_id = $2 order by created_at desc, id limit ${COMMENTS_MAX}`,
     [businessId, clientId],
   );
-  return rows.map((r) => ({ id: r.id, at: ms(r.created_at), author: r.author_name, text: r.body }));
+  return rows.map((r) => ({ id: r.id, at: ms(r.created_at), author: r.author_name, text: r.body, ...(readerId ? { mine: r.author_id === readerId } : {}) }));
 }
 
 /** `author`: the login that writes it; its name is copied, so the comment still says who after the login is gone. */
@@ -87,13 +97,17 @@ export async function addComment(
 }
 
 /**
- * Delete a comment, anyone's: for Renat and the front desk (`role` owner or
- * admin). A barber's login deletes none; finer rights come later.
+ * Delete a comment: one's own with «Удалять свои комментарии», someone
+ * else's with «Удалять чужие комментарии». (Before the rights Renat and the
+ * front desk deleted anyone's and a barber's login none; their rights
+ * started from that.)
  */
-export async function deleteComment(business: Business, clientId: string, commentId: string, by: { id: string; role: string }): Promise<boolean> {
-  if (by.role !== "owner" && by.role !== "admin") return false;
+export async function deleteComment(business: Business, clientId: string, commentId: string, by: Holder & { id: string }): Promise<boolean> {
   if (!isUuid(clientId) || !isUuid(commentId)) return false;
   return withTx(async (tx) => {
+    const [row] = await tx<{ author_id: string | null }>("select author_id from client_comments where id = $1 and client_id = $2 and business_id = $3 for update", [commentId, clientId, business.id]);
+    if (!row) return false;
+    if (!can(by, row.author_id !== null && row.author_id === by.id ? "clients.comments_delete_own" : "clients.comments_delete_others")) return false;
     const gone = await tx<{ id: string }>("delete from client_comments where id = $1 and client_id = $2 and business_id = $3 returning id", [commentId, clientId, business.id]);
     if (!gone.length) return false;
     await tx(AUDIT, [by.id, clientId, "comment_delete", JSON.stringify({ by: "admin", comment: commentId })]);
@@ -227,8 +241,10 @@ export function checkFile(rawName: unknown, declaredType: unknown, bytes: Uint8A
 
 export type ClientFile = { id: string; name: string; mime: string; size: number; at: number; by: string };
 
-export async function listFiles(q: Querier, businessId: string, clientId: string): Promise<ClientFile[]> {
+/** With a login (`who`): only with «Просматривать и скачивать файлы». */
+export async function listFiles(q: Querier, businessId: string, clientId: string, who?: Holder): Promise<ClientFile[]> {
   if (!isUuid(clientId)) return [];
+  if (who && !can(who, "clients.files")) return [];
   const rows = await q<{ id: string; name: string; mime: string; size: number; created_at: Date; uploaded_name: string }>(
     "select id, name, mime, size, created_at, uploaded_name from client_files where business_id = $1 and client_id = $2 order by created_at desc, id",
     [businessId, clientId],

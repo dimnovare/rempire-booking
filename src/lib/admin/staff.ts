@@ -2,7 +2,14 @@
  * Barbers in the admin: profile, which services each does at what price and
  * time, the weekly hours with breaks, one-off days, and special time.
  * Blocked time and vacations are src/lib/admin/visits.ts addTimeOff().
+ *
+ * Rights (src/lib/auth/rights.ts): saveStaffProfile asks them when it is
+ * handed a login: a new barber is «Создание сотрудников», a change
+ * «Редактирование сотрудников», and switching a barber off or on again
+ * «Увольнение сотрудников» (nobody is deleted here). The schedule and a
+ * barber's services are asked by the actions (staff/actions.ts).
  */
+import { can, type Holder } from "../auth/rights";
 import type { Business } from "../availability";
 import type { L10n } from "../catalog";
 import { withTx, type Querier } from "../db";
@@ -153,7 +160,8 @@ export function slugify(s: string): string {
 export type StaffProfileInput = { name: string; role?: L10n; bio?: L10n; photoUrl?: string | null; bookable: boolean; active: boolean; sort?: number | null };
 
 /** Add (id null) or change a barber. A new barber gets the template week of nothing: Renat sets the hours next. */
-export async function saveStaffProfile(business: Business, id: string | null, input: StaffProfileInput, actor: string): Promise<{ ok: true; id: string } | { ok: false; field: string }> {
+export async function saveStaffProfile(business: Business, id: string | null, input: StaffProfileInput, actor: string, who?: Holder): Promise<{ ok: true; id: string } | { ok: false; field: string }> {
+  if (who && !can(who, id ? "staff.edit" : "staff.create")) return { ok: false, field: "forbidden" };
   const name = t(input.name, 60).replace(/\s+/g, " ");
   if (!name) return { ok: false, field: "name" };
   const photo = t(input.photoUrl, 500);
@@ -164,6 +172,11 @@ export async function saveStaffProfile(business: Business, id: string | null, in
   return withTx(async (tx) => {
     if (id) {
       if (!isUuid(id)) return { ok: false as const, field: "id" };
+      if (who) {
+        const [cur] = await tx<{ active: boolean }>("select active from staff where id = $1 and business_id = $2 for update", [id, business.id]);
+        if (!cur) return { ok: false as const, field: "id" };
+        if (cur.active !== !!input.active && !can(who, "staff.dismiss")) return { ok: false as const, field: "forbidden" };
+      }
       const [row] = await tx<{ id: string }>(
         `update staff set display_name = $3, role = $4::jsonb, bio = $5::jsonb, photo_url = $6, bookable = $7, active = $8,
                 sort = coalesce($9, sort)

@@ -5,13 +5,20 @@
  * come from the shop (src/lib/shop.ts: the fake shop while SHOP_API_URL is
  * unset); booking keeps only what was sold, at the price of that moment.
  * Every action is the barber's own: requireStaff() decides whose column.
+ *
+ * Rights (src/lib/auth/rights.ts): «Проводить продажу товаров» for the
+ * page and its searches, «Создание товарных транзакций» for a sale,
+ * «Редактирование товарных транзакций» to take one back.
  */
 import { refresh } from "next/cache";
 import { requireStaff } from "@/lib/auth/current";
+import { can } from "@/lib/auth/rights";
 import type { Business } from "@/lib/availability";
+import { query } from "@/lib/db";
 import { commissionFor } from "@/lib/money";
 import { recordSale, undoSale, unitPriceFor, productTitle } from "@/lib/sales";
 import { identifyPhoto, lookupBarcode, searchProducts, ShopError, type ShopProduct } from "@/lib/shop";
+import { localParts, todayIn } from "@/lib/tz";
 import { barberLang } from "../../lang-server";
 
 export type SellProduct = {
@@ -51,7 +58,8 @@ function view(business: Business, p: ShopProduct): SellProduct {
 const failed = (e: unknown): Found => ({ ok: false, code: e instanceof ShopError && e.code === "bad_request" ? "bad_request" : "shop_down" });
 
 export async function searchAction(q: string): Promise<Found> {
-  const { business } = await requireStaff();
+  const { user, business } = await requireStaff();
+  if (!can(user, "visit.sell")) return { ok: false, code: "bad_request" };
   try {
     const items = await searchProducts(String(q ?? "").slice(0, 80), 12, process.env, await barberLang());
     return { ok: true, items: items.map((p) => view(business, p)) };
@@ -61,7 +69,8 @@ export async function searchAction(q: string): Promise<Found> {
 }
 
 export async function barcodeAction(code: string): Promise<Found> {
-  const { business } = await requireStaff();
+  const { user, business } = await requireStaff();
+  if (!can(user, "visit.sell")) return { ok: false, code: "bad_request" };
   const c = String(code ?? "").replace(/\s/g, "").slice(0, 64);
   if (!/^[0-9A-Za-z-]{4,64}$/.test(c)) return { ok: true, items: [] };
   try {
@@ -74,7 +83,8 @@ export async function barcodeAction(code: string): Promise<Found> {
 
 /** C7: a photo or a screenshot, downscaled on the phone, matched by the shop's AI. */
 export async function photoAction(dataUrl: string): Promise<Found> {
-  const { business } = await requireStaff();
+  const { user, business } = await requireStaff();
+  if (!can(user, "visit.sell")) return { ok: false, code: "bad_request" };
   try {
     const items = await identifyPhoto(String(dataUrl ?? ""));
     return { ok: true, items: items.slice(0, 3).map((p) => view(business, p)) };
@@ -91,6 +101,7 @@ export type SellDone =
 /** One sale. The phone made `ref`: the same tap sent twice is one sale. */
 export async function sellAction(input: { ref: string; productId: string; variant: string; mode: "client" | "self"; qty: number; expectCents: number }): Promise<SellDone> {
   const { user, business, staff } = await requireStaff();
+  if (!can(user, "visit.sell.create")) return { ok: false, code: "invalid" };
   const r = await recordSale(business, staff.id, user.id, {
     ref: String(input?.ref ?? ""),
     productId: String(input?.productId ?? ""),
@@ -108,7 +119,11 @@ export async function sellAction(input: { ref: string; productId: string; varian
 }
 
 export async function undoAction(ref: string): Promise<{ ok: true } | { ok: false; code: "not_found" | "too_late" }> {
-  const { user, staff } = await requireStaff();
+  const { user, business, staff } = await requireStaff();
+  // with the period «today», only a sale made today is taken back
+  const [sale] = await query<{ created_at: Date }>("select created_at from product_sales where ref = $1 and staff_id = $2", [String(ref ?? ""), staff.id]);
+  const made = sale ? { date: localParts(new Date(sale.created_at).getTime(), business.timezone).date, today: todayIn(business.timezone) } : {};
+  if (!can(user, "visit.sell.edit", made)) return { ok: false, code: "not_found" };
   const r = await undoSale(staff.id, String(ref ?? ""), user.id);
   if (r.ok) refresh();
   return r;

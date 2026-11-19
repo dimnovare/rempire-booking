@@ -19,13 +19,16 @@
  */
 import { Suspense } from "react";
 import { listClientColumns } from "@/lib/admin/client-columns";
+import { listMay } from "@/lib/admin/client-scope";
 import { listClients } from "@/lib/admin/clients";
 import { listServices } from "@/lib/admin/services";
 import { listStaff } from "@/lib/admin/staff";
 import { requireAdmin } from "@/lib/auth/current";
+import { canGroup } from "@/lib/auth/rights";
 import { dbConfigured, query } from "@/lib/db";
 import { Wait } from "../../lang";
 import { getA } from "../../lang-server";
+import { NoRights } from "../no-rights";
 import { ClientsView } from "./list-view";
 
 export default function ClientsLayout({ children }: LayoutProps<"/admin/clients">) {
@@ -43,8 +46,10 @@ async function Loaded() {
   const A = await getA();
   if (!dbConfigured()) return <p className="adm-wait">{A.noDb}</p>;
   const { user, business } = await requireAdmin();
+  // the section itself: «Клиентская база»
+  if (!canGroup(user, "clients")) return <NoRights />;
   const [initial, columns, staff, services] = await Promise.all([
-    listClients(query, business.id, {}, Date.now(), business.timezone),
+    listClients(query, business.id, {}, Date.now(), business.timezone, user),
     listClientColumns(query, user.id),
     listStaff(query, business.id),
     listServices(query, business.id),
@@ -53,7 +58,7 @@ async function Loaded() {
     <ClientsView
       initial={initial}
       tz={business.timezone}
-      owner={user.role === "owner"}
+      may={listMay(user)}
       columns={columns}
       // a barber who has left still has his clients, a service that is switched off its visits
       staff={staff.map((s) => ({ id: s.id, name: s.name }))}

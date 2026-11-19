@@ -78,12 +78,14 @@ export function FilesTab({ files, rules }: { files: ClientFile[]; rules: FileRul
   return (
     <div className="cc-scroll">
       <p className="cc-note">{K.filesNote(rules.exts.join(", "), mb, rules.max)}</p>
-      <div className="cc-bar">
-        <input ref={input} type="file" multiple hidden accept={rules.exts.map((x) => `.${x}`).join(",")} onChange={upload} />
-        <button type="button" className="cc-btn cc-btn-main" disabled={busy || full} onClick={() => input.current?.click()}>
-          {busy ? K.uploading : K.upload}
-        </button>
-      </div>
+      {card.may.upload && (
+        <div className="cc-bar">
+          <input ref={input} type="file" multiple hidden accept={rules.exts.map((x) => `.${x}`).join(",")} onChange={upload} />
+          <button type="button" className="cc-btn cc-btn-main" disabled={busy || full} onClick={() => input.current?.click()}>
+            {busy ? K.uploading : K.upload}
+          </button>
+        </div>
+      )}
       {bad.length > 0 && (
         <ul className="cc-file-bad" role="alert">
           {bad.map((b, i) => (
@@ -106,9 +108,11 @@ export function FilesTab({ files, rules }: { files: ClientFile[]; rules: FileRul
               <a className="cc-btn" href={`/admin/clients/${card.id}/files/${f.id}`} download={f.name}>
                 {K.download}
               </a>
-              <button type="button" className="cc-btn cc-btn-ico" aria-label={K.fileDelete(f.name)} title={K.fileDelete(f.name)} onClick={() => setAsking(f)}>
-                <XIcon size={14} />
-              </button>
+              {card.may.fileDelete && (
+                <button type="button" className="cc-btn cc-btn-ico" aria-label={K.fileDelete(f.name)} title={K.fileDelete(f.name)} onClick={() => setAsking(f)}>
+                  <XIcon size={14} />
+                </button>
+              )}
             </li>
           ))}
         </ul>

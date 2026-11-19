@@ -5,13 +5,17 @@
  * order; the columns are the ones this login keeps in the table
  * (client-columns.ts), the name first.
  *
- * **Only the owner.** The file holds every client's phone and e-mail, so
- * each export is written to the audit log: who, when, how many rows and
- * which columns. Never the rows themselves.
+ * **Only with «Выгружать список клиентов»** (the owner's login started
+ * with it, and no other). The file holds every client's phone and e-mail,
+ * so each export is written to the audit log: who, when, how many rows and
+ * which columns. Never the rows themselves. A login that does not see
+ * phones and e-mails in the list gets a file without those two columns,
+ * and only the clients it sees.
  *
  * The file is made in memory and handed back as bytes; nothing is kept on
  * the server.
  */
+import { can, type Holder } from "../auth/rights";
 import type { Business } from "../availability";
 import { withTx } from "../db";
 import { excelSerial, writeXlsx, type XCell } from "../xlsx";
@@ -42,13 +46,14 @@ function cell(c: ClientRow, col: ClientColumn | "name", tz: string): XCell {
 
 /**
  * The filtered list as an .xlsx file, and the audit row about it. `by` is
- * the login that asks: its role decides, its columns are the file's.
+ * the login that asks: its rights decide, its columns are the file's.
  */
-export async function exportClients(business: Business, by: { id: string; role: string }, filter: ClientFilter, words: ExportWords, now = Date.now()): Promise<Exported> {
-  if (by.role !== "owner") return { ok: false, code: "forbidden" };
+export async function exportClients(business: Business, by: Holder & { id: string }, filter: ClientFilter, words: ExportWords, now = Date.now()): Promise<Exported> {
+  if (!can(by, "clients.export")) return { ok: false, code: "forbidden" };
+  const contacts = can(by, "clients.list_contacts");
   return withTx<Exported>(async (tx) => {
-    const columns: ("name" | ClientColumn)[] = ["name", ...(await listClientColumns(tx, by.id))];
-    const rows = await clientRows(tx, clientWhere(business.id, filter, now, business.timezone), filter, EXPORT_MAX, 0, now);
+    const columns: ("name" | ClientColumn)[] = ["name", ...(await listClientColumns(tx, by.id)).filter((c) => contacts || (c !== "phone" && c !== "email"))];
+    const rows = await clientRows(tx, clientWhere(business.id, filter, now, business.timezone, by), filter, EXPORT_MAX, 0, now);
     const bytes = writeXlsx({
       name: words.sheet,
       header: columns.map((c) => words.cols[c]),

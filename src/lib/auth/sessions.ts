@@ -9,6 +9,8 @@
 import { randomBytes } from "node:crypto";
 import { hashToken } from "../booking";
 import type { Querier } from "../db";
+import type { Rights } from "./rights";
+import { backfillRights, rightsFromRow } from "./rights-store";
 
 export type Role = "owner" | "admin" | "staff";
 
@@ -22,6 +24,8 @@ export type StaffUser = {
   locale: string;
   hasPassword: boolean;
   sessionId: string;
+  /** what this login may do (src/lib/auth/rights.ts): ask can(user, right), never the role */
+  rights: Rights;
 };
 
 /** Days of no use before a session ends. The barber app stays logged in. */
@@ -52,19 +56,33 @@ type Row = {
   staff_id: string | null;
   locale: string;
   has_password: boolean;
+  rights_preset: string | null;
+  rights: string[] | null;
+  rights_values: unknown;
 };
 
 /** The user behind a cookie token, or null. A used session slides forward (at most once an hour). */
 export async function readSession(q: Querier, token: string | null | undefined, now = Date.now()): Promise<StaffUser | null> {
   if (!token || !TOKEN_RE.test(token)) return null;
-  const [r] = await q<Row>(
-    `select s.id as session_id, s.expires_at, s.last_seen_at,
-            u.id, u.business_id, u.email, u.name, u.role, u.staff_id, u.locale, (u.password_hash is not null) as has_password
-       from sessions s join users u on u.id = s.user_id
-      where s.token_hash = $1 and s.revoked_at is null and u.active`,
-    [hashToken(token)],
-  );
+  const read = () =>
+    q<Row>(
+      `select s.id as session_id, s.expires_at, s.last_seen_at,
+              u.id, u.business_id, u.email, u.name, u.role, u.staff_id, u.locale, (u.password_hash is not null) as has_password,
+              u.rights_preset, u.rights, u.rights_values
+         from sessions s join users u on u.id = s.user_id
+        where s.token_hash = $1 and s.revoked_at is null and u.active`,
+      [hashToken(token)],
+    );
+  let [r] = await read();
   if (!r || new Date(r.expires_at).getTime() <= now) return null;
+  // a login from before the rights (020): its set is written now, once, from its role (rights-store.ts)
+  if (!r.rights) {
+    await backfillRights(q, r.business_id);
+    [r] = await read();
+    if (!r) return null;
+  }
+  const rights = rightsFromRow(r);
+  if (!rights) return null;
   if (now - new Date(r.last_seen_at).getTime() > 3_600_000) {
     await q("update sessions set last_seen_at = $2, expires_at = $3 where id = $1", [r.session_id, new Date(now), new Date(now + SESSION_IDLE_DAYS * DAY)]);
   }
@@ -78,6 +96,7 @@ export async function readSession(q: Querier, token: string | null | undefined, 
     locale: r.locale,
     hasPassword: r.has_password,
     sessionId: r.session_id,
+    rights,
   };
 }
 

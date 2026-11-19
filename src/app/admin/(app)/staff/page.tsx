@@ -1,9 +1,11 @@
 import { Suspense } from "react";
 import { listStaff, staffDetail } from "@/lib/admin/staff";
 import { requireAdmin } from "@/lib/auth/current";
+import { canGroup } from "@/lib/auth/rights";
 import { dbConfigured, query } from "@/lib/db";
 import { todayIn } from "@/lib/tz";
 import { getA } from "../../lang-server";
+import { NoRights } from "../no-rights";
 import { BarberPage } from "./[id]/barber";
 
 /**
@@ -26,7 +28,13 @@ async function First() {
         <p className="adm-wait">{(await getA()).noDb}</p>
       </main>
     );
-  const { business } = await requireAdmin();
+  const { user, business } = await requireAdmin();
+  if (!canGroup(user, "staff"))
+    return (
+      <main className="adm-page">
+        <NoRights />
+      </main>
+    );
   const first = (await listStaff(query, business.id))[0];
   if (!first) return null;
   const today = todayIn(business.timezone);

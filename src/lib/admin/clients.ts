@@ -39,7 +39,15 @@
  *
  * The import from Altegio will fill the same table later; nothing here
  * imports.
+ *
+ * Rights (src/lib/auth/rights.ts): a function handed a login (`who`) asks
+ * them itself. Which clients it sees is «Показывать клиентов»
+ * (client-scope.ts); phones and e-mails are masked in the list and on the
+ * card without their two rights, and then cannot be searched by either;
+ * the note, the visit history, changing the card and deleting each have a
+ * right. Without `who` nothing is asked: the caller is the system or a test.
  */
+import { can, maskEmail, maskPhone, type Holder } from "../auth/rights";
 import type { Business } from "../availability";
 import { NOTE_MAX } from "../barber/clients";
 import { birthdayText, parseBirthday, type Birthday } from "../birthday";
@@ -50,6 +58,7 @@ import { isLocale, type Locale } from "../i18n";
 import { normalizePhone } from "../phone";
 import { todayIn } from "../tz";
 import { cleanConds, condsSql, isClientSort, isJoin, PAGE_SIZE, PAGE_SIZES, type ClientSort, type Join } from "./client-filter";
+import { clientSeen, seenClientsSql } from "./client-scope";
 import { isUuid } from "./visits";
 
 export { NOTE_MAX };
@@ -147,12 +156,16 @@ type StatsRow = { visits: number; first_visit: Date | null; last_visit: Date | n
  * the name, the e-mail and the card number. Mostly digits is a phone as
  * well («5555 0903», «+372 55»), whatever spaces and brackets it was typed
  * with: its digits are looked for inside both stored numbers.
+ * `contacts` false (a login that does not see phones and e-mails in the
+ * list): only the name and the card number are searched, so nobody finds
+ * out a number by trying its digits.
  */
-function searchPart(raw: unknown, params: unknown[]): string {
+function searchPart(raw: unknown, params: unknown[], contacts = true): string {
   const s = text(raw, 60);
   if (!s) return "";
   params.push(likeText(s));
   const at = `'%' || $${params.length} || '%'`;
+  if (!contacts) return ` and (c.name ilike ${at} or c.card_no ilike ${at})`;
   const words = `c.name ilike ${at} or coalesce(c.email, '') ilike ${at} or c.card_no ilike ${at}`;
   const digits = s.replace(/\D/g, "");
   const byPhone = digits.length >= 3 && digits.length >= s.replace(/[\s+()-]/g, "").length - 1;
@@ -168,12 +181,16 @@ function searchPart(raw: unknown, params: unknown[]): string {
  * values: this business's, not merged away, then the search, the category
  * and the conditions. The list, the export and the bulk actions all ask
  * with this one, so they always mean the same clients. Paging and sorting
- * are not part of it.
+ * are not part of it. With a login (`who`): only the clients it sees.
  */
-export function clientWhere(businessId: string, filter: ClientFilter = {}, now = Date.now(), tz = TZ): { where: string; params: unknown[] } {
+export function clientWhere(businessId: string, filter: ClientFilter = {}, now = Date.now(), tz = TZ, who?: Holder): { where: string; params: unknown[] } {
   const params: unknown[] = [businessId];
   let where = "c.business_id = $1 and c.merged_into is null";
-  where += searchPart(filter.q, params);
+  where += seenClientsSql(who, (value) => {
+    params.push(value);
+    return `$${params.length}`;
+  });
+  where += searchPart(filter.q, params, !who || can(who, "clients.list_contacts"));
   const label = text(filter.label, LABEL_MAX);
   if (label) {
     params.push(label);
@@ -247,16 +264,19 @@ export async function countClients(q: Querier, found: { where: string; params: u
 }
 
 /** One page of the client base: by name unless another column is asked for. `tz` is the salon's, for the conditions' days. */
-export async function listClients(q: Querier, businessId: string, filter: ClientFilter = {}, now = Date.now(), tz = TZ): Promise<ClientList> {
-  const found = clientWhere(businessId, filter, now, tz);
+export async function listClients(q: Querier, businessId: string, filter: ClientFilter = {}, now = Date.now(), tz = TZ, who?: Holder): Promise<ClientList> {
+  const found = clientWhere(businessId, filter, now, tz, who);
   const [labels, total] = await Promise.all([clientLabels(q, businessId), countClients(q, found)]);
   const size = (PAGE_SIZES as readonly number[]).includes(filter.size as number) ? (filter.size as number) : PAGE_SIZE;
   const pages = Math.max(1, Math.ceil(total / size));
   const asked = Number.isInteger(filter.page) ? (filter.page as number) : 1;
   const page = Math.min(Math.max(1, asked), pages);
   const rows = total ? await clientRows(q, found, filter, size, (page - 1) * size, now) : [];
-  return { rows, total, page, pages, size, labels };
+  return { rows: who && !can(who, "clients.list_contacts") ? rows.map(maskRow) : rows, total, page, pages, size, labels };
 }
+
+/** A row for a login without «Показывать номера телефонов и email в списке клиентов». */
+export const maskRow = (r: ClientRow): ClientRow => ({ ...r, phone: maskPhone(r.phone), email: maskEmail(r.email) });
 
 export type ClientVisit = {
   id: string;
@@ -303,9 +323,29 @@ export type ClientDetail = ClientRow & {
   photoV: string | null;
 };
 
-/** One client with his visits, or null: not this business's, merged away, or no such id. */
-export async function clientDetail(q: Querier, business: Business, id: string, now = Date.now()): Promise<ClientDetail | null> {
+/**
+ * One client with his visits, or null: not this business's, merged away,
+ * no such id, or (with a login) not one of the clients it sees. Without the
+ * card's contacts right his phones and e-mail are masked; without the note's
+ * right the note is empty; without the history's right so is the history.
+ */
+export async function clientDetail(q: Querier, business: Business, id: string, now = Date.now(), who?: Holder): Promise<ClientDetail | null> {
   if (!isUuid(id)) return null;
+  if (who && !(await clientSeen(q, business.id, who, id))) return null;
+  const d = await readDetail(q, business, id, now);
+  if (!d || !who) return d;
+  const contacts = can(who, "clients.card_contacts");
+  return {
+    ...d,
+    phone: contacts ? d.phone : maskPhone(d.phone),
+    phone2: contacts ? d.phone2 : maskPhone(d.phone2),
+    email: contacts ? d.email : maskEmail(d.email),
+    note: can(who, "clients.note") ? d.note : "",
+    history: can(who, "clients.history") ? d.history : [],
+  };
+}
+
+async function readDetail(q: Querier, business: Business, id: string, now: number): Promise<ClientDetail | null> {
   const [c] = await q<
     {
       id: string;
@@ -437,7 +477,7 @@ export type ClientInput = {
 /**
  * `field` is what to fix. «phoneTaken»: another client of the business has
  * this phone already; `clientId` is that client (the one he was merged
- * into, if he was).
+ * into, if he was). «forbidden»: the login has no right to this change.
  */
 export type ClientSaved = { ok: true; id: string } | { ok: false; field: string; clientId?: string };
 
@@ -589,14 +629,24 @@ async function phoneHolder(tx: Querier, businessId: string, phone: string, notId
  * which fields changed, never the values: a client's name and phone stay
  * in his own row only.
  */
-export async function saveClient(business: Business, id: string | null, input: ClientInput, actor: string, now = Date.now()): Promise<ClientSaved> {
+export async function saveClient(business: Business, id: string | null, input: ClientInput, actor: string, now = Date.now(), who?: Holder): Promise<ClientSaved> {
   if (id !== null && !isUuid(id)) return { ok: false, field: "id" };
-  const c = clean(input ?? {}, id === null, todayIn(business.timezone, now));
+  if (who && id !== null && !(await clientSeen(query, business.id, who, id))) return { ok: false, field: "id" };
+  // a login that sees the phones and the e-mail masked sends them back masked: they stay as they are
+  const asked: ClientInput = who && id !== null && !can(who, "clients.card_contacts") ? { ...(input ?? {}), phone: undefined, phone2: undefined, email: undefined } : (input ?? {});
+  const c = clean(asked, id === null, todayIn(business.timezone, now));
   if (!c.ok) return c;
   const v = c.v;
+  /** A category nobody has yet is «Настройка списка категорий клиентов». */
+  const newLabels = async (tx: Querier, labels: string[] | undefined, had: string[]) => {
+    if (!who || !labels?.length || can(who, "settings.categories")) return false;
+    const used = new Set([...(await clientLabels(tx, business.id)), ...had].map((l) => l.toLocaleLowerCase()));
+    return labels.some((l) => !used.has(l.toLocaleLowerCase()));
+  };
   const run = () =>
     withTx<ClientSaved>(async (tx) => {
       if (id === null) {
+        if (who && (!can(who, "clients.edit") || (v.note && !can(who, "clients.note.edit")) || (await newLabels(tx, v.labels, [])))) return { ok: false, field: "forbidden" };
         if (v.phone) {
           const other = await phoneHolder(tx, business.id, v.phone, null);
           if (other) return { ok: false, field: "phoneTaken", clientId: other };
@@ -668,6 +718,12 @@ export async function saveClient(business: Business, id: string | null, input: C
       if (next.phone2_e164 && next.phone2_e164 === next.phone_e164) next.phone2_e164 = null;
       const changed = (Object.keys(next) as (keyof Stored)[]).filter((k) => JSON.stringify(next[k]) !== JSON.stringify(cur[k] ?? (LISTS.has(k) ? [] : null)));
       if (!changed.length) return { ok: true, id };
+      if (who) {
+        // the note has its own right; everything else on the card is «Редактировать данные клиента»
+        if (changed.includes("staff_note") && !can(who, "clients.note.edit")) return { ok: false, field: "forbidden" };
+        if (changed.some((k) => k !== "staff_note") && !can(who, "clients.edit")) return { ok: false, field: "forbidden" };
+        if (changed.includes("labels") && (await newLabels(tx, next.labels, cur.labels ?? []))) return { ok: false, field: "forbidden" };
+      }
       if (next.phone_e164 && next.phone_e164 !== cur.phone_e164) {
         const other = await phoneHolder(tx, business.id, next.phone_e164, id);
         if (other) return { ok: false, field: "phoneTaken", clientId: other };
@@ -717,8 +773,8 @@ export async function saveClient(business: Business, id: string | null, input: C
   }
 }
 
-/** `has_history`: he has visits, purchases, or another client merged into him; his history stays, so he stays. */
-export type ClientDeleted = { ok: true } | { ok: false; code: "not_found" | "has_history" };
+/** `has_history`: he has visits, purchases, or another client merged into him; his history stays, so he stays. `forbidden`: no right to delete clients. */
+export type ClientDeleted = { ok: true } | { ok: false; code: "not_found" | "has_history" | "forbidden" };
 
 /**
  * Delete a client: only one with no history. A visit is never deleted
@@ -728,8 +784,10 @@ export type ClientDeleted = { ok: true } | { ok: false; code: "not_found" | "has
  * with him; a message that was written to him stays in the outbox without
  * his name on it. The audit row says who deleted, never whom by name.
  */
-export async function deleteClient(business: Business, id: string, actor: string): Promise<ClientDeleted> {
+export async function deleteClient(business: Business, id: string, actor: string, who?: Holder): Promise<ClientDeleted> {
   if (!isUuid(id)) return { ok: false, code: "not_found" };
+  if (who && !can(who, "clients.delete")) return { ok: false, code: "forbidden" };
+  if (who && !(await clientSeen(query, business.id, who, id))) return { ok: false, code: "not_found" };
   try {
     return await withTx<ClientDeleted>(async (tx) => {
       const [c] = await tx<{ id: string }>("select id from clients where id = $1 and business_id = $2 and merged_into is null for update", [id, business.id]);

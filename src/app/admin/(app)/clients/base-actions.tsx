@@ -21,6 +21,7 @@
 import { useEffect, useId, useState } from "react";
 import type { ClientChannel } from "@/lib/client-notify";
 import { CLIENT_COLUMNS, type ClientColumn } from "@/lib/admin/client-columns";
+import type { ListMay } from "@/lib/admin/client-scope";
 import { smsSegments } from "@/lib/sms";
 import { CaretIcon, CogIcon, TickIcon } from "../../icons";
 import { useA } from "../../lang";
@@ -171,7 +172,7 @@ export function ActionsMenu({
   ticked,
   total,
   question,
-  owner,
+  may,
   onStart,
 }: {
   /** the ticked rows; with none, the action is for the whole filtered list */
@@ -180,7 +181,8 @@ export function ActionsMenu({
   total: number;
   /** the list's own question, as it was last answered */
   question: ClientQuery;
-  owner: boolean;
+  /** what the login may do to many clients at once */
+  may: ListMay;
   onStart: (s: Started) => void;
 }) {
   const B = useA().clients.base;
@@ -216,9 +218,9 @@ export function ActionsMenu({
         return (
           <>
             <p className="cb-who">{who}</p>
-            {item("send", B.send)}
-            {item("label", B.addLabel)}
-            {owner && item("delete", B.del, true)}
+            {may.mass && item("send", B.send)}
+            {may.edit && item("label", B.addLabel)}
+            {may.bulkDelete && item("delete", B.del, true)}
           </>
         );
       }}

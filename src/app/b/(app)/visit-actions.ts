@@ -6,25 +6,28 @@
  * another barber's column is refused under the row lock, as if it did not
  * exist. The rules for a booking, a move and a cancel are the admin's
  * (src/lib/admin/visits.ts, via src/lib/barber/book.ts); the client gets
- * the same letters.
+ * the same letters. The login goes down with each call: its rights are
+ * asked where the change is made (src/lib/auth/rights.ts).
  */
 import { refresh } from "next/cache";
 import { adminSetStatus, isUuid, type AdminOutcome } from "@/lib/admin/visits";
 import { requireStaff } from "@/lib/auth/current";
+import { can } from "@/lib/auth/rights";
 import { barberBook, barberCancel, barberFreeStarts, barberMove, searchMyClients, type MyClient, type NewVisitInput, type StartsAnswer } from "@/lib/barber/book";
 import { clientCard, setClientNote, setVisitNote, type ClientCard } from "@/lib/barber/clients";
 import { query } from "@/lib/db";
 
 export async function setVisitStatus(visitId: string, status: string): Promise<boolean> {
   const { user, business, staff } = await requireStaff();
-  const ok = await adminSetStatus(business, String(visitId), String(status), user.id, { onlyStaffId: staff.id });
+  const ok = await adminSetStatus(business, String(visitId), String(status), user.id, { onlyStaffId: staff.id, who: user });
   if (ok) refresh();
   return ok;
 }
 
 /** Free start times on a day: for these services, or for moving this visit. */
 export async function freeStarts(date: string, what: { serviceIds?: string[]; visitId?: string }): Promise<StartsAnswer> {
-  const { business, staff } = await requireStaff();
+  const { user, business, staff } = await requireStaff();
+  if (!can(user, "journal.staff", { staffId: staff.id })) return { ok: false, code: "not_found" };
   if (what?.visitId !== undefined) {
     if (!isUuid(what.visitId)) return { ok: false, code: "not_found" };
     return barberFreeStarts(query, business, staff.id, String(date), { visitId: what.visitId });
@@ -36,14 +39,14 @@ export async function freeStarts(date: string, what: { serviceIds?: string[]; vi
 
 /** His own clients, by phone digits or name. */
 export async function findMyClients(text: string): Promise<MyClient[]> {
-  const { business, staff } = await requireStaff();
-  return searchMyClients(query, business.id, staff.id, String(text ?? ""));
+  const { user, business, staff } = await requireStaff();
+  return searchMyClients(query, business.id, staff.id, String(text ?? ""), user);
 }
 
 /** A walk-in or the client's next visit, in his own column. */
 export async function bookVisit(v: NewVisitInput): Promise<AdminOutcome> {
   const { user, business, staff } = await requireStaff();
-  const out = await barberBook(business, staff.id, user.id, v);
+  const out = await barberBook(business, staff.id, user.id, v, user);
   if (out.ok) refresh();
   return out;
 }
@@ -51,29 +54,29 @@ export async function bookVisit(v: NewVisitInput): Promise<AdminOutcome> {
 /** Move one of his visits to another time. */
 export async function moveVisit(visitId: string, start: number, force = false): Promise<AdminOutcome> {
   const { user, business, staff } = await requireStaff();
-  const out = await barberMove(business, staff.id, user.id, String(visitId), Number(start), force === true);
+  const out = await barberMove(business, staff.id, user.id, String(visitId), Number(start), force === true, user);
   if (out.ok) refresh();
   return out;
 }
 
 /** The emergency cancel, with a reason. */
-export async function cancelVisit(visitId: string, reason: string): Promise<"cancelled" | "already" | "not_found" | "reason"> {
+export async function cancelVisit(visitId: string, reason: string): Promise<"cancelled" | "already" | "not_found" | "reason" | "forbidden"> {
   const { user, business, staff } = await requireStaff();
-  const out = await barberCancel(business, staff.id, user.id, String(visitId), String(reason ?? ""));
+  const out = await barberCancel(business, staff.id, user.id, String(visitId), String(reason ?? ""), user);
   if (out === "cancelled") refresh();
   return out;
 }
 
 /** The card of a client of his (B6): null for anyone without a visit in his column. */
 export async function loadClientCard(clientId: string): Promise<ClientCard | null> {
-  const { business, staff } = await requireStaff();
-  return clientCard(query, business, staff.id, String(clientId ?? ""));
+  const { user, business, staff } = await requireStaff();
+  return clientCard(query, business, staff.id, String(clientId ?? ""), Date.now(), user);
 }
 
 /** The one shared note about a client of his; every barber and Renat see it. */
 export async function saveClientNote(clientId: string, note: string): Promise<boolean> {
   const { user, business, staff } = await requireStaff();
-  const ok = await setClientNote(business, staff.id, user.id, String(clientId ?? ""), String(note ?? ""));
+  const ok = await setClientNote(business, staff.id, user.id, String(clientId ?? ""), String(note ?? ""), user);
   if (ok) refresh();
   return ok;
 }
@@ -81,7 +84,7 @@ export async function saveClientNote(clientId: string, note: string): Promise<bo
 /** The note on one of his own visits. */
 export async function saveVisitNote(visitId: string, note: string): Promise<boolean> {
   const { user, business, staff } = await requireStaff();
-  const ok = await setVisitNote(business, staff.id, user.id, String(visitId ?? ""), String(note ?? ""));
+  const ok = await setVisitNote(business, staff.id, user.id, String(visitId ?? ""), String(note ?? ""), user);
   if (ok) refresh();
   return ok;
 }

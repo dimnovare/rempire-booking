@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Title, useA } from "../lang";
+import { useFrame } from "./frame";
 import { ACCOUNT, MORE, SECTIONS, SectionIcon, sectionOpen } from "./sections";
 
 /**
@@ -25,6 +26,8 @@ export function Nav() {
 
 export function NavLinks({ path }: { path: string }) {
   const A = useA();
+  // a section the login has no right to is not offered
+  const { off } = useFrame();
   const on = (href: string) => sectionOpen(href, path);
   const here = [...SECTIONS, MORE, ACCOUNT].find((it) => on(it.href));
   // behind «Ещё» on a phone: its own page, or a section without a tab
@@ -34,7 +37,7 @@ export function NavLinks({ path }: { path: string }) {
       {/* the browser tab says where you are, in the login's language */}
       <Title text={here ? A.nav[here.key] : ""} />
       <nav className="adm-nav" aria-label={A.sections}>
-        {SECTIONS.map((it) => (
+        {SECTIONS.filter((it) => !off.includes(it.key)).map((it) => (
           <Link key={it.href} href={it.href} className={it.bar ? undefined : "in-more"} aria-current={on(it.href) ? "page" : undefined} prefetch={false}>
             <SectionIcon name={it.icon} />
             <span>{A.nav[it.key]}</span>

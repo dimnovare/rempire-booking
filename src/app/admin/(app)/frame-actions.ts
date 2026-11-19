@@ -9,6 +9,10 @@
  * Products, their prices and stock always come from the shop through the
  * shop link (src/lib/shop.ts); a sale is the barber's own sale
  * (src/lib/admin/sale.ts → src/lib/sales.ts).
+ *
+ * Rights (src/lib/auth/rights.ts): the sale is «Проводить продажу товаров»
+ * with «Создание товарных транзакций» (its period decides whether a sale
+ * may be dated before today); «Список услуг» is the section «Услуги».
  */
 import { refresh } from "next/cache";
 import { setFavourite, type FavPage } from "@/lib/admin/favourites";
@@ -17,11 +21,13 @@ import { adminSell, findProducts, SALE_BACK_DAYS } from "@/lib/admin/sale";
 import { serviceList, type ServiceListRow } from "@/lib/admin/services";
 import { listStaff } from "@/lib/admin/staff";
 import { requireAdmin } from "@/lib/auth/current";
+import { can, canGroup } from "@/lib/auth/rights";
 import type { Business } from "@/lib/availability";
 import { query } from "@/lib/db";
 import { bpText, commissionFor } from "@/lib/money";
 import { productTitle, SALES, shopSales } from "@/lib/sales";
 import { ShopError, shopMode, type ShopProduct } from "@/lib/shop";
+import { localParts, todayIn } from "@/lib/tz";
 import { adminLang } from "../lang-server";
 
 /** The load of one month's days, for the mini month. Null for anything that is not a month. */
@@ -92,7 +98,7 @@ export type SaleForm = {
 
 export async function saleFormAction(): Promise<SaleForm> {
   const { user, business } = await requireAdmin();
-  const staff = (await listStaff(query, business.id)).filter((s) => s.active);
+  const staff = (await listStaff(query, business.id)).filter((s) => s.active && can(user, "journal.staff", { staffId: s.id }));
   return {
     barbers: staff.map((s) => ({ id: s.id, name: s.name })),
     me: staff.some((s) => s.id === user.staffId) ? user.staffId : null,
@@ -115,6 +121,11 @@ export type SaleDone =
 /** One sale, as the barber's own. The form made `ref`: the same tap sent twice is one sale. */
 export async function sellAction(input: { ref: string; staffId: string; productId: string; variant: string; qty: number; expectCents: number; clientId: string | null; at: number | null }): Promise<SaleDone> {
   const { user, business } = await requireAdmin();
+  // the day the sale is dated: «today only» refuses an earlier one
+  const at = input?.at == null ? Date.now() : Number(input.at);
+  const day = Number.isFinite(at) ? localParts(at, business.timezone).date : "";
+  if (!can(user, "visit.sell.create", { date: day, today: todayIn(business.timezone) })) return { ok: false, code: "invalid", field: "forbidden" };
+  if (!can(user, "journal.staff", { staffId: String(input?.staffId ?? "") })) return { ok: false, code: "invalid", field: "staff" };
   const r = await adminSell(business, user.id, {
     ref: String(input?.ref ?? ""),
     staffId: String(input?.staffId ?? ""),
@@ -138,6 +149,8 @@ export async function sellAction(input: { ref: string; staffId: string; productI
 /* ---------- «Список услуг» ---------- */
 
 export async function serviceListAction(): Promise<ServiceListRow[]> {
-  const { business } = await requireAdmin();
+  const { user, business } = await requireAdmin();
+  // the section «Услуги» itself
+  if (!canGroup(user, "services")) return [];
   return serviceList(query, business.id);
 }

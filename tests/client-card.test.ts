@@ -35,6 +35,7 @@ import {
 } from "@/lib/admin/client-card";
 import { clientDetail, deleteClient, listClients, saveClient, type ClientInput } from "@/lib/admin/clients";
 import { adminCancelVisit, adminCreateVisit, adminSetStatus, adminUpdateVisit } from "@/lib/admin/visits";
+import { legacyHolder } from "@/lib/auth/rights-store";
 import { birthdayText, parseBirthday } from "@/lib/birthday";
 import { book, type BookingInput } from "@/lib/booking";
 import { CLIENT_KINDS } from "@/lib/client-notify";
@@ -75,10 +76,10 @@ async function add(input: ClientInput): Promise<string> {
 }
 const card = async (id: string, now = LATER) => (await clientDetail(query, demo.business, id, now))!;
 
-/** A login, for what keeps who did it by id. */
-async function login(role: "owner" | "admin" | "staff", name: string): Promise<{ id: string; name: string; role: string }> {
+/** A login, for what keeps who did it by id, with the rights its role had before there were rights. */
+async function login(role: "owner" | "admin" | "staff", name: string) {
   const [u] = await query<{ id: string }>("insert into users (business_id, email, name, role) values ($1, $2, $3, $4) returning id", [demo.business.id, `${name.toLowerCase()}@example.test`, name, role]);
-  return { id: u.id, name, role };
+  return { ...legacyHolder(role, u.id), name };
 }
 
 let n = 0;

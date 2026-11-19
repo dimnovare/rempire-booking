@@ -2,13 +2,17 @@
  * A barber's own time and prices (Phase B, B4; docs/phase-b.md).
  *
  * Every change he makes from /b/time is one staff_requests row
- * (009_staff_requests.sql). Renat's two switches (businesses.settings,
- * src/lib/settings.ts) say what happens to it:
- *   barber_self_time  breaks, days off, sick days, special time, weekly hours
- *   barber_self_price his price or time for a service
- * «now» applies it at once and the row is `applied`; «ask» keeps it
- * `requested` until Renat answers in the admin's «Запросы». Until Renat
- * answers his question 2: time now, prices ask.
+ * (009_staff_requests.sql). The login's own rights say what happens to it
+ * (src/lib/auth/rights.ts; until 19.11.2026 two salon-wide switches did,
+ * and each login's rights started from them):
+ *   time   «Изменять график работы и время для записи сотрудника в
+ *          журнале»: breaks, days off, sick days, special time, weekly hours
+ *   price  «Изменять услуги сотрудников и их длительность»: his price or
+ *          time for a service
+ * With the right («now») it applies at once and the row is `applied`;
+ * without it («ask») a barber's own change stays `requested` until Renat
+ * answers in the admin's «Запросы». Someone who is not that barber and has
+ * no right to it («no») is refused.
  *
  * Days off that wait hold their time already (time_off.status =
  * 'requested', which online booking treats as taken), so no client books
@@ -18,8 +22,9 @@
  * A barber works only on his own column: every function takes the staff id
  * from requireStaff() and checks it under the row lock. Renat or the front
  * desk looking at the app as a barber (`viewing`) is the admin: their
- * changes apply at once and send no push.
+ * changes apply at once, if they have the right, and send no push.
  */
+import { can, type Holder } from "../auth/rights";
 import type { Business } from "../availability";
 import type { L10n } from "../catalog";
 import { cleanSpans } from "../admin/staff";
@@ -27,15 +32,35 @@ import { isUuid } from "../admin/visits";
 import { withTx, type Querier } from "../db";
 import { queuePush } from "../push";
 import type { AnswerPayload, RequestPayload } from "../push-kinds";
-import { SELF_KEYS, type SelfKey, type SelfMode } from "../settings";
 import { cleanExtra, type Extra } from "../slots";
 import { addDays, isLocalDate, localParts, startOfDay, timeToMinutes, todayIn, zonedToUtc } from "../tz";
 import { isRequestWhat, MAX_OFF_DAYS, MAX_SPANS, MAX_WEEKS, type OffKind, type RequestWhat, type WeekHours } from "./request-words";
 
-export type Who = { userId: string; staffId: string; staffName: string; viewing: boolean };
+/** What happens to a change: applied at once, kept for Renat's answer, or refused. */
+export type SelfMode = "now" | "ask" | "no";
+export type Who = {
+  userId: string;
+  staffId: string;
+  staffName: string;
+  viewing: boolean;
+  /** his time (breaks, days off, special time, weekly hours), and his prices and times for services */
+  time: SelfMode;
+  price: SelfMode;
+};
 export type RequestStatus = "requested" | "approved" | "declined" | "applied" | "withdrawn";
 
-export type ChangeCode = "invalid" | "past" | "too_long" | "not_found" | "not_yours" | "same";
+/**
+ * Who changes this column, with what the login's rights make of a change:
+ * «now» with the right (and the column in sight), else «ask» for the
+ * barber himself, else «no».
+ */
+export function whoOf(user: Holder & { id: string }, staff: { id: string; name: string }, viewing: boolean): Who {
+  const sees = can(user, "journal.staff", { staffId: staff.id });
+  const mode = (right: "journal.schedule" | "services.staff"): SelfMode => (sees && can(user, right) ? "now" : viewing ? "no" : "ask");
+  return { userId: user.id, staffId: staff.id, staffName: staff.name, viewing, time: mode("journal.schedule"), price: mode("services.staff") };
+}
+
+export type ChangeCode = "invalid" | "past" | "too_long" | "not_found" | "not_yours" | "same" | "forbidden";
 export type ChangeResult = { ok: true; id: string; status: "requested" | "applied"; visitsInside?: number } | { ok: false; code: ChangeCode };
 
 const DAY = 86_400_000;
@@ -48,11 +73,6 @@ const endMin = (s: string) => (s === "24:00" ? 1440 : timeToMinutes(s));
 /** The moment `date time` ends; «24:00» is the next midnight. */
 const at = (date: string, time: string, tz: string) => (time === "24:00" ? startOfDay(addDays(date, 1), tz) : zonedToUtc(date, time, tz));
 const ms = (d: Date | string) => new Date(d).getTime();
-
-function mode(business: Business, who: Who, key: SelfKey): SelfMode {
-  if (who.viewing) return "now";
-  return business.settings[key] === "ask" ? "ask" : "now";
-}
 
 async function lockStaff(tx: Querier, business: Business, staffId: string): Promise<boolean> {
   if (!isUuid(staffId)) return false;
@@ -135,7 +155,8 @@ export async function barberTimeOff(business: Business, who: Who, input: TimeOff
   const span = timeOffSpan(input, business.timezone, now);
   if ("code" in span) return { ok: false, code: span.code };
   const offKind = input.offKind as OffKind;
-  const m = mode(business, who, "barber_self_time");
+  const m = who.time;
+  if (m === "no") return { ok: false, code: "forbidden" };
   return withTx(async (tx) => {
     if (!(await lockStaff(tx, business, who.staffId))) return { ok: false as const, code: "not_found" as const };
     const [off] = await tx<{ id: string }>(
@@ -163,6 +184,7 @@ export async function barberTimeOff(business: Business, who: Who, input: TimeOff
  * login made: what Renat put in his column stays Renat's.
  */
 export async function barberRemoveTimeOff(business: Business, who: Who, timeOffId: string, now = Date.now()): Promise<{ ok: true } | { ok: false; code: ChangeCode }> {
+  if (who.time === "no") return { ok: false, code: "forbidden" };
   if (!isUuid(timeOffId)) return { ok: false, code: "not_found" };
   return withTx(async (tx) => {
     if (!(await lockStaff(tx, business, who.staffId))) return { ok: false as const, code: "not_found" as const };
@@ -241,7 +263,8 @@ export async function barberAddSpecial(business: Business, who: Who, input: Spec
   const spans = specialSpans(date, start, end, weeks, tz);
   if (spans[0].to <= now) return { ok: false, code: "past" };
   const what: RequestWhat = { kind: "special", action: "add", from: spans[0].from, to: spans[0].to, ...extraOf(extra), ...(weeks > 1 ? { weeks } : {}) };
-  const m = mode(business, who, "barber_self_time");
+  const m = who.time;
+  if (m === "no") return { ok: false, code: "forbidden" };
   return withTx(async (tx) => {
     if (!(await lockStaff(tx, business, who.staffId))) return { ok: false as const, code: "not_found" as const };
     const status = m === "ask" ? "requested" : "applied";
@@ -254,6 +277,7 @@ export async function barberAddSpecial(business: Business, who: Who, input: Spec
 
 /** Take special time away; visits already booked in it stay as they are. Only his own. */
 export async function barberRemoveSpecial(business: Business, who: Who, specialId: string, now = Date.now()): Promise<{ ok: true } | { ok: false; code: ChangeCode }> {
+  if (who.time === "no") return { ok: false, code: "forbidden" };
   if (!isUuid(specialId)) return { ok: false, code: "not_found" };
   return withTx(async (tx) => {
     if (!(await lockStaff(tx, business, who.staffId))) return { ok: false as const, code: "not_found" as const };
@@ -317,7 +341,8 @@ const sameWeek = (a: WeekHours, b: WeekHours) => [1, 2, 3, 4, 5, 6, 7].every((wd
 export async function barberSetHours(business: Business, who: Who, days: unknown, text?: string): Promise<ChangeResult> {
   const week = cleanWeek(days);
   if (!week) return { ok: false, code: "invalid" };
-  const m = mode(business, who, "barber_self_time");
+  const m = who.time;
+  if (m === "no") return { ok: false, code: "forbidden" };
   return withTx(async (tx) => {
     if (!(await lockStaff(tx, business, who.staffId))) return { ok: false as const, code: "not_found" as const };
     if (sameWeek(week, await weeklyHours(tx, who.staffId))) return { ok: false as const, code: "same" as const };
@@ -354,7 +379,8 @@ export async function barberSetPrice(business: Business, who: Who, input: PriceI
   if (!isUuid(serviceId)) return { ok: false, code: "not_found" };
   if (!Number.isInteger(priceCents) || priceCents < 0 || priceCents > 1_000_000) return { ok: false, code: "invalid" };
   if (!Number.isInteger(durationMin) || durationMin < 5 || durationMin > 720 || durationMin % 5 !== 0) return { ok: false, code: "invalid" };
-  const m = mode(business, who, "barber_self_price");
+  const m = who.price;
+  if (m === "no") return { ok: false, code: "forbidden" };
   return withTx(async (tx) => {
     if (!(await lockStaff(tx, business, who.staffId))) return { ok: false as const, code: "not_found" as const };
     const [o] = await tx<{ name: L10n; cents: number; min: number }>(
@@ -404,10 +430,14 @@ export async function barberWithdraw(business: Business, who: Who, requestId: st
   });
 }
 
-export type AnswerResult = { ok: true } | { ok: false; code: "not_found" | "done" | "gone" | "invalid" };
+export type AnswerResult = { ok: true } | { ok: false; code: "not_found" | "done" | "gone" | "invalid" | "forbidden" };
 
-/** Renat's yes or no. A yes applies what was asked; a no frees a waiting day off. The barber gets a push. */
-export async function answerRequest(business: Business, actor: string, requestId: string, answer: string, text?: string, now = Date.now()): Promise<AnswerResult> {
+/**
+ * Renat's yes or no. A yes applies what was asked; a no frees a waiting day off. The barber gets a push.
+ * With a login (`who`): answering is doing the change, so it needs the right
+ * the change itself needs: a barber's time, or his services and their times.
+ */
+export async function answerRequest(business: Business, actor: string, requestId: string, answer: string, text?: string, now = Date.now(), who?: Holder): Promise<AnswerResult> {
   if (!isUuid(requestId)) return { ok: false, code: "not_found" };
   if (answer !== "approved" && answer !== "declined") return { ok: false, code: "invalid" };
   return withTx(async (tx) => {
@@ -419,6 +449,7 @@ export async function answerRequest(business: Business, actor: string, requestId
     if (r.status !== "requested") return { ok: false as const, code: "done" as const };
     const what = r.payload;
     if (!isRequestWhat(what)) return { ok: false as const, code: "invalid" as const };
+    if (who && !(what.kind === "price" ? can(who, "services.staff") : can(who, "journal.schedule") && can(who, "journal.staff", { staffId: r.staff_id }))) return { ok: false as const, code: "forbidden" as const };
     await tx("select id from staff where id = $1 for update", [r.staff_id]);
     if (what.kind === "time_off") {
       const off = r.time_off_id
@@ -530,10 +561,10 @@ export const openRequestCount = async (q: Querier, businessId: string) =>
 export type MyOff = { id: string; from: number; to: number; kind: OffKind; status: "requested" | "approved"; note: string; mine: boolean };
 export type MySpecial = { id: string; from: number; to: number; extraCents: number; extraPct: number; mine: boolean };
 export type MyPrice = { serviceId: string; name: L10n; cents: number; min: number; waiting: { cents: number; min: number; requestId: string } | null };
-export type MyTime = { off: MyOff[]; special: MySpecial[]; hours: WeekHours; prices: MyPrice[]; requests: RequestRow[]; modes: Record<SelfKey, SelfMode> };
+export type MyTime = { off: MyOff[]; special: MySpecial[]; hours: WeekHours; prices: MyPrice[]; requests: RequestRow[]; modes: { time: SelfMode; price: SelfMode } };
 
-/** Everything /b/time shows: what is ahead of him and what he asked for lately. */
-export async function myTime(q: Querier, business: Business, staffId: string, now = Date.now()): Promise<MyTime> {
+/** Everything /b/time shows: what is ahead of him and what he asked for lately. `modes`: what the login's rights make of a change (whoOf). */
+export async function myTime(q: Querier, business: Business, staffId: string, now = Date.now(), modes: { time: SelfMode; price: SelfMode } = { time: "ask", price: "ask" }): Promise<MyTime> {
   const [off, special, hours, prices, requests] = await Promise.all([
     q<{ id: string; starts_at: Date; ends_at: Date; kind: OffKind; status: "requested" | "approved"; note: string; mine: boolean }>(
       `select t.id, t.starts_at, t.ends_at, t.kind, t.status, t.note, ${byHisLogin("t.created_by", "$1")} as mine
@@ -562,19 +593,6 @@ export async function myTime(q: Querier, business: Business, staffId: string, no
     hours,
     prices: prices.map((p) => ({ serviceId: p.id, name: p.name, cents: p.cents, min: p.min, waiting: waiting.get(p.id) ?? null })),
     requests,
-    modes: { barber_self_time: business.settings.barber_self_time, barber_self_price: business.settings.barber_self_price },
+    modes: { time: modes.time, price: modes.price },
   };
-}
-
-// ---------------------------------------------------------------- switches
-
-/** Renat's switch: «now» or «ask» for time or prices. Requests already waiting stay waiting. */
-export async function setBarberSelf(business: Business, actor: string, key: string, value: string): Promise<boolean> {
-  if (!(SELF_KEYS as readonly string[]).includes(key) || (value !== "now" && value !== "ask")) return false;
-  return withTx(async (tx) => {
-    const r = await tx<{ id: string }>("update businesses set settings = settings || jsonb_build_object($2::text, $3::text) where id = $1 returning id", [business.id, key, value]);
-    if (!r.length) return false;
-    await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'business', $2, 'settings', $3::jsonb)`, [actor, business.id, JSON.stringify({ [key]: value })]);
-    return true;
-  });
 }

@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { loadCalendar } from "@/lib/admin/calendar";
 import { listStaff } from "@/lib/admin/staff";
 import { requireAdmin } from "@/lib/auth/current";
+import { canGroup } from "@/lib/auth/rights";
 import { dbConfigured, query } from "@/lib/db";
 import { todayIn } from "@/lib/tz";
 import { getA } from "../../lang-server";
@@ -22,7 +23,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 /** Each barber with today at a glance: hours and how many visits. */
 async function Rail() {
   if (!dbConfigured()) return null;
-  const { business } = await requireAdmin();
+  const { user, business } = await requireAdmin();
+  // the section «Сотрудники» itself: without it there is no list (the page says so)
+  if (!canGroup(user, "staff")) return null;
   const tz = business.timezone;
   const today = todayIn(tz);
   const [A, staff, day] = await Promise.all([getA(), listStaff(query, business.id), loadCalendar(query, business, today, 1)]);

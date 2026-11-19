@@ -5,6 +5,7 @@
  */
 import { Suspense } from "react";
 import { requireStaff } from "@/lib/auth/current";
+import { can } from "@/lib/auth/rights";
 import { dbConfigured, query } from "@/lib/db";
 import { bpText } from "@/lib/money";
 import { listSales, SALES } from "@/lib/sales";
@@ -12,6 +13,7 @@ import { shopMode } from "@/lib/shop";
 import { addDays, startOfDay, todayIn } from "@/lib/tz";
 import { Wait } from "../../lang";
 import { getB } from "../../lang-server";
+import { NoRights } from "../may";
 import { Title } from "../title";
 import { SellView } from "./sell-view";
 
@@ -26,7 +28,9 @@ export default function SellPage() {
 async function Sell() {
   const B = await getB();
   if (!dbConfigured()) return <p className="adm-wait">{B.noDb}</p>;
-  const { business, staff } = await requireStaff();
+  const { user, business, staff } = await requireStaff();
+  // «Проводить продажу товаров»
+  if (!can(user, "visit.sell")) return <NoRights />;
   const tz = business.timezone;
   const now = Date.now();
   const today = todayIn(tz, now);

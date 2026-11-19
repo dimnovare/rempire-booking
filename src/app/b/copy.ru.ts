@@ -22,6 +22,8 @@ export const ru = {
   h: "ч",
   demo: "Демо",
 
+  /** What a page says to a login that has no right to it (src/lib/auth/rights.ts). */
+  rights: { none: "Нет доступа", noneLead: "Этот раздел закрыт для вашего входа. Права меняет владелец салона." },
   nav: { label: "Разделы", day: "День", week: "Неделя", time: "Моё время", sell: "Продать", more: "Ещё" },
 
   login: {

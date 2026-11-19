@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { RequestRow } from "@/lib/barber/requests";
 import { requestWords } from "@/lib/barber/request-words";
-import { REMINDER_CHANNELS, type ReminderChannel, type SelfKey, type SelfMode } from "@/lib/settings";
+import { REMINDER_CHANNELS, type ReminderChannel } from "@/lib/settings";
 import { useA } from "../../lang";
 import { SaveState, useAutoSave } from "../autosave";
-import { answer, setReminder, setSelf } from "./actions";
+import { answer, setReminder } from "./actions";
 
 type Toast = { text: string; bad?: boolean };
 
@@ -16,7 +17,12 @@ function useWhen(tz: string) {
   return (ms: number) => f.format(new Date(ms));
 }
 
-export function RequestsView({ open, recent, owner, modes, reminder, tz }: { open: RequestRow[]; recent: RequestRow[]; owner: boolean; modes: Record<SelfKey, SelfMode>; reminder: ReminderChannel; tz: string }) {
+/**
+ * `rightsNote`: the login manages rights, so it is told where «what barbers
+ * change themselves» lives now; `system`: it may set the salon's own
+ * settings (the reminder).
+ */
+export function RequestsView({ open, recent, rightsNote, system, reminder, tz }: { open: RequestRow[]; recent: RequestRow[]; rightsNote: boolean; system: boolean; reminder: ReminderChannel; tz: string }) {
   const A = useA();
   const R = A.req;
   const when = useWhen(tz);
@@ -29,8 +35,8 @@ export function RequestsView({ open, recent, owner, modes, reminder, tz }: { ope
 
   return (
     <div className="adm-cards">
-      {owner && <Switches modes={modes} />}
-      {owner && <Reminder channel={reminder} />}
+      {rightsNote && <SelfNote />}
+      {system && <Reminder channel={reminder} />}
 
       <section className="adm-card">
         <h2 className="adm-card-h">
@@ -91,7 +97,7 @@ function OpenRow({ r, tz, when, onToast }: { r: RequestRow; tz: string; when: st
     try {
       const res = await answer(r.id, verdict, note);
       if (res.ok) onToast({ text: verdict === "approved" ? R.approved : R.declined });
-      else onToast({ text: res.code === "done" || res.code === "gone" ? R.gone : A.error, bad: true });
+      else onToast({ text: res.code === "done" || res.code === "gone" ? R.gone : res.code === "forbidden" ? A.rights.refused : A.error, bad: true });
     } catch {
       onToast({ text: A.error, bad: true });
     } finally {
@@ -147,33 +153,32 @@ function Reminder({ channel }: { channel: ReminderChannel }) {
   );
 }
 
-/** Owner only: the two switches save by themselves, like the admin's other settings. */
-function Switches({ modes }: { modes: Record<SelfKey, SelfMode> }) {
+/**
+ * Where the two salon-wide switches were until 19.11.2026: what a barber
+ * changes himself is now a right of his own login («Доступ» → the login),
+ * so this card only says where to find it.
+ */
+function SelfNote() {
   const A = useA();
   const R = A.req;
-  const [now, setNow] = useState(modes);
-  const auto = useAutoSave(now, setNow, async (v) => (await setSelf("barber_self_time", v.barber_self_time)) && (await setSelf("barber_self_price", v.barber_self_price)), {
-    label: R.switches,
-  });
-  const row = (key: SelfKey, label: string) => (
-    <div className="adm-field">
-      <span>{label}</span>
-      <div className="adm-seg adm-seg-wide" role="group" aria-label={label}>
-        {(["now", "ask"] as const).map((v) => (
-          <button key={v} type="button" aria-pressed={now[key] === v} onClick={() => setNow({ ...now, [key]: v })}>
-            {R[v]}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
   return (
-    <section className="adm-card">
+    <section className="adm-card" data-self-note="">
       <h2 className="adm-card-h">{R.switches}</h2>
-      {row("barber_self_time", R.time)}
-      {row("barber_self_price", R.price)}
+      <p className="adm-meta">{R.movedLead}</p>
+      <ul className="adm-moved">
+        <li>
+          <b>{R.time}</b>
+          <span>{R.movedTime}</span>
+        </li>
+        <li>
+          <b>{R.price}</b>
+          <span>{R.movedPrice}</span>
+        </li>
+      </ul>
       <p className="adm-meta">{R.switchHint}</p>
-      <SaveState auto={auto} />
+      <Link className="adm-btn adm-btn-line adm-btn-sm adm-btn-auto" href="/admin/account" prefetch={false}>
+        {R.movedGo}
+      </Link>
     </section>
   );
 }

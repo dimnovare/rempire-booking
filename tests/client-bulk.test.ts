@@ -12,6 +12,7 @@ import { listMessages, MESSAGE_MAX } from "@/lib/admin/client-card";
 import { CLIENT_COLUMNS, cleanColumns, listClientColumns, setClientColumns } from "@/lib/admin/client-columns";
 import { clientDetail, LABELS_MAX, listClients, saveClient, type ClientInput } from "@/lib/admin/clients";
 import { adminCancelVisit, adminCreateVisit } from "@/lib/admin/visits";
+import { legacyHolder } from "@/lib/auth/rights-store";
 import { saveClientSubscription } from "@/lib/client-push";
 import { closeDb, query } from "@/lib/db";
 import { sentToConsole } from "@/lib/email";
@@ -29,8 +30,10 @@ const DEV = { NODE_ENV: "test", VITEST: "true", ALLOW_INDEXING: "yes" };
 // test values only: pushConfigured() needs both to be there, nothing is sent with them
 const KEYS = { VAPID_PUBLIC_KEY: "test-public-key", VAPID_PRIVATE_KEY: "test-private-key" };
 const PHONE = { endpoint: "https://fcm.googleapis.com/fcm/send/test-client-phone-0019", p256dh: "p256dh-test", auth: "auth-test", label: "Android" };
-const OWNER = { id: "test-owner", role: "owner" };
-const DESK = { id: "test-desk", role: "admin" };
+// logins as their roles were before the rights (src/lib/auth/rights-store.ts): what each may do is the same
+const OWNER = legacyHolder("owner", "test-owner");
+const DESK = legacyHolder("admin", "test-desk");
+const BARBER = legacyHolder("staff", "test-barber");
 const ALL: BulkTarget = { filter: {} };
 
 let demo: Demo;
@@ -213,7 +216,7 @@ describe("a mass message: queued", () => {
   it("refuses: a barber's login, no words, too many words, no channel, a channel that is none, nobody to reach", async () => {
     const c = await six();
     const send = (text: unknown, channels: unknown, by = OWNER, target: BulkTarget | null = ALL) => queueMassMessage(demo.business, target, { text, channels }, by, NOW, DEV);
-    expect(await send(TEXT, ["sms"], { id: "test-barber", role: "staff" })).toEqual({ ok: false, code: "forbidden" });
+    expect(await send(TEXT, ["sms"], BARBER)).toEqual({ ok: false, code: "forbidden" });
     expect(await send("   ", ["sms"])).toEqual({ ok: false, code: "text" });
     expect(await send("a".repeat(MESSAGE_MAX + 1), ["sms"])).toEqual({ ok: false, code: "text" });
     expect(await send(TEXT, [])).toEqual({ ok: false, code: "channels" });
@@ -322,7 +325,7 @@ describe("deleting many", () => {
 
     // not the front desk, not a barber
     expect(await bulkDelete(demo.business, ALL, DESK, NOW)).toEqual({ ok: false, code: "forbidden" });
-    expect(await bulkDelete(demo.business, ALL, { id: "test-barber", role: "staff" }, NOW)).toEqual({ ok: false, code: "forbidden" });
+    expect(await bulkDelete(demo.business, ALL, BARBER, NOW)).toEqual({ ok: false, code: "forbidden" });
     expect(await bulkDelete(demo.business, null, OWNER, NOW)).toEqual({ ok: false, code: "target" });
     expect(await query("select 1 from clients where merged_into is null")).toHaveLength(6);
 

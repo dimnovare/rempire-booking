@@ -3,12 +3,14 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { staffDetail } from "@/lib/admin/staff";
 import { requireAdmin } from "@/lib/auth/current";
+import { can, canGroup } from "@/lib/auth/rights";
 import { dbConfigured, query } from "@/lib/db";
 import { todayIn } from "@/lib/tz";
 import type { Copy } from "../../../copy";
 import { PrevIcon } from "../../../icons";
 import { Wait } from "../../../lang";
 import { getA } from "../../../lang-server";
+import { NoRights } from "../../no-rights";
 import { BarberPage } from "./barber";
 import { ProfileForm } from "./forms";
 
@@ -44,8 +46,15 @@ async function Detail({ params }: { params: PageProps<"/admin/staff/[id]">["para
         <p className="adm-wait">{A.noDb}</p>
       </main>
     );
-  const { business } = await requireAdmin();
+  const { user, business } = await requireAdmin();
   const { id } = await params;
+  // the section «Сотрудники»; a new barber is «Создание сотрудников»
+  if (!canGroup(user, "staff") || (id === "new" && !can(user, "staff.create")))
+    return (
+      <main className="adm-page">
+        <NoRights />
+      </main>
+    );
   if (id === "new") {
     return (
       <main className="adm-page adm-wide">

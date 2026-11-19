@@ -9,6 +9,7 @@
 import { refresh } from "next/cache";
 import { after } from "next/server";
 import { requireAdmin, requireOwner } from "@/lib/auth/current";
+import { can } from "@/lib/auth/rights";
 import { query } from "@/lib/db";
 import { runOutbox } from "@/lib/outbox";
 import {
@@ -28,6 +29,7 @@ import {
 import { saveIssuer, saveReceiver, setLastNumber, setRent, type IssuerInput, type ReceiverInput } from "@/lib/billing/parties";
 import { saveMoneySettings } from "@/lib/billing/settings";
 import { retrySale, reverseSale } from "@/lib/sales";
+import { localParts, todayIn } from "@/lib/tz";
 
 const str = (v: unknown, max = 400) => String(v ?? "").slice(0, max);
 const int = (v: unknown) => (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : NaN);
@@ -219,6 +221,11 @@ export async function resendAction(invoiceId: string): Promise<boolean> {
 
 export async function reverseSaleAction(saleId: string, note: string): Promise<{ ok: boolean; code?: string }> {
   const { user, business } = await requireAdmin();
+  // a product sale's own right (the invoices themselves stay with the login's side of the app);
+  // with its period «today», only a sale made today is taken back
+  const [sale] = await query<{ created_at: Date }>("select created_at from product_sales where id::text = $1 and business_id = $2", [str(saleId, 64), business.id]);
+  const made = sale ? { date: localParts(new Date(sale.created_at).getTime(), business.timezone).date, today: todayIn(business.timezone) } : {};
+  if (!can(user, "visit.sell.edit", made)) return { ok: false, code: "forbidden" };
   const r = await reverseSale(business, str(saleId, 64), user.id, str(note, 200));
   if (r.ok) refresh();
   return r.ok ? { ok: true } : { ok: false, code: r.code };
@@ -226,6 +233,7 @@ export async function reverseSaleAction(saleId: string, note: string): Promise<{
 
 export async function retrySaleAction(saleId: string): Promise<boolean> {
   const { user, business } = await requireAdmin();
+  if (!can(user, "visit.sell.edit")) return false;
   const ok = await retrySale(business, str(saleId, 64), user.id);
   if (ok) refresh();
   return ok;

@@ -7,8 +7,9 @@
  *   201 { ok: true, id }
  *   4xx { ok: false, code }   type · size · empty · full · not_found
  *
- * Only a login of this business, and only from our own pages: the request
- * must name our own host as its origin. The file's kind, size and number
+ * Only a login of this business with «Загружать файлы» that sees this
+ * client, and only from our own pages: the request must name our own host
+ * as its origin. The file's kind, size and number
  * are checked by src/lib/admin/client-card.ts.
  *
  * Where the app runs behind a platform that caps a request's size (Vercel:
@@ -16,8 +17,10 @@
  * large» for the platform's 413 as for ours.
  */
 import { addFile, FILE_MAX_BYTES } from "@/lib/admin/client-card";
+import { clientSeen } from "@/lib/admin/client-scope";
 import { requireAdmin } from "@/lib/auth/current";
-import { dbConfigured } from "@/lib/db";
+import { can } from "@/lib/auth/rights";
+import { dbConfigured, query } from "@/lib/db";
 
 const NO_STORE = { "Cache-Control": "private, no-store", "X-Robots-Tag": "noindex, nofollow" };
 /** What a form adds around the file itself: boundaries and the part's header. */
@@ -43,6 +46,8 @@ export async function POST(request: Request, ctx: RouteContext<"/admin/clients/[
   if (!sameSite(request)) return Response.json({ ok: false, code: "forbidden" }, { status: 403, headers: NO_STORE });
   const { user, business } = await requireAdmin();
   const { id } = await ctx.params;
+  if (!can(user, "clients.files.upload")) return Response.json({ ok: false, code: "forbidden" }, { status: 403, headers: NO_STORE });
+  if (!(await clientSeen(query, business.id, user, id))) return no("not_found");
   // by what the request says of itself first, so 5 MB too many are not read at all
   if (Number(request.headers.get("content-length") ?? 0) > FILE_MAX_BYTES + FORM_ROOM) return no("size");
   let file: FormDataEntryValue | null;

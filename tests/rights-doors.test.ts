@@ -1,0 +1,710 @@
+/**
+ * The server's doors: for every right that works here, one test that the
+ * server refuses without it and allows with it.
+ *
+ * These go through the real Server Actions and route handlers, as a browser
+ * would, with a real session in a real (in-memory) database. Only Next's
+ * own request plumbing is stood in for: the cookie jar, «refresh», and
+ * «redirect». What a page shows a login (its phones, its columns, its day's
+ * sums) is cut by plain functions the pages call, tested here directly.
+ *
+ * `both` runs the same call twice on a fresh database: once with the
+ * login's rights as its role had them and the one right on, once with that
+ * one right off. Fake people only.
+ */
+import { afterAll, describe, expect, it, vi } from "vitest";
+
+const jar = vi.hoisted(() => ({ cookies: {} as Record<string, string> }));
+vi.mock("next/headers", () => ({
+  cookies: async () => ({
+    get: (name: string) => (jar.cookies[name] ? { name, value: jar.cookies[name] } : undefined),
+    set: (name: string, value: string) => void (jar.cookies[name] = value),
+    delete: (name: string) => void delete jar.cookies[name],
+  }),
+  headers: async () => new Headers({ "user-agent": "vitest" }),
+}));
+vi.mock("next/cache", () => ({ refresh: () => {} }));
+vi.mock("next/navigation", () => ({
+  redirect: (to: string) => {
+    throw new Error(`REDIRECT ${to}`);
+  },
+  notFound: () => {
+    throw new Error("NOT_FOUND");
+  },
+}));
+vi.mock("next/server", () => ({ connection: async () => {}, after: () => {} }));
+
+import * as account from "@/app/admin/(app)/account/actions";
+import * as cal from "@/app/admin/(app)/actions";
+import * as clients from "@/app/admin/(app)/clients/actions";
+import { cardFieldsOf } from "@/app/admin/(app)/clients/card-fields";
+import { POST as exportRoute } from "@/app/admin/(app)/clients/export/route";
+import { GET as fileRoute } from "@/app/admin/(app)/clients/[id]/files/[fileId]/route";
+import { POST as uploadRoute } from "@/app/admin/(app)/clients/[id]/files/route";
+import * as frame from "@/app/admin/(app)/frame-actions";
+import * as invoices from "@/app/admin/(app)/invoices/actions";
+import * as requests from "@/app/admin/(app)/requests/actions";
+import * as services from "@/app/admin/(app)/services/actions";
+import * as staffActs from "@/app/admin/(app)/staff/actions";
+import * as bSell from "@/app/b/(app)/sell/actions";
+import * as bTime from "@/app/b/(app)/time/actions";
+import * as bVisit from "@/app/b/(app)/visit-actions";
+import { calendarFor, calendarMay, loadCalendar } from "@/lib/admin/calendar";
+import { addComment, addFile, listComments, listFiles } from "@/lib/admin/client-card";
+import { clientDetail, saveClient } from "@/lib/admin/clients";
+import { adminCreateVisit, adminSetStatus } from "@/lib/admin/visits";
+import { SESSION_COOKIE } from "@/lib/auth/cookie";
+import type { RightKey } from "@/lib/auth/rights";
+import { rightDef, RIGHTS, groupKey, type RightValue } from "@/lib/auth/rights-catalogue";
+import { backfillRights, loadHolder } from "@/lib/auth/rights-store";
+import { createSession } from "@/lib/auth/sessions";
+import { barberDaysFor, barberMay, loadBarberDays } from "@/lib/barber/day";
+import { closeDb, query } from "@/lib/db";
+import { FAKE_PRODUCTS } from "@/lib/shop";
+import { addDays, todayIn, zonedToUtc } from "@/lib/tz";
+import { freshDemo, type Demo } from "./helpers";
+
+afterAll(closeDb);
+
+const TZ = "Europe/Tallinn";
+const PHONE = "+37255500111";
+type Who = "owner" | "desk" | "barber";
+
+type Ctx = {
+  demo: Demo;
+  /** login ids */
+  owner: string;
+  desk: string;
+  barber: string;
+  /** the login that asks */
+  me: string;
+  /** Valentin's column (the barber's own) and Jevgeni's */
+  val: string;
+  jev: string;
+  /** Anna: a client with a phone, a note and one visit tomorrow in Valentin's column */
+  anna: string;
+  visit: string;
+  today: string;
+  tomorrow: string;
+};
+
+let seq = 0;
+const key = () => `rights-doors-${++seq}-${Math.random().toString(36).slice(2)}-0000`;
+const at = (date: string, time: string) => zonedToUtc(date, time, TZ);
+
+async function fresh(who: Who): Promise<Ctx> {
+  const demo = await freshDemo();
+  await query("delete from users where business_id = $1", [demo.business.id]).catch(() => []);
+  const add = async (email: string, name: string, role: string, staff: string | null) =>
+    (await query<{ id: string }>("insert into users (business_id, email, name, role, staff_id) values ($1, $2, $3, $4, $5) returning id", [demo.business.id, email, name, role, staff]))[0].id;
+  const owner = await add("owner@example.test", "Owner", "owner", null);
+  const desk = await add("desk@example.test", "Desk", "admin", null);
+  const barber = await add("valentin@example.test", "Valentin", "staff", demo.staff.valentin);
+  await backfillRights(query, demo.business.id);
+  const today = todayIn(TZ);
+  const tomorrow = addDays(today, 1);
+  const saved = await saveClient(demo.business, null, { name: "Anna Näidis", phone: PHONE, email: "anna@example.test", note: "стрижёт коротко" }, owner);
+  if (!saved.ok) throw new Error(`client: ${saved.field}`);
+  const v = await adminCreateVisit(demo.business, { staffId: demo.staff.valentin, start: at(tomorrow, "10:00"), serviceIds: [demo.services.clip], clientId: saved.id, idempotencyKey: key(), force: true }, owner);
+  if (!v.ok) throw new Error(`visit: ${v.code}`);
+  const me = { owner, desk, barber }[who];
+  jar.cookies = { [SESSION_COOKIE]: await createSession(query, me) };
+  return { demo, owner, desk, barber, me, val: demo.staff.valentin, jev: demo.staff.jevgeni, anna: saved.id, visit: v.id, today, tomorrow };
+}
+
+/** Switch one right of a login: on with everything it is nested under and its group, or off (it alone). */
+async function grant(id: string, right: string, on: boolean) {
+  if (!on) return void (await query("update users set rights = array_remove(rights, $2) where id = $1", [id, right]));
+  const keys: string[] = [];
+  for (let k: string | null = right; k; k = rightDef(k)?.parent ?? null) keys.push(k);
+  const group = rightDef(right)?.group;
+  if (group && group !== "single") keys.push(groupKey(group));
+  await query("update users set rights = (select array_agg(distinct x) from unnest(rights || $2::text[]) x) where id = $1", [id, keys]);
+}
+const setValue = (id: string, right: string, v: RightValue) => query("update users set rights_values = rights_values || $2::jsonb where id = $1", [id, JSON.stringify({ [right]: v })]);
+const holder = async (c: Ctx) => (await loadHolder(query, c.demo.business.id, c.me))!;
+
+type Opts = { also?: RightKey[]; without?: RightKey[] };
+
+/** One right, both ways, through a door. `ok` says whether the server did what was asked. */
+function both<T>(right: RightKey, who: Who, run: (c: Ctx) => Promise<T>, ok: (r: T, c: Ctx) => boolean | Promise<boolean>, opts: Opts = {}) {
+  it(`${right}: refused without it, allowed with it (${who})`, async () => {
+    for (const has of [true, false]) {
+      const c = await fresh(who);
+      for (const k of opts.also ?? []) await grant(c.me, k, true);
+      for (const k of opts.without ?? []) await grant(c.me, k, false);
+      await grant(c.me, right, has);
+      expect(await ok(await run(c), c), `${right}, ${has ? "with" : "without"} it`).toBe(has);
+    }
+  });
+  covered.add(right);
+}
+const covered = new Set<string>();
+const cover = (right: RightKey) => void covered.add(right);
+
+const newVisit = (c: Ctx, over: Partial<cal.NewVisit> = {}): cal.NewVisit => ({
+  staffId: c.val,
+  start: at(c.tomorrow, "14:00"),
+  serviceIds: [c.demo.services.clip],
+  clientId: null,
+  name: "Борис Образец",
+  phone: "",
+  comment: "",
+  staffNote: "",
+  smsReminder: false,
+  idempotencyKey: key(),
+  force: true,
+  ...over,
+});
+/** Make the fixture's visit one the client has come to. */
+const came = async (c: Ctx) => {
+  if (!(await adminSetStatus(c.demo.business, c.visit, "arrived", c.owner))) throw new Error("status");
+};
+const statusOf = async (id: string) => (await query<{ status: string }>("select status from appointments where id = $1", [id]))[0].status;
+/** Another service the barber does, for «change the services». */
+const otherService = async (c: Ctx) =>
+  (await query<{ service_id: string }>("select ss.service_id from staff_services ss join services s on s.id = ss.service_id where ss.staff_id = $1 and ss.active and s.active and ss.service_id <> $2 limit 1", [c.val, c.demo.services.clip]))[0].service_id;
+
+/* ------------------------------------------------------------------ 1. Журнал записей */
+
+describe("Журнал записей", () => {
+  it("journal.staff: a column the login does not see is not shown and takes no visit from it; one it sees does", async () => {
+    for (const sees of [true, false]) {
+      const c = await fresh("desk");
+      await setValue(c.me, "journal.staff", sees ? "all" : [c.jev]);
+      const data = calendarFor(await holder(c), await loadCalendar(query, c.demo.business, c.tomorrow, 1), c.today);
+      expect(data.staff.some((s) => s.id === c.val), "the column").toBe(sees);
+      expect(data.visits.some((v) => v.id === c.visit), "its visit").toBe(sees);
+      const r = await cal.createVisit(newVisit(c));
+      expect(r.ok, "a new visit in it").toBe(sees);
+      if (!sees) expect(r).toEqual({ ok: false, code: "forbidden" });
+      // moving a visit into it, or out of a hidden one
+      expect(await cal.setVisitStatus(c.visit, "arrived"), "a visit's status").toBe(sees);
+    }
+    cover("journal.staff");
+  });
+
+  it("journal.history: days before the limit are not shown; without a limit they are", async () => {
+    for (const free of [true, false]) {
+      const c = await fresh("desk");
+      const yesterday = addDays(c.today, -1);
+      const old = await adminCreateVisit(c.demo.business, { staffId: c.val, start: at(yesterday, "10:00"), serviceIds: [c.demo.services.clip], clientId: c.anna, idempotencyKey: key(), force: true }, c.owner);
+      if (!old.ok) throw new Error(old.code);
+      await setValue(c.me, "journal.history", free ? null : 0);
+      const me = await holder(c);
+      const data = calendarFor(me, await loadCalendar(query, c.demo.business, yesterday, 3), c.today);
+      expect(data.visits.some((v) => v.id === old.id), "yesterday's visit").toBe(free);
+      expect(data.visits.some((v) => v.id === c.visit), "tomorrow's visit").toBe(true);
+      expect(calendarMay(me, c.today).from).toBe(free ? null : c.today);
+      // the barber app's days are cut the same way
+      const days = barberDaysFor(me, c.val, await loadBarberDays(query, c.demo.business, c.val, yesterday, 3), c.today);
+      expect(days[0].visits.length > 0).toBe(free);
+      expect(days[2].visits.length).toBe(1);
+    }
+    cover("journal.history");
+  });
+
+  both(
+    "journal.schedule",
+    "desk",
+    (c) => cal.addBlock({ staffId: c.val, from: at(c.tomorrow, "15:00"), to: at(c.tomorrow, "16:00"), kind: "block", note: "" }),
+    (r) => r.ok,
+  );
+
+  it("journal.schedule, for a barber: with it his own time applies at once; without it, it waits for an answer", async () => {
+    for (const has of [true, false]) {
+      const c = await fresh("barber");
+      await grant(c.me, "journal.schedule", has);
+      const r = await bTime.addOff({ offKind: "block", date: c.tomorrow, start: "15:00", end: "16:00" });
+      expect(r).toMatchObject({ ok: true, status: has ? "applied" : "requested" });
+      // answering the request is making the change: the front desk needs the same right
+      if (!has) {
+        jar.cookies = { [SESSION_COOKIE]: await createSession(query, c.desk) };
+        await grant(c.desk, "journal.schedule", false);
+        expect(await requests.answer(r.ok ? r.id : "", "approved", "")).toEqual({ ok: false, code: "forbidden" });
+        await grant(c.desk, "journal.schedule", true);
+        expect(await requests.answer(r.ok ? r.id : "", "approved", "")).toEqual({ ok: true });
+      }
+    }
+  });
+
+  it("journal.phones: the phone in the calendar and in the barber's day is whole with it, masked without", async () => {
+    for (const has of [true, false]) {
+      const c = await fresh("barber");
+      await grant(c.me, "journal.phones", has);
+      const me = await holder(c);
+      const [day] = barberDaysFor(me, c.val, await loadBarberDays(query, c.demo.business, c.val, c.tomorrow, 1), c.today);
+      expect(day.visits[0].clientPhone).toBe(has ? PHONE : "+3725•••••11");
+      expect(barberMay(me, c.val, c.today).call).toBe(has);
+      const data = calendarFor(me, await loadCalendar(query, c.demo.business, c.tomorrow, 1), c.today);
+      expect(data.visits[0].clientPhone).toBe(has ? PHONE : "+3725•••••11");
+      expect(calendarMay(me, c.today).call).toBe(has);
+    }
+    cover("journal.phones");
+  });
+
+  both("journal.move", "desk", (c) => cal.updateVisit(c.visit, { staffId: c.val, start: at(c.tomorrow, "12:00"), force: true }), (r) => r.ok, { without: ["visit.edit.staff_time"] });
+
+  it("journal.stats: the day's sum is there with it, not without", async () => {
+    for (const has of [true, false]) {
+      const c = await fresh("barber");
+      await grant(c.me, "journal.stats", has);
+      const me = await holder(c);
+      const [day] = barberDaysFor(me, c.val, await loadBarberDays(query, c.demo.business, c.val, c.tomorrow, 1), c.today);
+      expect(day.count).toBe(1);
+      expect(day.totalCents > 0).toBe(has);
+      expect(barberMay(me, c.val, c.today).stats).toBe(has);
+      expect(calendarMay(me, c.today).stats).toBe(has);
+    }
+    cover("journal.stats");
+  });
+});
+
+/* ------------------------------------------------------------------ 2. Окно записи */
+
+describe("Окно записи", () => {
+  it("visit.client_data: the phone, the client's note and his card in a visit", async () => {
+    for (const has of [true, false]) {
+      const c = await fresh("barber");
+      await grant(c.me, "visit.client_data", has);
+      const me = await holder(c);
+      const [day] = barberDaysFor(me, c.val, await loadBarberDays(query, c.demo.business, c.val, c.tomorrow, 1), c.today);
+      expect(day.visits[0].clientPhone).toBe(has ? PHONE : null);
+      expect(day.visits[0].clientNote).toBe(has ? "стрижёт коротко" : "");
+      const card = await bVisit.loadClientCard(c.anna);
+      expect(card !== null).toBe(has);
+    }
+    cover("visit.client_data");
+  });
+
+  both("visit.client_create", "desk", (c) => cal.createVisit(newVisit(c)), (r) => r.ok);
+
+  it("visit.client_create: without it a visit for a client picked from the list is still booked", async () => {
+    const c = await fresh("desk");
+    await grant(c.me, "visit.client_create", false);
+    expect((await cal.createVisit(newVisit(c, { clientId: c.anna, name: "", phone: "" }))).ok).toBe(true);
+  });
+
+  both("visit.client_list", "desk", () => cal.findClients("Anna"), (r) => r.length === 1);
+  both("visit.client_list.phones", "desk", () => cal.findClients("Anna"), (r) => r[0]?.phone === PHONE);
+
+  it("visit.client_list.phones: without it a phone's digits find nobody", async () => {
+    const c = await fresh("desk");
+    expect(await cal.findClients("5550011")).toHaveLength(1);
+    await grant(c.me, "visit.client_list.phones", false);
+    expect(await cal.findClients("5550011")).toEqual([]);
+    expect((await cal.findClients("Anna"))[0].phone).toBe("+3725•••••11");
+  });
+
+  both("visit.create", "desk", (c) => cal.createVisit(newVisit(c)), (r) => r.ok);
+  both("visit.create", "barber", (c) => bVisit.bookVisit({ start: at(c.tomorrow, "14:00"), serviceIds: [c.demo.services.clip], name: "Борис Образец", key: key(), force: true }), (r) => r.ok);
+
+  both("visit.edit", "desk", (c) => cal.setVisitStatus(c.visit, "arrived"), (r) => r === true);
+  both(
+    "visit.edit.arrived",
+    "desk",
+    async (c) => {
+      await came(c);
+      return cal.setVisitStatus(c.visit, "done");
+    },
+    (r) => r === true,
+  );
+  both("visit.edit.staff_time", "desk", (c) => cal.updateVisit(c.visit, { staffId: c.val, start: at(c.tomorrow, "12:00"), force: true }), (r) => r.ok, { without: ["journal.move"] });
+  both("visit.edit.comment", "desk", (c) => cal.updateVisit(c.visit, { staffNote: "принести воск" }), (r) => r.ok);
+  both("visit.edit.comment", "barber", (c) => bVisit.saveVisitNote(c.visit, "принести воск"), (r) => r === true);
+  both("visit.edit.services", "desk", async (c) => cal.updateVisit(c.visit, { serviceIds: [await otherService(c)], force: true }), (r) => r.ok);
+
+  it("visit.edit with «today only»: a visit of an earlier day is not changed, today's is", async () => {
+    const c = await fresh("desk");
+    const yesterday = addDays(c.today, -1);
+    const old = await adminCreateVisit(c.demo.business, { staffId: c.val, start: at(yesterday, "10:00"), serviceIds: [c.demo.services.clip], clientId: c.anna, idempotencyKey: key(), force: true }, c.owner);
+    if (!old.ok) throw new Error(old.code);
+    await setValue(c.me, "visit.edit", "today");
+    expect(await cal.setVisitStatus(old.id, "done")).toBe(false);
+    expect((await cal.updateVisit(old.id, { staffNote: "поздно" })).ok).toBe(false);
+    expect(await cal.setVisitStatus(c.visit, "arrived")).toBe(true);
+    await setValue(c.me, "visit.edit", "all");
+    expect(await cal.setVisitStatus(old.id, "done")).toBe(true);
+  });
+
+  both("visit.delete", "desk", (c) => cal.cancelVisit(c.visit), (r) => r === "cancelled");
+  both("visit.delete", "barber", (c) => bVisit.cancelVisit(c.visit, "заболел"), (r) => r === "cancelled");
+  both(
+    "visit.delete.arrived",
+    "desk",
+    async (c) => {
+      await came(c);
+      return cal.cancelVisit(c.visit);
+    },
+    (r) => r === "cancelled",
+  );
+
+  it("a refused cancel leaves the visit as it was", async () => {
+    const c = await fresh("desk");
+    await grant(c.me, "visit.delete", false);
+    expect(await cal.cancelVisit(c.visit)).toBe("forbidden");
+    expect(await statusOf(c.visit)).toBe("booked");
+  });
+
+  const paste = FAKE_PRODUCTS[0];
+  const sale = (c: Ctx) => frame.sellAction({ ref: key(), staffId: c.val, productId: paste.productId, variant: paste.variant, qty: 1, expectCents: paste.priceCents, clientId: null, at: null });
+  const barberSale = (ref: string) => bSell.sellAction({ ref, productId: paste.productId, variant: paste.variant, mode: "client", qty: 1, expectCents: paste.priceCents });
+
+  both("visit.sell", "barber", () => bSell.searchAction("matte paste"), (r) => r.ok && r.items.length === 1);
+  both("visit.sell.create", "desk", sale, (r) => r.ok);
+  both("visit.sell.create", "barber", () => barberSale(key()), (r) => r.ok);
+  both(
+    "visit.sell.edit",
+    "barber",
+    async () => {
+      const ref = key();
+      const sold = await barberSale(ref);
+      if (!sold.ok) throw new Error(`sale: ${sold.code}`);
+      return bSell.undoAction(ref);
+    },
+    (r) => r.ok,
+  );
+  both(
+    "visit.sell.edit",
+    "desk",
+    async (c) => {
+      const sold = await sale(c);
+      if (!sold.ok) throw new Error(`sale: ${sold.code}`);
+      const [row] = await query<{ id: string }>("select id from product_sales where ref = $1", [sold.ref]);
+      return invoices.reverseSaleAction(row.id, "ошибка");
+    },
+    (r) => r.ok,
+  );
+
+  it("visit.sell.edit with «today only»: a sale made on an earlier day is not taken back, today's is", async () => {
+    const c = await fresh("desk");
+    const idOf = async (ref: string) => (await query<{ id: string }>("select id from product_sales where ref = $1", [ref]))[0].id;
+    const old = await sale(c);
+    const now = await sale(c);
+    if (!old.ok || !now.ok) throw new Error("sale");
+    await query("update product_sales set created_at = created_at - interval '2 days' where ref = $1", [old.ref]);
+    await setValue(c.me, "visit.sell.edit", "today");
+    expect(await invoices.reverseSaleAction(await idOf(old.ref), "ошибка")).toEqual({ ok: false, code: "forbidden" });
+    expect((await invoices.reverseSaleAction(await idOf(now.ref), "ошибка")).ok).toBe(true);
+    await setValue(c.me, "visit.sell.edit", "all");
+    expect((await invoices.reverseSaleAction(await idOf(old.ref), "ошибка")).ok).toBe(true);
+  });
+
+  it("visit.sell.create with «today only»: a sale dated yesterday is refused, one of today is taken", async () => {
+    const c = await fresh("desk");
+    await setValue(c.me, "visit.sell.create", "today");
+    const dated = (when: number | null) => frame.sellAction({ ref: key(), staffId: c.val, productId: paste.productId, variant: paste.variant, qty: 1, expectCents: paste.priceCents, clientId: null, at: when });
+    expect(await dated(at(addDays(c.today, -1), "12:00"))).toEqual({ ok: false, code: "invalid", field: "forbidden" });
+    expect((await dated(null)).ok).toBe(true);
+    await setValue(c.me, "visit.sell.create", "all");
+    expect((await dated(at(addDays(c.today, -1), "12:00"))).ok).toBe(true);
+  });
+});
+
+/* ------------------------------------------------------------------ 5. Сотрудники, 6. Услуги */
+
+describe("Сотрудники", () => {
+  const profile = (over: Partial<Parameters<typeof staffActs.saveProfile>[1]> = {}) => ({ name: "Valentin", role: { ru: "Барбер", et: "Barber", en: "Barber" }, photoUrl: "", bookable: true, active: true, ...over });
+  both("staff.create", "desk", () => staffActs.saveProfile(null, profile({ name: "Новый барбер" })), (r) => r.ok);
+  both("staff.edit", "desk", (c) => staffActs.saveProfile(c.val, profile({ name: "Valentin V." })), (r) => r.ok);
+  both("staff.dismiss", "desk", (c) => staffActs.saveProfile(c.val, profile({ active: false })), (r) => r.ok);
+  both("staff.schedule", "desk", (c) => staffActs.saveHours(c.val, { 1: [["10:00", "18:00"]], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [] }), (r) => r.ok);
+
+  it("staff.schedule: every part of a barber's schedule is behind it", async () => {
+    const c = await fresh("desk");
+    await grant(c.me, "staff.schedule", false);
+    expect(await staffActs.saveDay(c.val, c.tomorrow, [], "")).toEqual({ ok: false, field: "forbidden" });
+    expect(await staffActs.addOff({ staffId: c.val, from: at(c.tomorrow, "15:00"), to: at(c.tomorrow, "16:00"), kind: "block", note: "" })).toEqual({ ok: false, field: "forbidden" });
+    expect(await staffActs.addSpecial({ staffId: c.val, from: at(c.tomorrow, "19:00"), to: at(c.tomorrow, "21:00"), extraCents: 1000, note: "" })).toEqual({ ok: false, field: "forbidden" });
+    // the profile is another right, and stays
+    expect((await staffActs.saveProfile(c.val, profile())).ok).toBe(true);
+  });
+});
+
+describe("Услуги", () => {
+  const formOf = async (c: Ctx) => {
+    const [s] = await query<{ name: { ru?: string; et?: string; en?: string }; duration_min: number; price_cents: number; price_max_cents: number | null; buffer_after_min: number; online: boolean; active: boolean }>(
+      "select name, duration_min, price_cents, price_max_cents, buffer_after_min, online, active from services where id = $1",
+      [c.demo.services.clip],
+    );
+    return { name: { ru: s.name.ru ?? "", et: s.name.et ?? "", en: s.name.en ?? "" }, durationMin: s.duration_min, priceCents: s.price_cents, priceMaxCents: s.price_max_cents, bufferMin: s.buffer_after_min, online: s.online, active: s.active, allBarbers: false };
+  };
+  const save = async (c: Ctx, change: (f: Awaited<ReturnType<typeof formOf>>) => Partial<Awaited<ReturnType<typeof formOf>>>) => {
+    const f = await formOf(c);
+    return services.saveServiceAction(c.demo.services.clip, { ...f, ...change(f) });
+  };
+  const fresh1 = { name: { ru: "Новая услуга", et: "", en: "" }, durationMin: 30, priceCents: 1500, priceMaxCents: null, bufferMin: 0, online: true, active: true, allBarbers: false };
+
+  both("services.create", "desk", () => services.saveServiceAction(null, fresh1), (r) => r.ok);
+  both("services.edit", "desk", (c) => save(c, (f) => ({ durationMin: f.durationMin + 5 })), (r) => r.ok);
+  both("services.edit.name", "desk", (c) => save(c, (f) => ({ name: { ...f.name, ru: `${f.name.ru} плюс` } })), (r) => r.ok);
+  both("services.edit.price", "desk", (c) => save(c, (f) => ({ priceCents: f.priceCents + 100, priceMaxCents: null })), (r) => r.ok);
+  both("services.edit.online", "desk", (c) => save(c, (f) => ({ online: !f.online })), (r) => r.ok);
+  both("services.delete", "desk", (c) => save(c, () => ({ active: false })), (r) => r.ok);
+  both("services.staff", "desk", (c) => staffActs.saveOffers(c.val, [{ serviceId: c.demo.services.clip, offered: true, priceCents: 2600, durationMin: 30 }]), (r) => r.ok);
+
+  it("services.edit: a save that changes nothing of the three needs none of them", async () => {
+    const c = await fresh("desk");
+    for (const k of ["services.edit.name", "services.edit.price", "services.edit.online", "services.delete"] as const) await grant(c.me, k, false);
+    expect((await save(c, (f) => ({ durationMin: f.durationMin + 5 }))).ok).toBe(true);
+    expect(await save(c, (f) => ({ priceCents: f.priceCents + 100 }))).toEqual({ ok: false, field: "forbidden" });
+  });
+
+  it("services.staff, for a barber: with it his own price applies at once; without it, it waits", async () => {
+    for (const has of [true, false]) {
+      const c = await fresh("barber");
+      await grant(c.me, "services.staff", has);
+      const r = await bTime.setPrice({ serviceId: c.demo.services.clip, priceCents: 3300, durationMin: 30 });
+      expect(r).toMatchObject({ ok: true, status: has ? "applied" : "requested" });
+    }
+  });
+});
+
+/* ------------------------------------------------------------------ 8. Настройки */
+
+describe("Настройки", () => {
+  both("settings.system", "owner", () => requests.setReminder("sms"), (r) => r === true);
+  both("settings.users", "owner", (c) => account.linkUserStaff(c.desk, c.jev), (r) => r === true);
+  both("settings.users.remove", "owner", (c) => account.toggleUser(c.desk, false), (r) => r === true);
+  both(
+    "settings.users.invite",
+    "owner",
+    (c) => {
+      const f = new FormData();
+      f.set("email", "new@example.test");
+      f.set("name", "New");
+      f.set("role", "staff");
+      f.set("staffId", c.jev);
+      return account.addUser(f);
+    },
+    (r) => r.ok,
+  );
+  both(
+    "settings.users.rights",
+    "owner",
+    async (c) => {
+      const set = (await query<{ rights_preset: string; rights: string[]; rights_values: Record<string, RightValue> }>("select rights_preset, rights, rights_values from users where id = $1", [c.barber]))[0];
+      return account.saveRightsAction(c.barber, { preset: set.rights_preset, on: set.rights.filter((k) => k !== "journal.phones"), values: set.rights_values });
+    },
+    (r) => r.ok,
+  );
+
+  it("settings.users.rights: copying another login's rights is behind it too", async () => {
+    const c = await fresh("owner");
+    expect(await account.copyRightsAction(c.desk, c.barber)).not.toBeNull();
+    await grant(c.me, "settings.users.rights", false);
+    expect(await account.copyRightsAction(c.desk, c.barber)).toBeNull();
+  });
+
+  both("settings.categories", "desk", (c) => clients.bulkLabelAction({ ids: [c.anna] }, "Постоянные"), (r) => r.ok);
+
+  it("settings.categories: without it a category that is in use is still given", async () => {
+    const c = await fresh("desk");
+    await saveClient(c.demo.business, c.anna, { labels: ["VIP"] }, c.owner);
+    await grant(c.me, "settings.categories", false);
+    const other = await saveClient(c.demo.business, null, { name: "Борис Образец" }, c.owner);
+    if (!other.ok) throw new Error(other.field);
+    expect((await clients.bulkLabelAction({ ids: [other.id] }, "vip")).ok).toBe(true);
+    expect(await clients.bulkLabelAction({ ids: [other.id] }, "Новые слова")).toEqual({ ok: false, field: "forbidden" });
+  });
+});
+
+/* ------------------------------------------------------------------ 9. Клиентская база */
+
+describe("Клиентская база", () => {
+  const list = () => clients.listClientsAction({ q: "", label: "", page: 1 });
+  const cardOf = async (c: Ctx) => clientDetail(query, c.demo.business, c.anna, Date.now(), await holder(c));
+  const request = (url: string, init: RequestInit = {}) => new Request(`http://localhost${url}`, { ...init, headers: { origin: "http://localhost", host: "localhost", ...(init.headers ?? {}) } });
+
+  both("clients.list_contacts", "desk", list, (r, c) => r.rows.find((x) => x.id === c.anna)?.phone === PHONE && r.rows.find((x) => x.id === c.anna)?.email === "anna@example.test");
+
+  it("clients.list_contacts: without it the list shows masks, and neither a phone's digits nor an e-mail find anyone", async () => {
+    const c = await fresh("desk");
+    await grant(c.me, "clients.list_contacts", false);
+    const row = (await list()).rows.find((x) => x.id === c.anna)!;
+    expect([row.phone, row.email]).toEqual(["+3725•••••11", "a•••@example.test"]);
+    expect((await clients.listClientsAction({ q: "5550011", label: "", page: 1 })).total).toBe(0);
+    expect((await clients.listClientsAction({ q: "anna@example", label: "", page: 1 })).total).toBe(0);
+    expect((await clients.listClientsAction({ q: "Näidis", label: "", page: 1 })).total).toBe(1);
+  });
+
+  both("clients.card_contacts", "desk", cardOf, (d) => d?.phone === PHONE && d?.email === "anna@example.test");
+
+  it("clients.card_contacts: masked contacts are never saved back over the real ones", async () => {
+    const c = await fresh("desk");
+    await grant(c.me, "clients.card_contacts", false);
+    const d = (await cardOf(c))!;
+    expect([d.phone, d.email]).toEqual(["+3725•••••11", "a•••@example.test"]);
+    const r = await clients.saveCardAction(c.anna, { ...cardFieldsOf(d), cardNo: "A-17" });
+    expect(r.ok).toBe(true);
+    const [row] = await query<{ phone_e164: string; email: string; card_no: string }>("select phone_e164, email, card_no from clients where id = $1", [c.anna]);
+    expect(row).toEqual({ phone_e164: PHONE, email: "anna@example.test", card_no: "A-17" });
+  });
+
+  both("clients.edit", "desk", () => clients.saveClientAction(null, { name: "Новый клиент" }), (r) => r.ok);
+  both("clients.edit", "desk", async (c) => clients.saveCardAction(c.anna, { ...cardFieldsOf((await cardOf(c))!), cardNo: "A-17" }), (r) => r.ok);
+  both("clients.note", "desk", cardOf, (d) => d?.note === "стрижёт коротко");
+  both("clients.note.edit", "desk", async (c) => clients.saveCardAction(c.anna, { ...cardFieldsOf((await cardOf(c))!), note: "теперь длиннее" }), (r) => r.ok);
+  both("clients.note.edit", "barber", (c) => bVisit.saveClientNote(c.anna, "теперь длиннее"), (r) => r === true);
+
+  it("clients.note.edit: the note alone needs no right to the rest of the card, and the other way round", async () => {
+    const c = await fresh("desk");
+    await grant(c.me, "clients.edit", false);
+    const d = (await cardOf(c))!;
+    expect((await clients.saveCardAction(c.anna, { ...cardFieldsOf(d), note: "только примечание" })).ok).toBe(true);
+    expect(await clients.saveCardAction(c.anna, { ...cardFieldsOf(d), note: "только примечание", cardNo: "A-17" })).toMatchObject({ ok: false, field: "forbidden" });
+  });
+
+  const lonely = async (c: Ctx) => {
+    const r = await saveClient(c.demo.business, null, { name: "Без истории" }, c.owner);
+    if (!r.ok) throw new Error(r.field);
+    return r.id;
+  };
+  both("clients.delete", "desk", async (c) => clients.deleteClientAction(await lonely(c)), (r) => r.ok);
+
+  it("clients.delete: many at once stays the owner's, with the right or without", async () => {
+    const c = await fresh("desk");
+    const id = await lonely(c);
+    expect(await clients.bulkDeleteAction({ ids: [id] })).toEqual({ ok: false, code: "forbidden" });
+    jar.cookies = { [SESSION_COOKIE]: await createSession(query, c.owner) };
+    expect(await clients.bulkDeleteAction({ ids: [id] })).toMatchObject({ ok: true, deleted: 1 });
+    const again = await lonely(c);
+    await grant(c.owner, "clients.delete", false);
+    expect(await clients.bulkDeleteAction({ ids: [again] })).toEqual({ ok: false, code: "forbidden" });
+  });
+
+  both("clients.export", "owner", async () => (await exportRoute(request("/admin/clients/export", { method: "POST", body: "{}" }))).status, (status) => status === 200);
+
+  it("clients.export: the file leaves out phones and e-mails for a login that does not see them in the list", async () => {
+    const c = await fresh("owner");
+    const cols = async () => (await query<{ after: { columns: string[] } }>("select after from audit where entity = 'client' and action = 'export' order by id desc limit 1"))[0].after.columns;
+    await exportRoute(request("/admin/clients/export", { method: "POST", body: "{}" }));
+    expect(await cols()).toEqual(expect.arrayContaining(["name", "phone", "email"]));
+    await grant(c.me, "clients.list_contacts", false);
+    await exportRoute(request("/admin/clients/export", { method: "POST", body: "{}" }));
+    expect(await cols()).not.toEqual(expect.arrayContaining(["phone"]));
+    expect(await cols()).not.toEqual(expect.arrayContaining(["email"]));
+  });
+
+  both(
+    "clients.comments",
+    "desk",
+    async (c) => {
+      await addComment(c.demo.business, c.anna, "просил перезвонить", { id: c.owner, name: "Owner" });
+      return listComments(query, c.demo.business.id, c.anna, await holder(c));
+    },
+    (r) => r.length === 1,
+  );
+  both("clients.comments_add", "desk", (c) => clients.addCommentAction(c.anna, "просил перезвонить"), (r) => r.ok);
+  both(
+    "clients.comments_delete_own",
+    "desk",
+    async (c) => {
+      const mine = await addComment(c.demo.business, c.anna, "мой", { id: c.me, name: "Desk" });
+      return clients.deleteCommentAction(c.anna, mine.ok ? mine.id : "");
+    },
+    (r) => r === true,
+    { without: ["clients.comments_delete_others"] },
+  );
+  both(
+    "clients.comments_delete_others",
+    "desk",
+    async (c) => {
+      const his = await addComment(c.demo.business, c.anna, "чужой", { id: c.owner, name: "Owner" });
+      return clients.deleteCommentAction(c.anna, his.ok ? his.id : "");
+    },
+    (r) => r === true,
+    { without: ["clients.comments_delete_own"] },
+  );
+
+  const fileOf = async (c: Ctx) => {
+    const f = await addFile(c.demo.business, c.anna, { name: "note.txt", type: "text/plain", bytes: new TextEncoder().encode("привет") }, { id: c.owner, name: "Owner" });
+    if (!f.ok) throw new Error(f.code);
+    return f.id;
+  };
+  both(
+    "clients.files",
+    "desk",
+    async (c) => {
+      const fileId = await fileOf(c);
+      const res = await fileRoute(request(`/admin/clients/${c.anna}/files/${fileId}`), { params: Promise.resolve({ id: c.anna, fileId }) });
+      return { status: res.status, listed: (await listFiles(query, c.demo.business.id, c.anna, await holder(c))).length };
+    },
+    (r) => r.status === 200 && r.listed === 1,
+  );
+  both(
+    "clients.files.upload",
+    "desk",
+    async (c) => {
+      const body = new FormData();
+      body.set("file", new File([new TextEncoder().encode("привет")], "note.txt", { type: "text/plain" }));
+      return (await uploadRoute(request(`/admin/clients/${c.anna}/files`, { method: "POST", body }), { params: Promise.resolve({ id: c.anna }) })).status;
+    },
+    (status) => status === 201,
+  );
+  both("clients.files.delete", "desk", async (c) => clients.deleteFileAction(c.anna, await fileOf(c)), (r) => r === true);
+
+  it("clients.show: all clients, or only those who came to the chosen barbers", async () => {
+    for (const all of [true, false]) {
+      const c = await fresh("desk");
+      // Anna has a visit with Valentin; the login is shown Jevgeni's clients only
+      await setValue(c.me, "clients.show", all ? "all" : [c.jev]);
+      expect((await list()).rows.some((x) => x.id === c.anna), "in the list").toBe(all);
+      expect((await cardOf(c)) !== null, "her card").toBe(all);
+      expect((await cal.findClients("Anna")).length === 1, "in the calendar's search").toBe(all);
+      expect((await clients.saveCardAction(c.anna, { name: "Anna", phone: PHONE, phone2: "", email: "", birthday: "", gender: "", importance: "", cardNo: "", discount: "", locale: "ru", noOnline: false, note: "", labels: [] })).ok, "saving her card").toBe(all);
+      expect((await clients.massPreviewAction({ ids: [c.anna] }))?.clients, "as a mass message's target").toBe(all ? 1 : 0);
+    }
+    cover("clients.show");
+  });
+
+  both("clients.history", "desk", (c) => clients.clientStatsAction(c.anna, "", ""), (r) => r !== null);
+
+  it("clients.history: the card's visits come with it, and a barber's past visits with his client", async () => {
+    for (const has of [true, false]) {
+      const c = await fresh("desk");
+      await grant(c.me, "clients.history", has);
+      expect((await cardOf(c))!.history.length).toBe(has ? 1 : 0);
+    }
+  });
+});
+
+/* ------------------------------------------------------------------ the single right */
+
+describe("Совершать SMS рассылки клиентам", () => {
+  both("single.bulk_sms", "desk", (c) => clients.massSendAction({ ids: [c.anna] }, { text: "Привет", channels: ["sms"] }), (r) => r.ok);
+  both("single.bulk_sms", "desk", (c) => clients.sendMessageAction(c.anna, { text: "Привет", channels: ["sms"] }), (r) => r.ok);
+  both("single.bulk_sms", "desk", (c) => clients.massPreviewAction({ ids: [c.anna] }), (r) => r !== null);
+});
+
+/* ------------------------------------------------------------------ the sections themselves, and the whole list */
+
+describe("a section whose group switch is off", () => {
+  it("«Клиентская база»: the list is empty and every action inside refuses", async () => {
+    const c = await fresh("desk");
+    await grant(c.me, groupKey("clients"), false);
+    expect(await clients.listClientsAction({ q: "", label: "", page: 1 })).toMatchObject({ rows: [], total: 0 });
+    expect(await clients.saveClientAction(null, { name: "Новый" })).toEqual({ ok: false, field: "forbidden" });
+    expect(await clients.addCommentAction(c.anna, "x")).toEqual({ ok: false, field: "forbidden" });
+    expect(await clients.deleteClientAction(c.anna)).toEqual({ ok: false, code: "forbidden" });
+  });
+
+  it("«Услуги»: the list of services is not given", async () => {
+    const c = await fresh("desk");
+    expect((await frame.serviceListAction()).length).toBeGreaterThan(0);
+    await grant(c.me, groupKey("services"), false);
+    expect(await frame.serviceListAction()).toEqual([]);
+  });
+
+  it("a barber's login has no way into the admin's doors, whatever its rights", async () => {
+    const c = await fresh("barber");
+    await grant(c.me, "clients.export", true);
+    await expect(clients.listClientsAction({ q: "", label: "", page: 1 })).rejects.toThrow("REDIRECT /b");
+  });
+});
+
+describe("every right that works has a door test", () => {
+  it("none is left out", () => {
+    expect(RIGHTS.filter((r) => r.built && !covered.has(r.key)).map((r) => r.key)).toEqual([]);
+  });
+});

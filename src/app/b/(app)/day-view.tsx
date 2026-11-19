@@ -15,7 +15,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import type { Offer } from "@/lib/barber/book";
-import type { BBlock, BDay, BVisit } from "@/lib/barber/day";
+import type { BBlock, BDay, BMay, BVisit } from "@/lib/barber/day";
 import { coversDay, freeGaps, hoursText, nextVisit, type Gap } from "@/lib/barber/gaps";
 import { extraText, hasExtra } from "@/lib/slots";
 import { addDays, localParts, startOfDay } from "@/lib/tz";
@@ -25,18 +25,29 @@ import { useB, useTitle } from "../lang";
 import { CancelSheet, MoveSheet, NewVisitSheet, type NewPrefill } from "./book-sheets";
 import { ClientSheet, NoteEditor } from "./client-sheet";
 import { BSheet } from "./sheet";
+import { MayProvider, useMay } from "./may";
 import { saveClientNote, saveVisitNote, setVisitStatus } from "./visit-actions";
 
 const MIN = 60_000;
 /** how far to pull (px, after the drag is halved) before letting go refreshes */
 const PULL = 64;
 
-type Props = { days: BDay[]; date: string; today: string; now: number; tz: string; step: number; offers: Offer[] };
+type Props = { days: BDay[]; date: string; today: string; now: number; tz: string; step: number; offers: Offer[]; may: BMay };
+const CAME = new Set(["arrived", "done"]);
 
 /** What is open over the day: a visit, a new visit, or a visit being moved or cancelled. */
 type Open = { kind: "visit" | "move" | "cancel" | "client"; id: string } | { kind: "new"; prefill: NewPrefill };
 
-export function DayView({ days, date, today, now: serverNow, tz, step, offers }: Props) {
+/** The barber's day, with what the login may do in it handed down to its sheets. */
+export function DayView(props: Props) {
+  return (
+    <MayProvider value={props.may}>
+      <Day {...props} />
+    </MayProvider>
+  );
+}
+
+function Day({ days, date, today, now: serverNow, tz, step, offers, may }: Props) {
   const B = useB();
   useTitle(B.nav.day);
   const router = useRouter();
@@ -111,6 +122,8 @@ export function DayView({ days, date, today, now: serverNow, tz, step, offers }:
   const next = sel === today ? nextVisit(day.visits, now) : null;
   const thisWeek = days.some((d) => d.date === today);
 
+  // a new visit is offered only with the right to make one
+  const canBook = offers.length > 0 && may.create;
   return (
     <main className="adm-page bx-day">
       <div className="bx-pull" style={{ height: pulled }} aria-hidden={pulled === 0}>
@@ -167,7 +180,14 @@ export function DayView({ days, date, today, now: serverNow, tz, step, offers }:
           <span>{wholeDay ? `${B.day.kinds[wholeDay.kind] ?? wholeDay.kind} · ${B.day.allDay}` : hours ? B.day.hours(hours) : B.day.off}</span>
           {day.count > 0 && (
             <span>
-              {B.day.visits(day.count)} · <b>{eur(day.totalCents)}</b>
+              {B.day.visits(day.count)}
+              {/* the day's sum: «Показывать статистику» */}
+              {may.stats && (
+                <>
+                  {" "}
+                  · <b>{eur(day.totalCents)}</b>
+                </>
+              )}
             </span>
           )}
         </p>
@@ -180,9 +200,9 @@ export function DayView({ days, date, today, now: serverNow, tz, step, offers }:
 
       {next && <NextCard v={next} now={now} tz={tz} busy={busy} onOpen={() => openVisit(next.id)} onStatus={status} />}
 
-      <Timeline day={day} now={now} tz={tz} step={step} shortest={shortest} onOpen={openVisit} onFree={(start) => book({ start })} />
+      <Timeline day={day} now={now} tz={tz} step={step} shortest={may.create ? shortest : Infinity} onOpen={openVisit} onFree={(start) => book({ start })} />
 
-      {offers.length > 0 && (
+      {canBook && (
         <button type="button" className="bx-fab" aria-label={B.book.new} onClick={() => book({})}>
           <PlusIcon size={26} />
         </button>
@@ -193,7 +213,7 @@ export function DayView({ days, date, today, now: serverNow, tz, step, offers }:
           v={open}
           tz={tz}
           busy={busy}
-          canBook={offers.length > 0}
+          canBook={canBook}
           onClose={() => setSheet(null)}
           onStatus={status}
           onMove={() => setSheet({ kind: "move", id: open.id })}
@@ -208,7 +228,7 @@ export function DayView({ days, date, today, now: serverNow, tz, step, offers }:
           clientId={open.clientId}
           name={open.clientName}
           tz={tz}
-          canBook={offers.length > 0}
+          canBook={canBook}
           onClose={() => setSheet(null)}
           onBack={() => openVisit(open.id)}
           onAgain={() => again(open)}
@@ -231,10 +251,13 @@ const services = (v: BVisit, lang: Parameters<typeof pick3>[1]) => v.services.ma
 
 function NextCard({ v, now, tz, busy, onOpen, onStatus }: { v: BVisit; now: number; tz: string; busy: boolean; onOpen: () => void; onStatus: (v: BVisit, s: string) => void }) {
   const B = useB();
+  const may = useMay();
   const inChair = v.status === "arrived" || v.start <= now;
   const wait = Math.max(1, Math.round((v.start - now) / MIN));
   // one tap for what comes next: «arrived» from half an hour before, then «done»
-  const quick = v.status === "arrived" ? "done" : v.status === "booked" && v.start - now <= 30 * MIN ? "arrived" : null;
+  const next = v.status === "arrived" ? "done" : v.status === "booked" && v.start - now <= 30 * MIN ? "arrived" : null;
+  const quick = next && may.edit && (!CAME.has(v.status) || may.editCame) ? next : null;
+  const phone = may.call ? v.clientPhone : null;
   return (
     <section className={`bx-next${inChair ? " is-now" : ""}`} aria-label={B.day.next}>
       <p className="bx-next-when">{inChair ? B.day.now : `${B.day.next} · ${B.day.inMin(wait)}`}</p>
@@ -245,10 +268,10 @@ function NextCard({ v, now, tz, busy, onOpen, onStatus }: { v: BVisit; now: numb
         <span>{v.clientName}</span>
         <small>{services(v, B.lang)}</small>
       </button>
-      {(v.clientPhone || quick) && (
+      {(phone || quick) && (
         <div className="adm-bar-row">
-          {v.clientPhone && (
-            <a className="adm-btn adm-btn-line adm-btn-auto" href={`tel:${v.clientPhone}`}>
+          {phone && (
+            <a className="adm-btn adm-btn-line adm-btn-auto" href={`tel:${phone}`}>
               {B.visit.call}
             </a>
           )}
@@ -399,9 +422,12 @@ function VisitSheet({
   onSaved: (text: string) => void;
 }) {
   const B = useB();
+  const may = useMay();
   const date = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(v.start);
   // a visit still to come can be moved or cancelled (one that took place is history)
   const ahead = v.status === "booked" || v.status === "pending";
+  // a visit the client has come to has a right of its own
+  const canEdit = may.edit && (!CAME.has(v.status) || may.editCame);
   return (
     <BSheet title={v.clientName} onClose={onClose}>
       <p className="adm-time">
@@ -411,20 +437,28 @@ function VisitSheet({
         <span>{cap(dateWords(date, B.lang))}</span>
       </p>
       {v.clientPhone ? (
-        <a className="adm-phone" href={`tel:${v.clientPhone}`}>
-          {v.clientPhone} · {B.visit.call}
-        </a>
+        may.call ? (
+          <a className="adm-phone" href={`tel:${v.clientPhone}`}>
+            {v.clientPhone} · {B.visit.call}
+          </a>
+        ) : (
+          // a masked number: shown, never a link to call
+          <span className="adm-phone">{v.clientPhone}</span>
+        )
       ) : (
-        <p className="adm-meta">{B.visit.noPhone}</p>
+        may.card && <p className="adm-meta">{B.visit.noPhone}</p>
       )}
-      <button type="button" className="adm-txt lime bx-card-link" onClick={onClient}>
-        {B.client.card}
-      </button>
+      {may.card && (
+        <button type="button" className="adm-txt lime bx-card-link" onClick={onClient}>
+          {B.client.card}
+        </button>
+      )}
       <NoteEditor
         key={`c-${v.clientId}`}
         label={B.visit.clientNote}
         hint={B.visit.clientNoteHint}
         value={v.clientNote}
+        canEdit={may.card && may.clientNote}
         onSave={async (text) => {
           const ok = await saveClientNote(v.clientId, text);
           if (ok) onSaved(B.client.noteSaved);
@@ -433,7 +467,7 @@ function VisitSheet({
       />
       <div className="adm-status" role="group" aria-label={B.visit.setStatus}>
         {(["arrived", "done", "no_show"] as const).map((s) => (
-          <button key={s} type="button" aria-pressed={v.status === s} disabled={busy} onClick={() => onStatus(v, v.status === s ? "booked" : s)}>
+          <button key={s} type="button" aria-pressed={v.status === s} disabled={busy || !canEdit} onClick={() => onStatus(v, v.status === s ? "booked" : s)}>
             {B.visit.status[s]}
           </button>
         ))}
@@ -468,6 +502,7 @@ function VisitSheet({
         key={`v-${v.id}`}
         label={B.visit.visitNote}
         value={v.staffNote}
+        canEdit={canEdit && may.note}
         onSave={async (text) => {
           const ok = await saveVisitNote(v.id, text);
           if (ok) onSaved(B.client.noteSaved);
@@ -478,9 +513,9 @@ function VisitSheet({
         {B.visit.source[v.source] ?? v.source}
         {v.reminder ? "" : ` · ${B.visit.reminderOff}`}
       </p>
-      {(ahead || canBook) && (
+      {((ahead && may.move) || canBook) && (
         <div className="adm-bar-row bx-visit-acts">
-          {ahead && (
+          {ahead && may.move && (
             <button type="button" className="adm-btn adm-btn-line adm-btn-auto" onClick={onMove}>
               {B.book.move}
             </button>
@@ -492,7 +527,7 @@ function VisitSheet({
           )}
         </div>
       )}
-      {ahead && (
+      {ahead && may.cancel && (
         <button type="button" className="adm-txt warn bx-cancel" onClick={onCancel}>
           {B.book.cancel}
         </button>

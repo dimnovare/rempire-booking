@@ -6,10 +6,11 @@
  * or phone, and those stay out of addresses.
  *
  *   200  the file, as a download; X-Rows says how many clients are in it
- *   403  not the owner, or not from our own pages
+ *   403  no right to it, or not from our own pages
  *
- * Only the owner's login, and only from our own pages: the request must
- * name our own host as its origin. The columns are the ones the login
+ * Only a login with «Выгружать список клиентов» (the owner's started with
+ * it), and only from our own pages: the request must name our own host as
+ * its origin. The columns are the ones the login
  * keeps in the table, and every export is written to the audit log
  * (src/lib/admin/client-export.ts). Nothing is kept on the server.
  */
@@ -51,7 +52,7 @@ export async function POST(request: Request) {
   }
   const A = await getA();
   const B = A.clients.base;
-  const r = await exportClients(business, { id: user.id, role: user.role }, filterOf(asked), { sheet: A.nav.clients, cols: { ...B.cols, sold: B.xlsx.sold, discount: B.xlsx.discount } });
+  const r = await exportClients(business, user, filterOf(asked), { sheet: A.nav.clients, cols: { ...B.cols, sold: B.xlsx.sold, discount: B.xlsx.discount } });
   if (!r.ok) return no(r.code, 403);
   // the bytes alone, whatever buffer they came in
   return new Response(r.bytes.buffer.slice(r.bytes.byteOffset, r.bytes.byteOffset + r.bytes.byteLength) as ArrayBuffer, {
