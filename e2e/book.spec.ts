@@ -3,9 +3,10 @@ import { asBarber, B, expect, expectNoSideScroll, hydrated, nextWorkday, sheet, 
 /** B3: booking, moving and cancelling from his phone, in his own column. Fake names only. */
 test.describe("booking from the phone", () => {
   test.use(asBarber);
-  const day = nextWorkday();
+  // every test here is on his next working day: the demo visits are there, inside his hours
 
-  test("«+»: a new client on a free time, then moved, then cancelled with a reason", async ({ page }, info) => {
+  test("«+»: a new client on a free time, then moved, then cancelled with a reason", async ({ page, barber }, info) => {
+    const day = nextWorkday(barber.slug);
     const who = `E2E ${info.project.name} один`;
     await page.goto(`/b?d=${day}`);
     await hydrated(page);
@@ -51,7 +52,8 @@ test.describe("booking from the phone", () => {
     await expect(row).toHaveCount(0);
   });
 
-  test("a tap on free time books into that gap", async ({ page }, info) => {
+  test("a tap on free time books into that gap", async ({ page, barber }, info) => {
+    const day = nextWorkday(barber.slug);
     const who = `E2E ${info.project.name} два`;
     await page.goto(`/b?d=${day}`);
     await hydrated(page);
@@ -77,7 +79,8 @@ test.describe("booking from the phone", () => {
     await expect(page.locator(".bx-v", { hasText: who }).locator(".bx-t b")).toHaveText(at);
   });
 
-  test("free time too short for any of his services shows, with no «+»", async ({ page }) => {
+  test("free time too short for any of his services shows, with no «+»", async ({ page, barber }) => {
+    const day = nextWorkday(barber.slug);
     await page.goto(`/b?d=${day}`);
     await hydrated(page);
     const minutes = (t: string) => Number(/(\d+)\s*ч/.exec(t)?.[1] ?? 0) * 60 + Number(/(\d+)\s*мин/.exec(t)?.[1] ?? 0);
@@ -88,7 +91,7 @@ test.describe("booking from the phone", () => {
     const shortest = Math.min(...(await svcs.locator("small").allInnerTexts()).map((t) => minutes(t.split("·")[0])));
     await sheet(page).getByRole("button", { name: B.close }).click();
 
-    // the demo day has a 15-minute gap: seen, not tappable
+    // the demo day has a 15-minute gap after the first visit: seen, not tappable
     const short = page.locator(".bx-gap > div");
     await expect(short.first()).toBeVisible();
     await expect(page.locator(".bx-gap > div .bx-gap-add")).toHaveCount(0);
@@ -96,7 +99,8 @@ test.describe("booking from the phone", () => {
     for (const t of await page.locator(".bx-gap > button .bx-gap-main").allInnerTexts()) expect(minutes(t)).toBeGreaterThanOrEqual(shortest);
   });
 
-  test("a taken time is refused; outside his hours asks first", async ({ page }) => {
+  test("a taken time is refused; outside his hours asks first", async ({ page, barber }) => {
+    const day = nextWorkday(barber.slug);
     await page.goto(`/b?d=${day}`);
     await hydrated(page);
     await page.getByRole("button", { name: B.book.new }).click();

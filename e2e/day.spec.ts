@@ -21,18 +21,24 @@ test.describe("his day", () => {
     expect(await smallTargets(page)).toEqual([]);
   });
 
-  test("the week strip: another day, then back to today", async ({ page }) => {
-    const day = nextWorkday();
+  test("the week strip: another day, then back to today", async ({ page, barber }) => {
+    // his next working day: the second day of the demo visits
+    const day = nextWorkday(barber.slug);
     await page.goto("/b");
     await hydrated(page);
     const strip = page.getByRole("navigation", { name: B.day.days });
-    // the strip's buttons carry the day's words; `day` may sit in next week's strip
+    // the strip's buttons carry the day's words; `day` may sit in a later week's strip (he may be away for a week)
     const button = strip.getByRole("button", { name: new RegExp(`^${dateWords(day, "ru")}`) });
-    if (!(await button.count())) await strip.getByRole("link", { name: B.day.nextWeek }).click();
+    for (let week = 0; week < 4 && !(await button.count()); week++) {
+      const was = page.url();
+      await strip.getByRole("link", { name: B.day.nextWeek }).click();
+      await page.waitForURL((u) => u.href !== was);
+      await hydrated(page);
+    }
     await button.click();
     await expect(page).toHaveURL(new RegExp(`d=${day}`));
-    // four or five demo visits that day, and the lunch break
-    await expect(page.locator(".bx-v").nth(3)).toBeVisible();
+    // the five demo visits of that day, and the lunch break
+    await expect(page.locator(".bx-v:visible", { hasText: "Demo client" })).toHaveCount(5);
     await expect(page.locator(".bx-blk", { hasText: B.day.kinds.block })).toBeVisible();
     await expect(page.locator(".bx-sum")).toContainText("€");
     await page.getByRole("button", { name: B.day.toToday }).or(page.getByRole("link", { name: B.day.toToday })).click();
@@ -48,8 +54,8 @@ test.describe("his day", () => {
     await expect(page.getByRole("heading", { level: 1, name: B.day.today })).toBeVisible();
   });
 
-  test("a visit's sheet: the time, the services, the total, the status buttons", async ({ page }) => {
-    await page.goto(`/b?d=${nextWorkday()}`);
+  test("a visit's sheet: the time, the services, the total, the status buttons", async ({ page, barber }) => {
+    await page.goto(`/b?d=${nextWorkday(barber.slug)}`);
     await hydrated(page);
     await page.locator(".bx-v button").first().click();
     const s = sheet(page);

@@ -1,47 +1,30 @@
 #!/usr/bin/env node
 /**
  * Demo data for staging and tests: REMPIRE, Mardi 1, the five barbers'
- * public first names (as on rempire.ee), the services from the mock with
- * EXAMPLE prices, durations and hours. No clients, no visits.
+ * public first names (as on rempire.ee) and the salon's structure as it
+ * stands in Altegio (tools/altegio-structure.json, read 19.11.2026): the
+ * eight services, each barber's own time and price for them, the weekly
+ * hours and the dated shifts. tools/demo-structure.mjs works that out as
+ * DEMO; here it goes into the database. No clients, no visits.
  *
  *   node tools/seed-demo.mjs               # against DATABASE_URL
  *   node tools/seed-demo.mjs --if-enabled  # only when SEED_DEMO=yes (postbuild)
  *
+ * With SEED_BUSY=yes (staging only, never tests) it also fills the calendar
+ * with generated visits of fake clients: seedDemoBusy below.
+ *
  * Safe to run again: it only adds what is missing and never overwrites a
- * row Renat has since edited in the admin.
+ * row Renat has since edited in the admin. One exception: when the structure
+ * itself is a new one (DEMO.version is not the one the database has), the
+ * demo services, the barbers' lines, weekly hours and dated shifts are
+ * written over once, and the version is kept in businesses.settings.
  */
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
+import { addDays, DAY_MS, DEMO, demoWorkday, T, toMin, toTime, weekdayOf } from "./demo-structure.mjs";
 import { sslFor } from "./migrate.mjs";
 
-const T = (ru, et, en) => ({ ru, et, en });
-
-export const DEMO = {
-  business: { slug: "rempire", name: "REMPIRE", timezone: "Europe/Tallinn", default_locale: "ru" },
-  location: { slug: "mardi-1", name: "REMPIRE", address: "Mardi 1, Tallinn" },
-  services: [
-    { slug: "clip", d: 45, name: T("Стрижка машинкой и ножницами", "Juukselõikus masina ja kääridega", "Haircut, clippers + scissors") },
-    { slug: "long", d: 60, name: T("Стрижка ножницами, длинные волосы", "Pikad juuksed, kääridega", "Long hair, scissors") },
-    { slug: "buzz", d: 30, name: T("Стрижка машинкой (buzzcut)", "Masinalõikus (buzzcut)", "Buzzcut, clippers") },
-    { slug: "cutbeard", d: 75, name: T("Стрижка + борода", "Juukselõikus + habe", "Haircut + beard trim") },
-    { slug: "beard", d: 30, name: T("Оформление бороды", "Habeme piiramine", "Beard trim") },
-    { slug: "grey", d: 30, name: T("Камуфляж седины", "Hallide juuste katmine", "Grey hair coverage") },
-    { slug: "kid", d: 45, name: T("Детская стрижка", "Lapse juukselõikus", "Kid's haircut") },
-    { slug: "fs", d: 90, name: T("Отец и сын", "Isa ja poeg", "Father and son") },
-  ],
-  // price in euros per service; a missing service = the barber does not do it.
-  // Photos: the portraits from rempire.ee/en/barbershop, 480 x 640, grey
-  // (public/barbers/, 17.11.2026).
-  staff: [
-    { slug: "renat", name: "Renat", p: { clip: 40, long: 45, buzz: 35, cutbeard: 60, beard: 28, grey: 35, kid: 35, fs: 65 } },
-    { slug: "valentin", name: "Valentin", p: { clip: 40, long: 45, buzz: 35, cutbeard: 60, beard: 28, grey: 30, kid: 35, fs: 65 } },
-    { slug: "jevgeni", name: "Jevgeni", p: { clip: 38, long: 43, buzz: 33, cutbeard: 57, beard: 26, grey: 30, fs: 62 } },
-    { slug: "slava", name: "Slava", p: { clip: 38, long: 43, buzz: 33, cutbeard: 57, beard: 26, grey: 30, kid: 33, fs: 62 } },
-    { slug: "milena", name: "Milena", p: { clip: 35, long: 40, buzz: 30, grey: 30, kid: 30, fs: 60 } },
-  ],
-  // example week: Mon–Fri 10–20, Sat 10–18, Sunday closed
-  hours: [1, 2, 3, 4, 5].map((weekday) => ({ weekday, starts: "10:00", ends: "20:00" })).concat([{ weekday: 6, starts: "10:00", ends: "18:00" }]),
-};
+export { addDays, datedDays, DEMO, demoHours, demoWorkday, weekdayOf, weeklyTemplate } from "./demo-structure.mjs";
 
 const ROLE = T("Барбер", "Barber", "Barber");
 
@@ -55,15 +38,45 @@ export function demoId(kind, slug) {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
 
+const zoneFormat = new Map();
+/** A zone's clock at a moment: its date parts, as numbers. */
+function zoneParts(t, tz) {
+  let f = zoneFormat.get(tz);
+  if (!f) zoneFormat.set(tz, (f = new Intl.DateTimeFormat("en-CA", { timeZone: tz, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })));
+  const p = {};
+  for (const x of f.formatToParts(new Date(t))) p[x.type] = Number(x.value);
+  return p;
+}
+
+/** Today's local date and the minute of the day in a zone. */
+function localNow(now, tz) {
+  const p = zoneParts(now, tz);
+  const two = (n) => String(n).padStart(2, "0");
+  return { today: `${p.year}-${two(p.month)}-${two(p.day)}`, minute: p.hour * 60 + p.minute };
+}
+
+/** A local date and minute of the day as a moment (epoch ms). */
+function momentOf(date, minute, tz) {
+  const [y, m, d] = date.split("-").map(Number);
+  const wall = Date.UTC(y, m - 1, d, 0, minute);
+  const offset = (t) => {
+    const p = zoneParts(t, tz);
+    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - t;
+  };
+  return wall - offset(wall - offset(wall));
+}
+
 /** @param {{query: (sql: string, params?: unknown[]) => Promise<{rows: any[]}>}} db */
 export async function seedDemo(db) {
   const one = async (sql, params) => (await db.query(sql, params)).rows[0];
   const b = DEMO.business;
   const biz = await one(
     `insert into businesses (id, slug, name, timezone, default_locale) values ($5, $1, $2, $3, $4)
-     on conflict (slug) do update set slug = excluded.slug returning id`,
+     on conflict (slug) do update set slug = excluded.slug returning id, settings ->> 'demo_structure' as structure`,
     [b.slug, b.name, b.timezone, b.default_locale, demoId("business", b.slug)],
   );
+  // a new structure (an empty database too): the demo rows are written as the file has them
+  const renew = biz.structure !== DEMO.version;
   const loc = await one(
     `insert into locations (id, business_id, slug, name, address, timezone) values ($6, $1, $2, $3, $4, $5)
      on conflict (business_id, slug) do update set slug = excluded.slug returning id`,
@@ -71,11 +84,14 @@ export async function seedDemo(db) {
   );
   const svc = {};
   for (const [i, s] of DEMO.services.entries()) {
-    const prices = DEMO.staff.map((st) => st.p[s.slug]).filter((x) => x != null);
     const row = await one(
-      `insert into services (id, business_id, slug, name, duration_min, price_cents, sort) values ($7, $1, $2, $3::jsonb, $4, $5, $6)
-       on conflict (business_id, slug) do update set slug = excluded.slug returning id`,
-      [biz.id, s.slug, JSON.stringify(s.name), s.d, Math.min(...prices) * 100, i, demoId("service", s.slug)],
+      `insert into services (id, business_id, slug, name, duration_min, price_cents, price_max_cents, sort) values ($8, $1, $2, $3::jsonb, $4, $5, $6, $7)
+       on conflict (business_id, slug) do update set ${
+         renew
+           ? "name = excluded.name, duration_min = excluded.duration_min, price_cents = excluded.price_cents, price_max_cents = excluded.price_max_cents, sort = excluded.sort, online = true, active = true"
+           : "slug = excluded.slug"
+       } returning id`,
+      [biz.id, s.slug, JSON.stringify(s.name), s.d, s.cents, s.maxCents, i, demoId("service", s.slug)],
     );
     svc[s.slug] = row.id;
   }
@@ -89,19 +105,36 @@ export async function seedDemo(db) {
     const staffId = inserted?.id ?? (await one("select id from staff where business_id = $1 and slug = $2", [biz.id, st.slug])).id;
     // a barber seeded before the photos existed gets one; a photo set since is kept
     if (!inserted) await db.query("update staff set photo_url = $2 where id = $1 and photo_url is null", [staffId, photo]);
-    for (const [slug, eur] of Object.entries(st.p)) {
+    // his lines, hours and dated shifts as the file has them, for a new barber
+    // or a new structure; otherwise only a line that is missing is added
+    const whole = renew || !!inserted;
+    for (const [slug, l] of Object.entries(st.lines)) {
       await db.query(
-        `insert into staff_services (staff_id, service_id, price_cents) values ($1, $2, $3) on conflict do nothing`,
-        [staffId, svc[slug], eur * 100],
+        `insert into staff_services (staff_id, service_id, duration_min, price_cents, price_max_cents) values ($1, $2, $3, $4, $5)
+         on conflict (staff_id, service_id) do ${
+           whole ? "update set duration_min = excluded.duration_min, price_cents = excluded.price_cents, price_max_cents = excluded.price_max_cents, active = true" : "nothing"
+         }`,
+        [staffId, svc[slug], l.d, l.cents, l.maxCents],
       );
     }
-    // hours only for a barber who has none yet
-    if (inserted) {
-      for (const h of DEMO.hours) {
-        await db.query("insert into staff_hours (staff_id, weekday, starts, ends) values ($1, $2, $3, $4)", [staffId, h.weekday, h.starts, h.ends]);
-      }
+    if (!whole) continue;
+    // a demo service he does not do: switched off, as the admin does, never deleted
+    await db.query("update staff_services set active = false where staff_id = $1 and active and service_id = any($2::uuid[])", [
+      staffId,
+      DEMO.services.filter((s) => !st.lines[s.slug]).map((s) => svc[s.slug]),
+    ]);
+    await db.query("delete from staff_hours where staff_id = $1 and valid_from is null and valid_to is null", [staffId]);
+    for (const h of st.hours) {
+      await db.query("insert into staff_hours (staff_id, weekday, starts, ends) values ($1, $2, $3, $4)", [staffId, h.weekday, h.starts, h.ends]);
     }
+    await db.query(
+      `insert into staff_day_overrides (staff_id, day, intervals)
+       select $1::uuid, x.day::date, x.spans from jsonb_to_recordset($2::jsonb) as x(day text, spans jsonb)
+       on conflict (staff_id, day) do update set intervals = excluded.intervals`,
+      [staffId, JSON.stringify(st.days)],
+    );
   }
+  if (renew) await db.query("update businesses set settings = settings || jsonb_build_object('demo_structure', $2::text) where id = $1", [biz.id, DEMO.version]);
   await seedDemoMoney(db, biz.id);
   return { businessId: biz.id, locationId: loc.id, services: svc };
 }
@@ -305,50 +338,55 @@ export async function seedOwnerQa(db, forms = OWNER_QA) {
 }
 
 /**
- * Logins to try the admin and the barber app on a local run: an owner and
- * one per demo barber, at example.test (a name that can never get mail), with
- * no password: they log in with the e-mail code, which the console transport
- * prints. Only the in-memory database calls this (src/lib/db.ts,
- * DEMO_LOGINS=yes); never a real one.
- * @param {{query: (sql: string, params?: unknown[]) => Promise<{rows: any[]}>}} db
- */
-/**
  * Example visits for a LOCAL run only (DEMO_LOGINS=yes, src/lib/db.ts), so
- * the barber app has a day to show: each barber, today and tomorrow, five
- * visits and a lunch break, plus one client in 20 minutes. Fake clients («Demo client N», +372 5555 09xx),
- * never staging and never tests.
+ * the barber app has a day to show: each barber, today and his next working
+ * day after it (demoWorkday), five visits and a lunch break, plus one client
+ * in 20 minutes. Fake clients («Demo client N», +372 5555 09xx), never
+ * staging and never tests.
+ *
+ * A visit is the first of `svc` the barber does, at `at` or `after` minutes
+ * past the visit before. The day starts at 10:00, as every shift does at the
+ * latest, and is over by 16:00: on a template day two hours and more stay
+ * free after the last visit. The 15 minutes after the first visit are too
+ * short for any service. e2e relies on all of this (e2e/book.spec.ts).
  */
 export const DEMO_VISITS = [
-  { at: "10:00", svc: "clip", src: "online", comment: "Покороче по бокам" },
-  { at: "11:00", svc: "cutbeard", src: "admin" },
-  { at: "14:30", svc: "buzz", src: "online" },
-  { at: "16:00", svc: "beard", src: "admin", noPhone: true },
-  { at: "17:30", svc: "kid", src: "online" },
+  { at: "10:00", svc: ["clip"], src: "online", comment: "Покороче по бокам" },
+  { after: 15, svc: ["buzz", "long"], src: "admin" },
+  { after: 0, svc: ["beard", "grey"], src: "online" },
+  { at: "14:00", svc: ["kid", "buzz", "cutbeard"], src: "admin", noPhone: true },
+  { after: 0, svc: ["beard", "clip"], src: "online" },
 ];
+
+/** A barber's own lines, in the services' order. */
+async function demoLines(db, staffId) {
+  const r = await db.query(
+    `select sv.id, sv.slug, sv.name, coalesce(ss.duration_min, sv.duration_min) as dur, coalesce(ss.price_cents, sv.price_cents) as price, sv.buffer_after_min as buf
+       from services sv join staff_services ss on ss.service_id = sv.id and ss.staff_id = $1 and ss.active
+      where sv.active order by sv.sort, sv.slug`,
+    [staffId],
+  );
+  return r.rows;
+}
 
 /** @param {{query: (sql: string, params?: unknown[]) => Promise<{rows: any[]}>}} db */
 export async function seedDemoVisits(db, now = Date.now()) {
   const tz = DEMO.business.timezone;
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
-  const [y, m, d] = today.split("-").map(Number);
+  const { today } = localNow(now, tz);
   const [biz] = (await db.query("select id from businesses where slug = $1", [DEMO.business.slug])).rows;
   if (!biz) return 0;
   let added = 0;
   // First one client in 20 minutes for each barber, so «Дальше» (and its
   // «Пришёл», from 30 minutes before) shows whenever the app starts; the
-  // fixed visits below leave its time alone.
+  // fixed visits below leave its time alone. His shortest service.
   const soon = Math.ceil((now + 20 * 60_000) / 300_000) * 300_000;
   let j = 2 * DEMO.staff.length * DEMO_VISITS.length;
+  const lines = {};
   for (const st of DEMO.staff) {
     const k = ++j;
     const staffId = demoId("staff", st.slug);
-    const [line] = (
-      await db.query(
-        `select sv.id, sv.name, coalesce(ss.duration_min, sv.duration_min) as dur, coalesce(ss.price_cents, sv.price_cents) as price, sv.buffer_after_min as buf
-           from services sv join staff_services ss on ss.service_id = sv.id and ss.staff_id = $1 and ss.active where sv.slug = 'buzz'`,
-        [staffId],
-      )
-    ).rows;
+    lines[st.slug] = await demoLines(db, staffId);
+    const [line] = [...lines[st.slug]].sort((a, b) => a.dur - b.dur);
     if (!line) continue;
     const [client] = (
       await db.query(
@@ -375,8 +413,9 @@ export async function seedDemoVisits(db, now = Date.now()) {
   }
   let k = 0;
   for (let i = 0; i < 2; i++) {
-    const date = new Date(Date.UTC(y, m - 1, d + i)).toISOString().slice(0, 10);
     for (const st of DEMO.staff) {
+      // today whatever the day is, then the next day he works
+      const date = i === 0 ? today : demoWorkday(st.slug, addDays(today, 1));
       const staffId = demoId("staff", st.slug);
       await db.query(
         `insert into time_off (id, staff_id, starts_at, ends_at, kind, status, note)
@@ -384,17 +423,13 @@ export async function seedDemoVisits(db, now = Date.now()) {
          on conflict (id) do nothing`,
         [demoId("block", `${st.slug}:${date}`), staffId, date, tz],
       );
+      let end = 0;
       for (const v of DEMO_VISITS) {
         k++;
-        const [line] = (
-          await db.query(
-            `select sv.id, sv.name, coalesce(ss.duration_min, sv.duration_min) as dur, coalesce(ss.price_cents, sv.price_cents) as price, sv.buffer_after_min as buf
-               from services sv join staff_services ss on ss.service_id = sv.id and ss.staff_id = $1 and ss.active
-              where sv.slug = $2`,
-            [staffId, v.svc],
-          )
-        ).rows;
+        const line = v.svc.map((slug) => lines[st.slug].find((l) => l.slug === slug)).find(Boolean);
         if (!line) continue;
+        const at = toTime(v.at ? toMin(v.at) : end + v.after);
+        end = toMin(at) + line.dur + line.buf;
         const phone = v.noPhone ? null : `+37255550${String(900 + (k % 100)).padStart(3, "0")}`;
         const [client] = (
           await db.query(
@@ -403,7 +438,7 @@ export async function seedDemoVisits(db, now = Date.now()) {
             [demoId("client", String(k)), biz.id, `Demo client ${k}`, phone],
           )
         ).rows;
-        const id = demoId("visit", `${st.slug}:${date}:${v.at}`);
+        const id = demoId("visit", `${st.slug}:${date}:${at}`);
         const r = await db.query(
           `insert into appointments (id, business_id, location_id, staff_id, client_id, starts_at, ends_at, blocked_until, source, client_comment, reminder_min, total_cents)
            select $1, $2, s.location_id, s.id, $3,
@@ -417,7 +452,7 @@ export async function seedDemoVisits(db, now = Date.now()) {
                    and tstzrange(a.starts_at, a.blocked_until) &&
                        tstzrange(($4::date + $5::time) at time zone $6, ($4::date + $5::time) at time zone $6 + make_interval(mins => $7 + $8)))
            on conflict (id) do nothing returning id`,
-          [id, biz.id, client.id, date, v.at, tz, line.dur, line.buf, v.src, v.comment ?? "", phone ? 120 : null, line.price, staffId],
+          [id, biz.id, client.id, date, at, tz, line.dur, line.buf, v.src, v.comment ?? "", phone ? 120 : null, line.price, staffId],
         );
         if (!r.rows.length) continue;
         await db.query(
@@ -431,6 +466,14 @@ export async function seedDemoVisits(db, now = Date.now()) {
   return added;
 }
 
+/**
+ * Logins to try the admin and the barber app on a local run: an owner and
+ * one per demo barber, at example.test (a name that can never get mail), with
+ * no password: they log in with the e-mail code, which the console transport
+ * prints. Only the in-memory database calls this (src/lib/db.ts,
+ * DEMO_LOGINS=yes); never a real one.
+ * @param {{query: (sql: string, params?: unknown[]) => Promise<{rows: any[]}>}} db
+ */
 export async function seedDemoLogins(db) {
   const [biz] = (await db.query("select id from businesses where slug = $1", [DEMO.business.slug])).rows;
   if (!biz) return 0;
@@ -447,6 +490,347 @@ export async function seedDemoLogins(db) {
   await add("boss@example.test", "Owner and barber (demo)", "owner", demoId("staff", DEMO.staff[0].slug));
   for (const st of DEMO.staff) await add(`${st.slug}@example.test`, st.name, "staff", demoId("staff", st.slug));
   return added;
+}
+
+/**
+ * A busy calendar for STAGING only (Dim, 19.11.2026: «generated visits on
+ * the real shifts», docs/kickoff.md): the last 14 days and the next 14 are
+ * filled with visits of fake clients, inside each barber's shifts, with his
+ * own services, times and prices. Behind its own switch, SEED_BUSY=yes,
+ * which only the staging deploy sets (.github/workflows/ci.yml): unit tests
+ * and e2e need free times and fixed data, and never get it.
+ *
+ *   - 60–85 % of each shift is taken, on the 15-minute grid, around what is
+ *     already there: other visits (the database refuses two at once anyway),
+ *     blocked time and special time.
+ *   - A past visit is «Готово», about one in twenty «Не пришёл»; some past
+ *     shifts also have one cancelled visit. Ahead everything is «Записан».
+ *   - About two thirds were booked online, the rest by the staff.
+ *   - Clients: «Demo client 101» … «Demo client 250», +372 5555 0101 …
+ *     0250, the demo's own fake names and numbers. A client comes back, most
+ *     often to the same barber, and not twice within four days.
+ *   - Nothing is ever sent to them: no visit has an SMS reminder
+ *     (reminder_min is null), no client has an e-mail, and every client is
+ *     marked «no SMS, no e-mail», so a visit a tester books for one of them
+ *     later plans no SMS either. The numbers are made up, but a made-up
+ *     number can be somebody's.
+ *
+ * Nothing here is Math.random: every choice comes from a generator seeded
+ * with the barber and the date, so a day comes out the same whenever it is
+ * made. A barber's day is made once (its visits carry an idempotency_key
+ * that starts with «demo-busy:»); a later run adds the days that have come
+ * into the 28 days since, and closes the visits that are now behind.
+ */
+export const BUSY = {
+  back: 14,
+  ahead: 14,
+  /** the share of a shift that is taken: from, to */
+  fill: [0.6, 0.85],
+  step: 15,
+  clients: 150,
+  firstClient: 101,
+  /** of the visits, booked online */
+  online: 2 / 3,
+  /** of the past visits, a no-show */
+  noShow: 0.05,
+  /** of the past shifts, with one cancelled visit as well */
+  cancelled: 0.3,
+  /** days between two visits of one client, at least */
+  apart: 4,
+  /** of a barber's visits, his own regulars */
+  regulars: 0.7,
+  /** how often a service is booked, against the others */
+  weights: { clip: 45, cutbeard: 18, buzz: 12, beard: 9, long: 6, kid: 6, grey: 3, fs: 3 },
+  comments: ["Покороче по бокам", "Как в прошлый раз", "Могу опоздать на 5 минут", "Буду с ребёнком", "Only clippers on the sides, please"],
+  key: "demo-busy:",
+};
+
+/** The busy clients, all fake: «Demo client N» and +372 5555 0NNN, as the demo's other clients. */
+export function busyClient(i) {
+  const n = BUSY.firstClient + i;
+  return { id: demoId("client", String(n)), name: `Demo client ${n}`, phone: `+37255550${n}`, locale: i % 10 === 9 ? "en" : i % 10 >= 7 ? "et" : "ru" };
+}
+
+/** A seeded generator (mulberry32): numbers from 0 up to 1, the same for the same seed. */
+function seeded(seed) {
+  let a = createHash("sha256").update(`rempire-demo:busy:${seed}`).digest().readUInt32LE(0);
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** One of `lines`, the popular services more often. */
+function pickLine(lines, rand) {
+  const w = lines.map((l) => BUSY.weights[l.slug] ?? 3);
+  let x = rand() * w.reduce((a, b) => a + b, 0);
+  for (const [i, l] of lines.entries()) if ((x -= w[i]) < 0) return l;
+  return lines[lines.length - 1];
+}
+
+/** [from, to) pieces of `spans` that `busy` leaves, in minutes. */
+function freePieces(spans, busy) {
+  let out = spans.map(([a, b]) => [a, b]);
+  for (const [x, y] of busy) out = out.flatMap(([a, b]) => (y <= a || x >= b ? [[a, b]] : [[a, Math.min(b, x)], [Math.max(a, y), b]].filter(([p, q]) => q > p)));
+  return out;
+}
+
+/**
+ * The visits of one shift: start minutes and lines. `spans` are the working
+ * hours, `busy` what is already there ([from, to) minutes), `taken` the
+ * minutes of the shift other visits hold. Tried until the share is inside
+ * BUSY.fill; a shift too short for that gets the nearest.
+ */
+export function planShift({ spans, busy, taken, lines, seed }) {
+  const { step } = BUSY;
+  const up = (m) => Math.ceil(m / step) * step;
+  const shift = spans.reduce((n, [a, b]) => n + b - a, 0);
+  const lo = BUSY.fill[0] * shift;
+  const hi = BUSY.fill[1] * shift;
+  const shortest = Math.min(...lines.map((l) => l.dur));
+  const mean = lines.reduce((n, l) => n + l.dur, 0) / lines.length;
+  const free = freePieces(spans, busy)
+    .map(([a, b]) => [up(a), Math.floor(b / step) * step])
+    .filter(([a, b]) => b - a >= shortest);
+  let best = null;
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const rand = seeded(`${seed}:${attempt}`);
+    const target = lo + rand() * (hi - lo);
+    const visits = [];
+    let filled = taken;
+    for (let s = 0; s < free.length; s++) {
+      let [cursor, end] = free[s];
+      for (;;) {
+        const need = target - filled;
+        if (need < step) break;
+        // the free time that may stay free, spread over the visits still to come
+        const left = end - cursor + free.slice(s + 1).reduce((n, [a, b]) => n + b - a, 0);
+        const slack = Math.max(0, Math.floor((left - need) / step) * step);
+        const ahead = Math.max(1, Math.round(need / mean));
+        cursor += Math.min(slack, step * Math.round((rand() * 2 * slack) / (ahead + 1) / step));
+        const fit = lines.filter((l) => cursor + up(l.dur + l.buf) <= end && filled + l.dur <= hi);
+        if (!fit.length) break;
+        const line = pickLine(fit, rand);
+        visits.push({ start: cursor, line });
+        cursor += up(line.dur + line.buf);
+        filled += line.dur;
+      }
+    }
+    const miss = Math.max(0, lo - filled);
+    if (!best || miss < best.miss) best = { visits, filled, shift, miss };
+    if (!miss) break;
+  }
+  return best;
+}
+
+/**
+ * @param {{query: (sql: string, params?: unknown[]) => Promise<{rows: any[]}>}} db
+ * @returns {Promise<{visits: number, clients: number, closed: number, shifts: number}>} what this run added
+ */
+export async function seedDemoBusy(db, now = Date.now()) {
+  const none = { visits: 0, clients: 0, closed: 0, shifts: 0 };
+  const [biz] = (await db.query("select id, timezone from businesses where slug = $1", [DEMO.business.slug])).rows;
+  if (!biz) return none;
+  const tz = biz.timezone;
+  const { today, minute: nowMin } = localNow(now, tz);
+  const first = addDays(today, -BUSY.back);
+  const last = addDays(today, BUSY.ahead);
+  const from = new Date(momentOf(first, 0, tz));
+  const to = new Date(momentOf(addDays(last, 1), 0, tz));
+
+  // 1. Visits made earlier that are now behind: «Готово», or «Не пришёл» as planned (the key's last letter)
+  const closed = await db.query(
+    `update appointments set status = case when status = 'booked' and right(idempotency_key, 1) = 'n' then 'no_show' else 'done' end, updated_at = ends_at
+      where business_id = $1 and idempotency_key like $2 and status in ('booked', 'arrived') and ends_at <= $3 returning id`,
+    [biz.id, `${BUSY.key}%`, new Date(now)],
+  );
+
+  // 2. The demo barbers, their lines and hours, and what is in the 29 days already
+  const staff = (
+    await db.query("select id, slug, location_id from staff where business_id = $1 and active and id = any($2::uuid[]) order by sort, slug", [
+      biz.id,
+      DEMO.staff.map((s) => demoId("staff", s.slug)),
+    ])
+  ).rows;
+  if (!staff.length) return { ...none, closed: closed.rows.length };
+  const ids = staff.map((s) => s.id);
+  const hours = (
+    await db.query(
+      `select staff_id, weekday, to_char(starts, 'HH24:MI') as starts, to_char(ends, 'HH24:MI') as ends, valid_from::text as valid_from, valid_to::text as valid_to
+         from staff_hours where staff_id = any($1::uuid[])`,
+      [ids],
+    )
+  ).rows;
+  const overrides = (await db.query("select staff_id, day::text as day, intervals from staff_day_overrides where staff_id = any($1::uuid[]) and day between $2::date and $3::date", [ids, first, last])).rows;
+  const local = (col) => `to_char(${col} at time zone $2, 'YYYY-MM-DD HH24:MI')`;
+  const there = (
+    await db.query(
+      `select 'visit' as kind, a.staff_id, ${local("a.starts_at")} as a, ${local("a.blocked_until")} as b, a.status, a.client_id, a.idempotency_key as key
+         from appointments a where a.staff_id = any($1::uuid[]) and a.starts_at < $4 and a.blocked_until > $3
+       union all
+       select 'off', t.staff_id, ${local("t.starts_at")}, ${local("t.ends_at")}, t.status, null::uuid, null
+         from time_off t where t.staff_id = any($1::uuid[]) and t.status <> 'declined' and t.starts_at < $4 and t.ends_at > $3
+       union all
+       select 'special', x.staff_id, ${local("x.starts_at")}, ${local("x.ends_at")}, '', null::uuid, null
+         from special_time x where x.staff_id = any($1::uuid[]) and x.starts_at < $4 and x.ends_at > $3`,
+      [ids, tz, from, to],
+    )
+  ).rows;
+
+  const dayNo = (date) => Math.round(Date.parse(`${date}T12:00:00Z`) / DAY_MS);
+  const pool = Array.from({ length: BUSY.clients }, (_, i) => busyClient(i));
+  const indexOf = new Map(pool.map((c, i) => [c.id, i]));
+  /** the days each client already comes on */
+  const seen = pool.map(() => []);
+  /** barber-days made by an earlier run */
+  const made = new Set();
+  for (const r of there) {
+    if (r.kind !== "visit" || !r.key?.startsWith(BUSY.key)) continue;
+    if (!r.key.endsWith(":c")) made.add(`${r.staff_id}:${r.a.slice(0, 10)}`);
+    const i = indexOf.get(r.client_id);
+    if (i != null) seen[i].push(dayNo(r.a.slice(0, 10)));
+  }
+  /** what holds a barber's time on a date: [from, to) minutes, visits apart */
+  const heldOn = (staffId, date) => {
+    const held = [];
+    for (const r of there) {
+      if (r.staff_id !== staffId || (r.kind === "visit" && r.status === "cancelled")) continue;
+      const [ad, bd] = [r.a.slice(0, 10), r.b.slice(0, 10)];
+      if (ad > date || bd < date) continue;
+      const span = [ad < date ? 0 : toMin(r.a.slice(11)), bd > date ? 1440 : toMin(r.b.slice(11))];
+      if (span[1] > span[0]) held.push({ span, visit: r.kind === "visit" });
+    }
+    return held;
+  };
+  const pickClient = (rand, date, seat) => {
+    const n = dayNo(date);
+    const free = (apart, mine) => pool.map((_, i) => i).filter((i) => (!mine || i % staff.length === seat) && seen[i].every((d) => Math.abs(d - n) >= apart));
+    const regular = rand() < BUSY.regulars;
+    for (const list of [regular ? free(BUSY.apart, true) : [], free(BUSY.apart, false), free(1, false)]) {
+      if (list.length) return list[Math.floor(rand() * list.length)];
+    }
+    return Math.floor(rand() * pool.length);
+  };
+
+  // 3. The plan: every barber's shift in the 29 days that has not been made yet
+  const rows = [];
+  let shifts = 0;
+  const linesOf = new Map();
+  for (const st of staff) linesOf.set(st.id, await demoLines(db, st.id));
+  for (let date = first; date <= last; date = addDays(date, 1)) {
+    for (const [seat, st] of staff.entries()) {
+      const lines = linesOf.get(st.id);
+      const ov = overrides.find((o) => o.staff_id === st.id && o.day === date);
+      const spans = (ov ? ov.intervals : hours.filter((h) => h.staff_id === st.id && h.weekday === weekdayOf(date) && (!h.valid_from || h.valid_from <= date) && (!h.valid_to || h.valid_to >= date)).map((h) => [h.starts, h.ends]))
+        .map(([a, b]) => [toMin(a), toMin(b)])
+        .filter(([a, b]) => b > a)
+        .sort((x, y) => x[0] - y[0]);
+      if (!spans.length || !lines.length) continue;
+      const row = (start, line, rand, key, status) => {
+        // a cancelled visit is made again on every run until its day leaves the 29: its client must not depend on the others
+        const c = pool[status === "cancelled" ? Math.floor(rand() * pool.length) : pickClient(rand, date, seat)];
+        if (status !== "cancelled") seen[indexOf.get(c.id)].push(dayNo(date));
+        const online = rand() < BUSY.online;
+        const starts = momentOf(date, start, tz);
+        // booked a day to ten days before online, the same day to four days before by the staff; never after «now»
+        const lead = online ? 1440 * (1 + Math.floor(rand() * 10)) + Math.floor(rand() * 600) : 1440 * Math.floor(rand() * 5) + 30 + Math.floor(rand() * 270);
+        const created = Math.min(starts - lead * 60_000, now - (5 + Math.floor(rand() * 2880)) * 60_000);
+        const comment = online && rand() < 0.08 ? BUSY.comments[Math.floor(rand() * BUSY.comments.length)] : "";
+        const cancelledAt = status === "cancelled" ? created + Math.floor((starts - created) * (0.2 + 0.7 * rand())) : null;
+        rows.push({
+          id: demoId("busy", key),
+          staff_id: st.id,
+          location_id: st.location_id,
+          client_id: c.id,
+          starts_at: new Date(starts).toISOString(),
+          ends_at: new Date(starts + line.dur * 60_000).toISOString(),
+          blocked_until: new Date(starts + (line.dur + line.buf) * 60_000).toISOString(),
+          status,
+          source: online ? "online" : "admin",
+          comment,
+          price: line.price,
+          locale: c.locale,
+          key: `${BUSY.key}${key}`,
+          created_at: new Date(created).toISOString(),
+          cancelled_at: cancelledAt && new Date(cancelledAt).toISOString(),
+          cancelled_by: status === "cancelled" ? (online ? "client" : "admin") : null,
+          service_id: line.id,
+          name: line.name,
+          dur: line.dur,
+        });
+      };
+      const begun = (minute) => date < today || (date === today && minute <= nowMin);
+      if (!made.has(`${st.id}:${date}`)) {
+        const held = heldOn(st.id, date);
+        const taken = held.filter((h) => h.visit).reduce((n, h) => n + spans.reduce((m, [a, b]) => m + Math.max(0, Math.min(b, h.span[1]) - Math.max(a, h.span[0])), 0), 0);
+        const plan = planShift({ spans, busy: held.map((h) => h.span), taken, lines, seed: `${st.slug}:${date}` });
+        const rand = seeded(`${st.slug}:${date}:who`);
+        for (const v of plan.visits) {
+          const outcome = rand() < BUSY.noShow ? "n" : "d";
+          const status = begun(v.start + v.line.dur) ? (outcome === "n" ? "no_show" : "done") : begun(v.start) && outcome === "d" ? "arrived" : "booked";
+          row(v.start, v.line, rand, `${st.slug}:${date}:${toTime(v.start)}:${outcome}`, status);
+        }
+        if (plan.visits.length) shifts++;
+      }
+      // a cancelled visit of a past shift: it holds no time, so it may sit over another visit
+      const rand = seeded(`${st.slug}:${date}:cancelled`);
+      if (rand() < BUSY.cancelled) {
+        const line = pickLine(lines, rand);
+        const [a, b] = spans[Math.floor(rand() * spans.length)];
+        const slots = Math.floor((b - a - line.dur) / BUSY.step) + 1;
+        const start = slots > 0 ? a + BUSY.step * Math.floor(rand() * slots) : -1;
+        if (start >= 0 && begun(start)) row(start, line, rand, `${st.slug}:${date}:${toTime(start)}:c`, "cancelled");
+      }
+    }
+  }
+  if (!rows.length) return { ...none, closed: closed.rows.length };
+
+  // 4. The clients of those visits, then the visits with their lines, in one statement each
+  const used = [...new Set(rows.map((r) => r.client_id))].map((id) => pool[indexOf.get(id)]);
+  const firstBooked = (id) => rows.filter((r) => r.client_id === id).map((r) => r.created_at).sort()[0];
+  const firstSource = (id) => rows.filter((r) => r.client_id === id).sort((x, y) => (x.created_at < y.created_at ? -1 : 1))[0].source;
+  const clients = await db.query(
+    `insert into clients (id, business_id, name, phone_e164, locale, source, sms_opt_out, email_opt_out, created_at, updated_at)
+     select x.id, $1::uuid, x.name, x.phone, x.locale, x.source, true, true, x.created_at, x.created_at
+       from jsonb_to_recordset($2::jsonb) as x(id uuid, name text, phone text, locale text, source text, created_at timestamptz)
+     on conflict do nothing returning id`,
+    [biz.id, JSON.stringify(used.map((c) => ({ ...c, source: firstSource(c.id), created_at: firstBooked(c.id) })))],
+  );
+  // a number someone else already has on this database: his visits go to that client
+  const byPhone = new Map((await db.query("select id, phone_e164 from clients where business_id = $1 and phone_e164 = any($2::text[])", [biz.id, used.map((c) => c.phone)])).rows.map((r) => [r.phone_e164, r.id]));
+  for (const r of rows) r.client_id = byPhone.get(pool[indexOf.get(r.client_id)].phone) ?? r.client_id;
+  const visits = await db.query(
+    `with x as (
+       select * from jsonb_to_recordset($2::jsonb) as r(
+         id uuid, staff_id uuid, location_id uuid, client_id uuid, starts_at timestamptz, ends_at timestamptz, blocked_until timestamptz,
+         status text, source text, comment text, price int, locale text, key text, created_at timestamptz,
+         cancelled_at timestamptz, cancelled_by text, service_id uuid, name jsonb, dur int)
+     ), added as (
+       insert into appointments (id, business_id, location_id, staff_id, client_id, starts_at, ends_at, blocked_until, status, source,
+                                 client_comment, reminder_min, total_cents, locale, idempotency_key, cancelled_at, cancelled_by, created_at, updated_at)
+       select x.id, $1::uuid, x.location_id, x.staff_id, x.client_id, x.starts_at, x.ends_at, x.blocked_until, x.status, x.source,
+              x.comment, null::int, x.price, x.locale, x.key, x.cancelled_at, x.cancelled_by, x.created_at, x.created_at
+         from x
+       on conflict do nothing
+       returning id
+     )
+     insert into appointment_services (appointment_id, position, service_id, name, duration_min, price_cents)
+     select x.id, 0, x.service_id, x.name, x.dur, x.price from x join added on added.id = x.id
+     returning appointment_id`,
+    [biz.id, JSON.stringify(rows)],
+  );
+  return { visits: visits.rows.length, clients: clients.rows.length, closed: closed.rows.length, shifts };
+}
+
+/**
+ * The busy calendar is for staging: SEED_BUSY=yes, and never where the app
+ * is the real thing (ALLOW_INDEXING=yes, set at the move to rempire.ee).
+ * @param {Record<string, string | undefined>} [env]
+ */
+export function busyEnabled(env = process.env) {
+  return env.SEED_BUSY === "yes" && env.ALLOW_INDEXING !== "yes";
 }
 
 async function main() {
@@ -472,6 +856,10 @@ async function main() {
     const qa = await seedOwnerQa(client);
     const sales = await seedDemoSales(client);
     console.log(`Demo seed done (${special} special-time windows, ${qa} question forms, ${sales} demo sales added).`);
+    if (busyEnabled()) {
+      const busy = await seedDemoBusy(client);
+      console.log(`Busy calendar: ${busy.visits} visits of ${busy.clients} new clients in ${busy.shifts} shifts added, ${busy.closed} past visits closed.`);
+    }
   } finally {
     await client.end();
   }

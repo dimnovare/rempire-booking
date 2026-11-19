@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { test as base, expect, type Browser, type Page, type TestInfo } from "@playwright/test";
 import { ru as A } from "../src/app/admin/copy.ru";
 import { ru as B } from "../src/app/b/copy.ru";
+import { addDays, demoWorkday } from "../tools/demo-structure.mjs";
 import { authFile, SERVER_LOG } from "./env";
 
 export { A, B, expect };
@@ -114,13 +115,24 @@ export function tallinnDate(days = 0, now = Date.now()): string {
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
 }
 
-/** The next day the demo salon works (Monday to Saturday), at least `from` days ahead. */
-export function nextWorkday(from = 1): string {
-  for (let i = from; i < from + 7; i++) {
-    const d = tallinnDate(i);
-    if (new Date(`${d}T12:00:00Z`).getUTCDay() !== 0) return d;
-  }
-  throw new Error("no workday");
+/**
+ * The `nth` day from tomorrow on that this demo barber works: a dated shift
+ * of his, or his weekly hours (tools/demo-structure.mjs, the salon's own
+ * schedule). Each barber has his own days, and some weeks he is away: a
+ * test never counts on a weekday, it asks here, and two tests that must not
+ * meet on one day ask for two different numbers.
+ * The first one is also the second day of his demo visits (seedDemoVisits
+ * in tools/seed-demo.mjs): five of them from 10:00 and lunch at 13:00.
+ */
+export function nextWorkday(slug: string, nth = 1): string {
+  let day = tallinnDate(0);
+  for (let i = 0; i < nth; i++) day = workdayFrom(slug, addDays(day, 1));
+  return day;
+}
+
+/** The first day from `date` on (YYYY-MM-DD) that this demo barber works. */
+export function workdayFrom(slug: string, date: string): string {
+  return demoWorkday(slug, date);
 }
 
 /** The page is no wider than the phone: nothing to scroll sideways. */

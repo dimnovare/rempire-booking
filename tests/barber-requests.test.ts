@@ -397,7 +397,8 @@ describe("weekly hours", () => {
 });
 
 describe("prices", () => {
-  const price = async (who: Who, b: Business, cents: number, min = 45) => barberSetPrice(b, who, { serviceId: demo.services.clip, priceCents: cents, durationMin: min });
+  // a cut takes Valentin 60 minutes
+  const price = async (who: Who, b: Business, cents: number, min = 60) => barberSetPrice(b, who, { serviceId: demo.services.clip, priceCents: cents, durationMin: min });
   const clipOf = async (staffId: string) => (await myTime(query, await biz(), staffId, NOW)).prices.find((p) => p.serviceId === demo.services.clip)!;
 
   it("with prices «ask» (the start) a new price waits; a newer one replaces it; a yes applies it", async () => {
@@ -410,7 +411,8 @@ describe("prices", () => {
     expect(waiting).toMatchObject({ cents: was.cents, min: was.min, waiting: { cents: was.cents + 1000, min: 50, requestId: second.id } });
     const own = (await pushes()).filter((x) => x.kind === "own_request").at(-1)!;
     const euros = (c: number) => `${c / 100} €`;
-    expect(pushText("own_request", own.payload, "ru")!.body).toBe(`Стрижка машинкой и ножницами: ${euros(was.cents)} → ${euros(was.cents + 1000)}, ${was.min} → 50 мин`);
+    expect(was).toMatchObject({ cents: 4000, min: 60 });
+    expect(pushText("own_request", own.payload, "ru")!.body).toBe(`Стрижка ножницами и машинкой: ${euros(was.cents)} → ${euros(was.cents + 1000)}, ${was.min} → 50 мин`);
     expect(await answerRequest(demo.business, owner, second.id, "approved", "", NOW)).toEqual({ ok: true });
     expect(await clipOf(val.staffId)).toMatchObject({ cents: was.cents + 1000, min: 50, waiting: null });
   });

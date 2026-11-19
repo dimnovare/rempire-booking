@@ -12,6 +12,8 @@ import { freshDemo, type Demo } from "./helpers";
 const TZ = "Europe/Tallinn";
 const at = (date: string, time: string) => zonedToUtc(date, time, TZ);
 const NOW = at("2026-11-16", "10:00");
+// Tuesday 17.11.2026, as in the salon's own schedule (tools/altegio-structure.json): Renat and
+// Jevgeni 10:00–19:00, Slava 10:00–18:30; Valentin and Milena are off
 const TUE = "2026-11-17";
 const ACTOR = "test-admin";
 
@@ -36,10 +38,14 @@ const visit = (o: Partial<AdminVisitInput> & { staff?: string; services?: string
 
 describe("admin: new visit", () => {
   it("books inside the hours at the barber's own price, from the admin", async () => {
-    const r = await adminCreateVisit(demo.business, visit({ staff: "jevgeni" }), ACTOR);
-    expect(r).toMatchObject({ ok: true, totalCents: 3800, extraCents: 0 });
+    // Renat's own: 35 € for grey hair (the service's price is 30 €), 45 minutes for a cut (the others take 60)
+    const r = await adminCreateVisit(demo.business, visit({ services: ["grey"] }), ACTOR);
+    expect(r).toMatchObject({ ok: true, totalCents: 3500, extraCents: 0 });
     if (!r.ok) return;
-    expect(r.end - r.start).toBe(45 * 60_000);
+    expect(r.end - r.start).toBe(30 * 60_000);
+    const cut = await adminCreateVisit(demo.business, visit({ time: "14:00", phone: "+372 5555 0203" }), ACTOR);
+    expect(cut).toMatchObject({ ok: true, totalCents: 4000, extraCents: 0 });
+    expect(cut.ok && cut.end - cut.start).toBe(45 * 60_000);
     const [a] = await query<{ source: string; status: string; reminder_min: number | null; manage_token_hash: string | null }>(
       "select source, status, reminder_min, manage_token_hash from appointments where id = $1",
       [r.id],
@@ -60,7 +66,8 @@ describe("admin: new visit", () => {
 
   it("asks before booking outside the hours, then books when told to", async () => {
     expect(await adminCreateVisit(demo.business, visit({ time: "20:30" }), ACTOR)).toEqual({ ok: false, code: "outside_hours" });
-    expect(await adminCreateVisit(demo.business, visit({ time: "19:45" }), ACTOR)).toEqual({ ok: false, code: "outside_hours" });
+    // his day ends at 19:00: a cut from 18:45 would run past it
+    expect(await adminCreateVisit(demo.business, visit({ time: "18:45" }), ACTOR)).toEqual({ ok: false, code: "outside_hours" });
     expect((await adminCreateVisit(demo.business, visit({ time: "20:30", force: true }), ACTOR)).ok).toBe(true);
   });
 
@@ -113,7 +120,7 @@ describe("admin: new visit", () => {
   });
 
   it("refuses a service the barber does not do", async () => {
-    expect(await adminCreateVisit(demo.business, visit({ staff: "milena", services: ["cutbeard"] }), ACTOR)).toMatchObject({ ok: false, code: "not_offered" });
+    expect(await adminCreateVisit(demo.business, visit({ staff: "renat", services: ["beard"] }), ACTOR)).toMatchObject({ ok: false, code: "not_offered" });
   });
 });
 
@@ -141,24 +148,35 @@ describe("admin: move, edit, cancel, status", () => {
   it("moving to another barber takes his price and time", async () => {
     const r = await adminCreateVisit(demo.business, visit({ time: "12:00" }), ACTOR);
     if (!r.ok) throw new Error("not booked");
-    expect(await adminUpdateVisit(demo.business, r.id, { staffId: demo.staff.jevgeni }, ACTOR)).toMatchObject({ ok: true, totalCents: 3800 });
+    // his time: Renat cuts in 45 minutes, Jevgeni in 60, both for 40 €
+    expect(r.end - r.start).toBe(45 * 60_000);
+    const m = await adminUpdateVisit(demo.business, r.id, { staffId: demo.staff.jevgeni }, ACTOR);
+    expect(m).toMatchObject({ ok: true, totalCents: 4000 });
+    expect(m.ok && m.end - m.start).toBe(60 * 60_000);
     const [row] = await query<{ staff_id: string }>("select staff_id from appointments where id = $1", [r.id]);
     expect(row.staff_id).toBe(demo.staff.jevgeni);
-    // Milena does no beard: the move is refused and nothing changes
-    const cb = await adminCreateVisit(demo.business, visit({ time: "15:00", services: ["cutbeard"] }), ACTOR);
-    if (!cb.ok) throw new Error("not booked");
-    expect(await adminUpdateVisit(demo.business, cb.id, { staffId: demo.staff.milena }, ACTOR)).toMatchObject({ ok: false, code: "not_offered" });
+    // his price: grey hair is 35 € with Renat and 30 € with Valentin (a week later, when both work)
+    const g = await adminCreateVisit(demo.business, visit({ date: "2026-11-24", services: ["grey"], phone: "+372 5555 0204" }), ACTOR);
+    if (!g.ok) throw new Error("not booked");
+    expect(g.totalCents).toBe(3500);
+    expect(await adminUpdateVisit(demo.business, g.id, { staffId: demo.staff.valentin }, ACTOR)).toMatchObject({ ok: true, totalCents: 3000 });
+    // Jevgeni does no long hair: the move is refused and nothing changes
+    const long = await adminCreateVisit(demo.business, visit({ time: "15:00", services: ["long"] }), ACTOR);
+    if (!long.ok) throw new Error("not booked");
+    expect(await adminUpdateVisit(demo.business, long.id, { staffId: demo.staff.jevgeni }, ACTOR)).toMatchObject({ ok: false, code: "not_offered" });
+    const [same] = await query<{ staff_id: string }>("select staff_id from appointments where id = $1", [long.id]);
+    expect(same.staff_id).toBe(demo.staff.renat);
   });
 
   it("changes the services, and the end and price follow", async () => {
     const r = await adminCreateVisit(demo.business, visit({ time: "12:00" }), ACTOR);
     if (!r.ok) throw new Error("not booked");
-    const e = await adminUpdateVisit(demo.business, r.id, { serviceIds: [demo.services.clip, demo.services.beard], staffNote: "regular" }, ACTOR);
-    expect(e).toMatchObject({ ok: true, totalCents: 6800 });
+    const e = await adminUpdateVisit(demo.business, r.id, { serviceIds: [demo.services.clip, demo.services.grey], staffNote: "regular" }, ACTOR);
+    expect(e).toMatchObject({ ok: true, totalCents: 7500 });
     if (!e.ok) return;
     expect(e.end - e.start).toBe(75 * 60_000);
     const lines = await query<{ service_id: string }>("select service_id from appointment_services where appointment_id = $1 order by position", [r.id]);
-    expect(lines.map((l) => l.service_id)).toEqual([demo.services.clip, demo.services.beard]);
+    expect(lines.map((l) => l.service_id)).toEqual([demo.services.clip, demo.services.grey]);
   });
 
   it("cancels, which frees the chair; a cancelled visit cannot be moved or marked", async () => {
@@ -210,17 +228,18 @@ describe("admin: special time in percent", () => {
   });
 
   it("a new visit in a percent window: that percent of its own price, one service or two", async () => {
-    await pct("valentin", "20:00", "22:00", 50);
-    const one = await adminCreateVisit(demo.business, visit({ staff: "valentin", time: "20:00" }), ACTOR);
+    // Valentin: a cut is 60 minutes and 40 €, a beard trim 30 minutes and 28 €
+    await pct("valentin", "19:00", "22:00", 50);
+    const one = await adminCreateVisit(demo.business, visit({ staff: "valentin", time: "19:00" }), ACTOR);
     expect(one).toMatchObject({ ok: true, extraCents: 2000, totalCents: 6000 });
-    const two = await adminCreateVisit(demo.business, visit({ staff: "valentin", time: "20:45", services: ["clip", "beard"], phone: "+372 5555 0211" }), ACTOR);
+    const two = await adminCreateVisit(demo.business, visit({ staff: "valentin", time: "20:00", services: ["clip", "beard"], phone: "+372 5555 0211" }), ACTOR);
     expect(two).toMatchObject({ ok: true, extraCents: 3400, totalCents: 10200 });
     if (!one.ok || !two.ok) return;
     expect(await money(one.id)).toEqual({ total_cents: 6000, extra_cents: 2000 });
     expect(await money(two.id)).toEqual({ total_cents: 10200, extra_cents: 3400 });
     // another barber's percent is not his: Jevgeni at the same hour is outside his own hours
     expect(await adminCreateVisit(demo.business, visit({ staff: "jevgeni", time: "20:00", phone: "+372 5555 0212" }), ACTOR)).toEqual({ ok: false, code: "outside_hours" });
-    expect(await adminCreateVisit(demo.business, visit({ staff: "jevgeni", time: "20:00", phone: "+372 5555 0212", force: true }), ACTOR)).toMatchObject({ ok: true, extraCents: 0, totalCents: 3800 });
+    expect(await adminCreateVisit(demo.business, visit({ staff: "jevgeni", time: "20:00", phone: "+372 5555 0212", force: true }), ACTOR)).toMatchObject({ ok: true, extraCents: 0, totalCents: 4000 });
   });
 
   it("moving in and out of a percent window prices the visit again", async () => {
@@ -243,17 +262,17 @@ describe("admin: special time in percent", () => {
 
   it("other services or another barber in a percent window: the percent of the new price", async () => {
     await pct("renat", "20:00", "22:00", 50);
-    await pct("milena", "20:00", "22:00", 10);
+    await pct("valentin", "20:00", "22:00", 10);
     const r = await adminCreateVisit(demo.business, visit({ time: "20:00" }), ACTOR);
     if (!r.ok) throw new Error("not booked");
     // a note alone changes nothing
     expect(await adminUpdateVisit(demo.business, r.id, { staffNote: "regular" }, ACTOR)).toMatchObject({ ok: true, extraCents: 2000, totalCents: 6000 });
-    // + beard: 68 € and half of it
-    expect(await adminUpdateVisit(demo.business, r.id, { serviceIds: [demo.services.clip, demo.services.beard] }, ACTOR)).toMatchObject({ ok: true, extraCents: 3400, totalCents: 10200 });
-    // back to the cut, then to Milena: her 35 € and her +10 %
-    expect(await adminUpdateVisit(demo.business, r.id, { serviceIds: [demo.services.clip] }, ACTOR)).toMatchObject({ ok: true, extraCents: 2000, totalCents: 6000 });
-    expect(await adminUpdateVisit(demo.business, r.id, { staffId: demo.staff.milena }, ACTOR)).toMatchObject({ ok: true, extraCents: 350, totalCents: 3850 });
-    expect(await money(r.id)).toEqual({ total_cents: 3850, extra_cents: 350 });
+    // + grey hair: 75 € and half of it
+    expect(await adminUpdateVisit(demo.business, r.id, { serviceIds: [demo.services.clip, demo.services.grey] }, ACTOR)).toMatchObject({ ok: true, extraCents: 3750, totalCents: 11250 });
+    // grey hair alone, 35 € with Renat; then to Valentin: his 30 € and his +10 %
+    expect(await adminUpdateVisit(demo.business, r.id, { serviceIds: [demo.services.grey] }, ACTOR)).toMatchObject({ ok: true, extraCents: 1750, totalCents: 5250 });
+    expect(await adminUpdateVisit(demo.business, r.id, { staffId: demo.staff.valentin }, ACTOR)).toMatchObject({ ok: true, extraCents: 300, totalCents: 3300 });
+    expect(await money(r.id)).toEqual({ total_cents: 3300, extra_cents: 300 });
   });
 
   it("a move keeps the visit's prices as booked, and the percent is of those", async () => {
@@ -270,24 +289,28 @@ describe("admin: special time in percent", () => {
 
 describe("admin: calendar data", () => {
   it("has every barber's day: hours, visits with their lines, blocks and special time", async () => {
-    await adminCreateVisit(demo.business, visit({ time: "12:00", services: ["clip", "beard"] }), ACTOR);
+    await adminCreateVisit(demo.business, visit({ time: "12:00", services: ["clip", "grey"] }), ACTOR);
     await addTimeOff(demo.business, { staffId: demo.staff.slava, from: at(TUE, "00:00"), to: at("2026-11-18", "00:00"), kind: "sick" }, ACTOR);
     await addSpecialTime(demo.business, { staffId: demo.staff.valentin, from: at(TUE, "20:00"), to: at(TUE, "22:00"), extraCents: 2000 }, ACTOR);
     const cal = await loadCalendar(query, demo.business, TUE, 1);
     expect(cal.staff.map((s) => s.name)).toEqual(["Renat", "Valentin", "Jevgeni", "Slava", "Milena"]);
-    expect(cal.work[demo.staff.renat][TUE]).toEqual([[at(TUE, "10:00"), at(TUE, "20:00")]]);
+    expect(cal.work[demo.staff.renat][TUE]).toEqual([[at(TUE, "10:00"), at(TUE, "19:00")]]);
+    // a dated shift that is not the template's (Tuesday to 18:00), and a dated day off
+    expect(cal.work[demo.staff.slava][TUE]).toEqual([[at(TUE, "10:00"), at(TUE, "18:30")]]);
+    expect(cal.work[demo.staff.valentin][TUE]).toEqual([]);
     expect(cal.visits).toHaveLength(1);
-    expect(cal.visits[0]).toMatchObject({ clientName: "Walk In", clientPhone: "+37255550201", totalCents: 6800 });
+    expect(cal.visits[0]).toMatchObject({ clientName: "Walk In", clientPhone: "+37255550201", totalCents: 7500 });
     expect(cal.visits[0].services.map((s) => s.durationMin)).toEqual([45, 30]);
     expect(cal.blocks).toMatchObject([{ staffId: demo.staff.slava, kind: "sick" }]);
     expect(cal.special).toMatchObject([{ staffId: demo.staff.valentin, extraCents: 2000 }]);
-    expect(cal.services.find((s) => s.id === demo.services.clip)?.offers[demo.staff.jevgeni]).toEqual([3800, 45]);
+    expect(cal.services.find((s) => s.id === demo.services.clip)?.offers[demo.staff.jevgeni]).toEqual([4000, 60]);
+    expect(cal.services.find((s) => s.id === demo.services.clip)?.offers[demo.staff.renat]).toEqual([4000, 45]);
   });
 
   it("a week is seven days; Sunday has no hours", async () => {
     const cal = await loadCalendar(query, demo.business, weekStart(TUE), 7);
     expect(cal.dates).toEqual(["2026-11-16", "2026-11-17", "2026-11-18", "2026-11-19", "2026-11-20", "2026-11-21", "2026-11-22"]);
-    expect(cal.work[demo.staff.renat]["2026-11-21"]).toEqual([[at("2026-11-21", "10:00"), at("2026-11-21", "18:00")]]);
+    expect(cal.work[demo.staff.renat]["2026-11-21"]).toEqual([[at("2026-11-21", "10:00"), at("2026-11-21", "19:00")]]);
     expect(cal.work[demo.staff.renat]["2026-11-22"]).toEqual([]);
   });
 
@@ -305,8 +328,11 @@ describe("admin: barbers and services", () => {
     // Tuesday 12–16 with a break 14–15
     const ok = await saveWeeklyHours(demo.business, demo.staff.renat, { 2: [["12:00", "14:00"], ["15:00", "16:00"]] }, ACTOR);
     expect(ok).toEqual({ ok: true });
-    const look = await loadAvailability(query, { business: demo.business, serviceIds: [demo.services.buzz], staffId: demo.staff.renat, from: TUE, days: 2, now: NOW });
-    const starts = look.days[0].slots.map((s) => hhmm((s.start - at(TUE, "00:00")) / 60_000));
+    // a Tuesday after his dated shifts (they end on 5.12): there the week template is what counts.
+    // Grey hair takes him 30 minutes.
+    const day = "2026-12-08";
+    const look = await loadAvailability(query, { business: demo.business, serviceIds: [demo.services.grey], staffId: demo.staff.renat, from: day, days: 2, now: NOW });
+    const starts = look.days[0].slots.map((s) => hhmm((s.start - at(day, "00:00")) / 60_000));
     expect(starts[0]).toBe("12:00");
     expect(starts).toContain("13:30");
     expect(starts).not.toContain("14:00");

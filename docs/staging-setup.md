@@ -71,6 +71,13 @@ Both records were added on 17.11.2026, in Dim's Cloudflare account.
   - After `next build`, `postbuild` migrates the database and loads the
     demo data (`--build-env SEED_DEMO=yes`). If either fails, the build
     fails and the previous deployment stays live.
+  - **`SEED_BUSY=yes`** (19.11.2026; set by this deploy and nowhere else):
+    the demo seed also fills the calendar, the last 14 days and the next
+    14, with generated visits of fake clients («Demo client 101» …,
+    +372 5555 0101 …) on the barbers' real shifts (`seedDemoBusy` in
+    `tools/seed-demo.mjs`). Each deploy adds the days that have come into
+    those 28 and closes the visits now behind. Tests and e2e never set it,
+    and with `ALLOW_INDEXING=yes` it does nothing.
 - Then it checks noindex on the live domain.
 - To run it by hand: Actions → CI → Run workflow.
 - Check by hand: `npm run check:noindex -- https://rempire-booking.diipsolutions.eu`.

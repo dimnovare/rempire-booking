@@ -68,9 +68,11 @@ jobs:
       # previous deployment stays live.
       # Runtime: DB_DRIVER=auto uses DATABASE_URL when Vercel has it, and an
       # in-memory demo database (src/lib/db.ts) when it does not.
+      # SEED_BUSY=yes, here and nowhere else: the demo seed also fills the
+      # calendar with generated visits of fake clients (tools/seed-demo.mjs).
       - name: Deploy
         if: env.VERCEL_TOKEN != ''
-        run: npx --yes $VERCEL_CLI deploy --prod --build-env SEED_DEMO=yes --env DB_DRIVER=auto --env SEED_DEMO=yes --token "$VERCEL_TOKEN"
+        run: npx --yes $VERCEL_CLI deploy --prod --build-env SEED_DEMO=yes --build-env SEED_BUSY=yes --env DB_DRIVER=auto --env SEED_DEMO=yes --env SEED_BUSY=yes --token "$VERCEL_TOKEN"
 
       - name: noindex on staging
         if: env.VERCEL_TOKEN != ''

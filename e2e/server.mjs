@@ -30,6 +30,8 @@ const env = {
   DB_DRIVER: "pglite",
   SEED_DEMO: "yes",
   DEMO_LOGINS: "yes",
+  // free times and fixed data: never staging's generated visits (tools/seed-demo.mjs)
+  SEED_BUSY: "",
   EMAIL_TRANSPORT: "console",
   SMS_TRANSPORT: "console",
   // no push keys: the e2e server must never call a push service

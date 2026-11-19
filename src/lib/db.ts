@@ -147,12 +147,14 @@ async function makePglite(): Promise<Raw> {
       await seedDemoSales(db);
       await seedOwnerQa(db, [...OWNER_QA, DEMO_QA]);
       // a local run: logins at example.test, by e-mail code, and fake visits
-      // for today and tomorrow (tools/seed-demo.mjs)
+      // for today and each barber's next working day (tools/seed-demo.mjs)
+      const local = await import("../../tools/seed-demo.mjs");
       if (process.env.DEMO_LOGINS === "yes") {
-        const local = await import("../../tools/seed-demo.mjs");
         await local.seedDemoLogins(db);
         await local.seedDemoVisits(db);
       }
+      // staging's busy calendar (SEED_BUSY=yes): never tests, never e2e
+      if (local.busyEnabled()) await local.seedDemoBusy(db);
     }
     // the first owner login, from ADMIN_BOOTSTRAP_* (a local run)
     const { bootstrapOwner } = await import("../../tools/bootstrap-owner.mjs");

@@ -34,10 +34,10 @@ test.describe("his time", () => {
     expect(await smallTargets(page)).toEqual([]);
   });
 
-  test("a break applies at once, shows on his day, and goes away again", async ({ page, browser }, info) => {
+  test("a break applies at once, shows on his day, and goes away again", async ({ page, browser, barber }, info) => {
     const owner = await phoneOf(browser, info, "owner");
     await setSwitch(owner, A.req.time, A.req.now);
-    const day = nextWorkday();
+    const day = nextWorkday(barber.slug);
     await openTime(page);
     await page.getByRole("button", { name: T.add.block, exact: true }).click();
     const s = sheet(page);
@@ -62,7 +62,8 @@ test.describe("his time", () => {
     const owner = await phoneOf(browser, info, "owner");
     await setSwitch(owner, A.req.time, A.req.ask);
     try {
-      const day = nextWorkday(4);
+      // his fourth working day from tomorrow: no demo visit and no other test's visit is inside it
+      const day = nextWorkday(barber.slug, 4);
       const note = `E2E отпуск ${barber.name}`;
       await openTime(page);
       await expect(page.getByText(T.modeTime.ask)).toBeVisible();
@@ -157,12 +158,12 @@ test.describe("his time", () => {
     await expect(s.getByRole("alert")).toHaveText(T.same);
   });
 
-  test("special time in percent: «%» next to the number, «+50 %» ahead and on his day, money for a visit", async ({ page, browser }, info) => {
+  test("special time in percent: «%» next to the number, «+50 %» ahead and on his day, money for a visit", async ({ page, browser, barber }, info) => {
     const owner = await phoneOf(browser, info, "owner");
     await setSwitch(owner, A.req.time, A.req.now);
     await owner.context().close();
     // early morning well ahead: no demo visit and no other test is there
-    const day = nextWorkday(9);
+    const day = nextWorkday(barber.slug, 9);
     await openTime(page);
     await page.getByRole("button", { name: T.add.special, exact: true }).click();
     const s = sheet(page);
@@ -225,7 +226,7 @@ test.describe("Renat: special time for a barber", () => {
   test.use(asOwner);
 
   test("an amount or a percent: «€ | %» next to the number; the list and the calendar say «+50 %»", async ({ page }) => {
-    const day = nextWorkday(10);
+    const day = nextWorkday("slava", 10);
     await page.goto(`/admin/staff/${demoId("staff", "slava")}`);
     await hydrated(page);
     // on a phone the part opens as a sheet; on a wide screen it is open already

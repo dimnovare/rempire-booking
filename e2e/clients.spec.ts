@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { Page } from "@playwright/test";
 import { OUT } from "./env";
-import { A, asOwner, expect, expectNoSideScroll, hydrated, smallTargets, tallinnDate, test } from "./helpers";
+import { A, asOwner, expect, expectNoSideScroll, hydrated, nextWorkday, smallTargets, test } from "./helpers";
 
 /**
  * «Клиенты», the client base in the admin, and the bar that now holds four
@@ -65,8 +65,8 @@ test.describe("clients", () => {
   });
 
   test("the list and its search; a client's card: a category and a note are kept, his visit is there", async ({ page }, info) => {
-    // two of Renat's demo clients of tomorrow (tools/seed-demo.mjs, the second day: 26 at 10:00, 28 at 14:30).
-    // Tomorrow, not today: a fixed visit of today is left out when the «in 20 minutes» demo visit has its time.
+    // two of Renat's demo clients of his next working day (tools/seed-demo.mjs, the second day: 26 at 10:00, 28 before lunch).
+    // That day, not today: a fixed visit of today is left out when the «in 20 minutes» demo visit has its time.
     const k = info.project.name === "iphone" ? 28 : 26;
     const name = `Demo client ${k}`;
     const label = `E2E ${info.project.name}`;
@@ -131,11 +131,11 @@ test.describe("clients", () => {
     await hydrated(page);
     await expect(page.getByRole("heading", { level: 1, name, exact: true })).toBeVisible();
     await expect(part(page, C.data).getByRole("textbox", { name: A.visit.name })).toHaveValue(name);
-    // the history: the demo visit, tomorrow with Renat, in the calendar's words; it opens its day in the calendar
+    // the history: the demo visit, on Renat's next working day, in the calendar's words; it opens its day in the calendar
     const visit = part(page, C.history).locator(".cl-visit").first();
     await expect(visit).toContainText("Renat");
     await expect(visit.locator(".cl-st")).toHaveText(A.visit.status.booked);
-    await expect(visit).toHaveAttribute("href", `/admin?d=${tallinnDate(1)}`);
+    await expect(visit).toHaveAttribute("href", `/admin?d=${nextWorkday("renat")}`);
 
     // a category, added as a chip; it saves by itself
     const cats = part(page, C.labels);

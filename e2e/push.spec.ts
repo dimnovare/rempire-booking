@@ -41,7 +41,7 @@ const shown = (page: Page) =>
 test.use({ ...asBarber, channel: "chromium", permissions: ["notifications"] });
 
 test.describe("push in the service worker", () => {
-  test("the worker controls /b, shows the server's words, and a tap opens the visit's day", async ({ page, context }) => {
+  test("the worker controls /b, shows the server's words, and a tap opens the visit's day", async ({ page, context, barber }) => {
     await page.goto("/b/time");
     await hydrated(page);
     const scope = await page.evaluate(async () => (await navigator.serviceWorker.ready).scope);
@@ -50,7 +50,7 @@ test.describe("push in the service worker", () => {
     await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
 
     const { cdp, id } = await workerId(context, page);
-    const day = nextWorkday();
+    const day = nextWorkday(barber.slug);
     const msg = pushText(
       "visit_new",
       { visitId: "e2e", startsAt: new Date(`${day}T10:00:00Z`).toISOString(), tz: TZ, client: "Demo client 1", services: [{ ru: "Стрижка" }], staff: "Valentin" },

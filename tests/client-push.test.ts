@@ -15,18 +15,15 @@ import { DEFAULT_SETTINGS, readSettings } from "@/lib/settings";
 import { sentSms } from "@/lib/sms";
 import { addDays, todayIn, zonedToUtc } from "@/lib/tz";
 import { cancelByClient, findVisit } from "@/lib/visits";
+import { demoWorkday } from "../tools/seed-demo.mjs";
 import { freshDemo, type Demo } from "./helpers";
 
 const TZ = "Europe/Tallinn";
 const at = (date: string, time: string) => zonedToUtc(date, time, TZ);
 // The route asks the real clock whether a visit is still ahead, so the visits
-// here are on a real day to come: the first Monday to Saturday three or more days on.
+// here are on a real day to come: the first day Slava works, three or more days on.
 const NOW = Date.now();
-const DAY = (() => {
-  let d = addDays(todayIn(TZ, NOW), 3);
-  if (new Date(`${d}T12:00:00Z`).getUTCDay() === 0) d = addDays(d, 1);
-  return d;
-})();
+const DAY = demoWorkday("slava", addDays(todayIn(TZ, NOW), 3));
 const DDMM = `${DAY.slice(8, 10)}.${DAY.slice(5, 7)}`;
 // when the 12:00 visits are reminded: two hours before. Reminders are planned at most 48 hours ahead.
 const DUE = at(DAY, "10:00");

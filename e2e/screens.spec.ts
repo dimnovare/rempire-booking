@@ -21,10 +21,10 @@ for (const width of [320, 360]) {
       await test.info().attach(`${width}-${name}`, { body, contentType: "image/png" });
     };
 
-    test("the screens", async ({ page }) => {
+    test("the screens", async ({ page, barber }) => {
       for (const [name, url] of [
         ["day", "/b"],
-        ["tomorrow", `/b?d=${nextWorkday()}`],
+        ["tomorrow", `/b?d=${nextWorkday(barber.slug)}`],
         ["week", "/b/week"],
         ["time", "/b/time"],
         ["more", "/b/more"],
@@ -38,8 +38,8 @@ for (const width of [320, 360]) {
       }
     });
 
-    test("the sheets", async ({ page }) => {
-      await page.goto(`/b?d=${nextWorkday()}`);
+    test("the sheets", async ({ page, barber }) => {
+      await page.goto(`/b?d=${nextWorkday(barber.slug)}`);
       await hydrated(page);
       await page.locator(".bx-v", { hasText: "Demo client" }).first().getByRole("button").click();
       await check(page, "visit");

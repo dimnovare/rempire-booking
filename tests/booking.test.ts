@@ -4,8 +4,8 @@ import { loadAvailability } from "@/lib/availability";
 import { book, hashToken, type BookingInput } from "@/lib/booking";
 import { closeDb, query } from "@/lib/db";
 import { cleanExtra, extraFor, extraText, pricedWindows } from "@/lib/slots";
-import { addDays, isoWeekday, todayIn, zonedToUtc } from "@/lib/tz";
-import { demoId } from "../tools/seed-demo.mjs";
+import { addDays, todayIn, zonedToUtc } from "@/lib/tz";
+import { demoId, demoWorkday } from "../tools/seed-demo.mjs";
 import { freshDemo, type Demo } from "./helpers";
 
 const TZ = "Europe/Tallinn";
@@ -13,6 +13,8 @@ const at = (date: string, time: string) => zonedToUtc(date, time, TZ);
 const iso = (date: string, time: string) => new Date(at(date, time)).toISOString();
 // Monday 16.11.2026, 10:00 in Tallinn
 const NOW = at("2026-11-16", "10:00");
+// Tuesday 17.11.2026, as in the salon's own schedule (tools/altegio-structure.json): Renat and
+// Jevgeni 10:00–19:00, Slava 10:00–18:30; Valentin and Milena are off
 const TUE = "2026-11-17";
 
 let demo: Demo;
@@ -76,11 +78,11 @@ describe("database", () => {
 });
 
 describe("free slots", () => {
-  it("a 45-minute cut fits from 10:00 to the last start at 19:15", async () => {
+  it("a 45-minute cut fits from 10:00 to the last start at 18:15", async () => {
     const s = await slotsOf({ staff: "renat", services: ["clip"], date: TUE });
     expect(s[0].start).toBe(at(TUE, "10:00"));
-    expect(s[s.length - 1].start).toBe(at(TUE, "19:15"));
-    expect(s.length).toBe(38);
+    expect(s[s.length - 1].start).toBe(at(TUE, "18:15"));
+    expect(s.length).toBe(34);
   });
 
   it("nothing before now plus the 30-minute notice", async () => {
@@ -90,12 +92,13 @@ describe("free slots", () => {
 
   it("Sunday is closed and a barber without the service is left out", async () => {
     expect(await slotsOf({ services: ["clip"], date: "2026-11-22" })).toEqual([]);
-    expect(await slotsOf({ staff: "milena", services: ["beard"], date: TUE })).toEqual([]);
+    // Renat works that Tuesday, and does no beard trim
+    expect(await slotsOf({ staff: "renat", services: ["beard"], date: TUE })).toEqual([]);
   });
 
   it("two services add up to the barber's own total time", async () => {
-    const s = await slotsOf({ staff: "renat", services: ["clip", "beard"], date: TUE });
-    expect(s[s.length - 1].start).toBe(at(TUE, "18:45")); // 75 min to 20:00
+    const s = await slotsOf({ staff: "renat", services: ["clip", "grey"], date: TUE });
+    expect(s[s.length - 1].start).toBe(at(TUE, "17:45")); // 45 + 30 min to 19:00
   });
 
   it("time off and a changed day are respected", async () => {
@@ -110,7 +113,11 @@ describe("free slots", () => {
     expect(s).not.toContain(at(TUE, "13:30"));
     expect(s).toContain(at(TUE, "14:00"));
 
-    await query("insert into staff_day_overrides (staff_id, day, intervals) values ($1, $2, '[]')", [demo.staff.renat, TUE]);
+    // the day has its dated shift already: now it is a day off
+    await query("insert into staff_day_overrides (staff_id, day, intervals) values ($1, $2, '[]') on conflict (staff_id, day) do update set intervals = excluded.intervals", [
+      demo.staff.renat,
+      TUE,
+    ]);
     expect(await slotsOf({ staff: "renat", services: ["clip"], date: TUE })).toEqual([]);
   });
 
@@ -175,11 +182,12 @@ describe("booking", () => {
 
   it("«anyone» goes to the barber with fewer visits that day", async () => {
     await book(query, demo.business, input({ staff: "renat", time: "10:00" }), { now: NOW });
+    // Valentin is off that day: of the two with no visit yet, Jevgeni is listed first
     const a = await book(query, demo.business, input({ staff: null, time: "11:00" }), { now: NOW });
-    expect(a.ok && a.visit.staffId).toBe(demo.staff.valentin);
+    expect(a.ok && a.visit.staffId).toBe(demo.staff.jevgeni);
     const b = await book(query, demo.business, input({ staff: null, time: "12:00" }), { now: NOW });
-    expect(b.ok && b.visit.staffId).toBe(demo.staff.jevgeni);
-    const [row] = await query<{ any_staff: boolean }>("select any_staff from appointments where staff_id = $1", [demo.staff.jevgeni]);
+    expect(b.ok && b.visit.staffId).toBe(demo.staff.slava);
+    const [row] = await query<{ any_staff: boolean }>("select any_staff from appointments where staff_id = $1", [demo.staff.slava]);
     expect(row.any_staff).toBe(true);
   });
 
@@ -195,7 +203,7 @@ describe("booking", () => {
     expect(await book(query, demo.business, input({ date: "2026-11-16", time: "09:00" }), { now: NOW })).toEqual({ ok: false, code: "slot_taken" });
     expect(await book(query, demo.business, input({ phone: "12" }), { now: NOW })).toMatchObject({ ok: false, field: "phone" });
     expect(await book(query, demo.business, input({ name: "  " }), { now: NOW })).toMatchObject({ ok: false, field: "name" });
-    expect(await book(query, demo.business, input({ staff: "milena", services: ["beard"] }), { now: NOW })).toMatchObject({ ok: false, code: "not_offered" });
+    expect(await book(query, demo.business, input({ staff: "renat", services: ["beard"] }), { now: NOW })).toMatchObject({ ok: false, code: "not_offered" });
   });
 
   it("no SMS reminder when the client switches it off", async () => {
@@ -233,13 +241,14 @@ describe("special time", () => {
   const extraAt = (s: { start: number; extraCents: number }[], time: string) => s.find((x) => x.start === at(TUE, time))?.extraCents;
 
   it("after hours: adds bookable time at its price, never across the edge", async () => {
-    await special("renat", TUE, "20:00", "22:00", 20);
+    // his day ends at 19:00
+    await special("renat", TUE, "19:00", "21:00", 20);
     const s = await slotsOf({ staff: "renat", services: ["clip"], date: TUE });
-    expect(extraAt(s, "19:15")).toBe(0);
-    expect(extraAt(s, "19:30")).toBeUndefined(); // would run from 19:30 into special time
-    expect(extraAt(s, "20:00")).toBe(2000);
-    expect(extraAt(s, "21:15")).toBe(2000);
-    expect(extraAt(s, "21:30")).toBeUndefined();
+    expect(extraAt(s, "18:15")).toBe(0);
+    expect(extraAt(s, "18:30")).toBeUndefined(); // would run from 18:30 into special time
+    expect(extraAt(s, "19:00")).toBe(2000);
+    expect(extraAt(s, "20:15")).toBe(2000);
+    expect(extraAt(s, "20:30")).toBeUndefined();
   });
 
   it("inside the hours: replaces the usual price for that time", async () => {
@@ -372,8 +381,8 @@ describe("special time in percent", () => {
 
   it("free times: the percent of each barber's own price for the chosen services", async () => {
     await specialPct("renat", TUE, "13:00", "14:00", 50);
-    await specialPct("milena", TUE, "13:00", "14:00", 50);
-    // Renat's cut is 40 €, Milena's 35 €
+    await specialPct("valentin", TUE, "13:00", "14:00", 50);
+    // Renat's cut is 40 €; grey hair is 35 € with him and 30 € with Valentin
     const renat = await slotsOf({ staff: "renat", services: ["clip"], date: TUE });
     expect(extraAt(renat, "12:15")).toBe(0);
     expect(extraAt(renat, "12:30")).toBeUndefined(); // would run into the special hour
@@ -381,17 +390,21 @@ describe("special time in percent", () => {
     expect(extraAt(renat, "13:15")).toBe(2000);
     expect(extraAt(renat, "13:30")).toBeUndefined();
     expect(extraAt(renat, "14:00")).toBe(0);
-    expect(extraAt(await slotsOf({ staff: "milena", services: ["clip"], date: TUE }), "13:00")).toBe(1750);
-    // a 30-minute service at 28 €, and two services together (40 € + 28 €, 75 minutes)
-    expect(extraAt(await slotsOf({ staff: "renat", services: ["beard"], date: TUE }), "13:30")).toBe(1400);
+    expect(extraAt(await slotsOf({ staff: "valentin", services: ["grey"], date: TUE }), "13:00")).toBe(1500);
+    // a 30-minute service at 35 €, and two services together (40 € + 35 €, 75 minutes): a quarter of 75 €
+    expect(extraAt(await slotsOf({ staff: "renat", services: ["grey"], date: TUE }), "13:30")).toBe(1750);
     await specialPct("renat", TUE, "20:00", "22:00", 25);
-    expect(extraAt(await slotsOf({ staff: "renat", services: ["clip", "beard"], date: TUE }), "20:00")).toBe(1700);
+    expect(extraAt(await slotsOf({ staff: "renat", services: ["clip", "grey"], date: TUE }), "20:00")).toBe(1875);
     // half a cent goes up
     await query("update staff_services set price_cents = 3333 where staff_id = $1 and service_id = $2", [demo.staff.renat, demo.services.clip]);
     expect(extraAt(await slotsOf({ staff: "renat", services: ["clip"], date: TUE }), "13:00")).toBe(1667);
   });
 
   it("«anyone» at a percent time: the barber with the smallest extra first, each with his own amount", async () => {
+    // the salon's cut is 40 € with everyone; here three of them have a price of their own: 38, 38 and 35 €
+    for (const [s, cents] of [["jevgeni", 3800], ["slava", 3800], ["milena", 3500]] as const) {
+      await query("update staff_services set price_cents = $3 where staff_id = $1 and service_id = $2", [demo.staff[s], demo.services.clip, cents]);
+    }
     for (const s of ["renat", "valentin", "jevgeni", "slava", "milena"]) await specialPct(s, TUE, "13:00", "14:00", 50);
     const slot = (await slotsOf({ services: ["clip"], date: TUE })).find((x) => x.start === at(TUE, "13:00"))!;
     expect(slot.staffIds[0]).toBe(demo.staff.milena);
@@ -417,9 +430,9 @@ describe("special time in percent", () => {
     expect(row).toEqual({ total_cents: 6000, extra_cents: 2000 });
     const lines = await query<{ price_cents: number }>("select price_cents from appointment_services where appointment_id = $1", [r.visit.id]);
     expect(lines).toEqual([{ price_cents: 4000 }]);
-    // two services, and no extra sent: the server's own amount
-    const two = await book(query, demo.business, input({ time: "20:45", services: ["clip", "beard"], phone: "+372 5555 0113" }), { now: NOW });
-    expect(two.ok && [two.visit.totalCents, two.visit.extraCents]).toEqual([10200, 3400]);
+    // two services (40 € + 35 €), and no extra sent: the server's own amount
+    const two = await book(query, demo.business, input({ time: "20:45", services: ["clip", "grey"], phone: "+372 5555 0113" }), { now: NOW });
+    expect(two.ok && [two.visit.totalCents, two.visit.extraCents]).toEqual([11250, 3750]);
   });
 
   it("never charges another amount than the one shown", async () => {
@@ -444,9 +457,8 @@ describe("special time in percent", () => {
   });
 
   it("POST /api/bookings: a wrong extra is 409 with the nearest times and their right amounts", async () => {
-    // the route asks the real clock, so: the next working day at least two days on
-    let day = addDays(todayIn(TZ), 2);
-    while (isoWeekday(day) === 7) day = addDays(day, 1);
+    // the route asks the real clock, so: the next day Renat works, at least two days on
+    const day = demoWorkday("renat", addDays(todayIn(TZ), 2));
     await query("insert into special_time (business_id, staff_id, starts_at, ends_at, extra_cents, extra_pct) values ($1, $2, $3, $4, 0, 50)", [
       demo.business.id,
       demo.staff.renat,
@@ -483,7 +495,7 @@ describe("a visit being moved", () => {
     const moving = await starts(r.visit.id);
     expect(moving[0]).toBe(at(TUE, "10:00"));
     expect(moving).toContain(at(TUE, "10:15"));
-    expect(moving.length).toBe(38);
+    expect(moving.length).toBe(34);
     // only that visit is out of the way: another one still holds its time
     const other = await book(query, demo.business, input({ time: "12:00", phone: "+372 5555 0115" }), { now: NOW });
     if (!other.ok) throw new Error("not booked");

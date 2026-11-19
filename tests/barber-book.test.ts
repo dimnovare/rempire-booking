@@ -16,7 +16,8 @@ import { freshDemo, type Demo } from "./helpers";
 const TZ = "Europe/Tallinn";
 const at = (date: string, time: string) => zonedToUtc(date, time, TZ);
 const hm = (ms: number) => localParts(ms, TZ).time;
-// a Tuesday ahead of the real clock, and «now» the day before
+// a Tuesday ahead of the real clock, and «now» the day before. Renat works 10:00–19:00 that day
+// (tools/altegio-structure.json): a cut takes him 45 minutes, grey hair 30, and he does no beard trim
 const DAY = "2026-12-01";
 const NOW = at("2026-11-30", "12:00");
 const ACTOR = "test-admin";
@@ -77,26 +78,28 @@ describe("free start times", () => {
   });
 
   it("his free times in a percent window: the amount for these services, the one the booking then writes", async () => {
-    await addSpecialTime(demo.business, { staffId: demo.staff.renat, from: at(DAY, "20:00"), to: at(DAY, "22:00"), extraPct: 50 }, ACTOR);
+    // right after his day, which ends at 19:00
+    await addSpecialTime(demo.business, { staffId: demo.staff.renat, from: at(DAY, "19:00"), to: at(DAY, "21:00"), extraPct: 50 }, ACTOR);
     // the day itself keeps the window as he set it: free time there is «+50 %», no money yet
     const [day] = await loadBarberDays(query, demo.business, demo.staff.renat, DAY, 1);
-    expect(day.special.map((s) => [hm(s.from), hm(s.to), s.extraCents, s.extraPct])).toEqual([["20:00", "22:00", 0, 50]]);
+    expect(day.special.map((s) => [hm(s.from), hm(s.to), s.extraCents, s.extraPct])).toEqual([["19:00", "21:00", 0, 50]]);
     expect(freeGaps(day, { now: NOW, stepMin: 15 }).map((g) => [hm(g.from), hm(g.to), g.extraCents, g.extraPct])).toEqual([
-      ["10:00", "20:00", 0, 0],
-      ["20:00", "22:00", 0, 50],
+      ["10:00", "19:00", 0, 0],
+      ["19:00", "21:00", 0, 50],
     ]);
     const extraAt = async (serviceIds: string[], time: string) => {
       const r = await barberFreeStarts(query, demo.business, demo.staff.renat, DAY, { serviceIds }, NOW);
       if (!r.ok) throw new Error(r.code);
       return r.starts.find((s) => hm(s.start) === time)?.extraCents;
     };
-    expect(await extraAt([demo.services.clip], "19:15")).toBe(0);
-    expect(await extraAt([demo.services.clip], "19:30")).toBeUndefined(); // would run into the window
-    expect(await extraAt([demo.services.clip], "20:00")).toBe(2000);
-    expect(await extraAt([demo.services.beard], "20:00")).toBe(1400);
-    expect(await extraAt([demo.services.clip, demo.services.beard], "20:00")).toBe(3400);
-    const r = await barberBook(demo.business, demo.staff.renat, ACTOR, mine({ start: at(DAY, "20:00"), serviceIds: [demo.services.clip, demo.services.beard] }));
-    expect(r).toMatchObject({ ok: true, extraCents: 3400, totalCents: 10200 });
+    expect(await extraAt([demo.services.clip], "18:15")).toBe(0);
+    expect(await extraAt([demo.services.clip], "18:30")).toBeUndefined(); // would run into the window
+    expect(await extraAt([demo.services.clip], "19:00")).toBe(2000);
+    // grey hair is 35 € with him; with the cut 75 €
+    expect(await extraAt([demo.services.grey], "19:00")).toBe(1750);
+    expect(await extraAt([demo.services.clip, demo.services.grey], "19:00")).toBe(3750);
+    const r = await barberBook(demo.business, demo.staff.renat, ACTOR, mine({ start: at(DAY, "19:00"), serviceIds: [demo.services.clip, demo.services.grey] }));
+    expect(r).toMatchObject({ ok: true, extraCents: 3750, totalCents: 11250 });
   });
 
   it("a move into a percent window shows and charges the percent of the visit as it was booked", async () => {
@@ -117,11 +120,14 @@ describe("free start times", () => {
   });
 
   it("his services at his own prices; one he does not do is not there", async () => {
+    // his own time for a cut (the others take 60 minutes) and his own price for grey hair (Valentin's is 30 €)
     const renat = await barberOffers(query, demo.business.id, demo.staff.renat);
     expect(renat.find((o) => o.id === demo.services.clip)).toMatchObject({ priceCents: 4000, durationMin: 45 });
-    const milena = await barberOffers(query, demo.business.id, demo.staff.milena);
-    expect(milena.some((o) => o.id === demo.services.beard)).toBe(false);
-    expect(milena.find((o) => o.id === demo.services.clip)?.priceCents).toBe(3500);
+    expect(renat.find((o) => o.id === demo.services.grey)).toMatchObject({ priceCents: 3500, durationMin: 30 });
+    expect(renat.some((o) => o.id === demo.services.beard)).toBe(false);
+    const valentin = await barberOffers(query, demo.business.id, demo.staff.valentin);
+    expect(valentin.find((o) => o.id === demo.services.clip)).toMatchObject({ priceCents: 4000, durationMin: 60 });
+    expect(valentin.find((o) => o.id === demo.services.grey)?.priceCents).toBe(3000);
   });
 
   it("the free times of his day go round his visits; another barber's visit is not in his way", async () => {
@@ -136,7 +142,7 @@ describe("free start times", () => {
     expect(times).not.toContain("11:30");
     expect(times).not.toContain("12:00");
     expect(times).toContain("12:45");
-    expect(times.at(-1)).toBe("19:15");
+    expect(times.at(-1)).toBe("18:15");
   });
 
   it("for a move the visit itself is not in the way; someone else's visit is «not found»", async () => {
@@ -145,7 +151,7 @@ describe("free start times", () => {
     const r = await barberFreeStarts(query, demo.business, demo.staff.renat, DAY, { visitId: v.id }, NOW);
     expect(r.ok && r.starts.map((s) => hm(s.start))).toContain("12:00");
     expect(await barberFreeStarts(query, demo.business, demo.staff.renat, DAY, { visitId: other.id }, NOW)).toEqual({ ok: false, code: "not_found" });
-    expect(await barberFreeStarts(query, demo.business, demo.staff.milena, DAY, { serviceIds: [demo.services.beard] }, NOW)).toEqual({ ok: false, code: "not_offered" });
+    expect(await barberFreeStarts(query, demo.business, demo.staff.renat, DAY, { serviceIds: [demo.services.beard] }, NOW)).toEqual({ ok: false, code: "not_offered" });
     expect(await barberFreeStarts(query, demo.business, demo.staff.renat, "1.12.2026", { serviceIds: [demo.services.clip] }, NOW)).toEqual({ ok: false, code: "invalid" });
   });
 

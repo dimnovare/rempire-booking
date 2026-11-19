@@ -88,7 +88,7 @@ test.describe("Renat on /b", () => {
       await hydrated(page);
       await page.getByRole("button", { name: B.time.add.block, exact: true }).click();
       const s = sheet(page);
-      await s.getByLabel(B.time.day, { exact: true }).fill(nextWorkday(2));
+      await s.getByLabel(B.time.day, { exact: true }).fill(nextWorkday(barber.slug, 2));
       await s.getByLabel(B.time.start, { exact: true }).fill("19:30");
       await s.getByLabel(B.time.end, { exact: true }).fill("19:45");
       await s.getByLabel(B.time.note).fill("E2E от Рената");

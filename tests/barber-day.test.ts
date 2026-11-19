@@ -11,10 +11,11 @@ import { coversDay, freeGaps, hoursText, nextVisit } from "@/lib/barber/gaps";
 import { closeDb, query } from "@/lib/db";
 import { zonedToUtc } from "@/lib/tz";
 import { freshDemo, type Demo } from "./helpers";
-import { seedDemoVisits } from "../tools/seed-demo.mjs";
+import { demoWorkday, seedDemoVisits } from "../tools/seed-demo.mjs";
 
 const TZ = "Europe/Tallinn";
 const at = (date: string, time: string) => zonedToUtc(date, time, TZ);
+// Tuesday 17.11.2026 in the salon's own schedule (tools/altegio-structure.json): Renat works 10:00–19:00
 const TUE = "2026-11-17";
 const ACTOR = "test-admin";
 const MIN = 60_000;
@@ -58,7 +59,7 @@ describe("barber day: his own column only", () => {
     expect(day.visits[0].clientPhone).toMatch(/^\+3725555/);
     expect(day.visits[0].services).toHaveLength(1);
     expect(day.blocks).toEqual([expect.objectContaining({ kind: "block", note: "coffee" })]);
-    expect(hoursText(day.windows, TZ)).toBe("10:00–20:00");
+    expect(hoursText(day.windows, TZ)).toBe("10:00–19:00");
     expect(day.count).toBe(1);
     expect(day.totalCents).toBe(mine.totalCents);
   });
@@ -100,11 +101,11 @@ describe("barber day: free time and the next client", () => {
     expect(early.map((g) => [g.from, g.to])).toEqual([
       [at(TUE, "10:00"), at(TUE, "12:00")],
       [blockedUntil, at(TUE, "14:00")],
-      [at(TUE, "15:00"), at(TUE, "20:00")],
+      [at(TUE, "15:00"), at(TUE, "19:00")],
     ]);
     // at 16:07 only what is still ahead, on the step grid
     const late = freeGaps(day, { now: at(TUE, "16:07"), stepMin: 15 });
-    expect(late.map((g) => [g.from, g.to])).toEqual([[at(TUE, "16:15"), at(TUE, "20:00")]]);
+    expect(late.map((g) => [g.from, g.to])).toEqual([[at(TUE, "16:15"), at(TUE, "19:00")]]);
   });
 
   it("puts the client in the chair first, then the next one", async () => {
@@ -132,9 +133,10 @@ describe("status from the barber app", () => {
 
 describe("the demo day (a local run and e2e, tools/seed-demo.mjs)", () => {
   const db = { query: async (sql: string, params?: unknown[]) => ({ rows: await query(sql, params) }) };
-  // 09:22, 13:57, 16:57: the client in 20 minutes would sit on the next
-  // demo visit, which is itself more than 30 minutes away
-  for (const time of ["07:00", "09:22", "09:35", "10:40", "13:57", "16:57"]) {
+  // 09:22, 10:32, 13:22: the client in 20 minutes would sit on the next
+  // demo visit (10:00, 11:15, 14:00), which is itself more than 30 minutes
+  // away; at 10:32 and 13:57 he sits on two of them
+  for (const time of ["07:00", "09:22", "09:35", "10:32", "10:40", "13:22", "13:57", "16:57"]) {
     it(`started at ${time}: «Дальше» is at most 30 minutes away, so «Пришёл» shows; nothing overlaps`, async () => {
       const now = at(TUE, time);
       await seedDemoVisits(db, now);
@@ -148,4 +150,31 @@ describe("the demo day (a local run and e2e, tools/seed-demo.mjs)", () => {
       }
     });
   }
+
+  it("the second demo day is the next day the barber works, whatever the weekday: five visits and lunch inside his hours, two hours free after them", async () => {
+    // Valentin is away 17–23.11 and back on Tuesday 24.11; Jevgeni's next day is Wednesday 18.11, 10:00–16:00;
+    // Milena works Mondays, Thursdays and Fridays
+    for (const [slug, date] of [["valentin", "2026-11-24"], ["jevgeni", "2026-11-18"], ["milena", "2026-11-19"], ["renat", "2026-11-18"]] as const) {
+      expect(demoWorkday(slug, "2026-11-18"), slug).toBe(date);
+    }
+    await seedDemoVisits(db, at(TUE, "07:00"));
+    for (const slug of ["renat", "valentin", "jevgeni", "slava", "milena"]) {
+      const date = demoWorkday(slug, "2026-11-18");
+      const [day] = await loadBarberDays(query, demo.business, demo.staff[slug], date, 1);
+      expect(day.windows, slug).toHaveLength(1);
+      const [from, to] = day.windows[0];
+      expect(day.visits.map((v) => v.status), slug).toEqual(["booked", "booked", "booked", "booked", "booked"]);
+      expect(day.visits[0].start, slug).toBe(at(date, "10:00"));
+      // the first visit is a cut; 15 minutes after it, too short for any of his services, comes the second
+      expect(day.visits[0].services.map((s) => s.serviceId)).toEqual([demo.services.clip]);
+      expect(day.visits[1].start - day.visits[0].blockedUntil, slug).toBe(15 * MIN);
+      for (const v of day.visits) expect(v.start >= from && v.blockedUntil <= to, `${slug} ${v.start}`).toBe(true);
+      expect(day.blocks.map((b) => [b.from, b.to, b.note]), slug).toEqual([[at(date, "13:00"), at(date, "14:00"), "обед"]]);
+      const gaps = freeGaps(day, { now: at(TUE, "07:00"), stepMin: 15 });
+      const last = gaps.at(-1)!;
+      expect(last.to, slug).toBe(to);
+      // Jevgeni's Wednesday ends at 16:00, the shortest shift there is: half an hour is left; everywhere else two hours and more
+      expect(last.to - last.from, slug).toBeGreaterThanOrEqual((slug === "jevgeni" ? 30 : 120) * MIN);
+    }
+  });
 });

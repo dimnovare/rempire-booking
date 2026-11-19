@@ -151,7 +151,7 @@ describe("a client's numbers and visits", () => {
     const id = await add({ name: "Anna Näidis", phone: "+372 5555 0101" });
     const quiet = await add({ name: "Boris Sample" });
     const a = await visit(id, "valentin", "2026-11-03", "11:00"); // clip, 40 €
-    const b = await visit(id, "jevgeni", "2026-11-10", "12:00", "beard"); // 26 €
+    const b = await visit(id, "jevgeni", "2026-11-10", "12:00", "beard"); // 28 €
     const c = await visit(id, "valentin", "2026-11-17", "11:00"); // cancelled
     const d = await visit(id, "valentin", "2026-11-24", "11:00"); // no-show
     const e = await visit(id, "valentin", "2026-12-08", "11:00"); // ahead
@@ -162,7 +162,7 @@ describe("a client's numbers and visits", () => {
 
     const list = await listClients(query, demo.business.id, {}, NOW);
     const row = list.rows.find((r) => r.id === id)!;
-    expect(row.soldCents).toBe(4000 + 2600);
+    expect(row.soldCents).toBe(4000 + 2800);
     // every visit that is not cancelled, the one ahead too
     expect(row.visits).toBe(4);
     expect(row.firstVisit).toBe(a.start);
@@ -172,11 +172,11 @@ describe("a client's numbers and visits", () => {
 
     // a week later the December visit has begun: it counts
     const later = await listClients(query, demo.business.id, {}, at("2026-12-09", "12:00"));
-    expect(later.rows.find((r) => r.id === id)).toMatchObject({ soldCents: 4000 + 2600 + 4000, lastVisit: e.start, visits: 4 });
+    expect(later.rows.find((r) => r.id === id)).toMatchObject({ soldCents: 4000 + 2800 + 4000, lastVisit: e.start, visits: 4 });
 
     // the client's own page says the same and lists every visit: ahead first, then the newest
     const card = (await clientDetail(query, demo.business, id, NOW))!;
-    expect(card).toMatchObject({ name: "Anna Näidis", phone: "+37255550101", visits: 4, soldCents: 6600, firstVisit: a.start, lastVisit: d.start, source: "admin", locale: "ru" });
+    expect(card).toMatchObject({ name: "Anna Näidis", phone: "+37255550101", visits: 4, soldCents: 6800, firstVisit: a.start, lastVisit: d.start, source: "admin", locale: "ru" });
     expect(card.history.map((v) => [v.id, v.status, v.ahead])).toEqual([
       [e.id, "booked", true],
       [d.id, "no_show", false],
@@ -184,7 +184,7 @@ describe("a client's numbers and visits", () => {
       [b.id, "arrived", false],
       [a.id, "done", false],
     ]);
-    expect(card.history[3]).toMatchObject({ staffId: demo.staff.jevgeni, staffName: "Jevgeni", totalCents: 2600, start: b.start, end: b.end });
+    expect(card.history[3]).toMatchObject({ staffId: demo.staff.jevgeni, staffName: "Jevgeni", totalCents: 2800, start: b.start, end: b.end });
     expect(card.history[3].services.map((s) => s.en)).toEqual(["Beard trim"]);
   });
 

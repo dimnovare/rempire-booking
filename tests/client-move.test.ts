@@ -24,7 +24,7 @@ beforeEach(async () => {
 });
 afterAll(closeDb);
 
-/** Slava's free starts for a 45-minute cut on one local day, as the booking page would offer them at `now`. */
+/** Slava's free starts for a cut (60 minutes with him) on one local day, as the booking page would offer them at `now`. */
 async function free(date: string, now = NOW): Promise<number[]> {
   const r = await loadAvailability(query, { business: demo.business, serviceIds: [demo.services.clip], staffId: demo.staff.slava, from: date, days: 1, now });
   return r.days[0]?.slots.map((s) => s.start) ?? [];
@@ -78,7 +78,7 @@ describe("the client moves his own visit", () => {
 
   it("its own old time does not stand in its way: a quarter of an hour later works", async () => {
     const day = await free("2026-11-17");
-    // two free starts 15 minutes apart: the 45-minute visit overlaps itself
+    // two free starts 15 minutes apart: the 60-minute visit overlaps itself
     const from = day.find((s) => day.includes(s + 15 * 60_000))!;
     expect(from).toBeTruthy();
     const token = await booked(from);
@@ -142,7 +142,8 @@ describe("the routes behind «Перенести»", () => {
     // these run on the real clock: a visit some days from now
     const now = Date.now();
     const today = localParts(now, TZ).date;
-    const ahead = (await loadAvailability(query, { business: demo.business, serviceIds: [demo.services.clip], staffId: demo.staff.slava, from: today, days: 10, now })).days
+    // Slava works four days a week, and fewer in some: three weeks always hold four of his days
+    const ahead = (await loadAvailability(query, { business: demo.business, serviceIds: [demo.services.clip], staffId: demo.staff.slava, from: today, days: 21, now })).days
       .filter((d) => d.slots.length > 3)
       .slice(2, 4);
     expect(ahead).toHaveLength(2);
@@ -150,7 +151,7 @@ describe("the routes behind «Перенести»", () => {
     const to = ahead[1].slots[1].start;
     const token = await booked(from, "+372 5555 0503", now);
 
-    const slots = await moveSlotsRoute(new Request(`http://x/api/visit/${token}/slots?days=10`), ctx(token));
+    const slots = await moveSlotsRoute(new Request(`http://x/api/visit/${token}/slots?days=21`), ctx(token));
     expect(slots.status).toBe(200);
     expect(slots.headers.get("cache-control")).toBe("no-store");
     const j = (await slots.json()) as { offered: boolean; days: { d: string; s: [number, string, number][] }[] };

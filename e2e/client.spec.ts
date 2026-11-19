@@ -1,11 +1,12 @@
-import { asBarber, B, demoId, expect, expectNoSideScroll, hydrated, nextWorkday, phoneOf, sheet, smallTargets, test, toast } from "./helpers";
+import { asBarber, B, demoId, expect, expectNoSideScroll, hydrated, nextWorkday, phoneOf, sheet, smallTargets, test, toast, workdayFrom } from "./helpers";
 
 /** B6: the client's card from a visit, the shared note, the visit's note, «Записать снова». */
 test.describe("a client", () => {
   test.use(asBarber);
-  const day = nextWorkday();
+  // every test here starts from a demo visit of his next working day
 
   test("the card: calls, visits, the shared note Renat sees in the admin", async ({ page, browser, barber }, info) => {
+    const day = nextWorkday(barber.slug);
     const note = `E2E заметка ${barber.name}`;
     await page.goto(`/b?d=${day}`);
     await hydrated(page);
@@ -42,6 +43,7 @@ test.describe("a client", () => {
   });
 
   test("a note for this visit only", async ({ page, barber }) => {
+    const day = nextWorkday(barber.slug);
     const note = `E2E к записи ${barber.name}`;
     await page.goto(`/b?d=${day}`);
     await hydrated(page);
@@ -58,7 +60,8 @@ test.describe("a client", () => {
     await expect(sheet(page).getByText(note)).toBeVisible();
   });
 
-  test("«Записать снова»: the same client and services, four weeks on", async ({ page }) => {
+  test("«Записать снова»: the same client and services, four weeks on", async ({ page, barber }) => {
+    const day = nextWorkday(barber.slug);
     await page.goto(`/b?d=${day}`);
     await hydrated(page);
     const visit = page.locator(".bx-v", { hasText: "Demo client" }).first();
@@ -71,10 +74,13 @@ test.describe("a client", () => {
     await expect(s.getByRole("group", { name: B.book.services }).getByRole("button", { pressed: true })).toHaveCount(1);
     const later = new Date(Date.parse(`${day}T12:00:00Z`) + 28 * 86_400_000).toISOString().slice(0, 10);
     await expect(s.getByLabel(B.book.day, { exact: true })).toHaveValue(later);
+    // four weeks on may be a day he does not work (a dated day off, a swapped shift): then the first day after it that he does
+    const free = workdayFrom(barber.slug, later);
+    if (free !== later) await s.getByLabel(B.book.day, { exact: true }).fill(free);
     await s.getByRole("group", { name: B.book.time }).getByRole("button").first().click();
     await s.getByRole("button", { name: B.book.book, exact: true }).click();
     await expect(toast(page)).toContainText(B.book.booked("").trim());
-    await expect(page).toHaveURL(new RegExp(`d=${later}`));
+    await expect(page).toHaveURL(new RegExp(`d=${free}`));
     await expect(page.locator(".bx-v", { hasText: client })).toBeVisible();
   });
 });
