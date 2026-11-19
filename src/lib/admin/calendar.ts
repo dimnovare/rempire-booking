@@ -15,6 +15,8 @@ import { addDays, startOfDay } from "../tz";
 export type CalStaff = {
   id: string;
   name: string;
+  /** the label under the name: «Барбер» */
+  role: L10n;
   photoUrl: string | null;
   sort: number;
   bookable: boolean;
@@ -81,8 +83,8 @@ export async function loadCalendar(q: Querier, business: Business, from: string,
   const range = [business.id, new Date(fromMs), new Date(toMs)];
 
   const [staffRows, serviceRows, offerRows, hours, overrides, visitRows, lines, offRows, specialRows] = await Promise.all([
-    q<{ id: string; display_name: string; photo_url: string | null; sort: number; bookable: boolean; active: boolean }>(
-      `select id, display_name, photo_url, sort, bookable, active from staff
+    q<{ id: string; display_name: string; role: L10n; photo_url: string | null; sort: number; bookable: boolean; active: boolean }>(
+      `select id, display_name, role, photo_url, sort, bookable, active from staff
         where business_id = $1 order by sort, display_name`,
       [business.id],
     ),
@@ -159,7 +161,7 @@ export async function loadCalendar(q: Querier, business: Business, from: string,
   const busyStaff = new Set(visitRows.map((v) => v.staff_id));
   const staff = staffRows
     .filter((s) => s.active || busyStaff.has(s.id))
-    .map((s) => ({ id: s.id, name: s.display_name, photoUrl: s.photo_url, sort: s.sort, bookable: s.bookable, active: s.active }));
+    .map((s) => ({ id: s.id, name: s.display_name, role: s.role, photoUrl: s.photo_url, sort: s.sort, bookable: s.bookable, active: s.active }));
 
   const work: CalendarData["work"] = {};
   for (const s of staff) {
@@ -217,6 +219,26 @@ export async function loadCalendar(q: Querier, business: Business, from: string,
     blocks: offRows.map((t) => ({ id: t.id, staffId: t.staff_id, from: ms(t.starts_at), to: ms(t.ends_at), kind: t.kind, note: t.note, status: t.status })),
     special: specialRows.map((x) => ({ id: x.id, staffId: x.staff_id, from: ms(x.starts_at), to: ms(x.ends_at), extraCents: x.extra_cents, extraPct: x.extra_pct, note: x.note })),
   };
+}
+
+/**
+ * «Товаров на сумму» in the journal's day numbers: what the barbers' product
+ * sales made on one local day come to, in cents. A sale that was taken back
+ * (undone by the barber, or reversed by Renat on any later day) is not in
+ * it, and a minus row is nobody's sale. Sales to clients and the barbers'
+ * own purchases both count: each is goods sold that day.
+ */
+export async function dayGoodsCents(q: Querier, business: Business, date: string): Promise<number> {
+  const tz = business.timezone;
+  const [row] = await q<{ cents: number }>(
+    `select coalesce(sum(p.total_cents), 0)::int as cents
+       from product_sales p
+      where p.business_id = $1 and p.status = 'done' and p.reverses_id is null
+        and p.created_at >= $2 and p.created_at < $3
+        and not exists (select 1 from product_sales r where r.reverses_id = p.id)`,
+    [business.id, new Date(startOfDay(date, tz)), new Date(startOfDay(addDays(date, 1), tz))],
+  );
+  return row?.cents ?? 0;
 }
 
 export type ClientHit = { id: string; name: string; phone: string | null; visits: number; lastVisit: number | null };

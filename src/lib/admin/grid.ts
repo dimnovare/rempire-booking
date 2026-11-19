@@ -34,24 +34,34 @@ export function snap(minutes: number, step = 15): number {
 type Span = { from: number; to: number };
 
 /**
- * The hours the grid shows: 09:00–21:00, widened to whole hours around every
- * working window, visit, block and special window of those days.
+ * The hours the grid shows, as the journal we follow does (10:00–19:30 on
+ * its day): from the earliest start to the latest end of what is given for
+ * those days, out to the half hour. The calendar gives the working windows,
+ * the special time and the visits of the barbers it shows; time off is not
+ * given, so a vacation never makes the day 24 hours long.
+ * At least an hour, so a lone short visit still has a grid around it.
+ * Nothing on those days: `empty`, 10:00–19:00.
  */
-export function gridBounds(dates: string[], tz: string, spans: Span[], base: [number, number] = [9 * 60, 21 * 60]): [number, number] {
-  let lo = base[0];
-  let hi = base[1];
+export function daySpan(dates: string[], tz: string, spans: Span[], empty: [number, number] = [10 * 60, 19 * 60]): [number, number] {
+  let lo = Infinity;
+  let hi = -Infinity;
   for (const date of dates) {
     const day0 = startOfDay(date, tz);
     const day1 = startOfDay(addDays(date, 1), tz);
     for (const s of spans) {
-      if (s.to <= day0 || s.from >= day1) continue;
+      if (s.to <= day0 || s.from >= day1 || s.to <= s.from) continue;
       const a = Math.max(0, Math.round((Math.max(s.from, day0) - day0) / 60_000));
       const b = Math.min(24 * 60, Math.round((Math.min(s.to, day1) - day0) / 60_000));
-      lo = Math.min(lo, Math.floor(a / 60) * 60);
-      hi = Math.max(hi, Math.ceil(b / 60) * 60);
+      lo = Math.min(lo, Math.floor(a / 30) * 30);
+      hi = Math.max(hi, Math.ceil(b / 30) * 30);
     }
   }
-  return [Math.max(0, lo), Math.min(24 * 60, hi)];
+  if (!Number.isFinite(lo)) return empty;
+  if (hi - lo < 60) {
+    hi = Math.min(24 * 60, lo + 60);
+    lo = Math.min(lo, hi - 60);
+  }
+  return [lo, hi];
 }
 
 /** Is [from, to) inside one of the windows? */

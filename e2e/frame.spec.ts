@@ -79,7 +79,7 @@ test.describe("the frame", () => {
       const other = `${thisMonth}-${today.endsWith("-15") ? "16" : "15"}`;
       await day(page, other).click();
       await page.waitForURL((u) => u.pathname === "/admin" && u.searchParams.get("d") === other);
-      await expect(page.locator('.cal-title input[type="date"]:visible')).toHaveValue(other);
+      await expect(page.locator('.jr-title input[type="date"]:visible')).toHaveValue(other);
       await expect(day(page, other)).toHaveAttribute("aria-current", "date");
       await expect(day(page, today)).not.toHaveAttribute("aria-current", "date");
       await expect(day(page, today)).toHaveClass(/is-lit/);

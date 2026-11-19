@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { loadAvailability } from "@/lib/availability";
 import { loadCalendar, searchClients } from "@/lib/admin/calendar";
-import { gridBounds, hhmm, momentAt, snap, weekStart } from "@/lib/admin/grid";
+import { daySpan, hhmm, momentAt, snap, weekStart } from "@/lib/admin/grid";
 import { listServices, saveService } from "@/lib/admin/services";
 import { PHOTO_MAX_BYTES, addSpecialTime, cleanSpans, imageMime, listStaff, saveStaffOffers, saveStaffPhoto, saveStaffProfile, saveWeeklyHours, setDayOverride, slugify, staffDetail, staffPhoto } from "@/lib/admin/staff";
 import { adminCancelVisit, adminCreateVisit, adminSetStatus, adminUpdateVisit, addTimeOff, removeTimeOff, type AdminVisitInput } from "@/lib/admin/visits";
@@ -402,11 +402,12 @@ describe("admin: grid maths", () => {
     expect(hhmm(615)).toBe("10:15");
     expect(momentAt("2026-10-25", 10 * 60, TZ)).toBe(at("2026-10-25", "10:00"));
   });
-  it("shows 09–21, widened to whole hours around the day's spans", () => {
-    expect(gridBounds([TUE], TZ, [])).toEqual([540, 1260]);
-    expect(gridBounds([TUE], TZ, [{ from: at(TUE, "08:30"), to: at(TUE, "22:15") }])).toEqual([480, 1380]);
+  it("shows the day from the earliest start to the latest end, out to the half hour", () => {
+    // nothing that day: 10–19
+    expect(daySpan([TUE], TZ, [])).toEqual([600, 1140]);
+    expect(daySpan([TUE], TZ, [{ from: at(TUE, "08:30"), to: at(TUE, "22:15") }])).toEqual([510, 1350]);
     // a span on another day changes nothing
-    expect(gridBounds([TUE], TZ, [{ from: at("2026-11-18", "06:00"), to: at("2026-11-18", "07:00") }])).toEqual([540, 1260]);
+    expect(daySpan([TUE], TZ, [{ from: at("2026-11-18", "06:00"), to: at("2026-11-18", "07:00") }])).toEqual([600, 1140]);
   });
   it("cleans hour spans", () => {
     expect(cleanSpans([["15:00", "16:00"], ["10:00", "14:00"]])).toEqual([["10:00", "14:00"], ["15:00", "16:00"]]);

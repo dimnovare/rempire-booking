@@ -37,14 +37,6 @@
   --chrome-line: #3a3a4e;
   --chrome-fg: #fff;
   --chrome-mute: #b1b4c3;
-  /* the journal's visits */
-  --v-head: #907b9f;
-  --v-body: rgba(195, 165, 214, .8);
-  --v-name: #5f4670;
-  --v-text: #273a49;
-  --v2-head: #1a9e7c;
-  --v2-body: rgba(160, 226, 208, .85);
-  --v2-name: #14594a;
   --display: var(--font-body), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --body: var(--font-body), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --nav-h: 64px;
@@ -404,7 +396,11 @@ html, body { background: var(--ink); }
 .adm-or { display: flex; align-items: center; gap: 12px; color: var(--dim); font-size: 13px; }
 .adm-or::before, .adm-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
 
-/* ---------- calendar ---------- */
+/* ---------- calendar ----------
+   One markup for a phone and for the journal from 900px (calendar.tsx). Every place on the grid is given in
+   minutes: --t from its top, --m long, --span the whole day, --off to the first whole hour. --ppm is the
+   pixels a minute: on a phone 1.2 in a day (an hour is 72px) and 0.8 in a week; from 900px 1, times the scale
+   the tab chose (--zoom). This block is the phone; «the journal from 900px» is the block under it. */
 .cal { display: flex; flex-direction: column; height: calc(100dvh - var(--head-h) - var(--nav-h) - env(safe-area-inset-bottom, 0px)); }
 .cal.is-pending .cal-scroll { opacity: .55; transition: opacity .2s .15s; }
 .cal-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; padding: 6px max(8px, env(safe-area-inset-right, 0px)) 8px max(8px, env(safe-area-inset-left, 0px)); border-bottom: 1px solid var(--line); }
@@ -427,8 +423,10 @@ html, body { background: var(--ink); }
 .cal-add span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .cal-moving { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px max(8px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); background: var(--lime); color: var(--on-lime); font-size: 14px; }
 .cal-moving button { flex: none; min-height: 36px; padding: 0 12px; border: 1px solid var(--on-lime) !important; font: 600 12px/1 var(--display); }
-.cal-scroll { flex: 1; overflow: auto; overscroll-behavior: contain; position: relative; }
-.cal-grid { display: grid; min-width: min-content; --hour: 72px; }
+.cal-body { flex: 1; min-height: 0; display: flex; }
+.cal-scroll { flex: 1; min-width: 0; overflow: auto; overscroll-behavior: contain; position: relative; }
+.cal-grid { display: grid; min-width: min-content; --ppm: 1.2; grid-template-columns: 44px repeat(var(--cols), minmax(96px, 1fr)); }
+.cal.is-week .cal-grid { --ppm: .8; grid-template-columns: 40px repeat(7, minmax(44px, 1fr)); }
 .cal-corner, .cal-head { position: sticky; top: 0; z-index: 6; background: var(--raise); border-bottom: 1px solid var(--line-2); }
 .cal-corner { left: 0; z-index: 7; }
 .cal-head { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 6px 4px 7px; border-left: 1px solid var(--line); text-align: center; min-width: 0; }
@@ -436,85 +434,214 @@ html, body { background: var(--ink); }
 .cal-head b { font: 600 13px/1.2 var(--display); color: var(--fg); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cal-head small { font-size: 11px; color: var(--mute); font-variant-numeric: tabular-nums; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .cal-load { width: 100%; max-width: 80px; height: 3px; border-radius: 2px; background: var(--line-2); overflow: hidden; }
-.cal-load i { display: block; height: 3px; background: var(--v-head); }
+.cal-load i { display: block; height: 3px; background: #907b9f; }
 button.cal-head { cursor: pointer; }
 button.cal-head:hover b { color: var(--accent); }
 .cal-head.is-today b { color: var(--accent); }
 .cal-head.is-today { box-shadow: inset 0 -2px 0 var(--lime); }
-.cal-gutter { position: sticky; left: 0; z-index: 5; background: var(--raise); border-right: 1px solid var(--line); }
-.cal-gutter span { position: absolute; right: 5px; transform: translateY(-50%); font-size: 11px; color: var(--mute); font-variant-numeric: tabular-nums; }
-.cal-gutter span:first-child { transform: none; top: 2px !important; }
-.cal-gutter .cal-nowtag { right: 2px; left: 2px; z-index: 2; padding: 2px 0; border-radius: 4px; background: var(--fg); color: var(--lime); text-align: center; transform: translateY(-50%) !important; }
-.cal-col { position: relative; border-left: 1px solid var(--line); cursor: pointer; min-width: 0;
+.cal-who2 { display: contents; }
+.cal-gutter { position: sticky; left: 0; z-index: 5; height: calc(var(--ppm) * var(--span) * 1px); background: var(--raise); border-right: 1px solid var(--line); }
+.cal-tick, .cal-nowtag { position: absolute; top: calc(var(--ppm) * var(--t) * 1px); transform: translateY(-50%); font-size: 11px; font-variant-numeric: tabular-nums; }
+.cal-tick { right: 5px; color: var(--mute); }
+/* the label at the very top stays inside the grid */
+.cal-tick.is-first { transform: none; margin-top: 2px; }
+/* «now»: a dark tag with the time in yellow, and a line across */
+.cal-nowtag { right: 2px; left: 2px; z-index: 2; padding: 2px 0; border-radius: 4px; background: #2b3134; color: #ffcb00; text-align: center; }
+/* the journal's own time marks, from 900px */
+.jr-tick { display: none; }
+.cal-col { position: relative; height: calc(var(--ppm) * var(--span) * 1px); border-left: 1px solid var(--line); cursor: pointer; min-width: 0;
   background-color: #eef1f6; }
 /* the hour and quarter lines lie over the working hours' white, under the visits */
 .cal-col::after { content: ""; position: absolute; inset: 0; z-index: 0; pointer-events: none;
   background-image: linear-gradient(#d5dae3 1px, transparent 1px), linear-gradient(#eceff4 1px, transparent 1px);
-  background-size: 100% var(--hour), 100% calc(var(--hour) / 4); }
+  background-size: 100% calc(var(--ppm) * 60px), 100% calc(var(--ppm) * 15px);
+  background-position: 0 calc(var(--ppm) * var(--off, 0) * 1px), 0 0; }
 .cal-col.is-target { cursor: crosshair; }
-.cal-work { position: absolute; left: 0; right: 0; background: var(--raise); pointer-events: none; }
-.cal-sp { position: absolute; left: 2px; right: 2px; z-index: 1; border: 1px dashed #c99700; border-radius: 4px; background: rgba(255, 203, 0, .12); pointer-events: none; }
+.cal-work, .cal-sp, .cal-off, .cal-v, .cal-ghost, .cal-now { position: absolute; top: calc(var(--ppm) * var(--t) * 1px); }
+.cal-work, .cal-sp, .cal-off, .cal-ghost { height: calc(var(--ppm) * var(--m) * 1px); }
+.cal-work { left: 0; right: 0; background: var(--raise); pointer-events: none; }
+.cal-sp { left: 2px; right: 2px; z-index: 1; border: 1px dashed #c99700; border-radius: 4px; background: rgba(255, 203, 0, .12); pointer-events: none; }
 .cal-sp span { position: absolute; right: 4px; bottom: 2px; font-size: 10px; font-weight: 600; color: #7a5b00; }
-.cal-off { position: absolute; left: 0; right: 0; z-index: 1; padding: 3px 5px; overflow: hidden; text-align: left;
+.cal-off { left: 0; right: 0; z-index: 1; padding: 3px 5px; overflow: hidden; text-align: left;
   background: rgba(214, 219, 228, .7); border-radius: 4px; color: var(--fg); font-size: 11px; }
 .cal-off.k-vacation, .cal-off.k-sick { background: rgba(217, 45, 32, .1); color: #a3231a; }
-/* a visit as in Altegio's journal: a strip with the time, then the client and the services on the
-   body. Booked online by the client: violet; made by the staff: green over teal. */
-.cal-v { --h: var(--v-head); --b: var(--v-body); --n: var(--v-name); position: absolute; left: 3px; right: 3px; z-index: 2; display: flex; flex-direction: column; gap: 1px; padding: 0 0 2px; overflow: hidden; border-radius: 4px; text-align: left; background: var(--b); font-size: 12px; line-height: 1.2; }
-.cal-v:not(.src-online) { --h: var(--v2-head); --b: var(--v2-body); --n: var(--v2-name); }
+/* A visit as in the journal we follow: a strip with the time, then the client and the services on the body.
+   The strip (--h) says who made it: the client online, violet; the salon, green. The body (--b) and the name
+   (--n) say its state: waiting in its maker's tint, came orange, did not come red. The three come with each
+   card from src/lib/admin/journal.ts; the ones here are the first of them, an online visit that waits. */
+.cal-v { --h: #907b9f; --b: rgba(195, 165, 214, .8); --n: #765c88; left: 3px; right: 3px; z-index: 2; height: max(18px, calc(var(--ppm) * var(--m) * 1px)); display: flex; flex-direction: column; gap: 1px; padding: 0 0 2px; overflow: hidden; border-radius: 4px; text-align: left; background: var(--b); font-size: 12px; line-height: 1.2; }
 .cal-v > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cal-v .t { flex: none; padding: 2px 6px; background: var(--h); color: #fff; font-size: 10px; font-weight: 500; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 4px; }
 .cal-v b { padding: 1px 6px 0; color: var(--n); font-size: 12px; font-weight: 700; }
-.cal-v .s { padding: 0 6px; color: var(--v-text); font-size: 11px; font-weight: 600; }
+.cal-v .s { padding: 0 6px; color: #273a49; font-size: 11px; font-weight: 600; }
 .cal-v .dot { width: 6px; height: 6px; border-radius: 50%; background: #fff; display: inline-block; flex: none; }
-.cal-v .buf { display: none; }
-.cal-v.is-short { flex-direction: row; align-items: stretch; gap: 0; padding: 0; }
-.cal-v.is-short b { align-self: center; padding-top: 0; }
-.cal-v.is-short .s { display: none; }
-/* a narrow column has no room for the time and the name on one line: the strip is a mark, the place says the time */
-@media (max-width: 899px) { .cal-v.is-short .t { flex: 0 0 5px; padding: 0; font-size: 0; }
-  .cal-v.is-short .t > * { display: none; } }
+/* the status mark and the phone are the journal's, from 900px */
+.cal-v .mk, .cal-v .p { display: none; }
 .cal-v.is-sp { box-shadow: inset 0 0 0 1px #c99700; }
-.cal-v.st-arrived .t::after { content: "✓"; margin-left: auto; font-weight: 700; }
-.cal-v.st-done { opacity: .55; }
-.cal-v.st-no_show { --h: var(--warn); --b: rgba(217, 45, 32, .12); --n: #a3231a; }
-.cal-v.st-no_show b { text-decoration: line-through; }
+/* the visit running now glows */
+.cal-v.is-now { z-index: 3; box-shadow: rgba(226, 131, 14, .9) 0 0 7px 1px; }
+.cal-v.is-now.is-sp { box-shadow: inset 0 0 0 1px #c99700, rgba(226, 131, 14, .9) 0 0 7px 1px; }
 .cal-v.is-moving { outline: 2px dashed var(--sel); outline-offset: 1px; opacity: .55; }
 .cal-v.is-open { outline: 2px solid var(--sel); outline-offset: 1px; z-index: 3; }
 .cal-v:hover { filter: brightness(.96); }
-.cal-ghost { position: absolute; left: 3px; right: 3px; z-index: 4; border: 2px dashed var(--sel); border-radius: 4px; background: rgba(255, 203, 0, .2); color: var(--accent); font-size: 11px; padding: 2px 4px; pointer-events: none; }
-.cal-now { position: absolute; left: 0; right: 0; z-index: 3; height: 0; border-top: 1px solid var(--fg); pointer-events: none; }
-/* one barber's week on a phone: all seven days in view */
-.cal.is-week .cal-v { left: 1px; right: 1px; }
-.cal.is-week .cal-v .t, .cal.is-week .cal-v b { padding-left: 3px; padding-right: 3px; }
-.cal.is-week .cal-v .s, .cal.is-week .cal-v .dot { display: none; }
-.cal.is-week .cal-v b { font-size: 11px; }
-.cal.is-week .cal-v .t { font-size: 10px; }
-.cal.is-week .cal-v.is-short { flex-direction: column; align-items: stretch; justify-content: center; gap: 0; }
-.cal.is-week .cal-v.is-short .t { display: none; }
-.cal.is-week .cal-head { padding: 6px 1px 7px; }
-.cal.is-week .cal-head b { font-size: 12px; }
-.cal.is-week .cal-head small { font-size: 10px; }
+.cal-ghost { left: 3px; right: 3px; z-index: 4; border: 2px dashed var(--sel); border-radius: 4px; background: rgba(255, 203, 0, .2); color: var(--accent); font-size: 11px; padding: 2px 4px; pointer-events: none; }
+.cal-now { left: 0; right: 0; z-index: 3; height: 0; border-top: 1px solid #2b3134; pointer-events: none; }
+/* a day nobody works and nobody is booked on */
+.jr-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px 16px; text-align: center; }
+.jr-empty h2 { margin: 0; font: 500 20px/24px var(--body); color: var(--fg); }
+@media (max-width: 899px) {
+  .cal-v.st-arrived .t::after { content: "✓"; margin-left: auto; font-weight: 700; }
+  /* a short visit: the time and the name on one line */
+  .cal-v.is-short { flex-direction: row; align-items: stretch; gap: 0; padding: 0; }
+  .cal-v.is-short b { align-self: center; padding-top: 0; }
+  .cal-v.is-short .s { display: none; }
+  /* a narrow column has no room for the time and the name on one line: the strip is a mark, the place says the time */
+  .cal-v.is-short .t { flex: 0 0 5px; padding: 0; font-size: 0; }
+  .cal-v.is-short .t > * { display: none; }
+  /* one barber's week on a phone: all seven days in view */
+  .cal.is-week .cal-v { left: 1px; right: 1px; }
+  .cal.is-week .cal-v .t, .cal.is-week .cal-v b { padding-left: 3px; padding-right: 3px; }
+  .cal.is-week .cal-v .s, .cal.is-week .cal-v .dot { display: none; }
+  .cal.is-week .cal-v b { font-size: 11px; }
+  .cal.is-week .cal-v .t { font-size: 10px; }
+  .cal.is-week .cal-v.is-short { flex-direction: column; align-items: stretch; justify-content: center; gap: 0; }
+  .cal.is-week .cal-v.is-short .t { display: none; }
+  .cal.is-week .cal-head { padding: 6px 1px 7px; }
+  .cal.is-week .cal-head b { font-size: 12px; }
+  .cal.is-week .cal-head small { font-size: 10px; }
+}
+
+/* ---------- the journal from 900px (calendar.tsx, journal-bar.tsx, journal-side.tsx) ----------
+   Measured in the product we follow (docs/altegio-pages.md, «Журнал») and laid out on the design board, whose
+   sizes and colours these are: a white 48px bar of 32px controls with 8px corners and a 1px line; a 95px band
+   of heads (a 24px square photo, the name, the label under it); the time on both sides, 60px each, the hour
+   large with a small «00» and the half hour a small grey «30»; 1px a minute, a pale line every 15px and a
+   stronger one every hour; a visit as a card 6px in from its column, with a 15px strip. The icons and the
+   words are ours. */
 @media (min-width: 900px) {
   .cal { height: calc(100dvh - var(--head-h)); }
   .cal.has-panel { padding-right: var(--panel-w); }
-  /* the sidebar and an open panel leave the bar less room: it wraps before anything overlaps */
-  .cal-bar { flex-wrap: wrap; gap: 8px 12px; padding: 10px 16px 10px 20px; }
-  .cal-title { font-size: 20px; }
-  .cal-strip { order: 0; flex: 0 1 auto; display: flex; }
-  .cal-strip button { width: 52px; height: 44px; }
-  .cal-strip button b { font-size: 16px; }
-  .cal-who { order: 0; flex: 0 1 auto; }
-  .cal-add { position: static; width: auto; height: 40px; display: inline-flex; gap: 8px; padding: 0 14px; font: 600 13px/1 var(--display); box-shadow: none; }
-  .cal-add span { position: static; width: auto; height: auto; overflow: visible; clip-path: none; }
-  .cal-head { flex-direction: row; gap: 10px; padding: 8px; }
-  .cal-head .cal-who2 { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
-  .cal-head b { font-size: 15px; }
-  .cal-head .cal-load { width: 90px; }
-  .cal.is-week .cal-head { flex-direction: column; gap: 3px; }
-  .cal.is-week .cal-v .s { display: block; }
+
+  /* the bar */
+  .jr-bar { flex: none; position: relative; z-index: 12; min-height: 48px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; background: #fff; color: #2b3134; font: 400 12px/16px var(--body); }
+  .jr-btn { position: relative; flex: none; height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 1px solid #e0e3eb; border-radius: 8px; background: #fff; color: #2b3134; font: 500 12px/16px var(--body); white-space: nowrap; }
+  .jr-btn:hover { border-color: #c6cbd3; }
+  .jr-ibtn { width: 32px; padding: 0; }
+  .jr-ibtn[aria-pressed="true"], .jr-ibtn[aria-expanded="true"] { background: #eaeef4; }
+  /* the one main action of the page */
+  .jr-main, .jr-main:hover { border-color: #ffcb00; background: #ffcb00; }
+  .jr-main:hover { filter: brightness(1.05); }
+  /* the filter hides something: a dot says so */
+  .jr-btn.is-marked::after { content: ""; position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: #f72c32; box-shadow: 0 0 0 1.5px #fff; }
+  .jr-title { min-width: 0; margin: 0 0 0 12px; color: #2b3134; font: 500 20px/24px var(--body); }
+  .jr-title label { position: relative; display: block; border-radius: 4px; white-space: nowrap; cursor: pointer; }
+  .jr-title label:focus-within { outline: 2px solid var(--sel); outline-offset: 2px; }
+  .jr-title input { position: absolute; inset: 0; width: 100%; height: 100%; min-height: 0; padding: 0; border: 0; opacity: 0; cursor: pointer; }
+  .jr-space { flex: 1; }
+  /* «День | Неделя»: the open view dark */
+  .jr-seg { flex: none; display: flex; }
+  .jr-seg > .jr-btn { border-radius: 8px 0 0 8px; }
+  .jr-seg > .jr-pop-wrap > .jr-btn { border-left: 0; border-radius: 0 8px 8px 0; }
+  .jr-seg .jr-btn[aria-pressed="true"] { border-color: #2b3134; background: #2b3134; color: #fff; }
+  /* what a control opens under itself: a menu, or the day's numbers */
+  .jr-pop-wrap { position: relative; flex: none; display: flex; }
+  .jr-pop { position: absolute; top: 36px; right: 0; z-index: 20; min-width: 200px; padding: 4px; border-radius: 8px; background: #fff; box-shadow: rgba(0, 29, 102, .16) 0 6px 24px; color: #2b3134; font: 400 12px/16px var(--body); }
+  .jr-pop-dialog { min-width: 264px; padding: 16px; border-radius: 12px; }
+  .jr-item { width: 100%; min-height: 32px; display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 6px; font: 500 12px/16px var(--body); white-space: nowrap; }
+  .jr-item:hover { background: #f7f9fc; }
+  .jr-item > span:last-of-type { flex: 1; }
+  .jr-item > svg { flex: none; }
+  .jr-ava { width: 24px; height: 24px; border-radius: 4px; font: 700 10px/1 var(--body); }
+  .jr-box { flex: none; width: 16px; height: 16px; display: grid; place-items: center; border: 1px solid #c6cbd3; border-radius: 4px; color: transparent; }
+  .jr-box.is-on { border-color: #2b3134; background: #2b3134; color: #fff; }
+  /* a state's own colours beside its name: the body, and the strip of the one who made it */
+  .jr-dot { flex: none; width: 12px; height: 12px; border-radius: 3px; }
+  .jr-dot.k-online { background: rgb(195, 165, 214); box-shadow: inset 0 4px 0 #907b9f; }
+  .jr-dot.k-staff { background: rgb(134, 223, 205); box-shadow: inset 0 4px 0 #1ab394; }
+  .jr-dot.k-came { background: rgb(255, 153, 88); }
+  .jr-dot.k-noshow { background: rgb(255, 107, 107); }
+  .jr-zoom { display: flex; gap: 4px; padding: 4px; }
+  .jr-zoom button { height: 32px; padding: 0 10px; border-radius: 8px; background: #eaeef4; font: 500 12px/16px var(--body); white-space: nowrap; }
+  .jr-zoom button[aria-checked="true"] { background: #2b3134; color: #fff; }
+  .jr-nums p { margin: 0 0 12px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .jr-nums p b { font: 500 14px/20px var(--body); }
+  .jr-nums p span, .jr-nums dt { color: #71757f; }
+  .jr-nums dl { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+  .jr-nums dl > div { display: flex; justify-content: space-between; gap: 16px; }
+  .jr-nums dd { margin: 0; font-weight: 500; white-space: nowrap; }
+
+  /* the heads: a 95px white band, then 18px of the page's ground above the grid */
+  .cal-grid, .cal.is-week .cal-grid { --ppm: var(--zoom, 1); color: #2b3134; font: 400 12px/16px var(--body); }
+  .cal-grid { grid-template-columns: 60px repeat(var(--cols), minmax(96px, 1fr)) 60px; }
+  .cal.is-week .cal-grid { grid-template-columns: 60px repeat(7, minmax(72px, 1fr)) 60px; }
+  .cal-corner, .cal-head { height: 95px; border-top: 1px solid #eef1f6; border-bottom: 0; background: #fff; }
+  .cal-corner-r { left: auto; right: 0; border-left: 1px solid #eef1f6; }
+  .cal-head { flex-direction: row; justify-content: flex-start; gap: 8px; padding: 0 12px; border-left: 1px solid #eef1f6; text-align: left; }
+  .cal-head .cal-ava { width: 24px; height: 24px; border-radius: 4px; font: 700 10px/1 var(--body); }
+  .cal-who2 { display: block; min-width: 0; }
+  .cal-head b, .cal-head small { display: block; }
+  .cal-head b, .cal-head.is-today b, button.cal-head:hover b { color: #2b3134; font: 500 12px/16px var(--body); }
+  .cal-head .jr-role { color: #71757f; font: 400 12px/16px var(--body); }
+  /* a week: a day in each head, its name over its date; today underlined in yellow */
+  .cal.is-week .cal-head { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; }
+  .cal-head.is-today { box-shadow: inset 0 -2px 0 #ffcb00; }
+  button.cal-head:hover { background: #f7f9fc; }
+
+  /* the time on both sides */
+  .cal-gutter, .cal-col { margin-top: 18px; }
+  .cal-gutter { border-right: 0; background: #fff; }
+  .cal-gutter-r { left: auto; right: 0; border-left: 1px solid #e0e3eb; }
+  .cal-tick { display: none; }
+  .jr-tick { position: absolute; top: calc(var(--ppm) * var(--t) * 1px); right: 8px; margin-top: -8px; display: flex; align-items: flex-start; gap: 2px; color: #2b3134; }
+  .jr-tick b { font: 500 16px/16px var(--body); }
+  .jr-tick i { font: normal 400 9px/11px var(--body); }
+  .jr-tick.is-half { margin-top: -5px; color: #9aa3b1; }
+  .cal-gutter-r .jr-tick { right: auto; left: 8px; }
+  .cal-gutter-r .jr-tick.is-half { left: 10px; }
+  .cal-nowtag { left: 6px; right: auto; height: 16px; margin-top: -8px; padding: 0 5px; transform: none; font: 700 10px/16px var(--body); }
+
+  /* the grid: a stronger line every hour, a pale one every 15px (15, 10 or 5 minutes, by the scale) */
+  .cal-col { border-left: 1px solid #e0e3eb; }
+  .cal-col::after { background-image: linear-gradient(#dfe3ea 1px, transparent 1px), linear-gradient(#f0f2f6 1px, transparent 1px); background-size: 100% calc(var(--ppm) * 60px), 100% 15px; }
+  /* a break or a block: pale grey with its times */
+  .cal-off, .cal-off.k-vacation, .cal-off.k-sick { display: flex; align-items: flex-start; padding: 3px 6px; border-radius: 0; background: rgba(224, 227, 235, .55); color: #71757f; font: 400 9px/11px var(--body); }
+
+  /* a visit's card: 6px in, a 15px strip with the time and the status mark, then the name, the phone, the services */
+  .cal-v { left: 6px; right: 6px; height: max(14px, calc(var(--ppm) * var(--m) * 1px - 1px)); gap: 0; padding: 0; font: 700 10px/11px var(--body); }
+  /* a line that does not fit is cut off at the card's foot, never squeezed */
+  .cal-v > * { flex: none; }
+  .cal-v .t { height: 15px; justify-content: space-between; padding: 0 4px; font: 400 9px/11px var(--body); font-variant-numeric: normal; }
+  .cal-v b { padding: 2px 4px 0; font: 700 10px/11px var(--body); }
+  .cal-v .p { display: block; padding: 0 4px; color: var(--n); font: 700 10px/11px var(--body); }
+  .cal-v .s { margin-top: 1px; padding: 0 4px; font: 700 9px/11px var(--body); }
+  .cal-v .dot { display: none; }
+  .cal-v .mk { display: block; flex: none; }
+  .cal-ghost { left: 6px; right: 6px; }
+  /* the status filter: a state without its tick is not on the grid */
+  .cal.hide-online .cal-v.k-online, .cal.hide-staff .cal-v.k-staff, .cal.hide-came .cal-v.k-came, .cal.hide-noshow .cal-v.k-noshow { display: none; }
+
+  .jr-empty .adm-btn { min-height: 32px; padding: 0 12px; font: 500 12px/16px var(--body); }
+
+  /* the panel on the right: 321px on the page's ground, one tab; an open visit lies over it */
+  .jr-side { flex: 0 0 321px; min-height: 0; display: flex; flex-direction: column; background: #f7f9fc; border-left: 1px solid #e0e3eb; color: #2b3134; font: 400 12px/16px var(--body); }
+  .cal.has-panel .jr-side { display: none; }
+  .jr-tabs { flex: none; display: flex; height: 48px; }
+  .jr-tabs button { flex: 1; height: 48px; background: #fff; font: 500 12px/16px var(--body); text-align: center; }
+  .jr-side-body { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+  .jr-search { position: relative; display: block; }
+  .jr-search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #71757f; pointer-events: none; }
+  .jr-search input { height: 32px; min-height: 32px; padding: 0 10px 0 30px; border-color: #e0e3eb; border-radius: 8px; font-size: 12px; }
+  /* the field's own dark line says it has the keyboard; the frame's second ring is too much for 32px */
+  .jr-search input:focus-visible { outline: none; }
+  .jr-side-note { margin: 0; color: #71757f; }
+  .jr-side-note.is-bad { color: var(--warn); }
+  .jr-hits { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .jr-hits.is-busy { opacity: .55; }
+  .jr-hits a { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 8px; background: #fff; text-decoration: none; }
+  .jr-hits a:hover { box-shadow: inset 0 0 0 1px #e0e3eb; }
+  .jr-hits b { font: 500 12px/16px var(--body); overflow-wrap: anywhere; }
+  .jr-hits small { color: #71757f; font-size: 12px; }
 }
-.cal-who2 { display: contents; }
 
 /* ---------- sheets: from the bottom on phones, a panel on the right on wide screens ---------- */
 .adm-sheet-wrap { position: fixed; inset: 0; z-index: 50; background: rgba(34, 34, 46, .45); display: flex; align-items: flex-end; justify-content: center; }

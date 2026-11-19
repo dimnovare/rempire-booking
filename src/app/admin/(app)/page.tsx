@@ -1,10 +1,12 @@
 /**
- * The calendar: a day with one column per barber, or one barber's week.
+ * The calendar: a day with a column for each barber who works it or has a
+ * visit on it, or one barber's week.
  * /admin?d=2026-11-17            a day
  * /admin?d=2026-11-17&v=week&s=  a week of barber s
+ * A day comes with what its product sales come to, for the day's numbers.
  */
 import { Suspense } from "react";
-import { loadCalendar } from "@/lib/admin/calendar";
+import { dayGoodsCents, loadCalendar } from "@/lib/admin/calendar";
 import { weekStart } from "@/lib/admin/grid";
 import { requireAdmin } from "@/lib/auth/current";
 import { dbConfigured, query } from "@/lib/db";
@@ -30,7 +32,10 @@ async function Loaded({ searchParams }: { searchParams: PageProps<"/admin">["sea
   const today = todayIn(tz, now);
   const date = isLocalDate(sp.d) ? sp.d : today;
   const view = sp.v === "week" ? "week" : "day";
-  const data = await loadCalendar(query, business, view === "week" ? weekStart(date) : date, view === "week" ? 7 : 1);
+  const [data, goodsCents] = await Promise.all([
+    loadCalendar(query, business, view === "week" ? weekStart(date) : date, view === "week" ? 7 : 1),
+    view === "day" ? dayGoodsCents(query, business, date) : null,
+  ]);
   const wanted = typeof sp.s === "string" ? sp.s : null;
   const staffId = data.staff.find((s) => s.id === wanted)?.id ?? data.staff[0]?.id ?? null;
   return (
@@ -44,6 +49,7 @@ async function Loaded({ searchParams }: { searchParams: PageProps<"/admin">["sea
       staffId={staffId}
       now={now}
       step={business.settings.slot_step_min}
+      goodsCents={goodsCents}
     />
   );
 }

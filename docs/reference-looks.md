@@ -133,7 +133,41 @@ gets it → send.
        pages are the login's own (`users.favourites`, migration 017).
      - **Ours, not theirs:** «Мой день | Салон» sits under the head; no
        bell, as nothing feeds one; the way out stays in the menu too.
-   - **Not built:** the journal's large hour numbers.
+   - **The journal: built 19.11.2026** (`calendar.tsx`, `journal-bar.tsx`
+     and `journal-side.tsx` in `src/app/admin/(app)/`; its rules in
+     `src/lib/admin/journal.ts`; the two calendar blocks of `admin.css`).
+     From 900 px, to the design board's sizes; a phone keeps its own bar,
+     day strip and sizes and takes only the visits' colours.
+     - **Bar:** white, 48 px, 32 px controls: «Сегодня», ‹ ›, the day as
+       the title («19 ноября, четверг»; a click picks any date), then
+       «Продать» (the sale drawer), the day's numbers, «День | Неделя»
+       (the week asks for the barber), the status filter, the scale, the
+       right panel, and the one yellow button, «Запись».
+     - **Columns:** only the barbers who work that day (hours, or special
+       time) or have a visit on it; time off stays in the column as a
+       block. A day nobody works says «Расписание не установлено». The day
+       runs from the earliest start to the latest end among them, 1 px a
+       minute, the time on both sides with the large hour numbers.
+     - **A visit:** the strip says who made it (online violet, the salon
+       green), the body its state: `pending` and `booked` wait in their
+       maker's tint, `arrived` and `done` are orange, `no_show` red.
+       «Now» is the dark tag and a line, the visit running now glows, a
+       break is pale grey with its times.
+     - **The day's numbers:** clients, «Записей на сумму» (every visit of
+       the day), «Выполнено на сумму» (arrived or done; the sum on the
+       button), «Товаров на сумму» (the day's product sales that were not
+       taken back).
+     - **Filter, scale, panel:** kept per browser tab. The filter has a
+       tick per state; the scale is 1, 1.5 or 3 px a minute (15, 10 or 5
+       minutes to a line); the panel has one tab, «Клиенты», the client
+       base's own search.
+     - **Not built:** cash, card and loyalty in the day's numbers
+       (payments are not built); subscriptions and certificates under
+       «Продать»; the bar's menu button and «Добавить сотрудника в
+       расписание»; the menu behind a barber's head; the card on hover and
+       pulling a visit's foot to make it longer; the panel's chat. A tap
+       on the grid still snaps to the booking step (15 minutes), whatever
+       the scale.
 2. **Invoices: built 19.11.2026** (`src/app/admin/(app)/invoices/`, the
    «Счета» block of `admin.css`).
    - **The section wears Isolta's colours:** in «Счета» the frame turns

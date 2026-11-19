@@ -44,6 +44,52 @@ export const EyeIcon = ({ size = 20 }: P) => (
     <circle cx="12" cy="12" r="3" />
   </svg>
 );
+export const SearchIcon = ({ size = 16 }: P) => (
+  <svg {...svg(size, 1.8)}>
+    <circle cx="11" cy="11" r="6.5" />
+    <path d="M20 20l-4.4-4.4" />
+  </svg>
+);
+// the journal's bar (calendar.tsx, journal-bar.tsx): the status filter, the scale, the panel on the right
+export const FunnelIcon = ({ size = 16 }: P) => (
+  <svg {...svg(size, 1.8)}>
+    <path d="M4 5h16l-6 7v6l-4 2v-8z" />
+  </svg>
+);
+export const ZoomIcon = ({ size = 16 }: P) => (
+  <svg {...svg(size, 1.8)}>
+    <circle cx="11" cy="11" r="6" />
+    <path d="M20 20l-4.5-4.5M8.5 11h5M11 8.5v5" />
+  </svg>
+);
+export const PanelIcon = ({ size = 16 }: P) => (
+  <svg {...svg(size, 1.8)}>
+    <rect x="4" y="4" width="16" height="16" />
+    <path d="M14 4v16" />
+  </svg>
+);
+
+/**
+ * The small mark at the right of a visit's strip: a clock while it waits, a
+ * plus once the client is in, a tick when the visit is done, a minus if he
+ * did not come.
+ */
+export function StatusMark({ status, size = 11 }: { status: string; size?: number }) {
+  return (
+    <svg {...svg(size, 2.2)} className="mk">
+      <circle cx="12" cy="12" r="9" />
+      {status === "no_show" ? (
+        <path d="M7.5 12h9" />
+      ) : status === "done" ? (
+        <path d="M7.5 12.5l3 3 6-6.5" />
+      ) : status === "arrived" ? (
+        <path d="M12 7.5v9M7.5 12h9" />
+      ) : (
+        <path d="M12 7v5.5l3.5 2" />
+      )}
+    </svg>
+  );
+}
 
 /** A barber's portrait (grey, like the client flow) or the first letter. */
 export function Ava({ src, name, className }: { src: string | null | undefined; name: string; className?: string }) {
