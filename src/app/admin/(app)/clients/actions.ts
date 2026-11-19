@@ -202,6 +202,7 @@ export async function addCommentAction(id: string, text: string): Promise<{ ok: 
 
 export async function deleteCommentAction(id: string, commentId: string): Promise<boolean> {
   const { user, business } = await requireAdmin();
+  if (!(await clientSeen(query, business.id, user, str(id)))) return false;
   const ok = await deleteComment(business, str(id), str(commentId), user);
   if (ok) refresh();
   return ok;

@@ -632,6 +632,10 @@ async function phoneHolder(tx: Querier, businessId: string, phone: string, notId
 export async function saveClient(business: Business, id: string | null, input: ClientInput, actor: string, now = Date.now(), who?: Holder): Promise<ClientSaved> {
   if (id !== null && !isUuid(id)) return { ok: false, field: "id" };
   if (who && id !== null && !(await clientSeen(query, business.id, who, id))) return { ok: false, field: "id" };
+  // the client who holds a phone is named (for the link to his card) only to a login that may see him;
+  // to the others the answer is just «this phone is taken», with no id
+  // (asked on the connection the caller is on: inside a transaction, on the transaction)
+  const named = async (q: Querier, other: string): Promise<{ clientId?: string }> => (!who || (await clientSeen(q, business.id, who, other)) ? { clientId: other } : {});
   // a login that sees the phones and the e-mail masked sends them back masked: they stay as they are
   const asked: ClientInput = who && id !== null && !can(who, "clients.card_contacts") ? { ...(input ?? {}), phone: undefined, phone2: undefined, email: undefined } : (input ?? {});
   const c = clean(asked, id === null, todayIn(business.timezone, now));
@@ -649,7 +653,7 @@ export async function saveClient(business: Business, id: string | null, input: C
         if (who && (!can(who, "clients.edit") || (v.note && !can(who, "clients.note.edit")) || (await newLabels(tx, v.labels, [])))) return { ok: false, field: "forbidden" };
         if (v.phone) {
           const other = await phoneHolder(tx, business.id, v.phone, null);
-          if (other) return { ok: false, field: "phoneTaken", clientId: other };
+          if (other) return { ok: false, field: "phoneTaken", ...(await named(tx, other)) };
         }
         const phone2 = v.phone2 && v.phone2 !== v.phone ? v.phone2 : null;
         const [row] = await tx<{ id: string }>(
@@ -726,7 +730,7 @@ export async function saveClient(business: Business, id: string | null, input: C
       }
       if (next.phone_e164 && next.phone_e164 !== cur.phone_e164) {
         const other = await phoneHolder(tx, business.id, next.phone_e164, id);
-        if (other) return { ok: false, field: "phoneTaken", clientId: other };
+        if (other) return { ok: false, field: "phoneTaken", ...(await named(tx, other)) };
       }
       await tx(
         `update clients set name = $2, phone_e164 = $3, email = $4, locale = $5, staff_note = $6, labels = $7::text[],
@@ -767,7 +771,7 @@ export async function saveClient(business: Business, id: string | null, input: C
     // two saves of the same phone at once: the database's unique (business_id, phone_e164) refused the second
     if (pgCode(err) === "23505" && v.phone) {
       const other = await phoneHolder(query, business.id, v.phone, id);
-      return { ok: false, field: "phoneTaken", ...(other ? { clientId: other } : {}) };
+      return { ok: false, field: "phoneTaken", ...(other ? await named(query, other) : {}) };
     }
     throw err;
   }

@@ -708,3 +708,44 @@ describe("every right that works has a door test", () => {
     expect(RIGHTS.filter((r) => r.built && !covered.has(r.key)).map((r) => r.key)).toEqual([]);
   });
 });
+
+/* Found by the security review of the rights commit (19.11.2026): three doors that asked the right but not the scope. */
+describe("what a login does not see stays closed", () => {
+  it("a comment of a client the login is not shown is not deleted", async () => {
+    for (const all of [true, false]) {
+      const c = await fresh("desk");
+      await grant(c.me, "clients.comments_delete_own", true);
+      const mine = await addComment(c.demo.business, c.anna, "мой", { id: c.me, name: "Desk" });
+      // Anna came to Valentin; the login is shown Jevgeni's clients only
+      await setValue(c.me, "clients.show", all ? "all" : [c.jev]);
+      expect(await clients.deleteCommentAction(c.anna, mine.ok ? mine.id : ""), all ? "shown" : "not shown").toBe(all);
+      expect((await listComments(query, c.demo.business.id, c.anna)).length, "comments left").toBe(all ? 0 : 1);
+    }
+  });
+
+  it("«этот телефон занят» names the client who has it only to a login that is shown him", async () => {
+    for (const all of [true, false]) {
+      const c = await fresh("desk");
+      await setValue(c.me, "clients.show", all ? "all" : [c.jev]);
+      const r = await clients.saveClientAction(null, { name: "Другая Анна", phone: PHONE });
+      expect(r).toMatchObject({ ok: false, field: "phoneTaken" });
+      expect(r.ok ? null : (r.clientId ?? null), all ? "named" : "not named").toBe(all ? c.anna : null);
+    }
+  });
+
+  it("a barber's price request is answered only by a login that sees his column", { timeout: 120000 }, async () => {
+    for (const sees of [true, false]) {
+      const c = await fresh("barber");
+      await grant(c.me, "services.staff", false);
+      expect(await bTime.setPrice({ serviceId: c.demo.services.clip, priceCents: 3300, durationMin: 30 })).toMatchObject({ ok: true, status: "requested" });
+      const [asked] = await query<{ id: string }>("select id from staff_requests where staff_id = $1 and status = 'requested'", [c.val]);
+      // the front desk answers: it has the right to change a barber's services, and sees Valentin's column or only Jevgeni's
+      await grant(c.desk, "services.staff", true);
+      await setValue(c.desk, "journal.staff", sees ? "all" : [c.jev]);
+      jar.cookies = { [SESSION_COOKIE]: await createSession(query, c.desk) };
+      const r = await requests.answer(asked.id, "approved", "");
+      expect(r.ok, sees ? "sees his column" : "does not see it").toBe(sees);
+      if (!r.ok) expect(r.code).toBe("forbidden");
+    }
+  });
+});

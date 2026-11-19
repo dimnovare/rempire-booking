@@ -449,7 +449,8 @@ export async function answerRequest(business: Business, actor: string, requestId
     if (r.status !== "requested") return { ok: false as const, code: "done" as const };
     const what = r.payload;
     if (!isRequestWhat(what)) return { ok: false as const, code: "invalid" as const };
-    if (who && !(what.kind === "price" ? can(who, "services.staff") : can(who, "journal.schedule") && can(who, "journal.staff", { staffId: r.staff_id }))) return { ok: false as const, code: "forbidden" as const };
+    // his column must be one this login sees, whatever is asked; then the right for the change itself
+    if (who && !(can(who, "journal.staff", { staffId: r.staff_id }) && can(who, what.kind === "price" ? "services.staff" : "journal.schedule"))) return { ok: false as const, code: "forbidden" as const };
     await tx("select id from staff where id = $1 for update", [r.staff_id]);
     if (what.kind === "time_off") {
       const off = r.time_off_id

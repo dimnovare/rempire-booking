@@ -7,7 +7,7 @@
  */
 import { Suspense } from "react";
 import { requireAdmin } from "@/lib/auth/current";
-import { can } from "@/lib/auth/rights";
+import { can, seenStaff } from "@/lib/auth/rights";
 import { listRequests } from "@/lib/barber/requests";
 import { dbConfigured, query } from "@/lib/db";
 import { Title, Wait } from "../../lang";
@@ -29,7 +29,9 @@ async function Loaded() {
   const A = await getA();
   if (!dbConfigured()) return <p className="adm-wait">{A.noDb}</p>;
   const { user, business } = await requireAdmin();
-  const rows = await listRequests(query, business.id, { days: 14 });
+  // only the barbers whose column this login sees (journal.staff): the server refuses an answer for the others anyway
+  const seen = seenStaff(user);
+  const rows = (await listRequests(query, business.id, { days: 14 })).filter((r) => seen === "all" || seen.includes(r.staffId));
   return (
     <>
       <Title text={A.req.title} />
