@@ -10,22 +10,14 @@
  * to the home screen from here, it is the same one app.
  */
 import type { Metadata, Viewport } from "next";
-import localFont from "next/font/local";
-import { Questrial } from "next/font/google";
+import { Inter } from "next/font/google";
 import { Suspense } from "react";
 import { LangProvider } from "./lang";
 import { adminLang } from "./lang-server";
 import "./admin.css";
 
-const display = localFont({
-  src: "../fonts/akrobat-extrabold.woff",
-  weight: "800",
-  display: "swap",
-  variable: "--font-display",
-  fallback: ["Arial Narrow", "sans-serif"],
-});
-// Questrial has no Cyrillic: Russian text falls back to the system face, as in the client flow.
-const body = Questrial({ weight: "400", subsets: ["latin", "latin-ext"], display: "swap", variable: "--font-body" });
+// Inter, as Altegio's admin (docs/reference-looks.md), Cyrillic included.
+const body = Inter({ subsets: ["latin", "latin-ext", "cyrillic"], display: "swap", variable: "--font-body" });
 
 // no title here: each section renders its own <title> in the login's language (lang.tsx, Title)
 export const metadata: Metadata = {
@@ -37,14 +29,14 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#000000",
-  colorScheme: "dark",
+  themeColor: "#22222e",
+  colorScheme: "light",
   viewportFit: "cover",
 };
 
 export default function AdminRoot({ children }: LayoutProps<"/admin">) {
   return (
-    <html lang="ru" className={`${display.variable} ${body.variable}`}>
+    <html lang="ru" className={body.variable}>
       <body className="adm">
         {/* the language needs the request (the login or a cookie), so everything below waits for it */}
         <Suspense fallback={null}>

@@ -53,7 +53,8 @@ tags, a 2 px lime rule on the left of quoted text. All from rempire.ee.
 
 Measured on the live Altegio widget at 375 px (`b353848.alteg.io`), then
 written as tokens in `src/app/globals.css`. The admin and the barber app
-keep their own styles.
+have their own tokens, after Altegio's admin (`docs/reference-looks.md`):
+a dark frame, light pages, yellow for the main action.
 
 | Token | Value | Use |
 |---|---|---|

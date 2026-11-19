@@ -1,4 +1,5 @@
-/* The barber app (/b): on top of admin.css (read only, the same look).
+/* The barber app (/b): on top of admin.css (read only, the same look: Altegio's,
+   docs/reference-looks.md).
    Phone first, one column. On a wide screen it stays a phone-wide column
    in the middle, with the four sections always at the bottom. */
 
@@ -12,8 +13,8 @@
 .bx-top { gap: 8px; }
 .bx-who { gap: 8px; }
 .bx-me { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; min-width: 0; text-decoration: none; }
-.bx-me b { font: 800 15px/1 var(--display); text-transform: uppercase; letter-spacing: .06em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bx-viewing { padding: 0 10px 0 4px; border: 1px solid var(--line-2); color: var(--lime); font-size: 13px; }
+.bx-me b { font: 600 15px/1 var(--display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bx-viewing { padding: 0 10px 0 4px; border: 1px solid var(--chrome-line); border-radius: 8px; color: var(--lime); font-size: 13px; }
 .bx-viewing span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46vw; }
 .adm-ava.bx-ava { width: 26px; height: 32px; font-size: 13px; }
 
@@ -22,7 +23,7 @@
   :root { --top-h: 52px; }
   .bx-top { gap: 8px; padding-left: max(16px, env(safe-area-inset-left, 0px)); }
   .bx .logo { height: 19px; }
-  .bx-nav { position: fixed; display: grid; height: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px)); padding: 0 0 env(safe-area-inset-bottom, 0px); background: var(--raise); border-top: 1px solid var(--line-2); max-width: 640px; margin: 0 auto; }
+  .bx-nav { position: fixed; display: grid; height: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px)); padding: 0 0 env(safe-area-inset-bottom, 0px); background: var(--chrome); max-width: 640px; margin: 0 auto; }
   .bx-nav a { flex-direction: column; gap: 5px; margin-top: -1px; padding: 0; font-size: 11px; border-top: 2px solid transparent; border-bottom: 0; }
   .bx-nav a svg { width: 22px; height: 22px; }
   .bx-nav a[aria-current="page"] { border-top-color: var(--lime); }
@@ -32,7 +33,7 @@
 
 /* «install the app» line under the top bar */
 .bx-banner { display: flex; align-items: center; gap: 8px; padding: 4px max(8px, env(safe-area-inset-right, 0px)) 4px max(16px, env(safe-area-inset-left, 0px)); background: var(--lime-bg); border-bottom: 1px solid var(--line); }
-.bx-banner a { flex: 1; min-height: 40px; display: flex; align-items: center; color: var(--lime); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+.bx-banner a { flex: 1; min-height: 40px; display: flex; align-items: center; color: var(--accent); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
 .bx-banner .adm-ibtn { width: 36px; height: 36px; border-color: transparent !important; color: var(--mute); }
 
 /* login and the install guide */
@@ -41,8 +42,8 @@
 .bx-steps { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--line-2); }
 .bx-steps ol { margin: 0; padding: 0 0 0 22px; display: flex; flex-direction: column; gap: 8px; list-style: decimal; }
 .bx-steps li { padding-left: 4px; }
-.bx-steps li::marker { color: var(--lime); font-family: var(--display); }
-.bx-share { display: inline-block; vertical-align: -3px; margin-right: 6px; color: var(--lime); }
+.bx-steps li::marker { color: var(--accent); font-family: var(--display); }
+.bx-share { display: inline-block; vertical-align: -3px; margin-right: 6px; color: var(--accent); }
 
 /* plain lists of rows (the barber picker, clients, requests) */
 .bx-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--line); }
@@ -56,12 +57,12 @@
 
 /* sheets: a centred card on a wide screen too (no side panel in a phone app) */
 @media (min-width: 900px) {
-  .bx-sheet-wrap { top: 0; left: 0; width: auto; background: rgba(0, 0, 0, .66); align-items: center; }
+  .bx-sheet-wrap { top: 0; left: 0; width: auto; background: rgba(34, 34, 46, .45); align-items: center; }
   .bx-sheet { max-width: 560px; height: auto; max-height: 88dvh; border: 1px solid var(--line-2); }
   .bx .adm-toast { left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom, 0px)); margin: 0 auto; }
 }
 .bx-noteblk { display: flex; flex-direction: column; gap: 6px; }
-.bx-noteblk > small { color: var(--dim); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+.bx-noteblk > small { color: var(--dim); font-size: 12px; }
 
 /* ---------- the day (B2) ---------- */
 .bx-day { gap: 14px; padding-top: 10px; }
@@ -76,30 +77,30 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-strip .adm-ibtn { width: 32px; height: 52px; border-color: transparent !important; color: var(--mute); }
 .bx-strip-days { flex: 1; min-width: 0; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
 .bx-strip-days button { display: flex; flex-direction: column; align-items: center; gap: 2px; min-height: 58px; padding: 6px 0 4px; text-align: center; border: 1px solid transparent !important; }
-.bx-strip-days small { font-size: 11px; color: var(--mute); text-transform: uppercase; letter-spacing: .06em; }
-.bx-strip-days b { font: 800 19px/1 var(--display); font-variant-numeric: tabular-nums; }
-.bx-strip-days i { font-style: normal; font-size: 11px; line-height: 14px; min-height: 14px; color: var(--lime); font-variant-numeric: tabular-nums; }
+.bx-strip-days small { font-size: 11px; color: var(--mute); }
+.bx-strip-days b { font: 600 19px/1 var(--display); font-variant-numeric: tabular-nums; }
+.bx-strip-days i { font-style: normal; font-size: 11px; line-height: 14px; min-height: 14px; color: var(--accent); font-variant-numeric: tabular-nums; }
 .bx-strip-days .is-off b { color: var(--dim); }
 /* the narrowest phones (320 px): a little more room for each day */
 @media (max-width: 359px) { .bx-strip .adm-ibtn { width: 28px; } .bx-strip-days { gap: 0; } }
 .bx-strip-days .is-today { border-color: var(--line-2) !important; }
-.bx-strip-days [aria-pressed="true"] { background: var(--lime); border-color: var(--lime) !important; }
+.bx-strip-days [aria-pressed="true"] { background: var(--lime); border-color: var(--sel) !important; }
 .bx-strip-days [aria-pressed="true"] :is(small, b, i) { color: var(--on-lime); }
 
 /* the head: day, hours, money */
 .bx-head { display: flex; flex-direction: column; gap: 4px; }
 .bx-head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.bx-head-row .adm-txt { color: var(--lime); font-size: 14px; }
+.bx-head-row .adm-txt { color: var(--accent); font-size: 14px; }
 .bx-sum { margin: 4px 0 0; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 15px; color: var(--mute); }
-.bx-sum b { color: var(--fg); font: 800 17px/1 var(--display); letter-spacing: .02em; }
-.bx-sp { margin: 0; font-size: 13px; color: var(--lime); }
+.bx-sum b { color: var(--fg); font: 600 17px/1 var(--display); }
+.bx-sp { margin: 0; font-size: 13px; color: var(--accent); }
 
 /* the next client */
 .bx-next { display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid var(--line-2); background: var(--raise); }
-.bx-next.is-now { border-color: var(--lime); }
-.bx-next-when { margin: 0; font: 800 12px/1 var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--lime); }
+.bx-next.is-now { border-color: var(--sel); }
+.bx-next-when { margin: 0; font: 600 12px/1 var(--display); color: var(--accent); }
 .bx-next-main { display: flex; flex-direction: column; gap: 4px; text-align: left; }
-.bx-next-main b { font: 800 26px/1 var(--display); font-variant-numeric: tabular-nums; }
+.bx-next-main b { font: 600 26px/1 var(--display); font-variant-numeric: tabular-nums; }
 .bx-next-main span { font-size: 19px; overflow-wrap: anywhere; }
 .bx-next-main small { color: var(--mute); font-size: 14px; }
 
@@ -108,7 +109,7 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-tl { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--line); }
 .bx-tl > li { display: flex; align-items: stretch; border-bottom: 1px solid var(--line); }
 .bx-t { flex: none; width: 52px; display: flex; flex-direction: column; justify-content: center; gap: 3px; font-variant-numeric: tabular-nums; }
-.bx-t b { font: 800 17px/1 var(--display); }
+.bx-t b { font: 600 17px/1 var(--display); }
 .bx-t small { font-size: 12px; color: var(--dim); }
 .bx-v > button { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 8px 0 8px 10px; text-align: left; border-left: 3px solid var(--line-2) !important; }
 .bx-v .bx-t { width: 46px; }
@@ -121,16 +122,16 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-v.st-done > button { opacity: .55; }
 .bx-v.st-no_show > button { border-left-color: var(--warn) !important; }
 .bx-v.st-no_show .bx-v-main b { text-decoration: line-through; color: var(--mute); }
-.bx-v.is-sp .bx-v-side b { color: var(--lime); }
+.bx-v.is-sp .bx-v-side b { color: var(--accent); }
 .bx-blk { min-height: 48px; padding: 6px 0 6px 13px; gap: 10px; }
 .bx-gap > :is(button, div) { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 0 6px 13px; text-align: left; }
 .bx-gap .bx-t, .bx-blk .bx-t { width: 46px; }
 .bx-gap .bx-t b, .bx-blk .bx-t b { font-size: 15px; color: var(--mute); }
 .bx-gap-main { flex: 1; min-width: 0; color: var(--mute); font-size: 14px; }
-.bx-gap.is-sp .bx-gap-main { color: var(--lime); }
+.bx-gap.is-sp .bx-gap-main { color: var(--accent); }
 /* free time books a visit: the «+» says so */
-.bx-gap-add { flex: none; width: 36px; height: 36px; display: grid; place-items: center; color: var(--lime); border: 1px dashed var(--line-2); }
-.bx-gap > button:is(:hover, :focus-visible) .bx-gap-add { border-style: solid; border-color: var(--lime); }
+.bx-gap-add { flex: none; width: 36px; height: 36px; display: grid; place-items: center; color: var(--accent); border: 1px dashed var(--line-2); }
+.bx-gap > button:is(:hover, :focus-visible) .bx-gap-add { border-style: solid; border-color: var(--sel); }
 .bx-blk { background: repeating-linear-gradient(135deg, transparent 0 8px, var(--raise-2) 8px 16px); }
 .bx-blk-main { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 14px; }
 .bx-blk-main small { color: var(--mute); font-size: 13px; }
@@ -146,7 +147,7 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-wk > li > a { display: flex; flex-direction: column; gap: 4px; padding: 12px 0 12px 12px; text-decoration: none; border-left: 3px solid transparent; min-width: 0; }
 .bx-wk > li.is-today > a { border-left-color: var(--lime); }
 .bx-wk-head { display: flex; justify-content: space-between; gap: 12px; }
-.bx-wk-head b { font: 800 17px/1.1 var(--display); text-transform: uppercase; letter-spacing: .03em; }
+.bx-wk-head b { font: 600 17px/1.1 var(--display); }
 .bx-wk-head span { font-variant-numeric: tabular-nums; }
 .bx-wk > li > a > small { color: var(--mute); font-size: 13px; }
 .bx-wk > li.is-off .bx-wk-head b { color: var(--dim); }
@@ -158,8 +159,8 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 
 /* ---------- notifications (B5) ---------- */
 .bx-hint { margin: 0; padding: 10px 12px; border-left: 2px solid var(--warn); color: var(--fg); font-size: 14px; }
-.bx-hint a { color: var(--lime); }
-.bx-on { margin: 0; color: var(--lime); font-size: 15px; }
+.bx-hint a { color: var(--accent); }
+.bx-on { margin: 0; color: var(--accent); font-size: 15px; }
 .bx-kinds { margin: 4px 0 0; padding: 0; border: 0; display: flex; flex-direction: column; }
 .bx-kinds legend { margin-bottom: 6px; }
 .bx-kind { justify-content: space-between; border-top: 1px solid var(--line); padding: 4px 0; }
@@ -168,7 +169,7 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 /* ---------- booking from the phone (B3) ---------- */
 /* room under the last row for the «+» */
 .bx-day { padding-bottom: 96px; }
-.bx-fab { position: fixed; z-index: 25; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom, 0px)); width: 58px; height: 58px; display: grid; place-items: center; background: var(--lime); color: var(--on-lime); box-shadow: 0 0 0 1px #000; }
+.bx-fab { position: fixed; z-index: 25; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom, 0px)); width: 58px; height: 58px; display: grid; place-items: center; background: var(--lime); color: var(--on-lime); border-radius: 16px; box-shadow: 0 6px 18px rgba(34, 34, 46, .28); }
 .bx-sell-gallery { align-self: flex-start; min-height: 44px; text-decoration: underline; text-underline-offset: 3px; }
 /* on a wide screen the app is a 640px column in the middle: the button stays inside it */
 @media (min-width: 672px) { .bx-fab { right: calc(50vw - 320px + 16px); } }
@@ -181,10 +182,10 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-daypick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .bx-times { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; }
 .bx-times button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 48px; padding: 4px 2px; border: 1px solid var(--line-2) !important; font-variant-numeric: tabular-nums; }
-.bx-times b { font: 800 16px/1 var(--display); letter-spacing: .02em; }
+.bx-times b { font: 600 16px/1 var(--display); }
 .bx-times small { font-size: 11px; color: var(--mute); }
-.bx-times .is-sp b, .bx-times .is-sp small { color: var(--lime); }
-.bx-times button[aria-pressed="true"] { background: var(--lime); border-color: var(--lime) !important; }
+.bx-times .is-sp b, .bx-times .is-sp small { color: var(--accent); }
+.bx-times button[aria-pressed="true"] { background: var(--lime); border-color: var(--sel) !important; }
 .bx-times button[aria-pressed="true"] :is(b, small) { color: var(--on-lime); }
 .bx-times button:disabled { opacity: .45; }
 .bx-other { align-self: flex-start; }
@@ -195,7 +196,7 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-cancel { align-self: flex-start; }
 /* the admin's tick box (.adm-svcs .bx), under its own name: .bx is this app's root */
 .adm-svcs .bx-tick { flex: none; width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--line-2); color: transparent; }
-.adm-svcs button[aria-pressed="true"] .bx-tick { background: var(--lime); border-color: var(--lime); color: var(--on-lime); }
+.adm-svcs button[aria-pressed="true"] .bx-tick { background: var(--lime); border-color: var(--sel); color: var(--on-lime); }
 
 /* ---------- «Моё время» (B4) ---------- */
 .bx-time-add { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -204,20 +205,20 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-rows > li { padding: 0; }
 .bx-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 10px 2px; text-align: left; }
 .bx-row .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.bx-row .txt b { font: 800 17px/1.1 var(--display); text-transform: uppercase; letter-spacing: .03em; }
+.bx-row .txt b { font: 600 17px/1.1 var(--display); }
 .bx-row .txt .plain { font-size: 16px; line-height: 1.3; overflow-wrap: anywhere; }
 .bx-row .txt small { color: var(--mute); font-size: 13px; }
 .bx-row .tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .bx-row .end { flex: none; white-space: nowrap; }
-.bx-row .end.price { font: 800 18px/1 var(--display); }
-.bx-row .bx-plus { color: var(--lime); }
+.bx-row .end.price { font: 600 18px/1 var(--display); }
+.bx-row .bx-plus { color: var(--accent); }
 .bx-row .bx-note { overflow-wrap: anywhere; }
 .bx-x { border-color: transparent !important; color: var(--mute); }
 @media (hover: hover) { button.bx-row:hover { background: var(--raise); } }
 .bx-confirm { display: flex; flex-direction: column; gap: 8px; padding: 0 0 12px; }
 .bx-week { margin: 0; display: grid; gap: 6px; }
 .bx-week > div { display: grid; grid-template-columns: 88px 1fr; gap: 10px; }
-.bx-week dt { font: 800 14px/1.4 var(--display); text-transform: uppercase; letter-spacing: .06em; color: var(--mute); }
+.bx-week dt { font: 600 14px/1.4 var(--display); color: var(--mute); }
 .bx-week dd { margin: 0; font-variant-numeric: tabular-nums; }
 .bx-week dd.is-off { color: var(--dim); }
 .bx-wday { margin: 0; padding: 10px 0 12px; border: 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
@@ -228,7 +229,7 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-span { display: flex; align-items: center; gap: 8px; clear: both; }
 .bx-span input { flex: 1 1 0; min-width: 0; }
 .bx-step { display: flex; align-items: center; gap: 12px; }
-.bx-step b { min-width: 96px; text-align: center; font: 800 20px/1 var(--display); font-variant-numeric: tabular-nums; }
+.bx-step b { min-width: 96px; text-align: center; font: 600 20px/1 var(--display); font-variant-numeric: tabular-nums; }
 .bx-step .adm-ibtn { font-size: 22px; }
 
 /* ---------- the client's card (B6) ---------- */
@@ -251,7 +252,7 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-pick-head { display: flex; align-items: center; gap: 12px; }
 .bx-pick-head .bx-thumb { width: 72px; height: 72px; }
 .bx-pick-head .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.bx-pick-head .txt b { font: 800 20px/1.1 var(--display); text-transform: uppercase; letter-spacing: .03em; overflow-wrap: anywhere; }
+.bx-pick-head .txt b { font: 600 20px/1.1 var(--display); overflow-wrap: anywhere; }
 .bx-pick-head .txt small { color: var(--mute); font-size: 13px; }
 .bx-pick .adm-btn-ghost.adm-btn-sm { align-self: flex-start; }
 .bx-sell-go { min-height: 60px; font-size: 17px; }
@@ -272,7 +273,7 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-scan-close, .bx-scan-torch { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); width: 48px; height: 48px; display: grid; place-items: center; background: rgba(0, 0, 0, .55); border: 1px solid var(--line-2); }
 .bx-scan-close { left: max(12px, env(safe-area-inset-left, 0px)); }
 .bx-scan-torch { right: max(12px, env(safe-area-inset-right, 0px)); }
-.bx-scan-torch[aria-pressed="true"] { background: var(--lime); border-color: var(--lime); color: var(--on-lime); }
+.bx-scan-torch[aria-pressed="true"] { background: var(--lime); border-color: var(--sel); color: var(--on-lime); }
 .bx-scan-bar { display: flex; flex-direction: column; gap: 10px; padding: 14px max(16px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); background: var(--raise); }
 .bx-scan-bar p { margin: 0; font-size: 15px; }
 .bx-scan-bar p.is-err { color: var(--warn); }
@@ -280,4 +281,4 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-scan-manual input { flex: 1; }
 .bx-scan-manual .adm-btn { flex: none; }
 /* five sections in the bottom bar */
-.bx-nav:has(a:nth-child(5)) a { font-size: 10px; letter-spacing: .04em; }
+.bx-nav:has(a:nth-child(5)) a { font-size: 10px; }

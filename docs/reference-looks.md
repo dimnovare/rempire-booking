@@ -96,15 +96,24 @@ gets it → send.
 - Below: the lines (item number, name, unit price, amount, unit, discount,
   total), with the currency on the right.
 
-## What this means for us (not built yet)
+## What this means for us
 
-1. **Admin and barber app:** light, Inter, Altegio's greys and yellow; the
-   calendar in the journal's colours. Our admin is already built on colour
-   tokens (`src/app/admin/admin.css`), so the look is a contained change;
-   the dark sidebar with the mini month and the tiles is a change of the
-   frame.
-2. **Invoices:** the list as Isolta's table, and a free «Новый счёт» that
-   starts from the receiver, beside the monthly drafts we make per barber.
+1. **Admin and barber app: built 19.11.2026** (`src/app/admin/admin.css`,
+   `src/app/b/barber.css`, the two layouts).
+   - Pages light in Inter; the frame dark (`#22222e`): on a phone the top
+     bar and the sections at the bottom, from 900 px the admin's sections
+     as a sidebar on the left. The barber app stays a phone-wide column.
+   - Yellow (`#ffcb00`) for the one main action and the current choice;
+     other buttons white with a grey line; 8 px corners, cards 12 px.
+   - The calendar in the journal's colours: a visit booked online violet,
+     one made by the staff green over teal, a strip with the time on top;
+     «now» a dark tag with yellow time; breaks pale grey; special time a
+     dashed amber frame.
+   - **Not built:** the sidebar's mini month, the four tiles and
+     «Избранное»; the journal's large hour numbers.
+2. **Invoices (not built yet):** the list as Isolta's table, and a free
+   «Новый счёт» that starts from the receiver, beside the monthly drafts we
+   make per barber.
 3. **Functionality** Altegio has and we do not (clients base, loyalty,
    stock, cash accounts, reports) is a list for Dim to choose from, not
    part of the look.

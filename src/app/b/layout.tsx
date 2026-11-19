@@ -7,8 +7,7 @@
  * Never indexed, even after the move to rempire.ee.
  */
 import type { Metadata, Viewport } from "next";
-import localFont from "next/font/local";
-import { Questrial } from "next/font/google";
+import { Inter } from "next/font/google";
 import { Suspense } from "react";
 import "../admin/admin.css";
 import "./barber.css";
@@ -16,15 +15,8 @@ import { LangProvider } from "./lang";
 import { barberLang } from "./lang-server";
 import { SwRegister } from "./sw-register";
 
-const display = localFont({
-  src: "../fonts/akrobat-extrabold.woff",
-  weight: "800",
-  display: "swap",
-  variable: "--font-display",
-  fallback: ["Arial Narrow", "sans-serif"],
-});
-// Questrial has no Cyrillic: Russian text falls back to the system face, as in the client flow.
-const body = Questrial({ weight: "400", subsets: ["latin", "latin-ext"], display: "swap", variable: "--font-body" });
+// Inter, as Altegio's admin (docs/reference-looks.md), Cyrillic included.
+const body = Inter({ subsets: ["latin", "latin-ext", "cyrillic"], display: "swap", variable: "--font-body" });
 
 export const metadata: Metadata = {
   title: "REMPIRE",
@@ -37,14 +29,14 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#000000",
-  colorScheme: "dark",
+  themeColor: "#22222e",
+  colorScheme: "light",
   viewportFit: "cover",
 };
 
 export default function BarberRoot({ children }: LayoutProps<"/b">) {
   return (
-    <html lang="ru" className={`${display.variable} ${body.variable}`}>
+    <html lang="ru" className={body.variable}>
       <body className="adm bx">
         {/* the language needs the request (the login), so everything below waits for it */}
         <Suspense fallback={null}>

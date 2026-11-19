@@ -39,6 +39,7 @@ moved to rempire.ee.
 | 22 | Apps | **Two** (Dim, 18.11): one staff app where the role decides what opens, and the client booking site, installable. Renat is owner and barber at once. The final addresses are open. See `docs/apps.md`. |
 | 23 | Booking look | **As Altegio's widget** (Renat, 19.11: «оставить все так же как в оригинале: цвета, последовательность, дизайн»; Dim: Altegio's visuals, our texts). Light, the same order of steps, our own code, icons and words. A client cancels at any time; after «Add to calendar» a goodbye and the start again. See `docs/client-flow.md`. |
 | 24 | Keep it simple | Dim, 19.11: «let's not try to overcomplicate our solution and make exactly what is asked». For invoices Renat only does «new invoice → pick who gets it» in Isolta. |
+| 25 | Staff look | **As Altegio's admin** (Dim, 19.11): the admin and the barber app light, in Altegio's colours, the calendar as its journal. Invoices as Isolta's. Measured in `docs/reference-looks.md`. |
 
 ### Round 1 answers (Dim, decisions page, 17.11.2026)
 

@@ -42,7 +42,11 @@ Goal: as simple as Altegio or Fresha. Copy their flows and features freely.
   today** (Renat and Dim, 19.11.2026): the same colours, layout and order of
   steps, in our own code, icons and texts. See `docs/client-flow.md` and
   `docs/brand.md`, «Booking look».
-- Never Altegio's or Fresha's logo, name, texts or «Powered by».
+- **The admin and the barber app follow Altegio's admin** (Dim, 19.11.2026):
+  a dark frame, light pages, yellow for the main action, the calendar in
+  its journal's colours. Invoices follow Isolta. See
+  `docs/reference-looks.md`.
+- Never Altegio's, Fresha's or Isolta's logo, name, texts or «Powered by».
 
 ## Hard rules
 
