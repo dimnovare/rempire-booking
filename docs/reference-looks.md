@@ -134,6 +134,38 @@ gets it → send.
    - **Not built:** a PDF preview before sending (the PDF exists once an
      invoice is issued); Isolta's reference number for payments; its
      products list, reports and attachments.
-3. **Functionality** Altegio has and we do not (clients base, loyalty,
-   stock, cash accounts, reports) is a list for Dim to choose from, not
-   part of the look.
+3. **«Клиенты»: built 19.11.2026** (`src/app/admin/(app)/clients/`,
+   `src/lib/admin/clients.ts`, the «Клиенты» block of `admin.css`; Dim's
+   choice in decisions round 8).
+   - **The list:** a search field with an icon (a name, phone digits or
+     an e-mail), one category as a filter, the yellow «Добавить клиента».
+     From 900 px one table on a white sheet: Имя, Телефон, Email, Визиты,
+     Последний визит, Первый визит, Продано; on a phone a row per client.
+     25 a page, by name. From 900 to 1199 px the e-mail and the first
+     visit are left out, so the table fits beside the sidebar.
+   - **What is typed in the search is never in the address:** the list is
+     asked for by an action, so a client's name or phone stays out of
+     links, the browser's history and the request log.
+   - **One client:** his numbers, then three parts that save by
+     themselves: his fields (name, phone, e-mail, the language of his
+     letters and SMS, SMS and letters on or off), his categories as chips
+     (free words, migration 016; the words already in use are offered),
+     and the shared note the barbers see too. Under them every visit he
+     has had or has ahead, with the calendar's status words; a visit opens
+     its day in the calendar.
+   - **The numbers:** «Визиты» is every visit that is not cancelled, the
+     ones ahead too; the first and the last visit are ones that have
+     begun; «Продано» is the sum of the visits that have begun and were
+     neither cancelled nor a no-show.
+   - **The sections:** «Клиенты» is the sixth, so a phone's bottom bar
+     holds four of them and «Ещё» (`/admin/more` lists the others as large
+     rows); the sidebar from 900 px lists every section. The words are
+     still ours («Календарь», «Барберы»), not Altegio's «Журнал» and
+     «Сотрудники».
+   - **Not built:** the import from Altegio (it will fill the same
+     table); merging two clients; deleting or erasing one; sorting by a
+     column; an export; Altegio's loyalty, discounts and its own list of
+     categories.
+4. **Functionality** Altegio has and we do not (loyalty, stock, cash
+   accounts, reports) is a list for Dim to choose from, not part of the
+   look.

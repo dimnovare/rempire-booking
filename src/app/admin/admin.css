@@ -127,6 +127,11 @@ html, body { background: var(--ink); }
 .adm-nav a[aria-current="page"] { color: var(--lime); border-top-color: var(--lime); }
 /* the tabs share the width whatever their number (five at most, see nav.tsx); with five, the words need a little less room on a phone */
 @media (max-width: 899px) { .adm-nav:has(a:nth-child(5)) a { font-size: 10px; } }
+/* the admin's sections (sections.tsx) are one list of links. A phone's bar shows four of them and «Ещё»: the ones
+   behind «Ещё» (in-more) are hidden there and listed on /admin/more. The sidebar from 900px shows every section
+   and has no «Ещё» (is-more). */
+@media (max-width: 899px) { .adm-nav a.in-more { display: none; } }
+@media (min-width: 900px) { .adm-nav a.is-more { display: none; } }
 .adm-main { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px)); }
 @media (min-width: 900px) {
   :root { --top-h: 56px; }
@@ -813,6 +818,86 @@ button.cal-head:hover b { color: var(--accent); }
 }
 @media (max-width: 899px) {
   .adm-two-cols { display: flex; flex-direction: column; gap: 14px; }
+}
+
+/* ---------- «Ещё» (/admin/more): the sections a phone's bar has no tab for, as large rows ---------- */
+.adm-more .adm-item { min-height: 72px; gap: 14px; }
+.adm-more .adm-item .txt b { font-size: 17px; }
+.adm-more-ico { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 8px; background: var(--raise); border: 1px solid var(--line-2); color: var(--fg); }
+
+/* ---------- «Клиенты»: the client base (Dim, decisions round 8, 19.11.2026) ----------
+   In the look of the rest of the admin (Altegio's, docs/reference-looks.md): the yellow main button, a search
+   with an icon on top, one table on a white sheet from 900px, a row per client on a phone. Its own classes
+   (cl-): the invoices' inv- ones wear another product's colours. */
+.cl-top { flex-wrap: wrap; }
+.cl-top .adm-btn { width: auto; }
+.cl-filters { display: flex; flex-wrap: wrap; gap: 10px; }
+.cl-filters select { flex: 1 1 180px; }
+.cl-search { position: relative; flex: 2 1 240px; display: block; }
+.cl-search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--dim); pointer-events: none; }
+:where(.adm) .cl-search input { padding-left: 42px; }
+.cl-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+/* a line about the field above it, close under it */
+.adm-form > .cl-hint { margin-top: -8px; }
+.cl-list.is-busy { opacity: .55; transition: opacity .2s .15s; }
+.cl-item .txt small { overflow-wrap: anywhere; }
+.cl-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.cl-card { background: var(--raise); border: 1px solid var(--line-2); border-radius: 8px; overflow-x: auto; }
+.cl-table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.cl-table th { padding: 14px 12px; border-bottom: 1px solid var(--line-2); font: 500 13px/1.2 var(--display); color: var(--mute); text-align: left; white-space: nowrap; }
+.cl-table td { height: 52px; padding: 6px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.cl-table tbody tr:last-child td { border-bottom: 0; }
+.cl-table tbody tr:hover td { background: var(--ink); }
+.cl-table .n { text-align: right; }
+.cl-table .c-name { min-width: 150px; white-space: normal; overflow-wrap: anywhere; }
+.cl-table .c-name a { font-weight: 600; color: var(--fg); text-decoration: none; }
+.cl-table .c-name a:hover { text-decoration: underline; }
+.cl-table td.c-mail { max-width: 240px; overflow: hidden; text-overflow: ellipsis; }
+/* beside the sidebar a small laptop has no room for seven columns: the e-mail and the first visit wait
+   for a wider screen (both are on the client's own page) */
+@media (max-width: 1199px) { .cl-table .c-mail, .cl-table .c-first { display: none; } }
+.cl-pages { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cl-pages .adm-btn { width: auto; }
+.cl-pages span { color: var(--mute); font-size: 14px; text-align: center; }
+@media (min-width: 900px) {
+  .cl-search { max-width: 420px; }
+  .cl-filters select { max-width: 260px; }
+  .cl-pages { justify-content: flex-start; gap: 16px; }
+}
+/* one client: his name and numbers, three parts that save by themselves, his visits */
+.cl-hero { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.cl-stats { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; background: var(--line-2); border: 1px solid var(--line-2); border-radius: 12px; }
+.cl-stats > div { padding: 10px 14px; background: var(--raise); }
+.cl-stats dt { font-size: 13px; color: var(--mute); }
+.cl-stats dd { margin: 4px 0 0; font: 600 18px/1.2 var(--display); font-variant-numeric: tabular-nums; }
+.cl-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.cl-chip { display: inline-flex; align-items: center; max-width: 100%; min-height: 36px; padding-left: 12px; background: var(--lime-bg); border: 1px solid var(--lime); border-radius: 8px; font-size: 14px; }
+.cl-chip > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cl-chip > button { flex: none; display: grid; place-items: center; width: 36px; height: 34px; color: var(--mute); }
+.cl-chip > button:hover { color: var(--warn); }
+/* on the narrowest phone the button goes under the field, so the field keeps room for a whole word */
+.cl-add { display: flex; flex-wrap: wrap; gap: 8px; }
+.cl-add input { flex: 1 1 150px; }
+.cl-add .adm-btn { width: auto; min-height: 48px; }
+.cl-used { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cl-used > span { flex: 1 0 100%; font-size: 13px; color: var(--mute); }
+.cl-used .adm-chip { gap: 6px; max-width: 100%; overflow: hidden; }
+.cl-visits { list-style: none; margin: 0; padding: 0; overflow: hidden; background: var(--raise); border: 1px solid var(--line-2); border-radius: 12px; }
+.cl-visits > li + li { border-top: 1px solid var(--line); }
+.cl-visit { display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 10px 8px 10px 14px; text-decoration: none; }
+.cl-visit .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cl-visit .txt b { font: 600 15px/1.2 var(--display); font-variant-numeric: tabular-nums; }
+.cl-visit .txt small { color: var(--mute); font-size: 13px; overflow-wrap: anywhere; }
+.cl-visit .end { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cl-visit.st-cancelled .txt b, .cl-visit.st-cancelled .end b, .cl-visit.st-no_show .end b { color: var(--dim); text-decoration: line-through; }
+@media (hover: hover) { .cl-visit:hover { background: var(--ink); } }
+/* the status in the calendar's words: still ahead dark, came green, did not come red */
+.cl-st.st-booked, .cl-st.st-pending { border-color: var(--sel); color: var(--accent); }
+.cl-st.st-arrived, .cl-st.st-done { border-color: var(--ok); color: var(--ok); }
+.cl-st.st-no_show, .cl-st.st-cancelled { border-color: var(--warn); color: var(--warn); }
+@media (min-width: 900px) {
+  .cl-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 880px; }
+  .cl-visits { max-width: 880px; }
 }
 
 /* ---------- the test line (staging only; src/components/test-banner.tsx, Phase C) ----------

@@ -21,6 +21,11 @@ const FIELD: Record<string, string> = {
   photoUrl: "фото",
   extra: "доплата",
   date: "дата",
+  // «Клиенты»
+  phoneTaken: "телефон: такой уже есть у другого клиента",
+  locale: "язык",
+  labels: "категории",
+  note: "заметка",
 };
 
 export const ru = {
@@ -34,8 +39,8 @@ export const ru = {
   /** A {ru, et, en} text from the data (a service, a barber's label): this language first. */
   pick: (t: Text3) => t?.ru || t?.et || t?.en || "",
   title: "Админ",
-  // `requests` is for the barbers' requests page (Phase B, B4); the menu shows a section only once nav.tsx lists it
-  nav: { calendar: "Календарь", staff: "Барберы", services: "Услуги", requests: "Запросы", invoices: "Счета", account: "Доступ" },
+  // the sections (sections.tsx lists them); `more` is the fifth tab of a phone's bar
+  nav: { calendar: "Календарь", clients: "Клиенты", staff: "Барберы", services: "Услуги", requests: "Запросы", invoices: "Счета", more: "Ещё", account: "Доступ" },
   loading: "Загрузка…",
   noDb: "База данных не подключена.",
   demo: "Демо-данные. Записи здесь не настоящие.",
@@ -253,6 +258,51 @@ export const ru = {
     onlineYes: "да",
     needName: "Введите название: без него не сохранить.",
   },
+
+  /** «Клиенты»: the client base (Dim, decisions round 8, 19.11.2026). */
+  clients: {
+    title: "Клиенты",
+    add: "Добавить клиента",
+    search: "Имя, телефон или e-mail",
+    label: "Категория",
+    allLabels: "Все категории",
+    count: (n: number, filtered: boolean) => (filtered ? `Найдено: ${n}` : `Всего: ${n}`),
+    cols: { name: "Имя", phone: "Телефон", email: "Email", visits: "Визиты", last: "Последний визит", first: "Первый визит", sold: "Продано" },
+    none: "Клиентов пока нет. Клиент появляется здесь сам после первой записи. Чтобы внести его вручную, нажмите «Добавить клиента».",
+    nothing: "Никого не нашлось. Проверьте имя или телефон или сбросьте поиск.",
+    reset: "Сбросить поиск",
+    pages: "Страницы",
+    page: (n: number, of: number) => `Страница ${n} из ${of}`,
+    prev: "Назад",
+    next: "Дальше",
+    noVisits: "визитов нет",
+    lastOn: (d: string) => `последний ${d}`,
+    email: "E-mail",
+    phoneHint: "Можно и без телефона.",
+    taken: "Такой телефон уже есть у другого клиента.",
+    openHim: "Открыть его карточку",
+    data: "Данные",
+    lang: "Язык писем и SMS",
+    sms: "Присылать SMS",
+    mail: "Присылать письма",
+    labels: "Категории",
+    labelsHint: "Свои слова: «VIP», «дети». По ним клиентов находят в списке.",
+    noLabels: "Категорий пока нет.",
+    labelNew: "Новая категория",
+    labelPh: "Например: VIP",
+    labelRemove: (s: string) => `Убрать «${s}»`,
+    labelsFull: (n: number) => `Больше ${n} категорий не добавить.`,
+    used: "Выбрать из готовых",
+    note: "Заметка",
+    noteHint: "Её видят и барберы.",
+    history: "История визитов",
+    noHistory: "Визитов пока нет.",
+    capped: (n: number) => `Показаны последние ${n}.`,
+    inCalendar: "Открыть день в календаре",
+    since: (d: string) => `Клиент с ${d}`,
+  },
+  /** «Ещё» in a phone's bar: the sections that have no tab of their own. */
+  more: { title: "Ещё" },
 
   /** The staff app's two sides (docs/apps.md), for Renat and the front desk. */
   side: { label: "Мой день или салон", mine: "Мой день", barber: "Барбер", salon: "Салон", waiting: (n: number) => `Запросов ждёт: ${n}` },

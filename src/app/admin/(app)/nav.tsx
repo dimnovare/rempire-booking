@@ -3,69 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Title, useA } from "../lang";
+import { ACCOUNT, MORE, SECTIONS, SectionIcon, sectionOpen } from "./sections";
 
 /**
- * The sections of the daily work: the bottom bar on a phone, the top bar
- * from 900px. Five at most, so that each stays one tap away and its word
- * stays readable on a 360px phone. A sixth section needs a «Ещё» tab
- * first; it never becomes a sixth column.
+ * The sections of the daily work (sections.tsx): the sidebar from 900px,
+ * with every section; the bottom bar on a phone, with five tabs at most, so
+ * that each stays one tap away and its word stays readable on a 360px
+ * phone. The fifth is «Ещё» (/admin/more): the sections that have no tab of
+ * their own are listed there, and «Ещё» is lit while one of them is open.
+ * A new section goes behind «Ещё»; the bar never gets a sixth column.
+ *
+ * One list of links for both: the styles hide `in-more` on a phone and
+ * `is-more` on a wide screen (admin.css).
  */
-const ITEMS = [
-  { href: "/admin", key: "calendar", icon: "cal" },
-  { href: "/admin/staff", key: "staff", icon: "staff" },
-  { href: "/admin/services", key: "services", icon: "svc" },
-  { href: "/admin/requests", key: "requests", icon: "req" },
-  { href: "/admin/invoices", key: "invoices", icon: "inv" },
-] as const;
-
-/** «Доступ» is about the person, not the work: it sits in the corner beside «Выйти» (AccountLink). */
-const ACCOUNT = { href: "/admin/account", key: "account", icon: "key" } as const;
-
-function Icon({ name }: { name: string }) {
-  const p = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, "aria-hidden": true } as const;
-  if (name === "cal")
-    return (
-      <svg viewBox="0 0 24 24" width="22" height="22" {...p}>
-        <rect x="3.5" y="5" width="17" height="15.5" />
-        <path d="M3.5 10h17M8 3v4M16 3v4" />
-      </svg>
-    );
-  if (name === "staff")
-    return (
-      <svg viewBox="0 0 24 24" width="22" height="22" {...p}>
-        <circle cx="9" cy="8" r="3.5" />
-        <path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6M16 4.8a3.5 3.5 0 010 6.4M18 14.4c2 .9 3.5 2.8 3.5 5.6" />
-      </svg>
-    );
-  if (name === "svc")
-    return (
-      <svg viewBox="0 0 24 24" width="22" height="22" {...p}>
-        <circle cx="6.5" cy="17.5" r="3" />
-        <circle cx="17.5" cy="17.5" r="3" />
-        <path d="M8.6 15.4L19 3M15.4 15.4L5 3" />
-      </svg>
-    );
-  // an inbox: what has come in and waits for an answer (the barbers' requests, Phase B)
-  if (name === "req")
-    return (
-      <svg viewBox="0 0 24 24" width="22" height="22" {...p}>
-        <path d="M3.5 13.5l2.6-8h11.8l2.6 8v6h-17zM3.5 13.5h5l1.2 2.5h4.6l1.2-2.5h5" />
-      </svg>
-    );
-  // a sheet with lines and a total: the barbers' invoices (Phase C)
-  if (name === "inv")
-    return (
-      <svg viewBox="0 0 24 24" width="22" height="22" {...p}>
-        <path d="M5.5 3h13v18l-2.2-1.5-2.1 1.5-2.2-1.5-2.1 1.5-2.2-1.5-2.2 1.5zM9 8h6M9 12h6M9 16h3" />
-      </svg>
-    );
-  return (
-    <svg viewBox="0 0 24 24" width="22" height="22" {...p}>
-      <circle cx="8" cy="15" r="4.5" />
-      <path d="M11.2 11.8L20 3M16.5 6.5l3 3M14 9l2 2" />
-    </svg>
-  );
-}
 
 /** The sections; the current one is lit once the path is known (it streams in). */
 export function Nav() {
@@ -74,19 +24,25 @@ export function Nav() {
 
 export function NavLinks({ path }: { path: string }) {
   const A = useA();
-  const on = (href: string) => (href === "/admin" ? path === "/admin" : path.startsWith(href));
-  const here = [...ITEMS, ACCOUNT].find((it) => on(it.href));
+  const on = (href: string) => sectionOpen(href, path);
+  const here = [...SECTIONS, MORE, ACCOUNT].find((it) => on(it.href));
+  // behind «Ещё» on a phone: its own page, or a section without a tab
+  const inMore = on(MORE.href) || SECTIONS.some((it) => !it.bar && on(it.href));
   return (
     <>
       {/* the browser tab says where you are, in the login's language */}
       <Title text={here ? A.nav[here.key] : ""} />
       <nav className="adm-nav" aria-label={A.sections}>
-        {ITEMS.map((it) => (
-          <Link key={it.href} href={it.href} aria-current={on(it.href) ? "page" : undefined} prefetch={false}>
-            <Icon name={it.icon} />
+        {SECTIONS.map((it) => (
+          <Link key={it.href} href={it.href} className={it.bar ? undefined : "in-more"} aria-current={on(it.href) ? "page" : undefined} prefetch={false}>
+            <SectionIcon name={it.icon} />
             <span>{A.nav[it.key]}</span>
           </Link>
         ))}
+        <Link href={MORE.href} className="is-more" aria-current={inMore ? "page" : undefined} prefetch={false}>
+          <SectionIcon name={MORE.icon} />
+          <span>{A.nav[MORE.key]}</span>
+        </Link>
       </nav>
     </>
   );
@@ -98,7 +54,7 @@ export function AccountLink() {
   const on = usePathname().startsWith(ACCOUNT.href);
   return (
     <Link href={ACCOUNT.href} className="adm-acc" aria-current={on ? "page" : undefined} prefetch={false}>
-      <Icon name={ACCOUNT.icon} />
+      <SectionIcon name={ACCOUNT.icon} />
       <span>{A.nav[ACCOUNT.key]}</span>
     </Link>
   );

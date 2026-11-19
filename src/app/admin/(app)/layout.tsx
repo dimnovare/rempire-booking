@@ -11,9 +11,11 @@ import { SaveToast } from "./autosave";
 import { AccountLink, Nav, NavLinks } from "./nav";
 
 /**
- * The logged-in admin. One thin bar on top with «Доступ» and «Выйти» on the
- * right, on every screen; the sections of the daily work sit at the bottom
- * on phones and in the top bar from 900px. Each page checks the login itself.
+ * The logged-in admin. On a phone: one thin bar on top with «Доступ» and
+ * «Выйти» on the right, and the sections of the daily work in a bar at the
+ * bottom, four of them and «Ещё» (nav.tsx, sections.tsx). From 900px all of
+ * it is the sidebar on the left, with every section (admin.css). Each page
+ * checks the login itself.
  *
  * It is the «Салон» side of the staff app (docs/apps.md): the side switch
  * sits beside the logo on a wide screen and in a row under the bar on a
