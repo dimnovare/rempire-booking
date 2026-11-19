@@ -14,6 +14,7 @@ import { useA } from "../../lang";
 import { PlusIcon } from "../../icons";
 import { SaveState, useAutoSave } from "../autosave";
 import { Pane } from "../sheet";
+import { Titled } from "../star";
 import { saveServiceAction } from "./actions";
 
 type Draft = { name: { ru: string; et: string; en: string }; duration: string; price: string; range: boolean; priceMax: string; buffer: string; online: boolean; active: boolean; allBarbers: boolean };
@@ -61,7 +62,9 @@ export function ServicesEditor({ services }: { services: ServiceRow[] }) {
     <main className="adm-page adm-wide adm-two">
       <div className="adm-two-main">
         <div className="adm-page-head">
-          <h1 className="adm-h1">{A.services.title}</h1>
+          <Titled page="services">
+            <h1 className="adm-h1">{A.services.title}</h1>
+          </Titled>
           <button type="button" className="adm-btn adm-btn-line adm-btn-sm" onClick={() => pick(NEW)}>
             <PlusIcon size={14} />
             {A.add}

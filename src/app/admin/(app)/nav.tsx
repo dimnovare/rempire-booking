@@ -6,15 +6,16 @@ import { Title, useA } from "../lang";
 import { ACCOUNT, MORE, SECTIONS, SectionIcon, sectionOpen } from "./sections";
 
 /**
- * The sections of the daily work (sections.tsx): the sidebar from 900px,
- * with every section; the bottom bar on a phone, with five tabs at most, so
- * that each stays one tap away and its word stays readable on a 360px
- * phone. The fifth is «Ещё» (/admin/more): the sections that have no tab of
- * their own are listed there, and «Ещё» is lit while one of them is open.
- * A new section goes behind «Ещё»; the bar never gets a sixth column.
+ * The sections of the daily work (sections.tsx) as a phone's bottom bar,
+ * with five tabs at most, so that each stays one tap away and its word
+ * stays readable on a 360px phone. The fifth is «Ещё» (/admin/more): the
+ * sections that have no tab of their own are listed there, and «Ещё» is lit
+ * while one of them is open. A new section goes behind «Ещё»; the bar never
+ * gets a sixth column. The styles hide `in-more` (admin.css).
  *
- * One list of links for both: the styles hide `in-more` on a phone and
- * `is-more` on a wide screen (admin.css).
+ * From 900px the bar is gone with the whole top bar: the sidebar has the
+ * sections as its menu (sidebar.tsx). The browser tab's title is still
+ * written here, on every width.
  */
 
 /** The sections; the current one is lit once the path is known (it streams in). */

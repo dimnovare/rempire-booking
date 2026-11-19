@@ -10,6 +10,7 @@ import { listRequests } from "@/lib/barber/requests";
 import { dbConfigured, query } from "@/lib/db";
 import { Title, Wait } from "../../lang";
 import { getA } from "../../lang-server";
+import { Titled } from "../star";
 import { RequestsView } from "./requests-view";
 
 export default function RequestsPage() {
@@ -30,7 +31,9 @@ async function Loaded() {
   return (
     <>
       <Title text={A.req.title} />
-      <h1 className="adm-h1">{A.req.title}</h1>
+      <Titled page="requests">
+        <h1 className="adm-h1">{A.req.title}</h1>
+      </Titled>
       <RequestsView
         open={rows.filter((r) => r.status === "requested")}
         recent={rows.filter((r) => r.status !== "requested")}

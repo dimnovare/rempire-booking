@@ -4,7 +4,7 @@
  */
 import type { Locale } from "@/lib/i18n";
 import type { ru } from "./copy.ru";
-import { minsText, pl, type Text3 } from "./copy.shared";
+import { cap, minsText, pl, type Text3 } from "./copy.shared";
 
 const FIELD: Record<string, string> = {
   phone: "telefon",
@@ -36,7 +36,19 @@ export const et: typeof ru = {
   mins: (n: number) => minsText(n, "t", "min"),
   pick: (t: Text3) => t?.et || t?.ru || t?.en || "",
   title: "Admin",
-  nav: { calendar: "Kalender", clients: "Kliendid", staff: "Barberid", services: "Teenused", requests: "Taotlused", invoices: "Arved", more: "Veel", account: "Ligipääs" },
+  nav: {
+    calendar: "Kalender",
+    clients: "Kliendid",
+    staff: "Barberid",
+    services: "Teenused",
+    catalogue: "Tootekataloog",
+    requests: "Taotlused",
+    invoices: "Arved",
+    more: "Veel",
+    account: "Ligipääs",
+    goods: "Tooted",
+    clientBase: "Kliendibaas",
+  },
   loading: "Laadimine…",
   noDb: "Andmebaas ei ole ühendatud.",
   demo: "Demoandmed. Siinsed broneeringud ei ole päris.",
@@ -301,6 +313,77 @@ export const et: typeof ru = {
   more: { title: "Veel" },
 
   side: { label: "Minu päev või salong", mine: "Minu päev", barber: "Barber", salon: "Salong", waiting: (n: number) => `Ootel taotlusi: ${n}` },
+
+  frame: {
+    sidebar: "Külgriba",
+    month: (d: Date) => cap(new Intl.DateTimeFormat("et-EE", { month: "long", year: "numeric", timeZone: "UTC" }).format(d)),
+    monthPrev: "Eelmine kuu",
+    monthNext: "Järgmine kuu",
+    day: (d: Date) => new Intl.DateTimeFormat("et-EE", { day: "numeric", month: "long", timeZone: "UTC" }).format(d),
+    dayLoad: (day: string, pct: number) => `${day}, hõivatud ${pct} %`,
+    dayOff: (day: string) => `${day}, puhkepäev`,
+    tiles: "Kiirtoimingud",
+    fav: "Lemmikud",
+    favEmpty: "Vajutage lehe pealkirja kõrval tärni, ja leht ilmub siia.",
+    favAdd: (page: string) => `Lisa lemmikutesse: ${page}`,
+    favRemove: (page: string) => `Eemalda lemmikutest: ${page}`,
+    all: "Kõik jaotised",
+    journal: "Kalender",
+  },
+
+  sale: {
+    title: "Toote müük",
+    when: "Päev ja kellaaeg",
+    day: "Päev",
+    time: "Kellaaeg",
+    seller: "Kes müüs",
+    pickSeller: "Valige barber",
+    product: "Toode",
+    search: "Nimi või vöötkood",
+    looking: "Otsime…",
+    nothing: "Midagi ei leitud.",
+    shopDown: "Pood ei vasta. Proovige uuesti.",
+    notConfigured: "Ühendus poega on seadistamata.",
+    stock: (n: number) => `laos: ${n}`,
+    change: "Teine toode",
+    qty: "Kogus",
+    less: "Vähem",
+    more: "Rohkem",
+    client: "Klient",
+    clientHint: "Nimi või telefon. Võib jätta tühjaks.",
+    clientRemove: "Eemalda klient",
+    total: "Kokku",
+    share: (pct: string, sum: string) => `Barberile ${pct}: ${sum}`,
+    saved: (what: string) => `Müük on kirjas: ${what}`,
+    demo: "Pood ei ole ühendatud: need on näidistooted.",
+    test: "Testmüük: poodi ei lähe, laoseis ei muutu.",
+    priceChanged: (p: string) => `Hind poes muutus: ${p}. Kontrollige ja salvestage uuesti.`,
+    notFound: "Seda toodet poes enam ei ole.",
+    badTime: (days: number) => `Kontrollige päeva ja kellaaega: mitte tulevikus ja mitte varem kui ${days} ${pl(days, "päev", "päeva")} tagasi.`,
+    needSeller: "Valige, kes müüs.",
+    needProduct: "Leidke toode.",
+  },
+
+  catalogue: {
+    title: "Tootekataloog",
+    lead: "Tooted, hinnad ja laoseis poest. Neid muudetakse poes.",
+    search: "Nimi või vöötkood",
+    hint: "Sisestage nimi või vöötkood. Pood annab tooteid otsingu järgi, mitte kogu nimekirja korraga.",
+    cols: { name: "Toode", price: "Hind", stock: "Laos" },
+    demo: "Pood ei ole ühendatud. Need on näidistooted, mitte päris.",
+    notConfigured: "Ühendus poega on seadistamata: aadress või võti puudub. Tooteid ei saa näidata.",
+    shopDown: "Pood ei vasta. Proovige uuesti.",
+    nothing: "Midagi ei leitud.",
+    found: (n: number) => `Leitud: ${n}`,
+    capped: (n: number) => `Näidatud on esimesed ${n}. Täpsustage otsingut.`,
+  },
+
+  svcList: {
+    title: "Teenuste nimekiri",
+    edit: "Muuda",
+    none: "Teenuseid veel ei ole.",
+    noBarbers: "Ükski barber seda ei tee.",
+  },
 
   account: {
     title: "Ligipääs",

@@ -35,7 +35,8 @@ test.describe("clients", () => {
     await hydrated(page);
     await expect(page.getByRole("heading", { level: 1, name: A.more.title })).toBeVisible();
     const others = page.locator(".adm-more .adm-item:visible");
-    await expect(others).toHaveText([A.nav.staff, A.nav.services]);
+    // (the last two are the sidebar's tiles on a wide screen: e2e/frame.spec.ts)
+    await expect(others).toHaveText([A.nav.staff, A.nav.services, A.nav.catalogue, A.sale.title]);
     await expect(bar(page).getByRole("link", { name: A.nav.more })).toHaveAttribute("aria-current", "page");
     await expect(bar(page).locator('a[aria-current="page"]:visible')).toHaveCount(1);
     await expect(page).toHaveTitle(`${A.nav.more} · REMPIRE`);
@@ -244,13 +245,15 @@ test.describe("clients", () => {
   test.describe("on a wide screen", () => {
     test.use({ viewport: { width: 1440, height: 900 } });
 
-    test("the sidebar lists every section; the list is a table; a card's parts stand side by side", async ({ page }, info) => {
+    test("the sidebar's menu has every section; the list is a table; a card's parts stand side by side", async ({ page }, info) => {
       test.skip(info.project.name !== "android", "one wide run is enough");
       await page.goto("/admin/clients");
       await hydrated(page);
-      // every section, and no «Ещё»
-      await expect(bar(page).getByRole("link")).toHaveText([A.nav.calendar, A.nav.clients, A.nav.staff, A.nav.services, A.nav.requests, A.nav.invoices]);
-      await expect(bar(page).getByRole("link", { name: A.nav.clients })).toHaveAttribute("aria-current", "page");
+      // opened on this page, the sidebar is the menu (e2e/frame.spec.ts): every section and no «Ещё»;
+      // «Клиенты» is a group, open on its page «Клиентская база»; «Товары» is the other group, shut
+      await expect(bar(page).getByRole("link")).toHaveText([A.nav.clientBase, A.nav.staff, A.nav.services, A.nav.requests, A.nav.invoices, A.nav.account]);
+      await expect(bar(page).getByRole("button")).toHaveText([A.nav.clients, A.nav.goods]);
+      await expect(bar(page).getByRole("link", { name: A.nav.clientBase })).toHaveAttribute("aria-current", "page");
       const K = C.cols;
       await expect(page.locator(".cl-table thead th")).toHaveText([K.name, K.phone, K.email, K.visits, K.last, K.first, K.sold]);
       await expect(page.locator(".cl-table tbody tr")).toHaveCount(25);
@@ -274,10 +277,10 @@ test.describe("clients", () => {
       expect(b!.x).toBeGreaterThan(a!.x + a!.width - 1);
       await expectNoSideScroll(page);
       await page.screenshot({ fullPage: true, path: path.join(OUT, "screens", "pc-cl-card.png") });
-      // «Ещё» by its address still works here: the same two rows
+      // «Ещё» by its address still works here: the same rows
       await page.goto("/admin/more");
       await hydrated(page);
-      await expect(page.locator(".adm-more .adm-item:visible")).toHaveText([A.nav.staff, A.nav.services]);
+      await expect(page.locator(".adm-more .adm-item:visible")).toHaveText([A.nav.staff, A.nav.services, A.nav.catalogue, A.sale.title]);
     });
   });
 });

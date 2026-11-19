@@ -17,6 +17,7 @@ import { dbConfigured, query } from "@/lib/db";
 import { todayIn } from "@/lib/tz";
 import { Title, Wait } from "../../lang";
 import { getA } from "../../lang-server";
+import { Titled } from "../star";
 import { dmy, InvTabs, monthDate } from "./common";
 import { InvoiceList, NewInvoice, type ListRow } from "./list-view";
 
@@ -57,7 +58,9 @@ async function Loaded() {
     <>
       <Title text={A.inv.title} />
       <div className="adm-page-head inv-top">
-        <h1 className="adm-h1">{A.inv.title}</h1>
+        <Titled page="invoices">
+          <h1 className="adm-h1">{A.inv.title}</h1>
+        </Titled>
         {issuers.length > 0 && (
           <NewInvoice
             receivers={receivers

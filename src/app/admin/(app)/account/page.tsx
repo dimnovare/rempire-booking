@@ -7,6 +7,7 @@ import { OutIcon } from "../../icons";
 import { Wait } from "../../lang";
 import { getA } from "../../lang-server";
 import { Fold } from "../fold";
+import { Titled } from "../star";
 import { logout } from "./actions";
 import { AddUserForm, LinkStaff, MyLang, PasswordForm, ToggleUser } from "./forms";
 
@@ -33,7 +34,9 @@ async function Loaded() {
   const when = new Intl.DateTimeFormat(A.intl, { timeZone: business.timezone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   return (
     <>
-      <h1 className="adm-h1">{A.account.title}</h1>
+      <Titled page="account">
+        <h1 className="adm-h1">{A.account.title}</h1>
+      </Titled>
       <div className="adm-cards">
         <section className={`adm-card${owner ? "" : " adm-card-narrow"}`}>
           <h2 className="adm-card-h">{A.account.me}</h2>

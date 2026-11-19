@@ -112,7 +112,6 @@ html, body { background: var(--ink); }
 }
 .adm-me { margin-left: auto; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .adm-me form { display: contents; }
-.adm-email { display: none; color: var(--chrome-mute); font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
 /* the corner: «Доступ» (the person's own section) and «Выйти», two quiet links of one kind */
 .adm-out, .adm-acc { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; color: var(--chrome-mute); font-size: 14px; white-space: nowrap; text-decoration: none; }
 .adm-out:hover, .adm-acc:hover { color: var(--chrome-fg); }
@@ -143,25 +142,142 @@ html, body { background: var(--ink); }
   .adm-nav a[aria-current="page"] { border-bottom-color: var(--lime); }
   .adm-main { padding-bottom: 0; }
 }
-/* 900px+, the admin (not the barber app, which stays a phone-wide column): the bar is Altegio's dark
-   sidebar on the left. The logo, «Мой день | Салон», the sections one under another, and at the bottom
-   who is signed in, «Доступ» and «Выйти». Nothing is left at the top, so --top-h is 0 and the page,
-   the calendar and the panels get the whole height. */
+/* 900px+, the admin (not the barber app, which stays a phone-wide column): the top bar and the bottom
+   bar are gone, and the sidebar on the left holds everything (the «sidebar» block below). Nothing is
+   left at the top, so --top-h is 0 and the page, the calendar and the panels get the whole height. */
 @media (min-width: 900px) {
   :root:has(.adm-top:not(.bx-top)) { --top-h: 0px; --side-w: 220px; }
-  .adm-top:not(.bx-top), .adm:has(.test-banner) .adm-top:not(.bx-top) { position: fixed; top: var(--test-h); left: 0; bottom: 0; width: var(--side-w); height: auto; flex-direction: column; align-items: stretch; gap: 16px; padding: 18px 12px 12px; overflow-y: auto; }
-  .adm-top:not(.bx-top) .adm-brand { padding: 0 8px; }
-  .adm-top:not(.bx-top) .adm-side-bar a { flex: 1; }
-  .adm-top:not(.bx-top) .adm-nav { flex-direction: column; height: auto; gap: 2px; }
-  .adm-top:not(.bx-top) .adm-nav a { min-height: 40px; padding: 0 12px; border: 0; border-radius: 8px; justify-content: flex-start; gap: 10px; font: 500 14px/1 var(--display); }
-  .adm-top:not(.bx-top) .adm-nav a:hover { color: var(--chrome-fg); }
-  .adm-top:not(.bx-top) .adm-nav a[aria-current="page"] { background: var(--chrome-line); color: var(--chrome-fg); }
-  .adm-top:not(.bx-top) .adm-me { margin: auto 0 0; flex-direction: column; align-items: stretch; gap: 0; padding-top: 10px; border-top: 1px solid var(--chrome-line); }
-  .adm-top:not(.bx-top) .adm-me .adm-tag { align-self: flex-start; margin: 0 10px 6px; }
-  .adm-top:not(.bx-top) .adm-email { display: block; max-width: none; padding: 4px 10px; font-size: 12px; }
-  .adm-top:not(.bx-top) :is(.adm-out, .adm-acc) { border-radius: 8px; }
+  .adm-top:not(.bx-top), .adm:has(.test-banner) .adm-top:not(.bx-top) { display: none; }
   .adm-top:not(.bx-top) ~ .adm-main { margin-left: var(--side-w); }
   .adm-savetoast { left: calc(var(--side-w) + 16px); }
+}
+
+/* ---------- the sidebar from 900px (sidebar.tsx): two modes, as in the product we follow ----------
+   Measured there (docs/altegio-pages.md, «Sidebar») and laid out on the design board: 220px wide.
+   «till»: a 47px head, the month with a ring per day, 100px tiles, «Избранное», then who is signed
+   in (49px), a 44px yellow bar and a thin 30px row. «menu»: black, the sections as an accordion of
+   40px rows, the open group a dark card with a yellow head. The colours are tokens, so «Счета» can
+   turn the whole frame indigo (the «Счета» block). */
+:root {
+  --sb-bg: #22222e;
+  --sb-menu-bg: #08080c;
+  --sb-line: #33333f;
+  --sb-tile: #14141c;
+  --sb-card: #22222e;
+  --sb-on: #ffd940;
+  --sb-on-fg: #08080c;
+  --sb-bar: #ffcb00;
+  --sb-bar-fg: #2b3134;
+  --sb-soft: #c6cbd3;
+  --sb-dim: #9aa3b1;
+  --sb-quiet: #828995;
+}
+.sb { display: none; }
+/* the star beside a page's title: the pages it keeps are listed in the sidebar, so a phone has none */
+.adm-titled { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.adm-star { display: none; }
+@media (min-width: 900px) {
+  .adm-star { flex: none; display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; color: var(--dim); }
+  .adm-star:hover { color: var(--fg); }
+  .adm-star[aria-pressed="true"] { color: #ffcb00; }
+
+  .sb { position: fixed; top: var(--test-h); left: 0; bottom: 0; z-index: 30; width: var(--side-w); display: flex; flex-direction: column; overflow: hidden; background: var(--sb-bg); color: #fff; font: 500 12px/16px var(--body); }
+  .sb.is-menu { background: var(--sb-menu-bg); }
+  .sb a { text-decoration: none; }
+  /* 47px and a 1px line under it; the menu's head has no line */
+  .sb-head { flex: none; height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--sb-line); }
+  .sb.is-menu .sb-head { height: 47px; border-bottom: 0; }
+  .sb-brand { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 47px; }
+  .sb-mark { flex: none; width: 20px; height: 20px; border-radius: 6px; background: #fff; color: var(--sb-bg); display: grid; place-items: center; }
+  .sb.is-menu .sb-mark { color: var(--sb-menu-bg); }
+  .sb-mark svg { height: 15px; width: auto; }
+  .sb-name { font-size: 14px; line-height: 20px; font-weight: 500; color: #dfe4ed; }
+  .sb .adm-tag.lime { border-color: var(--lime); color: var(--lime); }
+  /* «Мой день | Салон»: under the head in both modes, where it was under the logo */
+  .sb-side:empty { display: none; }
+  .sb-side { flex: none; padding: 8px 12px 0; }
+  .sb.is-menu .sb-side { padding-bottom: 4px; }
+  .sb .adm-side-bar a { flex: 1; min-height: 32px; padding: 0 8px; border-color: var(--sb-line); color: var(--sb-soft); font: 500 12px/1 var(--display); }
+  .sb .adm-side-bar a[aria-current="page"] { border-color: var(--lime); color: var(--on-lime); }
+  .sb-mid { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; }
+  .sb-mid::-webkit-scrollbar { display: none; }
+
+  /* the month */
+  .sb-month { flex: none; padding: 12px 12px 8px; }
+  .sb-month-head { display: flex; align-items: center; justify-content: space-between; height: 28px; font-size: 14px; line-height: 20px; }
+  .sb-month-head button { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: var(--sb-soft); }
+  .sb-month-head button:hover { color: #fff; }
+  .sb-wd, .sb-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); justify-items: center; }
+  .sb-wd { margin-top: 4px; font-size: 13px; line-height: 20px; color: var(--sb-quiet); }
+  /* «пн вт ср», as Russian writes them; Estonian's letters and English's «Mon» stay as they are */
+  .sb-wd:lang(ru) { text-transform: lowercase; }
+  .sb-days { row-gap: 2px; margin-top: 2px; }
+  /* a day: a 25px ring (the conic part is its load, the rest grey), a 22px disc of the sidebar's colour over it, the number */
+  .sb-day { position: relative; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; color: #fff; font-size: 11px; line-height: 20px; font-weight: 600; --c: #69ce14; }
+  .sb-day[data-band="yellow"] { --c: #f2c30c; }
+  .sb-day[data-band="red"] { --c: #d1050b; }
+  .sb-day::before { content: ""; position: absolute; inset: 1.5px; border-radius: 50%; background: conic-gradient(var(--c) var(--p, 0%), #71757f 0); }
+  .sb-day::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--sb-bg); }
+  .sb-day > span { position: relative; z-index: 1; }
+  .sb-day.is-off::before { content: none; }
+  .sb-day.is-off { color: var(--sb-dim); }
+  /* the month is still being asked for: numbers only, not days off */
+  .sb-days.is-wait .sb-day { color: #fff; }
+  .sb-day.is-out { opacity: .45; }
+  .sb-day.is-lit::after { background: #f7f9fc; }
+  .sb-day.is-lit { color: #2b3134; }
+  .sb-day:hover::after { background: var(--sb-line); }
+  .sb-day.is-lit:hover::after { background: #fff; }
+
+  /* the tiles: 2 a row, the third alone under them (the fourth, a hand-typed payment, is not built) */
+  .sb-tiles { flex: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 8px; }
+  .sb-tile { height: 100px; border-radius: 12px; background: var(--sb-tile); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; font-size: 12px; line-height: 16px; font-weight: 500; text-align: center; }
+  .sb-tile:hover, .sb-tile[aria-current="page"] { box-shadow: inset 0 0 0 1px var(--sb-quiet); }
+
+  /* «Избранное» */
+  .sb-fav { flex: none; padding: 0 8px 8px; }
+  .sb-fav-head { width: 100%; height: 36px; border-radius: 8px; display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 14px; line-height: 20px; }
+  .sb-fav-head > span { flex: 1; text-align: left; }
+  .sb-fav-head > svg:last-child { color: var(--sb-quiet); transition: transform .15s ease-out; }
+  .sb-fav-head[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }
+  .sb-fav-head:hover { background: var(--sb-line); }
+  .sb-fav-list { list-style: none; margin: 0; padding: 0; }
+  .sb-fav-list a { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 8px 0 34px; border-radius: 8px; color: var(--sb-soft); font-size: 14px; line-height: 20px; }
+  .sb-fav-list a > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sb-fav-list a:hover { color: #fff; }
+  .sb-fav-list a[aria-current="page"] { background: var(--sb-line); color: #fff; }
+  .sb-fav-list a > svg { flex: none; color: #ffcb00; }
+  .sb-fav-empty { margin: 0; padding: 4px 8px 4px 34px; color: var(--sb-dim); font-size: 12px; line-height: 16px; font-weight: 400; }
+
+  /* the menu: an accordion */
+  .sb-menu { flex: none; padding: 4px 12px; display: flex; flex-direction: column; gap: 2px; }
+  .sb-row { width: 100%; height: 40px; border-radius: 8px; color: #fff; display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 14px; line-height: 24px; font-weight: 500; }
+  .sb-row > span { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sb-row > svg:first-child { flex: none; }
+  .sb-row > svg:last-child:not(:first-child) { flex: none; color: var(--sb-quiet); transition: transform .15s ease-out; }
+  .sb-row:hover { background: var(--sb-card); }
+  .sb-group.is-open { border-radius: 10px; background: var(--sb-card); padding: 4px; }
+  .sb-group.is-open > .sb-row, a.sb-row[aria-current="page"] { background: var(--sb-on); color: var(--sb-on-fg); }
+  .sb-group.is-open > .sb-row > svg:last-child { color: inherit; transform: rotate(180deg); }
+  .sb-sub { display: flex; align-items: center; height: 40px; padding: 0 8px; border-radius: 8px; color: var(--sb-soft); font-size: 14px; line-height: 20px; font-weight: 500; }
+  .sb-sub:hover { color: #fff; }
+  .sb-sub[aria-current="page"] { color: #fff; font-weight: 600; }
+
+  /* the foot: who is signed in and the way out, the yellow bar, the thin row */
+  .sb-me { flex: none; height: 49px; display: flex; align-items: center; gap: 8px; padding: 0 12px; }
+  .sb-me .who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .sb-me .who > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sb-me b { font-size: 12px; line-height: 16px; font-weight: 500; }
+  .sb-me .who span { font-size: 11px; line-height: 14px; color: var(--sb-dim); }
+  .sb-me form { display: contents; }
+  .sb-out { flex: none; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: var(--sb-soft); }
+  .sb-out:hover { color: #fff; }
+  .sb-bar { flex: none; width: 100%; height: 44px; background: var(--sb-bar); color: var(--sb-bar-fg); display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 14px; line-height: 20px; font-weight: 500; }
+  .sb-bar:hover { filter: brightness(1.05); }
+  .sb-foot { flex: none; height: 30px; display: flex; align-items: center; gap: 12px; padding: 0 12px; font-size: 11px; line-height: 14px; font-weight: 400; color: var(--sb-dim); }
+  .sb-foot button { min-height: 24px; }
+  .sb-foot button:hover { color: #fff; }
+  .sb :focus-visible { outline-color: #fff; outline-offset: -2px; }
 }
 
 .adm-wait { padding: 24px 16px; color: var(--mute); }
@@ -652,12 +768,25 @@ button.cal-head:hover b { color: var(--accent); }
   --chrome-2: #252442;
   --chrome-line: #4a4790;
   --chrome-mute: #cfcdea;
+  /* the sidebar: indigo in both modes; what is yellow elsewhere is Isolta's darker pill here */
+  --sb-bg: #312e6b;
+  --sb-menu-bg: #312e6b;
+  --sb-line: #4a4790;
+  --sb-tile: #252442;
+  --sb-card: #3b3880;
+  --sb-on: #252442;
+  --sb-on-fg: #fff;
+  --sb-bar: #252442;
+  --sb-bar-fg: #fff;
+  --sb-soft: #cfcdea;
+  --sb-dim: #b4b1dc;
+  --sb-quiet: #a5a2d6;
 }
 /* on the indigo frame the current section is Isolta's darker pill, and yellow has no place */
 :root:has(.adm-inv) .adm-top:not(.bx-top) .adm-nav a[aria-current="page"] { background: var(--chrome-2); }
 :root:has(.adm-inv) .adm-nav a[aria-current="page"] { color: #fff; border-top-color: #fff; }
 :root:has(.adm-inv) .adm-side a[aria-current="page"] { background: #fff; border-color: #fff; color: #312e6b; }
-:root:has(.adm-inv) .adm-top .adm-tag.lime, :root:has(.adm-inv) .adm-acc[aria-current="page"] { border-color: #fff; color: #fff; }
+:root:has(.adm-inv) :is(.adm-top, .sb) .adm-tag.lime, :root:has(.adm-inv) .adm-acc[aria-current="page"] { border-color: #fff; color: #fff; }
 
 .adm-inv-tabs { display: flex; align-self: flex-start; }
 .adm-inv-tabs a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; font: 600 13px/1 var(--display); color: var(--mute); text-decoration: none; }
@@ -899,6 +1028,93 @@ button.cal-head:hover b { color: var(--accent); }
   .cl-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); max-width: 880px; }
   .cl-visits { max-width: 880px; }
 }
+
+/* ---------- a drawer from the right (drawer.tsx): «Продажа товара», «Список услуг» ----------
+   The look of the visit window we follow (docs/reference-looks.md): a pale ground, white columns with 8px
+   corners and 12px inside, 8px between them, 32px controls with a 1px line, and a white 64px foot: the title
+   on the left, the buttons on the right, the yellow one last. On a phone it fills the screen, its columns
+   stand one under another and its fields keep the phone's sizes. */
+.dw-wrap { position: fixed; inset: 0; z-index: 55; display: flex; justify-content: flex-end; background: rgba(34, 34, 46, .45); }
+.dw { width: 100%; height: 100%; display: flex; flex-direction: column; background: var(--ink); color: var(--fg); outline: none; }
+.dw-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 8px; padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); }
+.dw-body > p { margin: 0; }
+.dw-col { flex: none; min-width: 0; display: flex; flex-direction: column; gap: 12px; padding: 12px; border-radius: 8px; background: var(--raise); }
+.dw-col > p { margin: 0; }
+.dw-foot { flex: none; min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px max(16px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); background: var(--raise); border-top: 1px solid #e0e3eb; }
+.dw-foot h2 { margin: 0; min-width: 0; font: 500 16px/24px var(--body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dw-acts { flex: none; display: flex; gap: 8px; }
+.dw-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; border: 1px solid #e0e3eb; border-radius: 8px; background: var(--raise); color: var(--fg); font: 500 14px/16px var(--body); text-decoration: none; white-space: nowrap; }
+.dw-btn-main { border-color: var(--lime); background: var(--lime); color: var(--on-lime); }
+.dw-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.dw-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; color: var(--dim); font-size: 13px; }
+.dw-field > small { font-size: 12px; }
+.dw-note { color: var(--dim); font-size: 13px; }
+.dw-thumb { flex: none; display: block; width: 40px; height: 40px; border-radius: 6px; background: var(--raise-2); object-fit: cover; }
+.dw-hits, .dw-products, .dw-svcs, .dw-svc-barbers { list-style: none; margin: 0; padding: 0; }
+.dw-hits { display: flex; flex-direction: column; gap: 4px; }
+.dw-hits button { width: 100%; min-height: 44px; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 6px 10px; border: 1px solid #e0e3eb; border-radius: 8px; }
+.dw-hits button:hover, .dw-products button:hover, .dw-svcs > li > button:hover { background: var(--ink); }
+.dw b { font-weight: 600; }
+.dw-hits small, .dw-chosen small, .dw-products small, .dw-product small, .dw-svcs small, .dw-total small { color: var(--dim); font-size: 12px; font-weight: 400; }
+.dw-chosen { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 4px 4px 4px 10px; border: 1px solid var(--lime); border-radius: 8px; background: var(--lime-bg); color: var(--fg); }
+.dw-chosen .txt, .dw-products .txt, .dw-product .txt, .dw-svcs .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.dw-x { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; color: var(--dim); }
+.dw-x:hover { color: var(--warn); }
+.dw-products { border: 1px solid #e0e3eb; border-radius: 8px; overflow: hidden; }
+.dw-products li + li { border-top: 1px solid var(--line); }
+.dw-products button { width: 100%; min-height: 56px; display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+.dw-products .end, .dw-svcs .end { flex: none; font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* on a phone «Другой товар» goes under the product, so a long name keeps the whole row */
+.dw-product { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid #e0e3eb; border-radius: 8px; }
+.dw-product .dw-btn { flex: 1 0 100%; }
+.dw-qty { display: flex; align-items: center; gap: 8px; }
+.dw-qty > span { flex: 1; color: var(--dim); font-size: 13px; }
+.dw-qty > b { min-width: 28px; text-align: center; font-size: 16px; font-variant-numeric: tabular-nums; }
+.dw-step { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid #e0e3eb; border-radius: 8px; background: var(--raise); font-size: 18px; line-height: 1; }
+.dw-total { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.dw-total > span { color: var(--dim); font-size: 13px; }
+.dw-total > b { font: 600 16px/24px var(--body); font-variant-numeric: tabular-nums; }
+.dw-total > small { grid-column: 1 / -1; }
+.dw-svcs > li + li { border-top: 1px solid var(--line); }
+.dw-svcs > li > button { width: 100%; min-height: 52px; display: flex; align-items: center; gap: 10px; padding: 8px 4px; }
+.dw-svcs > li > button > svg { flex: none; color: var(--dim); transition: transform .15s ease-out; }
+.dw-svcs > li.is-open > button > svg { transform: rotate(180deg); }
+.dw-svcs > li > p { margin: 0; padding: 0 4px 10px; }
+.dw-svc-barbers { margin: 0 4px 10px; border-radius: 8px; background: var(--ink); }
+.dw-svc-barbers li { display: grid; grid-template-columns: minmax(0, 1fr) auto 64px; gap: 12px; padding: 8px 10px; font-variant-numeric: tabular-nums; }
+.dw-svc-barbers li + li { border-top: 1px solid var(--line); }
+.dw-svc-barbers .t { color: var(--dim); white-space: nowrap; }
+.dw-svc-barbers .p { text-align: right; white-space: nowrap; }
+@media (min-width: 900px) {
+  .dw { width: 760px; max-width: calc(100vw - var(--side-w)); box-shadow: -8px 0 32px rgba(34, 34, 46, .18); font: 400 12px/16px var(--body); }
+  .dw-narrow { width: 520px; }
+  .dw-body { flex-direction: row; align-items: flex-start; padding: 16px 16px 8px; }
+  .dw-col-side { flex: 0 0 256px; }
+  .dw-col-main { flex: 1 1 0; }
+  .dw-foot { flex-basis: 64px; padding: 0 16px; }
+  .dw-btn { min-height: 32px; font-size: 12px; }
+  .dw-field, .dw-note, .dw-qty > span, .dw-total > span { font-size: 12px; }
+  :where(.adm) .dw :is(input, select) { min-height: 32px; padding: 0 10px; border-color: #e0e3eb; font-size: 12px; }
+  .dw-hits button { min-height: 40px; }
+  .dw-chosen { min-height: 40px; }
+  .dw-x { width: 28px; height: 28px; }
+  .dw-products button { min-height: 52px; }
+  .dw-product { flex-wrap: nowrap; }
+  .dw-product .dw-btn { flex: none; }
+  .dw-step { width: 32px; height: 32px; font-size: 16px; }
+  .dw-svcs > li > button { min-height: 44px; }
+  .dw-svcs b, .dw-products b, .dw-product b, .dw-hits b, .dw-chosen b { font-size: 13px; font-weight: 500; }
+  .dw-svcs .end, .dw-products .end { font-size: 13px; }
+}
+/* the frame's own line («Продажа записана»): over a drawer too */
+.adm-frame-toast { z-index: 70; }
+
+/* ---------- «Каталог товаров» (/admin/catalogue): the shop's products, read-only ----------
+   The list is «Клиенты»'s (cl-): the search with its icon, one table on a white sheet from 900px. */
+.cat-table .cat-pic { width: 56px; padding-right: 0; }
+.cat-table .c-name { font-weight: 500; }
+.cat-item { cursor: default; }
+@media (hover: hover) { .cat-item:hover { background: none; } }
 
 /* ---------- the test line (staging only; src/components/test-banner.tsx, Phase C) ----------
  * Its place and height are in the shell block above; this is its look. Loud

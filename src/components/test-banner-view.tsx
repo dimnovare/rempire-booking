@@ -16,6 +16,9 @@ import { reportProblemAction, reportsInfoAction } from "./test-banner-actions";
 
 type Words = { line: string; report: string; ask: string; send: string; sent: string; fail: string; tooMany: string };
 
+/** The admin's sidebar has its own «Сообщить о проблеме» (sidebar.tsx): it opens this sheet by this event. */
+export const REPORT_EVENT = "adm:report";
+
 export function AdminTestBannerView({ report }: { report: boolean }) {
   const A = useA();
   const [open, setOpen] = useState(false);
@@ -24,6 +27,12 @@ export function AdminTestBannerView({ report }: { report: boolean }) {
   useEffect(() => {
     if (open) void reportsInfoAction().then(setAll, () => setAll(null));
   }, [open]);
+  useEffect(() => {
+    if (!report) return;
+    const ask = () => setOpen(true);
+    window.addEventListener(REPORT_EVENT, ask);
+    return () => window.removeEventListener(REPORT_EVENT, ask);
+  }, [report]);
   return (
     <>
       <Line t={A.test} report={report} open={open} onOpen={() => setOpen(true)} />

@@ -3,7 +3,7 @@
  * two dictionaries must match (copy.et.ts, copy.en.ts). Short and plain.
  */
 import type { Locale } from "@/lib/i18n";
-import { minsText, plural, type Text3 } from "./copy.shared";
+import { cap, minsText, plural, type Text3 } from "./copy.shared";
 
 const FIELD: Record<string, string> = {
   phone: "телефон",
@@ -39,8 +39,21 @@ export const ru = {
   /** A {ru, et, en} text from the data (a service, a barber's label): this language first. */
   pick: (t: Text3) => t?.ru || t?.et || t?.en || "",
   title: "Админ",
-  // the sections (sections.tsx lists them); `more` is the fifth tab of a phone's bar
-  nav: { calendar: "Календарь", clients: "Клиенты", staff: "Барберы", services: "Услуги", requests: "Запросы", invoices: "Счета", more: "Ещё", account: "Доступ" },
+  // the sections (sections.tsx lists them); `more` is the fifth tab of a phone's bar;
+  // `goods` and `clientBase` are a group and a page of the wide sidebar's menu
+  nav: {
+    calendar: "Календарь",
+    clients: "Клиенты",
+    staff: "Барберы",
+    services: "Услуги",
+    catalogue: "Каталог товаров",
+    requests: "Запросы",
+    invoices: "Счета",
+    more: "Ещё",
+    account: "Доступ",
+    goods: "Товары",
+    clientBase: "Клиентская база",
+  },
   loading: "Загрузка…",
   noDb: "База данных не подключена.",
   demo: "Демо-данные. Записи здесь не настоящие.",
@@ -306,6 +319,82 @@ export const ru = {
 
   /** The staff app's two sides (docs/apps.md), for Renat and the front desk. */
   side: { label: "Мой день или салон", mine: "Мой день", barber: "Барбер", salon: "Салон", waiting: (n: number) => `Запросов ждёт: ${n}` },
+
+  /** The wide frame (from 900px): the sidebar with its month, tiles and «Избранное», and the menu behind «Все разделы». */
+  frame: {
+    sidebar: "Боковая панель",
+    month: (d: Date) => cap(new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric", timeZone: "UTC" }).format(d).replace(" г.", "")),
+    monthPrev: "Прошлый месяц",
+    monthNext: "Следующий месяц",
+    day: (d: Date) => new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", timeZone: "UTC" }).format(d),
+    dayLoad: (day: string, pct: number) => `${day}, занято ${pct} %`,
+    dayOff: (day: string) => `${day}, выходной`,
+    tiles: "Быстрые действия",
+    fav: "Избранное",
+    favEmpty: "Нажмите на звезду рядом с названием страницы, и она появится здесь.",
+    favAdd: (page: string) => `Добавить в избранное: ${page}`,
+    favRemove: (page: string) => `Убрать из избранного: ${page}`,
+    all: "Все разделы",
+    journal: "Журнал",
+  },
+
+  /** «Продажа товара»: the front desk records a barber's sale (src/lib/admin/sale.ts). */
+  sale: {
+    title: "Продажа товара",
+    when: "День и время",
+    day: "День",
+    time: "Время",
+    seller: "Кто продал",
+    pickSeller: "Выберите барбера",
+    product: "Товар",
+    search: "Название или штрихкод",
+    looking: "Ищем…",
+    nothing: "Ничего не нашлось.",
+    shopDown: "Магазин не отвечает. Попробуйте ещё раз.",
+    notConfigured: "Связь с магазином не настроена.",
+    stock: (n: number) => `на складе: ${n}`,
+    change: "Другой товар",
+    qty: "Количество",
+    less: "Меньше",
+    more: "Больше",
+    client: "Клиент",
+    clientHint: "Имя или телефон. Можно не указывать.",
+    clientRemove: "Убрать клиента",
+    total: "Итого",
+    /** `pct` comes with its sign: «17 %». */
+    share: (pct: string, sum: string) => `Барберу ${pct}: ${sum}`,
+    saved: (what: string) => `Продажа записана: ${what}`,
+    demo: "Магазин не подключён: это демо-товары.",
+    test: "Тестовая продажа: в магазин не уходит, склад не меняется.",
+    priceChanged: (p: string) => `Цена в магазине изменилась: ${p}. Проверьте и сохраните ещё раз.`,
+    notFound: "Такого товара в магазине больше нет.",
+    badTime: (days: number) => `Проверьте день и время: не в будущем и не раньше, чем ${days} ${plural(days, "день", "дня", "дней")} назад.`,
+    needSeller: "Выберите, кто продал.",
+    needProduct: "Найдите товар.",
+  },
+
+  /** «Каталог товаров»: the shop's products, read-only (docs/one-place.md). */
+  catalogue: {
+    title: "Каталог товаров",
+    lead: "Товары, цены и остатки из магазина. Меняются они в магазине.",
+    search: "Название или штрихкод",
+    hint: "Введите название или штрихкод. Магазин отдаёт товары по поиску, не весь список сразу.",
+    cols: { name: "Товар", price: "Цена", stock: "На складе" },
+    demo: "Магазин не подключён. Это демо-товары, не настоящие.",
+    notConfigured: "Связь с магазином не настроена: нет адреса или ключа. Товары показать нельзя.",
+    shopDown: "Магазин не отвечает. Попробуйте ещё раз.",
+    nothing: "Ничего не нашлось.",
+    found: (n: number) => `Найдено: ${n}`,
+    capped: (n: number) => `Показаны первые ${n}. Уточните поиск.`,
+  },
+
+  /** «Список услуг»: the services with each barber's price and time, read-only. */
+  svcList: {
+    title: "Список услуг",
+    edit: "Изменить",
+    none: "Услуг пока нет.",
+    noBarbers: "Никто из барберов её не делает.",
+  },
 
   account: {
     title: "Доступ",

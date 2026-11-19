@@ -10,6 +10,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useA } from "../../lang";
 import { Ava, NextIcon, PlusIcon } from "../../icons";
+import { Titled } from "../star";
 
 export type RailItem = { id: string; name: string; photoUrl: string | null; active: boolean; line: string; services: number; hidden: boolean };
 
@@ -22,7 +23,9 @@ export function StaffRail({ items }: { items: RailItem[] }) {
   return (
     <aside className={`adm-rail${index ? " is-index" : ""}`} aria-label={A.staff.title}>
       <div className="adm-page-head">
-        <H className="adm-h1">{A.staff.title}</H>
+        <Titled page="staff">
+          <H className="adm-h1">{A.staff.title}</H>
+        </Titled>
         <Link className="adm-btn adm-btn-line adm-btn-sm" href="/admin/staff/new">
           <PlusIcon size={14} />
           {A.visit.barber}

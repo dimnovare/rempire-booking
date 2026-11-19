@@ -19,6 +19,7 @@ import { eur } from "../../copy";
 import { NextIcon, PlusIcon, PrevIcon } from "../../icons";
 import { useA } from "../../lang";
 import { Sheet } from "../sheet";
+import { Titled } from "../star";
 import { listClientsAction, saveClientAction, type ClientQuery } from "./actions";
 
 /** After the last keystroke, before the list is asked for. */
@@ -116,7 +117,9 @@ export function ClientsView({ initial, tz }: { initial: ClientList; tz: string }
   return (
     <>
       <div className="adm-page-head cl-top">
-        <h1 className="adm-h1">{C.title}</h1>
+        <Titled page="clients">
+          <h1 className="adm-h1">{C.title}</h1>
+        </Titled>
         <AddClient />
       </div>
       {data.total === 0 && !filtered && !busy ? (

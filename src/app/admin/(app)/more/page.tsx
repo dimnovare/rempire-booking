@@ -1,6 +1,7 @@
 /**
  * /admin/more «Ещё»: the fifth tab of a phone's bottom bar. The sections
- * that have no tab of their own (sections.tsx, `bar: false`), as large rows.
+ * that have no tab of their own (sections.tsx, `bar: false`), as large rows,
+ * and «Продажа товара», which a wide screen has as a tile of its sidebar.
  * A wide screen has every section in the sidebar and no link to this page.
  */
 import Link from "next/link";
@@ -11,6 +12,7 @@ import { NextIcon } from "../../icons";
 import { Wait } from "../../lang";
 import { getA } from "../../lang-server";
 import { SECTIONS, SectionIcon } from "../sections";
+import { SaleRow } from "./sale-row";
 
 export default function MorePage() {
   return (
@@ -45,6 +47,9 @@ async function Loaded() {
             </Link>
           </li>
         ))}
+        <li>
+          <SaleRow />
+        </li>
       </ul>
     </>
   );

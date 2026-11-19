@@ -24,4 +24,7 @@ export const minsText = (n: number, h: string, min: string) => {
   return hours ? `${hours} ${h}${m ? ` ${m} ${min}` : ""}` : `${m} ${min}`;
 };
 
+/** «ноябрь 2026» → «Ноябрь 2026». */
+export const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 export type Text3 = { ru?: string; et?: string; en?: string } | null | undefined;

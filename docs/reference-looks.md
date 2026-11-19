@@ -109,8 +109,31 @@ gets it → send.
      one made by the staff green over teal, a strip with the time on top;
      «now» a dark tag with yellow time; breaks pale grey; special time a
      dashed amber frame.
-   - **Not built:** the sidebar's mini month, the four tiles and
-     «Избранное»; the journal's large hour numbers.
+   - **Sidebar and tiles: built 19.11.2026** (`sidebar.tsx`, `frame.tsx`
+     and the two drawers in `src/app/admin/(app)/`; the «sidebar» and
+     «drawer» blocks of `admin.css`). From 900 px; a phone keeps its bar
+     and gets «Каталог товаров» and «Продажа товара» on «Ещё».
+     - **Two modes**, kept per browser tab. «Till»: the month, the tiles
+       and «Избранное»; a tab that opens on the calendar starts in it.
+       «Menu»: every section as an accordion on black; a tab that opens on
+       any other page starts in it. The yellow bar switches: «Все разделы»,
+       and «Журнал» back to the calendar.
+     - **The month:** a ring per day, the minutes booked over the minutes
+       the barbers work that day, less their time off
+       (`src/lib/admin/month-load.ts`, one query a month). Green under
+       50 %, yellow from 50 %, red from 75 %; cancelled visits do not
+       count; a day nobody works has no ring. A day opens in the calendar.
+     - **Three tiles:** «Продажа товара», a drawer: the front desk records
+       the barber's own sale (`src/lib/admin/sale.ts`, `docs/one-place.md`);
+       «Список услуг», a read-only drawer; «Каталог товаров»
+       (`/admin/catalogue`): the shop's products by a search, because the
+       shop link has no call for the whole list. The fourth, «Новый
+       платёж», is not built.
+     - **«Избранное»:** a star beside each section's title; the starred
+       pages are the login's own (`users.favourites`, migration 017).
+     - **Ours, not theirs:** «Мой день | Салон» sits under the head; no
+       bell, as nothing feeds one; the way out stays in the menu too.
+   - **Not built:** the journal's large hour numbers.
 2. **Invoices: built 19.11.2026** (`src/app/admin/(app)/invoices/`, the
    «Счета» block of `admin.css`).
    - **The section wears Isolta's colours:** in «Счета» the frame turns

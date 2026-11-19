@@ -24,6 +24,10 @@
  * own, sync_status 'test': never sent, still on the statement and the invoice
  * draft. A sale for himself with no purchase price then books 0 €, marked
  * (mode 'self', purchase_cents null); with SHOP_SALES on it is refused.
+ *
+ * «Продажа товара» in the admin (src/lib/admin/sale.ts) is this same sale,
+ * made for the barber at the front desk: the same row, the same 17 %, the
+ * same trip to the shop. It may name the client who bought (client_id, 017).
  */
 import { randomBytes } from "node:crypto";
 import type { Business } from "./availability";
@@ -87,6 +91,9 @@ export type Sale = {
   shopOrderRef: string | null;
   reversesId: string | null;
   reversedBy: string | null;
+  /** the client who bought, when the front desk named one (the admin's «Продажа товара») */
+  clientId: string | null;
+  clientName: string | null;
   note: string;
   createdAt: string;
 };
@@ -112,6 +119,8 @@ type SaleRow = {
   purchase_cents: number | null;
   reverses_id: string | null;
   reversed_by?: string | null;
+  client_id?: string | null;
+  client_name?: string | null;
   note: string;
   created_at: Date;
 };
@@ -137,13 +146,18 @@ const saleOf = (r: SaleRow): Sale => ({
   noPurchase: r.mode === "self" && r.purchase_cents == null,
   reversesId: r.reverses_id,
   reversedBy: r.reversed_by ?? null,
+  clientId: r.client_id ?? null,
+  clientName: r.client_name ?? null,
   note: r.note,
   createdAt: new Date(r.created_at).toISOString(),
 });
 
-const SALE_SQL = `select p.*, (select r.id from product_sales r where r.reverses_id = p.id) as reversed_by from product_sales p`;
+const SALE_SQL = `select p.*, (select r.id from product_sales r where r.reverses_id = p.id) as reversed_by,
+                         (select c.name from clients c where c.id = p.client_id) as client_name
+                    from product_sales p`;
 
 export const isRef = (v: unknown): v is string => typeof v === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(v);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const newRef = () => `s_${randomBytes(12).toString("base64url")}`;
 
 /** The full product line as the statement and the invoice print it. */
@@ -170,7 +184,8 @@ export function quote(business: Business, p: ShopProduct, mode: "client" | "self
   return { unitCents: unit, totalCents: qty * unit, commissionCents: commission };
 }
 
-export type SellInput = { ref: string; productId: string; variant: string; mode: string; qty: number; expectCents?: number | null };
+/** `clientId`: the client who bought, for a sale to a client made in the admin; the barber app sends none. */
+export type SellInput = { ref: string; productId: string; variant: string; mode: string; qty: number; expectCents?: number | null; clientId?: string | null };
 
 export type SellResult =
   | { ok: true; sale: Sale; replay?: boolean }
@@ -192,6 +207,9 @@ export async function recordSale(
   if (!mode) return { ok: false, code: "invalid", field: "mode" };
   const qty = Number(input.qty);
   if (!Number.isInteger(qty) || qty < 1 || qty > SALES.maxQty) return { ok: false, code: "invalid", field: "qty" };
+  // a named client is one of ours, and only a sale to a client has one
+  const clientId = input.clientId == null || input.clientId === "" ? null : String(input.clientId);
+  if (clientId !== null && (mode !== "client" || !UUID.test(clientId))) return { ok: false, code: "invalid", field: "client" };
 
   const [seen] = await query<SaleRow>(`${SALE_SQL} where p.ref = $1`, [input.ref]);
   if (seen) {
@@ -211,12 +229,17 @@ export async function recordSale(
   if (!q) return { ok: false, code: "no_purchase_price" };
   // the barber saw a price: if the shop's moved since, he sees the new one first
   if (input.expectCents != null && Number(input.expectCents) !== q.unitCents) return { ok: false, code: "price_changed", unitCents: q.unitCents };
+  if (clientId !== null) {
+    const [c] = await query("select 1 from clients where id = $1 and business_id = $2 and merged_into is null", [clientId, business.id]);
+    if (!c) return { ok: false, code: "invalid", field: "client" };
+  }
 
   return withTx(async (tx) => {
     const [row] = await tx<SaleRow>(
       `insert into product_sales (business_id, ref, staff_id, mode, shop_product_id, shop_variant, name, barcode, qty, unit_cents, list_cents,
-                                  purchase_cents, vat_bp, commission_bp, commission_basis, commission_cents, total_cents, sync_after, created_by, created_at, sync_status)
-       select $1, $2, s.id, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21
+                                  purchase_cents, vat_bp, commission_bp, commission_basis, commission_cents, total_cents, sync_after, created_by, created_at, sync_status,
+                                  client_id)
+       select $1, $2, s.id, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
          from staff s where s.id = $3 and s.business_id = $1
        on conflict (ref) do nothing
        returning *, null::uuid as reversed_by`,
@@ -242,6 +265,7 @@ export async function recordSale(
         actorUserId,
         new Date(now),
         shopSales(env) ? "queued" : "test",
+        clientId,
       ],
     );
     if (!row) {
@@ -295,10 +319,10 @@ export async function reverseSale(business: Business, saleId: string, actor: str
     const [row] = await tx<{ id: string }>(
       `insert into product_sales (business_id, ref, staff_id, mode, shop_product_id, shop_variant, name, barcode, qty, unit_cents, list_cents,
                                   purchase_cents, vat_bp, commission_bp, commission_basis, commission_cents, total_cents,
-                                  reverses_id, note, sync_status, created_by)
+                                  reverses_id, note, sync_status, created_by, client_id)
        select business_id, $2, staff_id, mode, shop_product_id, shop_variant, name, barcode, -qty, unit_cents, list_cents,
               purchase_cents, vat_bp, commission_bp, commission_basis, -commission_cents, -total_cents,
-              id, $3, case when sync_status = 'test' then 'test' else 'none' end, $4
+              id, $3, case when sync_status = 'test' then 'test' else 'none' end, $4, client_id
          from product_sales where id = $1
        returning id`,
       [saleId, `r_${randomBytes(12).toString("base64url")}`, String(note ?? "").trim().slice(0, 300), /^[0-9a-f-]{36}$/i.test(actor) ? actor : null],

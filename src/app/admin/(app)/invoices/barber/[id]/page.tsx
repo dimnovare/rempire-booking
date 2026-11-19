@@ -128,7 +128,8 @@ async function Loaded({ params, searchParams }: { params: P["params"]; searchPar
                 sync: s.syncStatus,
                 reversal: s.reversesId !== null,
                 reversed: s.reversedBy !== null,
-                note: [s.noPurchase ? A.inv.noPurchase : "", s.note].filter(Boolean).join(" · "),
+                // the client, when the front desk named him («Продажа товара»)
+                note: [s.clientName ? `${A.sale.client}: ${s.clientName}` : "", s.noPurchase ? A.inv.noPurchase : "", s.note].filter(Boolean).join(" · "),
               }))}
             />
           )}

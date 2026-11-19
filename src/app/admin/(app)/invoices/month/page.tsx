@@ -16,6 +16,7 @@ import { failedSales } from "@/lib/sales";
 import { todayIn } from "@/lib/tz";
 import { Title, Wait } from "../../../lang";
 import { getA } from "../../../lang-server";
+import { Titled } from "../../star";
 import { dayOf, dmy, InvTabs, MonthNav, pickMonth, StatusTag } from "../common";
 import { FailedSales, MakeDrafts } from "../month-view";
 
@@ -53,7 +54,9 @@ async function Loaded({ searchParams }: { searchParams: PageProps<"/admin/invoic
     <>
       <Title text={A.inv.title} />
       <div className="adm-page-head">
-        <h1 className="adm-h1">{A.inv.title}</h1>
+        <Titled page="invoices">
+          <h1 className="adm-h1">{A.inv.title}</h1>
+        </Titled>
       </div>
       <InvTabs A={A} here="month" m={sp.m ? m : undefined} />
       <MonthNav A={A} m={m} base="/admin/invoices/month" />

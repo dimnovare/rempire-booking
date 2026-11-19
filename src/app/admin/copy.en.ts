@@ -4,7 +4,7 @@
  */
 import type { Locale } from "@/lib/i18n";
 import type { ru } from "./copy.ru";
-import { minsText, pl, type Text3 } from "./copy.shared";
+import { cap, minsText, pl, type Text3 } from "./copy.shared";
 
 const FIELD: Record<string, string> = {
   phone: "phone",
@@ -36,7 +36,19 @@ export const en: typeof ru = {
   mins: (n: number) => minsText(n, "h", "min"),
   pick: (t: Text3) => t?.en || t?.ru || t?.et || "",
   title: "Admin",
-  nav: { calendar: "Calendar", clients: "Clients", staff: "Barbers", services: "Services", requests: "Requests", invoices: "Invoices", more: "More", account: "Access" },
+  nav: {
+    calendar: "Calendar",
+    clients: "Clients",
+    staff: "Barbers",
+    services: "Services",
+    catalogue: "Product catalogue",
+    requests: "Requests",
+    invoices: "Invoices",
+    more: "More",
+    account: "Access",
+    goods: "Products",
+    clientBase: "Client base",
+  },
   loading: "Loading…",
   noDb: "The database is not connected.",
   demo: "Demo data. The visits here are not real.",
@@ -299,6 +311,77 @@ export const en: typeof ru = {
   more: { title: "More" },
 
   side: { label: "My day or salon", mine: "My day", barber: "Barber", salon: "Salon", waiting: (n: number) => `Requests waiting: ${n}` },
+
+  frame: {
+    sidebar: "Sidebar",
+    month: (d: Date) => cap(new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric", timeZone: "UTC" }).format(d)),
+    monthPrev: "Previous month",
+    monthNext: "Next month",
+    day: (d: Date) => new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", timeZone: "UTC" }).format(d),
+    dayLoad: (day: string, pct: number) => `${day}, ${pct} % booked`,
+    dayOff: (day: string) => `${day}, day off`,
+    tiles: "Quick actions",
+    fav: "Favourites",
+    favEmpty: "Tap the star beside a page's title and the page shows up here.",
+    favAdd: (page: string) => `Add to favourites: ${page}`,
+    favRemove: (page: string) => `Remove from favourites: ${page}`,
+    all: "All sections",
+    journal: "Calendar",
+  },
+
+  sale: {
+    title: "Product sale",
+    when: "Day and time",
+    day: "Day",
+    time: "Time",
+    seller: "Who sold",
+    pickSeller: "Pick a barber",
+    product: "Product",
+    search: "Name or barcode",
+    looking: "Looking…",
+    nothing: "Nothing found.",
+    shopDown: "The shop does not answer. Try again.",
+    notConfigured: "The link to the shop is not set up.",
+    stock: (n: number) => `in stock: ${n}`,
+    change: "Another product",
+    qty: "Quantity",
+    less: "Less",
+    more: "More",
+    client: "Client",
+    clientHint: "Name or phone. May be left empty.",
+    clientRemove: "Remove the client",
+    total: "Total",
+    share: (pct: string, sum: string) => `The barber's ${pct}: ${sum}`,
+    saved: (what: string) => `Sale recorded: ${what}`,
+    demo: "No shop is connected: these are demo products.",
+    test: "A test sale: it does not go to the shop, and the stock stays as it is.",
+    priceChanged: (p: string) => `The shop's price has changed: ${p}. Check it and save again.`,
+    notFound: "The shop no longer has this product.",
+    badTime: (days: number) => `Check the day and time: not in the future and not more than ${days} ${pl(days, "day", "days")} back.`,
+    needSeller: "Pick who sold.",
+    needProduct: "Find a product.",
+  },
+
+  catalogue: {
+    title: "Product catalogue",
+    lead: "Products, prices and stock from the shop. They are changed in the shop.",
+    search: "Name or barcode",
+    hint: "Type a name or a barcode. The shop gives products by search, not the whole list at once.",
+    cols: { name: "Product", price: "Price", stock: "In stock" },
+    demo: "No shop is connected. These are demo products, not real ones.",
+    notConfigured: "The link to the shop is not set up: the address or the key is missing. Products cannot be shown.",
+    shopDown: "The shop does not answer. Try again.",
+    nothing: "Nothing found.",
+    found: (n: number) => `Found: ${n}`,
+    capped: (n: number) => `The first ${n} are shown. Narrow the search.`,
+  },
+
+  svcList: {
+    title: "Service list",
+    edit: "Change",
+    none: "No services yet.",
+    noBarbers: "No barber does it.",
+  },
 
   account: {
     title: "Access",

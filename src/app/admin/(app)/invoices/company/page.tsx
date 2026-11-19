@@ -11,6 +11,7 @@ import { dbConfigured, query } from "@/lib/db";
 import { todayIn } from "@/lib/tz";
 import { Title, Wait } from "../../../lang";
 import { getA } from "../../../lang-server";
+import { Titled } from "../../star";
 import { InvTabs } from "../common";
 import { CompanyView } from "./company-view";
 
@@ -36,7 +37,9 @@ async function Loaded() {
     <>
       <Title text={A.inv.company} />
       <div className="adm-page-head">
-        <h1 className="adm-h1">{A.inv.title}</h1>
+        <Titled page="invoices">
+          <h1 className="adm-h1">{A.inv.title}</h1>
+        </Titled>
       </div>
       <InvTabs A={A} here="company" />
       <CompanyView
