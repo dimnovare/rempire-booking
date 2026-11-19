@@ -8,11 +8,17 @@
  * The first page comes from the server with the page. Everything after it
  * (a search, a category, another page) is asked for by an action and kept
  * here: what is typed is a client's name or phone, and those stay out of
- * the address. Coming back from a client's card, the same search is still
- * there and is asked for again, so the row shows what was just changed.
+ * the address.
+ *
+ * A client's card opens over the list (layout.tsx): from 900px the list
+ * stays in view behind the drawer with the open client's row outlined in
+ * yellow; on a phone the card is the page and the list is put away until
+ * the card is closed. Either way the search is still there afterwards.
+ * When the card changes, adds or deletes a client it says so
+ * (CLIENTS_CHANGED), and the list asks for its page again.
  */
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { ClientList } from "@/lib/admin/clients";
 import { eur } from "../../copy";
@@ -21,6 +27,7 @@ import { useA } from "../../lang";
 import { Sheet } from "../sheet";
 import { Titled } from "../star";
 import { listClientsAction, saveClientAction, type ClientQuery } from "./actions";
+import { CLIENTS_CHANGED } from "./card-fields";
 
 /** After the last keystroke, before the list is asked for. */
 const DELAY = 300;
@@ -39,6 +46,8 @@ function SearchIcon() {
 export function ClientsView({ initial, tz }: { initial: ClientList; tz: string }) {
   const A = useA();
   const C = A.clients;
+  // the client whose card is open over the list (/admin/clients/<id>), if any
+  const { id: open } = useParams<{ id?: string }>();
   // what is in the field, and what the list was last asked for (a moment behind the typing)
   const [text, setText] = useState("");
   const [f, setF] = useState<ClientQuery>(ALL);
@@ -87,6 +96,12 @@ export function ClientsView({ initial, tz }: { initial: ClientList; tz: string }
     const s = r.current;
     return () => window.clearTimeout(s.timer);
   }, []);
+  // a card saved, added or deleted a client: the same search, asked for again
+  useEffect(() => {
+    const again = () => setF((cur) => ({ ...cur }));
+    window.addEventListener(CLIENTS_CHANGED, again);
+    return () => window.removeEventListener(CLIENTS_CHANGED, again);
+  }, []);
 
   const ask = (next: (cur: ClientQuery) => ClientQuery) => {
     window.clearTimeout(r.current.timer);
@@ -115,7 +130,7 @@ export function ClientsView({ initial, tz }: { initial: ClientList; tz: string }
   const labels = f.label && !data.labels.includes(f.label) ? [...data.labels, f.label] : data.labels;
 
   return (
-    <>
+    <div className={`cl-listpart${open ? " is-behind" : ""}`}>
       <div className="adm-page-head cl-top">
         <Titled page="clients">
           <h1 className="adm-h1">{C.title}</h1>
@@ -177,9 +192,9 @@ export function ClientsView({ initial, tz }: { initial: ClientList; tz: string }
                   </thead>
                   <tbody>
                     {data.rows.map((c) => (
-                      <tr key={c.id}>
+                      <tr key={c.id} className={c.id === open ? "is-open" : undefined}>
                         <td className="c-name">
-                          <Link href={`/admin/clients/${c.id}`} prefetch={false}>
+                          <Link href={`/admin/clients/${c.id}`} prefetch={false} aria-current={c.id === open ? "true" : undefined}>
                             {c.name}
                           </Link>
                           {c.labels.length > 0 && (
@@ -246,7 +261,7 @@ export function ClientsView({ initial, tz }: { initial: ClientList; tz: string }
           )}
         </>
       )}
-    </>
+    </div>
   );
 }
 

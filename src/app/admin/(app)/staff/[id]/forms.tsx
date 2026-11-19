@@ -15,6 +15,7 @@ import { eur } from "../../../copy";
 import { useA } from "../../../lang";
 import { Ava, XIcon } from "../../../icons";
 import { SaveState, useAutoSave } from "../../autosave";
+import { shrinkPhoto } from "../../photo-shrink";
 import { addOff, addSpecial, removeOff, removeSpecial, saveDay, saveHours, saveOffers, saveProfile, uploadPhoto } from "../actions";
 
 type Msg = { ok: boolean; text: string } | null;
@@ -68,27 +69,6 @@ function Remove({ onClick, disabled }: { onClick: () => void; disabled: boolean 
 }
 
 type Profile = { name: string; role: { ru: string; et: string; en: string }; photoUrl: string; bookable: boolean; active: boolean };
-
-/**
- * A photo straight from a phone is several MB. The browser makes it a JPEG
- * that fits 800×1000 (about 100 KB) before it is sent, turned the right way
- * up. Throws when the file is not a picture the browser can read.
- */
-async function shrinkPhoto(file: File): Promise<Blob> {
-  const img = await createImageBitmap(file, { imageOrientation: "from-image" });
-  const k = Math.min(1, 800 / img.width, 1000 / img.height);
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(img.width * k));
-  canvas.height = Math.max(1, Math.round(img.height * k));
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("no canvas");
-  // a see-through PNG gets the page's black behind it, not JPEG's default
-  ctx.fillStyle = "#000";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-  img.close();
-  return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("no blob"))), "image/jpeg", 0.86));
-}
 
 /** A barber who exists saves by itself; a new one is made with the one button. */
 export function ProfileForm({ id, initial, onDone }: { id: string | null; initial: Profile; onDone?: () => void }) {

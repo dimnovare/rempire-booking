@@ -6,9 +6,16 @@
  * insert the visit and its services. The appointments_no_overlap constraint
  * backs the check. The Idempotency-Key makes a double tap or a retry return
  * the first booking instead of a second one.
+ *
+ * «Запретить записываться через онлайн-запись» (the client's card in the
+ * admin, clients.no_online): an online booking with that client's phone is
+ * refused as «invalid» with no field, which the booking page shows as its
+ * plain «Что-то пошло не так… позвоните в салон». It never says why. The
+ * staff still book him (source «admin»).
  */
 import { createHash, randomBytes } from "node:crypto";
 import { loadAvailability, type Business } from "./availability";
+import { visitClientTakes } from "./client-notify";
 import { withTx, type Querier } from "./db";
 import { isLocale, type Locale } from "./i18n";
 import { normalizePhone } from "./phone";
@@ -151,6 +158,15 @@ async function findByKey(q: Querier, businessId: string, key: string, phone: str
 
 class KeyReused extends Error {}
 
+/** Is this phone a client's who may not book online (clients.no_online)? */
+async function bannedOnline(q: Querier, businessId: string, phone: string): Promise<boolean> {
+  const [row] = await q<{ id: string }>(
+    "select id from clients where business_id = $1 and no_online and (phone_e164 = $2 or phone2_e164 = $2) limit 1",
+    [businessId, phone],
+  );
+  return !!row;
+}
+
 class SlotGone extends Error {}
 
 function pgCode(err: unknown): string | undefined {
@@ -182,6 +198,10 @@ async function bookClean(q: Querier, business: Business, c: Clean, now: number):
 
   const prior = await replay();
   if (prior) return prior;
+
+  // a client the salon does not take online bookings from: either of his two phones.
+  // No field and no code of its own: the answer is the one any refused request gets
+  if (c.source === "online" && (await bannedOnline(q, business.id, c.phone))) return { ok: false, code: "invalid" };
 
   const date = localParts(c.start, business.timezone).date;
   const look = await loadAvailability(q, { business, serviceIds: c.serviceIds, staffId: c.staffId, from: date, days: 1, now });
@@ -302,8 +322,11 @@ async function insertVisit(tx: Querier, business: Business, c: Clean, staffId: s
  * send time (src/lib/outbox.ts). Online and admin bookings both use it.
  * The booking form is open to anyone, so one address gets at most
  * CONFIRMATIONS_PER_DAY letters a day; the visit is booked either way.
+ * A client who takes no letters, or no confirmations (his card's
+ * «Уведомления», src/lib/client-notify.ts), gets none queued.
  */
 export async function queueConfirmation(tx: Querier, businessId: string, appointmentId: string, email: string, locale: Locale, now = Date.now()): Promise<boolean> {
+  if (!(await visitClientTakes(tx, appointmentId, "email", "confirmation"))) return false;
   // parallel bookings to one address count one after another (held to commit)
   await tx("select pg_advisory_xact_lock(hashtext('confirm:' || $1))", [email]);
   const [recent] = await tx<{ n: number }>(
@@ -330,7 +353,8 @@ export const CHANGE_LETTER_DELAY_MS = 2 * 60_000;
  * already told about. If the confirmation is still queued, it is built at
  * send time and already shows the change (or is skipped when cancelled),
  * so nothing more is queued. Like the confirmation, the letter is built at
- * send time from the visit as it is then (src/lib/outbox.ts).
+ * send time from the visit as it is then (src/lib/outbox.ts). A client who
+ * has this kind or all letters switched off gets none queued.
  */
 export async function queueChangeLetter(
   tx: Querier,
@@ -340,6 +364,7 @@ export async function queueChangeLetter(
   from: { startsAt: Date; staffId: string } | null,
   now = Date.now(),
 ): Promise<boolean> {
+  if (!(await visitClientTakes(tx, appointmentId, "email", kind))) return false;
   const [conf] = await tx<{ recipient: string; locale: string; status: string }>(
     `select recipient, locale, status from notifications
       where appointment_id = $1 and kind = 'confirmation' and channel = 'email'

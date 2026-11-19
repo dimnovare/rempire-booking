@@ -203,13 +203,54 @@ gets it → send.
    - **What is typed in the search is never in the address:** the list is
      asked for by an action, so a client's name or phone stays out of
      links, the browser's history and the request log.
-   - **One client:** his numbers, then three parts that save by
-     themselves: his fields (name, phone, e-mail, the language of his
-     letters and SMS, SMS and letters on or off), his categories as chips
-     (free words, migration 016; the words already in use are offered),
-     and the shared note the barbers see too. Under them every visit he
-     has had or has ahead, with the calendar's status words; a visit opens
-     its day in the calendar.
+   - **One client: the full card** (the owner, 19.11.2026: every field of
+     Altegio's card and seven of its nine tabs, not loyalty and not
+     accounts; `clients/[id]/`, `src/lib/admin/client-card.ts`, migration
+     018, the «cc-» block of `admin.css`, to the design board «Карточка
+     клиента»).
+     - **A drawer over the list** from 900 px: 900 px on the right, white,
+       no dark side. The list stays in view and in use behind it (it is
+       the layout, so its search and page are kept) and the open client's
+       row is outlined in yellow. The sidebar stays, where Altegio hides
+       its menu. On a phone the card is the page, and its tabs are one row
+       of chips that scrolls sideways. `/admin/clients/<id>` opens it,
+       `?tab=history` a tab.
+     - **«Карточка клиента»:** left, the fields: name, phone, second
+       phone, e-mail, birthday (a year is not needed: «14.03»), gender,
+       importance class, card number, discount, the language of his
+       messages, categories (chips; free words, migration 016, the ones in
+       use are offered), «Запретить записываться через онлайн-запись», the
+       note the barbers see too. Right: his photo, the comments (a dated
+       history beside the note), and the numbers nobody types: sold «за N
+       посещений», first and last visit. Foot: «Удалить» and the yellow
+       «Сохранить». **«Сохранить» here, not autosave:** the board has the
+       button; leaving with changes that are not saved asks first.
+     - **The discount is stored and shown only.** It changes no price.
+     - **«Удалить»** asks, and refuses a client who has visits or
+       purchases: his history stays, so he stays.
+     - **«История визитов»:** a filter (all, upcoming, past, cancelled)
+       and a table under a line per day: the barber with the time and the
+       way to that day in the calendar, the status with a coloured dot,
+       the services, the cost.
+     - **«Статистика»:** a period, then three cards: what he spent per
+       month (bars, plain SVG), his services and his barbers with counts
+       and sums. The same visits as «Продано».
+     - **«Сообщения»:** every message to him in the outbox: its words or
+       its kind, when, the kind, the state, the channel. No «calls» tab.
+     - **«Отправить сообщение»:** a text with its count of SMS parts, the
+       channels as ticks, the yellow «Отправить». It is queued as a
+       «manual» row per channel and the cron sends it. Push is offered
+       only while he has a notification on for a visit ahead.
+     - **«Уведомления»:** «Рекламные сообщения: не отправлять» (kept;
+       nothing is sent as advertising yet), the channels he accepts (SMS,
+       e-mail, push), and a switch for each kind we really send a client:
+       the confirmation, the reminder, «the salon moved it», «the salon
+       cancelled it». Altegio lists 13 kinds; the other nine we do not
+       send, so they are not listed. The outbox honours all of it
+       (`src/lib/client-notify.ts`).
+     - **«Файлы»:** the note with the kinds and the size, «Загрузить
+       файлы», the list, «Файлов пока нет». In the database, 5 MB each,
+       20 a client, served only to a login and only as a download.
    - **The numbers:** «Визиты» is every visit that is not cancelled, the
      ones ahead too; the first and the last visit are ones that have
      begun; «Продано» is the sum of the visits that have begun and were
@@ -220,9 +261,11 @@ gets it → send.
      still ours («Календарь», «Барберы»), not Altegio's «Журнал» and
      «Сотрудники».
    - **Not built:** the import from Altegio (it will fill the same
-     table); merging two clients; deleting or erasing one; sorting by a
-     column; an export; Altegio's loyalty, discounts and its own list of
-     categories.
+     table); merging two clients; erasing one who has history; sorting by
+     a column; an export; the card's «Лояльность» and «Счета клиентов»
+     tabs; a discount that changes a price; paid sums, a balance and
+     deposits among the card's numbers (payments are not built), and
+     products in «Продано»; calls; Altegio's own list of categories.
 4. **Functionality** Altegio has and we do not (loyalty, stock, cash
    accounts, reports) is a list for Dim to choose from, not part of the
    look.

@@ -1,120 +1,84 @@
 /**
- * /admin/clients/<id>: one client. His numbers, his fields, his categories
- * and the shared note (card.tsx; each part saves by itself), then every
- * visit he has had or has ahead, with any barber. A visit opens its day in
- * the calendar (/admin?d=…).
+ * /admin/clients/<id>: one client's card (the owner, 19.11.2026: every
+ * field and seven tabs of the tool we follow; docs/reference-looks.md,
+ * «Клиенты»). From 900px it is a 900px drawer over the list, which the
+ * layout keeps behind it; on a phone it is the page.
+ *
+ * /admin/clients/<id>?tab=history   a tab has its own address (read by drawer.tsx)
+ *
+ * Everything the seven tabs show comes with the page, read at once; an
+ * action that changes something asks for the page again (drawer.tsx).
  */
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { clientDetail, clientLabels, LABEL_MAX, LABELS_MAX, NOTE_MAX, VISITS_MAX } from "@/lib/admin/clients";
+import { clientReach, clientStats, defaultStatsPeriod, FILE_EXTS, FILE_MAX_BYTES, FILES_MAX, listComments, listFiles, listMessages, COMMENT_MAX, MESSAGE_MAX } from "@/lib/admin/client-card";
+import { CARD_NO_MAX, clientDetail, clientLabels, LABEL_MAX, LABELS_MAX, NOTE_MAX, VISITS_MAX } from "@/lib/admin/clients";
 import { requireAdmin } from "@/lib/auth/current";
 import { dbConfigured, query } from "@/lib/db";
-import { localParts } from "@/lib/tz";
-import { eur } from "../../../copy";
-import { NextIcon, PrevIcon } from "../../../icons";
+import { smsTransport } from "@/lib/sms";
+import { todayIn } from "@/lib/tz";
 import { Wait } from "../../../lang";
 import { getA } from "../../../lang-server";
-import { ClientCard } from "./card";
+import { cardFieldsOf, notifyFieldsOf } from "../card-fields";
+import { ClientDrawer } from "./drawer";
 
 export default function ClientPage({ params }: PageProps<"/admin/clients/[id]">) {
   return (
-    <main className="adm-page adm-wide adm-cl">
-      <Suspense fallback={<Wait />}>
-        <Detail params={params} />
-      </Suspense>
-    </main>
+    <Suspense
+      fallback={
+        <section className="cc cc-wait" aria-busy="true">
+          <Wait />
+        </section>
+      }
+    >
+      <Detail params={params} />
+    </Suspense>
   );
 }
 
-async function Detail({ params }: { params: PageProps<"/admin/clients/[id]">["params"] }) {
-  const A = await getA();
-  if (!dbConfigured()) return <p className="adm-wait">{A.noDb}</p>;
-  const { business } = await requireAdmin();
+async function Detail({ params }: Pick<PageProps<"/admin/clients/[id]">, "params">) {
+  if (!dbConfigured()) return <p className="adm-wait">{(await getA()).noDb}</p>;
+  const { user, business } = await requireAdmin();
   const { id } = await params;
-  const [d, used] = await Promise.all([clientDetail(query, business, id), clientLabels(query, business.id)]);
-  if (!d) notFound();
-  const C = A.clients;
+  const now = Date.now();
   const tz = business.timezone;
-  const day = new Intl.DateTimeFormat(A.intl, { timeZone: tz, day: "2-digit", month: "2-digit", year: "numeric" });
-  const weekday = new Intl.DateTimeFormat(A.intl, { timeZone: tz, weekday: "short" });
-  const time = new Intl.DateTimeFormat(A.intl, { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-  const date = (at: number | null) => (at == null ? "—" : day.format(at));
+  const [d, used, comments, files, messages, reach, stats] = await Promise.all([
+    clientDetail(query, business, id, now),
+    clientLabels(query, business.id),
+    listComments(query, business.id, id),
+    listFiles(query, business.id, id),
+    listMessages(query, business.id, id),
+    clientReach(query, business, id, now),
+    clientStats(query, business, id, defaultStatsPeriod(tz, now), now),
+  ]);
+  if (!d || !reach || !stats) notFound();
 
   return (
-    <>
-      <Link className="adm-back" href="/admin/clients">
-        <PrevIcon />
-        {C.title}
-      </Link>
-      <div className="cl-hero">
-        <h1 className="adm-h1">{d.name}</h1>
-        <p className="adm-meta">
-          {C.since(day.format(d.createdAt))} · {A.visit.source[d.source] ?? d.source}
-        </p>
-        {d.phone && (
-          <a className="adm-phone" href={`tel:${d.phone}`}>
-            {d.phone} · {A.visit.call}
-          </a>
-        )}
-      </div>
-      <dl className="cl-stats">
-        <div>
-          <dt>{C.cols.visits}</dt>
-          <dd>{d.visits}</dd>
-        </div>
-        <div>
-          <dt>{C.cols.sold}</dt>
-          <dd>{eur(d.soldCents)}</dd>
-        </div>
-        <div>
-          <dt>{C.cols.last}</dt>
-          <dd>{date(d.lastVisit)}</dd>
-        </div>
-        <div>
-          <dt>{C.cols.first}</dt>
-          <dd>{date(d.firstVisit)}</dd>
-        </div>
-      </dl>
-
-      {/* a card per client: its fields start from this client */}
-      <ClientCard
-        key={d.id}
-        id={d.id}
-        initial={{ name: d.name, phone: d.phone ?? "", email: d.email ?? "", locale: d.locale, sms: !d.smsOptOut, mail: !d.emailOptOut, labels: d.labels, note: d.note }}
-        used={used}
-        limits={{ note: NOTE_MAX, label: LABEL_MAX, labels: LABELS_MAX }}
-      />
-
-      <section className="adm-section" aria-label={C.history}>
-        <h2 className="adm-card-h">{C.history}</h2>
-        {d.history.length === 0 ? (
-          <p className="adm-meta">{C.noHistory}</p>
-        ) : (
-          <ul className="cl-visits">
-            {d.history.map((v) => (
-              <li key={v.id}>
-                <Link className={`cl-visit st-${v.status}`} href={`/admin?d=${localParts(v.start, tz).date}`} title={C.inCalendar} prefetch={false}>
-                  <span className="txt">
-                    <b>
-                      {weekday.format(v.start)}, {day.format(v.start)}, {time.format(v.start)}
-                    </b>
-                    <small>{[v.staffName, ...v.services.map((s) => A.pick(s))].filter(Boolean).join(" · ")}</small>
-                  </span>
-                  <span className="end">
-                    <span className={`adm-tag cl-st st-${v.status}`}>{A.visit.status[v.status] ?? v.status}</span>
-                    <b>{eur(v.totalCents)}</b>
-                  </span>
-                  <span className="adm-chev">
-                    <NextIcon />
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-        {d.history.length >= VISITS_MAX && <p className="adm-meta">{C.capped(VISITS_MAX)}</p>}
-      </section>
-    </>
+    <ClientDrawer
+      // a card per client: its forms start from this client
+      key={d.id}
+      id={d.id}
+      name={d.name}
+      tz={tz}
+      today={todayIn(tz, now)}
+      card={cardFieldsOf(d)}
+      used={used}
+      limits={{ note: NOTE_MAX, label: LABEL_MAX, labels: LABELS_MAX, cardNo: CARD_NO_MAX, comment: COMMENT_MAX, message: MESSAGE_MAX }}
+      photoV={d.photoV}
+      comments={comments}
+      // anyone's comment, by Renat and the front desk (src/lib/admin/client-card.ts)
+      canDeleteComments={user.role === "owner" || user.role === "admin"}
+      numbers={{ soldCents: d.soldCents, soldVisits: d.soldVisits, firstVisit: d.firstVisit, lastVisit: d.lastVisit }}
+      history={d.history}
+      capped={d.history.length >= VISITS_MAX ? VISITS_MAX : 0}
+      stats={stats}
+      messages={messages}
+      reach={reach}
+      // no provider yet in production: an SMS waits in the queue (src/lib/sms.ts)
+      smsReady={smsTransport() !== "disabled"}
+      notify={notifyFieldsOf(d)}
+      files={files}
+      fileRules={{ exts: [...FILE_EXTS], maxBytes: FILE_MAX_BYTES, max: FILES_MAX }}
+    />
   );
 }

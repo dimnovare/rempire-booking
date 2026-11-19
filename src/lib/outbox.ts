@@ -39,9 +39,21 @@
  * (settings.client_reminder) says how the two go together: «sms» plans no
  * notification; «both» sends both; «push» skips the SMS of a visit whose
  * notification went out, so only clients without it cost an SMS.
+ *
+ * A client's own switches (his card's «Уведомления» in the admin;
+ * src/lib/client-notify.ts): a channel he does not accept and a kind he has
+ * switched off are never queued for him, and a reminder that was queued
+ * before he switched it off is cancelled at the next run.
+ *
+ * A message written by hand on a client's card is a row of kind «manual»
+ * with its text in the payload and the client in client_id
+ * (src/lib/admin/client-card.ts queues it). By SMS or e-mail it goes like
+ * any other row; as a notification it goes to the phones turned on for the
+ * visit named in the row, the client's next one.
  */
 import { after } from "next/server";
 import { getBusinessById } from "./availability";
+import { refusesSql, takesSql } from "./client-notify";
 import { sendPushToClient } from "./client-push";
 import { query, type Querier } from "./db";
 import { emailTransport, sendEmail, type LetterBody } from "./email";
@@ -123,9 +135,10 @@ const PUSH_REMINDER_AT = `a.starts_at - make_interval(mins => ${PUSH_LEAD_MIN})`
 async function planClientPush(q: Querier, now: number): Promise<{ added: number; cancelled: number }> {
   const cancelled = await q<{ id: string }>(
     `update notifications n set status = 'cancelled', locked_until = null
-       from appointments a, businesses b
-      where n.appointment_id = a.id and b.id = a.business_id and n.kind = 'client_reminder' and n.status = 'queued'
-        and (a.status not in ('booked', 'pending') or ${REMINDER_MODE} = 'sms' or ${PLANNED_AT} is distinct from ${PUSH_REMINDER_AT})
+       from appointments a, businesses b, clients c
+      where n.appointment_id = a.id and b.id = a.business_id and c.id = a.client_id and n.kind = 'client_reminder' and n.status = 'queued'
+        and (a.status not in ('booked', 'pending') or ${REMINDER_MODE} = 'sms' or ${PLANNED_AT} is distinct from ${PUSH_REMINDER_AT}
+             or ${refusesSql("c", "push", "reminder")})
       returning n.id`,
   );
   const added = await q<{ id: string }>(
@@ -135,10 +148,12 @@ async function planClientPush(q: Querier, now: number): Promise<{ added: number;
                                'business', b.name, 'address', l.address, 'tz', l.timezone),
             ${PUSH_REMINDER_AT} - interval '1 minute'
        from appointments a
+       join clients c on c.id = a.client_id
        join staff s on s.id = a.staff_id
        join businesses b on b.id = a.business_id
        join locations l on l.id = a.location_id
       where a.status in ('booked', 'pending') and ${REMINDER_MODE} <> 'sms'
+        and ${takesSql("c", "push", "reminder")}
         and exists (select 1 from client_push_subscriptions p where p.appointment_id = a.id and p.retired_at is null)
         and a.starts_at > $1
         and ${PUSH_REMINDER_AT} < $2
@@ -155,9 +170,10 @@ async function planClientPush(q: Querier, now: number): Promise<{ added: number;
 export async function planReminders(q: Querier, now = Date.now()): Promise<{ added: number; cancelled: number }> {
   const cancelled = await q<{ id: string }>(
     `update notifications n set status = 'cancelled', locked_until = null
-       from appointments a
-      where n.appointment_id = a.id and n.kind = 'reminder' and n.status = 'queued'
-        and (a.status not in ('booked', 'pending') or a.reminder_min is null or ${PLANNED_AT} is distinct from ${REMINDER_AT})
+       from appointments a, clients c
+      where n.appointment_id = a.id and c.id = a.client_id and n.kind = 'reminder' and n.status = 'queued'
+        and (a.status not in ('booked', 'pending') or a.reminder_min is null or ${PLANNED_AT} is distinct from ${REMINDER_AT}
+             or ${refusesSql("c", "sms", "reminder")})
       returning n.id`,
   );
   const added = await q<{ id: string }>(
@@ -172,7 +188,7 @@ export async function planReminders(q: Querier, now = Date.now()): Promise<{ add
        join businesses b on b.id = a.business_id
        join locations l on l.id = a.location_id
       where a.status in ('booked', 'pending') and a.reminder_min is not null
-        and c.phone_e164 is not null and not c.sms_opt_out
+        and c.phone_e164 is not null and ${takesSql("c", "sms", "reminder")}
         and a.starts_at > $1
         and ${REMINDER_AT} < $2
         and not exists (select 1 from notifications n
@@ -399,7 +415,7 @@ async function deliver(q: Querier, rows: OutboxRow[], now: number, env: Env, sen
       } else if (row.channel === "push" && "push" in msg) {
         // a login's phones, or the phones turned on for this one visit
         const r =
-          row.kind === "client_reminder"
+          row.kind === "client_reminder" || row.kind === "manual"
             ? await (senders.pushClient ?? sendPushToClient)(q, row.appointment_id ?? "", msg.push, env)
             : await (senders.push ?? sendPushToUser)(q, row.recipient, msg.push, env);
         if (!r.devices) {
@@ -461,6 +477,14 @@ async function composePush(q: Querier, row: OutboxRow, now: number): Promise<Com
     if (new Date(a.starts_at).getTime() <= now) return { skip: "visit already started" };
     const text = clientReminderText(row, `/v/${await mintVisitLink(q, row.appointment_id, "push", 12)}`);
     return text ? { push: text } : { skip: "no text" };
+  }
+  if (row.kind === "manual") {
+    // written by hand on the client's card: its own words, to the phones of the visit it names
+    if (!row.appointment_id) return { skip: "no visit" };
+    const p = row.payload as { text?: unknown; subject?: unknown };
+    const body = typeof p.text === "string" ? p.text.trim() : "";
+    if (!body) return { skip: "no text" };
+    return { push: { title: String(p.subject || "REMPIRE"), body, url: `/v/${await mintVisitLink(q, row.appointment_id, "push", 12)}`, tag: `msg-${row.id}` } };
   }
   let payload = row.payload;
   if (VISIT_KINDS.has(row.kind) && row.appointment_id) {
