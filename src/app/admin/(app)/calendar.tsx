@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import type { CalBlock, CalendarData, CalService, CalVisit } from "@/lib/admin/calendar";
 import { gridBounds, hhmm, minutesInDay, momentAt, snap, weekStart } from "@/lib/admin/grid";
 import type { AdminOutcome } from "@/lib/admin/visits";
+import { extraText } from "@/lib/slots";
 import { addDays } from "@/lib/tz";
 import { eur } from "../copy";
 import { useA } from "../lang";
@@ -367,7 +368,8 @@ export function Calendar({ data, view, date, today, staffId, now: serverNow, ste
                     if (bottom <= 0 || top >= height) return null;
                     return (
                       <div key={x.id} className="cal-sp" style={{ top, height: bottom - top }}>
-                        <span>+{eur(x.extraCents)}</span>
+                        {/* the window as it was set, «+20 €» or «+50 %»; a visit in it shows its own money */}
+                        <span>{extraText(x)}</span>
                       </div>
                     );
                   })}

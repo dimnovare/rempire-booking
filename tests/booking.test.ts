@@ -1,8 +1,10 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { POST as bookRoute } from "@/app/api/bookings/route";
 import { loadAvailability } from "@/lib/availability";
 import { book, hashToken, type BookingInput } from "@/lib/booking";
 import { closeDb, query } from "@/lib/db";
-import { zonedToUtc } from "@/lib/tz";
+import { cleanExtra, extraFor, extraText, pricedWindows } from "@/lib/slots";
+import { addDays, isoWeekday, todayIn, zonedToUtc } from "@/lib/tz";
 import { demoId } from "../tools/seed-demo.mjs";
 import { freshDemo, type Demo } from "./helpers";
 
@@ -290,5 +292,203 @@ describe("special time", () => {
     expect(slot.staffIds[0]).not.toBe(demo.staff.renat);
     const r = await book(query, demo.business, input({ staff: null, time: "11:00" }), { now: NOW });
     expect(r.ok && r.visit.extraCents).toBe(0);
+  });
+});
+
+describe("special time in percent", () => {
+  // the other way to price a window (Renat, 19.11.2026): «+50 %» of the visit's price
+  const specialPct = (staff: string, date: string, from: string, to: string, pct: number) =>
+    query("insert into special_time (business_id, staff_id, starts_at, ends_at, extra_cents, extra_pct) values ($1, $2, $3, $4, 0, $5)", [
+      demo.business.id,
+      demo.staff[staff],
+      iso(date, from),
+      iso(date, to),
+      pct,
+    ]);
+  const extraAt = (s: { start: number; extraCents: number }[], time: string) => s.find((x) => x.start === at(TUE, time))?.extraCents;
+
+  it("the rule: an amount as it is, a percent of the visit's price, rounded to the cent", () => {
+    expect(extraFor({ extraCents: 2000 }, 4000)).toBe(2000);
+    expect(extraFor({ extraCents: 2000, extraPct: 0 }, 4000)).toBe(2000);
+    expect(extraFor({ extraCents: 0, extraPct: 50 }, 4000)).toBe(2000);
+    expect(extraFor({ extraCents: 0, extraPct: 300 }, 6800)).toBe(20400);
+    expect(extraFor({ extraCents: 0, extraPct: 50 }, 3333)).toBe(1667); // 1666.5
+    expect(extraFor({ extraCents: 0, extraPct: 33 }, 3550)).toBe(1172); // 1171.5
+    expect(extraFor({ extraCents: 0, extraPct: 50 }, 0)).toBe(0);
+    expect(extraText({ extraCents: 2000 })).toBe("+20 €");
+    expect(extraText({ extraCents: 1250, extraPct: 0 })).toBe("+12.50 €");
+    expect(extraText({ extraCents: 0, extraPct: 50 })).toBe("+50 %");
+  });
+
+  it("a new window has exactly one of the two, whole and in range", () => {
+    expect(cleanExtra(2000, 0)).toEqual({ extraCents: 2000, extraPct: 0 });
+    expect(cleanExtra(2000, undefined)).toEqual({ extraCents: 2000, extraPct: 0 });
+    expect(cleanExtra(0, 50)).toEqual({ extraCents: 0, extraPct: 50 });
+    expect(cleanExtra(undefined, 1)).toEqual({ extraCents: 0, extraPct: 1 });
+    expect(cleanExtra(100_000, 0)).not.toBeNull();
+    expect(cleanExtra(0, 300)).not.toBeNull();
+    for (const [cents, pct] of [[2000, 50], [0, 0], [undefined, undefined], [0, 301], [0, -5], [0, 12.5], [100_001, 0], [-1, 0], [10.5, 0], [NaN, 50], [0, NaN], ["20", 0], [0, "50"]]) {
+      expect(cleanExtra(cents, pct), `${cents} / ${pct}`).toBeNull();
+    }
+  });
+
+  it("the table refuses both at once and a percent out of range", async () => {
+    const row = (cents: number, pct: number) =>
+      query("insert into special_time (business_id, staff_id, starts_at, ends_at, extra_cents, extra_pct) values ($1, $2, $3, $4, $5, $6)", [
+        demo.business.id,
+        demo.staff.renat,
+        iso(TUE, "20:00"),
+        iso(TUE, "22:00"),
+        cents,
+        pct,
+      ]);
+    await expect(row(2000, 50)).rejects.toMatchObject({ code: "23514" });
+    await expect(row(0, 301)).rejects.toMatchObject({ code: "23514" });
+    await expect(row(0, -1)).rejects.toMatchObject({ code: "23514" });
+    // a window from before the percent, written with extra_cents alone
+    await query("insert into special_time (business_id, staff_id, starts_at, ends_at, extra_cents) values ($1, $2, $3, $4, 1500)", [demo.business.id, demo.staff.renat, iso(TUE, "20:00"), iso(TUE, "22:00")]);
+    const [old] = await query<{ extra_cents: number; extra_pct: number }>("select extra_cents, extra_pct from special_time");
+    expect(old).toEqual({ extra_cents: 1500, extra_pct: 0 });
+  });
+
+  it("an amount and a percent that come to the same money are still two prices: no visit across the two", () => {
+    const h = (n: number) => n * 3_600_000;
+    expect(
+      pricedWindows(
+        [[h(10), h(20)]],
+        [
+          { from: h(12), to: h(13), extraCents: 2000 },
+          { from: h(13), to: h(14), extraCents: 0, extraPct: 50 },
+          { from: h(14), to: h(15), extraCents: 0, extraPct: 50 },
+        ],
+      ),
+    ).toEqual([
+      { from: h(10), to: h(12), extraCents: 0, extraPct: 0 },
+      { from: h(12), to: h(13), extraCents: 2000, extraPct: 0 },
+      { from: h(13), to: h(15), extraCents: 0, extraPct: 50 },
+      { from: h(15), to: h(20), extraCents: 0, extraPct: 0 },
+    ]);
+  });
+
+  it("free times: the percent of each barber's own price for the chosen services", async () => {
+    await specialPct("renat", TUE, "13:00", "14:00", 50);
+    await specialPct("milena", TUE, "13:00", "14:00", 50);
+    // Renat's cut is 40 €, Milena's 35 €
+    const renat = await slotsOf({ staff: "renat", services: ["clip"], date: TUE });
+    expect(extraAt(renat, "12:15")).toBe(0);
+    expect(extraAt(renat, "12:30")).toBeUndefined(); // would run into the special hour
+    expect(extraAt(renat, "13:00")).toBe(2000);
+    expect(extraAt(renat, "13:15")).toBe(2000);
+    expect(extraAt(renat, "13:30")).toBeUndefined();
+    expect(extraAt(renat, "14:00")).toBe(0);
+    expect(extraAt(await slotsOf({ staff: "milena", services: ["clip"], date: TUE }), "13:00")).toBe(1750);
+    // a 30-minute service at 28 €, and two services together (40 € + 28 €, 75 minutes)
+    expect(extraAt(await slotsOf({ staff: "renat", services: ["beard"], date: TUE }), "13:30")).toBe(1400);
+    await specialPct("renat", TUE, "20:00", "22:00", 25);
+    expect(extraAt(await slotsOf({ staff: "renat", services: ["clip", "beard"], date: TUE }), "20:00")).toBe(1700);
+    // half a cent goes up
+    await query("update staff_services set price_cents = 3333 where staff_id = $1 and service_id = $2", [demo.staff.renat, demo.services.clip]);
+    expect(extraAt(await slotsOf({ staff: "renat", services: ["clip"], date: TUE }), "13:00")).toBe(1667);
+  });
+
+  it("«anyone» at a percent time: the barber with the smallest extra first, each with his own amount", async () => {
+    for (const s of ["renat", "valentin", "jevgeni", "slava", "milena"]) await specialPct(s, TUE, "13:00", "14:00", 50);
+    const slot = (await slotsOf({ services: ["clip"], date: TUE })).find((x) => x.start === at(TUE, "13:00"))!;
+    expect(slot.staffIds[0]).toBe(demo.staff.milena);
+    expect(slot.extraCents).toBe(1750);
+    expect([...slot.extras].sort((a, b) => a - b)).toEqual([1750, 1900, 1900, 2000, 2000]);
+    // the price the client saw decides who may take it
+    const a = await book(query, demo.business, input({ staff: null, time: "13:00", extraCents: 1750 }), { now: NOW });
+    expect(a.ok && [a.visit.staffId, a.visit.extraCents, a.visit.totalCents]).toEqual([demo.staff.milena, 1750, 5250]);
+    const b = await book(query, demo.business, input({ staff: null, time: "13:00", extraCents: 2000, phone: "+372 5555 0111" }), { now: NOW });
+    expect(b.ok && [demo.staff.renat, demo.staff.valentin]).toContain(b.ok && b.visit.staffId);
+    expect(b.ok && [b.visit.extraCents, b.visit.totalCents]).toEqual([2000, 6000]);
+    // nobody is at +10 €
+    expect(await book(query, demo.business, input({ staff: null, time: "13:00", extraCents: 1000, phone: "+372 5555 0112" }), { now: NOW })).toEqual({ ok: false, code: "slot_taken" });
+  });
+
+  it("books at the price shown: the total is the price plus the percent, the extra kept apart as money", async () => {
+    await specialPct("renat", TUE, "20:00", "22:00", 50);
+    const r = await book(query, demo.business, input({ time: "20:00", extraCents: 2000 }), { now: NOW });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect([r.visit.totalCents, r.visit.extraCents]).toEqual([6000, 2000]);
+    const [row] = await query<{ total_cents: number; extra_cents: number }>("select total_cents, extra_cents from appointments where id = $1", [r.visit.id]);
+    expect(row).toEqual({ total_cents: 6000, extra_cents: 2000 });
+    const lines = await query<{ price_cents: number }>("select price_cents from appointment_services where appointment_id = $1", [r.visit.id]);
+    expect(lines).toEqual([{ price_cents: 4000 }]);
+    // two services, and no extra sent: the server's own amount
+    const two = await book(query, demo.business, input({ time: "20:45", services: ["clip", "beard"], phone: "+372 5555 0113" }), { now: NOW });
+    expect(two.ok && [two.visit.totalCents, two.visit.extraCents]).toEqual([10200, 3400]);
+  });
+
+  it("never charges another amount than the one shown", async () => {
+    await specialPct("renat", TUE, "13:00", "14:00", 50);
+    expect(await book(query, demo.business, input({ time: "13:00", extraCents: 0 }), { now: NOW })).toEqual({ ok: false, code: "slot_taken" });
+    expect(await book(query, demo.business, input({ time: "13:00", extraCents: 1500 }), { now: NOW })).toEqual({ ok: false, code: "slot_taken" });
+    // the barber's price went up after the client saw +20 €: now it is +22 €, so «slot taken» and a new look
+    await query("update staff_services set price_cents = 4400 where staff_id = $1 and service_id = $2", [demo.staff.renat, demo.services.clip]);
+    expect(await book(query, demo.business, input({ time: "13:00", extraCents: 2000 }), { now: NOW })).toEqual({ ok: false, code: "slot_taken" });
+    const r = await book(query, demo.business, input({ time: "13:00", extraCents: 2200 }), { now: NOW });
+    expect(r.ok && [r.visit.totalCents, r.visit.extraCents]).toEqual([6600, 2200]);
+    expect(await query("select id from appointments")).toHaveLength(1);
+  });
+
+  it("a long visit's percent may pass 1000 € and is still bookable", async () => {
+    await query("update staff_services set price_cents = 40000 where staff_id = $1 and service_id = $2", [demo.staff.renat, demo.services.clip]);
+    await specialPct("renat", TUE, "20:00", "22:00", 300);
+    const s = await slotsOf({ staff: "renat", services: ["clip"], date: TUE });
+    expect(extraAt(s, "20:00")).toBe(120_000);
+    const r = await book(query, demo.business, input({ time: "20:00", extraCents: 120_000 }), { now: NOW });
+    expect(r.ok && [r.visit.totalCents, r.visit.extraCents]).toEqual([160_000, 120_000]);
+  });
+
+  it("POST /api/bookings: a wrong extra is 409 with the nearest times and their right amounts", async () => {
+    // the route asks the real clock, so: the next working day at least two days on
+    let day = addDays(todayIn(TZ), 2);
+    while (isoWeekday(day) === 7) day = addDays(day, 1);
+    await query("insert into special_time (business_id, staff_id, starts_at, ends_at, extra_cents, extra_pct) values ($1, $2, $3, $4, 0, 50)", [
+      demo.business.id,
+      demo.staff.renat,
+      iso(day, "13:00"),
+      iso(day, "14:00"),
+    ]);
+    const body = { serviceIds: [demo.services.clip], staffId: demo.staff.renat, startsAt: iso(day, "13:00"), extraCents: 1500, name: "Test Client", phone: "+372 5555 0114", locale: "ru" };
+    const res = await bookRoute(new Request("http://x/api/bookings", { method: "POST", headers: { "idempotency-key": `route-key-${Math.random()}-0001` }, body: JSON.stringify(body) }));
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      error: "slot_taken",
+      alternatives: [
+        [at(day, "12:15"), demo.staff.renat, 0],
+        [at(day, "13:00"), demo.staff.renat, 2000],
+        [at(day, "13:15"), demo.staff.renat, 2000],
+      ],
+    });
+    expect(await query("select id from appointments")).toHaveLength(0);
+  });
+});
+
+describe("a visit being moved", () => {
+  it("does not block its own old time when its id is ignored, and still does without", async () => {
+    const r = await book(query, demo.business, input({ time: "10:00" }), { now: NOW });
+    if (!r.ok) throw new Error("not booked");
+    const ask = { business: demo.business, serviceIds: [demo.services.clip], staffId: demo.staff.renat, from: TUE, days: 1, now: NOW };
+    const starts = async (ignoreAppointmentId?: string | null) => (await loadAvailability(query, { ...ask, ignoreAppointmentId })).days[0].slots.map((s) => s.start);
+    // taken: nothing from 10:00 until the visit ends at 10:45
+    for (const without of [await starts(), await starts(null)]) {
+      expect(without).not.toContain(at(TUE, "10:00"));
+      expect(without).not.toContain(at(TUE, "10:30"));
+      expect(without[0]).toBe(at(TUE, "10:45"));
+    }
+    const moving = await starts(r.visit.id);
+    expect(moving[0]).toBe(at(TUE, "10:00"));
+    expect(moving).toContain(at(TUE, "10:15"));
+    expect(moving.length).toBe(38);
+    // only that visit is out of the way: another one still holds its time
+    const other = await book(query, demo.business, input({ time: "12:00", phone: "+372 5555 0115" }), { now: NOW });
+    if (!other.ok) throw new Error("not booked");
+    const again = await starts(r.visit.id);
+    expect(again).toContain(at(TUE, "10:00"));
+    expect(again).not.toContain(at(TUE, "12:00"));
   });
 });

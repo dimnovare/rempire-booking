@@ -3,14 +3,19 @@
  * free, what comes next, the words for the hours. Pure, so the page in the
  * phone runs it too (the free time moves with the clock).
  */
-import { mergeIntervals, pricedWindows, subtractIntervals, type Interval } from "../slots";
+import { extraFor, mergeIntervals, pricedWindows, subtractIntervals, type Interval } from "../slots";
 import { localParts, startOfDay, addDays } from "../tz";
 import type { BBlock, BDay, BVisit } from "./day";
 
 /** Statuses that count towards the day's visits and money. */
 export const COUNTED = new Set(["pending", "booked", "arrived", "done"]);
 
-export type Gap = { from: number; to: number; extraCents: number };
+/**
+ * A free piece of the day with its special-time extra as written: an amount
+ * (extraCents) or a percent (extraPct). No visit yet, so a percent is still
+ * a percent here; startsIn() makes it money for one visit.
+ */
+export type Gap = { from: number; to: number; extraCents: number; extraPct?: number };
 
 /**
  * What is still free in a day: working and special time minus visits (with
@@ -28,12 +33,13 @@ export function freeGaps(day: Pick<BDay, "windows" | "visits" | "blocks" | "spec
   const out: Gap[] = [];
   for (const w of pricedWindows(day.windows, day.special)) {
     for (const [a, b] of subtractIntervals([[Math.max(w.from, notBefore), w.to]], busy)) {
-      if (b - a >= step) out.push({ from: a, to: b, extraCents: w.extraCents });
+      if (b - a >= step) out.push({ from: a, to: b, extraCents: w.extraCents, extraPct: w.extraPct });
     }
   }
   return out.sort((x, y) => x.from - y.from);
 }
 
+/** A free start for one visit, with its special-time extra in money. */
 export type FreeStart = { start: number; extraCents: number };
 
 /**
@@ -41,14 +47,18 @@ export type FreeStart = { start: number; extraCents: number };
  * visit before (the gap's own start), then on the step grid. The visit and
  * its tidy-up must fit before the gap ends. A gap never spans two prices
  * (freeGaps cuts at special time), as the server's own check wants.
+ * `baseCents` is the visit's price without the extra (its services at his
+ * prices): a gap priced in percent adds that percent of it, as the server
+ * does when the visit is booked or moved (src/lib/admin/visits.ts).
  */
-export function startsIn(gaps: Gap[], o: { durationMin: number; bufferMin: number; stepMin: number }): FreeStart[] {
+export function startsIn(gaps: Gap[], o: { durationMin: number; bufferMin: number; stepMin: number; baseCents: number }): FreeStart[] {
   const step = o.stepMin * 60_000;
   const need = (o.durationMin + o.bufferMin) * 60_000;
   const out: FreeStart[] = [];
   if (step <= 0 || o.durationMin <= 0) return out;
   for (const g of gaps) {
-    for (let s = g.from; s + need <= g.to; s = (Math.floor(s / step) + 1) * step) out.push({ start: s, extraCents: g.extraCents });
+    const extraCents = extraFor(g, o.baseCents);
+    for (let s = g.from; s + need <= g.to; s = (Math.floor(s / step) + 1) * step) out.push({ start: s, extraCents });
   }
   return out;
 }

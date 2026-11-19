@@ -2,6 +2,8 @@
  * POST /api/bookings   (Idempotency-Key: <uuid>)
  * { serviceIds, staffId|null, startsAt, extraCents?, name, phone, email?, comment?, locale, smsReminder }
  * extraCents: the special-time extra the client was shown; a different one is slot_taken.
+ * It is money, as /api/slots gave it: a percent window is already worked out
+ * for these services and that barber, here and in the alternatives.
  *
  * 201 { visit, manageUrl }    booked (or the same tap again: manageUrl null)
  * 409 { error: "slot_taken", alternatives: [[startMs, staffId, extraCents], …] }

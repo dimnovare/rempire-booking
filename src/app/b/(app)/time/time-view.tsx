@@ -9,6 +9,7 @@
 import { useEffect, useState } from "react";
 import type { ChangeCode, ChangeResult, MyPrice, MyTime } from "@/lib/barber/requests";
 import { MAX_OFF_DAYS, MAX_SPANS, MAX_WEEKS, requestWords, weekGroups, type OffKind, type WeekHours } from "@/lib/barber/request-words";
+import { cleanExtra, extraText, hasExtra } from "@/lib/slots";
 import { addDays, localParts } from "@/lib/tz";
 import { PlusIcon, XIcon } from "../../../admin/icons";
 import { cap, dateWords, ddmm, eur, minsText, pick3 } from "../../copy.shared";
@@ -111,7 +112,7 @@ export function TimeView({ data, tz, today, viewing }: { data: MyTime; tz: strin
       when: o.kind === "block" ? spanText(o.from, o.to, tz, B) : daysText(o.from, o.to, tz, B),
       note: o.note,
       waiting: o.status === "requested",
-      extra: 0,
+      extra: "",
       mine: o.mine || viewing,
     })),
     ...data.special.map((x) => ({
@@ -122,7 +123,8 @@ export function TimeView({ data, tz, today, viewing }: { data: MyTime; tz: strin
       when: spanText(x.from, x.to, tz, B),
       note: "",
       waiting: false,
-      extra: x.extraCents,
+      // the window as he set it: «+20 €» or «+50 %»
+      extra: hasExtra(x) ? extraText(x) : "",
       mine: x.mine || viewing,
     })),
   ].sort((a, b) => a.from - b.from);
@@ -159,7 +161,7 @@ export function TimeView({ data, tz, today, viewing }: { data: MyTime; tz: strin
                   <span className="txt">
                     <b>
                       {a.title}
-                      {a.extra > 0 && <span className="bx-plus"> +{eur(a.extra)}</span>}
+                      {a.extra && <span className="bx-plus"> {a.extra}</span>}
                     </b>
                     <small>{a.when}</small>
                     {a.note && <small className="bx-note">{a.note}</small>}
@@ -410,12 +412,16 @@ function SpecialSheet({ today, ask, onClose, onDone }: SheetProps & { today: str
   const [date, setDate] = useState(today);
   const [start, setStart] = useState("08:00");
   const [end, setEnd] = useState("10:00");
-  const [extra, setExtra] = useState("10");
+  // the extra is an amount or a percent of the visit's price; each way keeps
+  // its own number, so «10 €» never turns into «10 %» by a tap
+  const [unit, setUnit] = useState<"eur" | "pct">("eur");
+  const [extra, setExtra] = useState({ eur: "10", pct: "50" });
   const [weeks, setWeeks] = useState(1);
   const [note, setNote] = useState("");
-  const cents = euros(extra);
-  const ok = isTime(start) && isTime(end) && toMin(end) > toMin(start) && Number.isInteger(cents) && cents >= 0 && cents <= 100_000;
-  const { busy, problem, send } = useSend(() => addSpecial({ date, start, end, extraCents: cents, weeks, note }), onDone);
+  const sent: { extraCents?: number; extraPct?: number } = unit === "pct" ? { extraPct: Number(extra.pct.replace(",", ".").trim()) } : { extraCents: euros(extra.eur) };
+  // the server's own rule: one of the two, a whole number above zero and in range
+  const ok = isTime(start) && isTime(end) && toMin(end) > toMin(start) && cleanExtra(sent.extraCents, sent.extraPct) !== null;
+  const { busy, problem, send } = useSend(() => addSpecial({ date, start, end, ...sent, weeks, note }), onDone);
   const wd = cap(dateWords(date, B.lang, { weekday: "long" }));
   return (
     <BSheet title={T.add.special} onClose={onClose} bar={<Bar ask={ask} ok={ok} busy={busy} problem={problem} onSend={() => void send()} />}>
@@ -433,11 +439,21 @@ function SpecialSheet({ today, ask, onClose, onDone }: SheetProps & { today: str
           <input type="time" step={300} value={end} onChange={(e) => setEnd(e.target.value)} />
         </label>
       </div>
-      <label className="adm-field">
+      <div className="adm-field">
         <span>{T.extra}</span>
-        <input inputMode="decimal" value={extra} onChange={(e) => setExtra(e.target.value)} />
-        <small className="adm-meta">{T.extraHint}</small>
-      </label>
+        <div className="adm-row">
+          <input inputMode={unit === "pct" ? "numeric" : "decimal"} aria-label={T.extra} value={extra[unit]} onChange={(e) => setExtra({ ...extra, [unit]: e.target.value })} />
+          <div className="adm-seg adm-seg-wide" role="group" aria-label={T.extraUnit} style={{ flex: "0 0 112px" }}>
+            <button type="button" aria-pressed={unit === "eur"} onClick={() => setUnit("eur")}>
+              €
+            </button>
+            <button type="button" aria-pressed={unit === "pct"} onClick={() => setUnit("pct")}>
+              %
+            </button>
+          </div>
+        </div>
+        <small className="adm-meta">{unit === "pct" ? T.extraHintPct : T.extraHint}</small>
+      </div>
       <div className="adm-field">
         <span>
           {T.repeat} · {wd}

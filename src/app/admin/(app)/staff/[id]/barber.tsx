@@ -10,6 +10,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import type { StaffDetail } from "@/lib/admin/staff";
+import { extraText } from "@/lib/slots";
 import { eur, type Copy } from "../../../copy";
 import { useA } from "../../../lang";
 import { Ava, NextIcon, PlusIcon } from "../../../icons";
@@ -64,7 +65,7 @@ export function BarberPage({ d, tz, today, back }: { d: StaffDetail; tz: string;
       title: A.staff.timeOffRow,
       value: firstOff ? `${A.block.kinds[firstOff.kind] ?? firstOff.kind}: ${dt.format(firstOff.from)} – ${dt.format(firstOff.to - 1)}${more(A, d.timeOff.length)}` : A.staff.none,
     },
-    { k: "special", title: A.staff.special, value: firstSp ? `${dt.format(firstSp.from)}, ${tm.format(firstSp.from)}–${tm.format(firstSp.to)}, +${eur(firstSp.extraCents)}${more(A, d.special.length)}` : A.staff.none },
+    { k: "special", title: A.staff.special, value: firstSp ? `${dt.format(firstSp.from)}, ${tm.format(firstSp.from)}–${tm.format(firstSp.to)}, ${extraText(firstSp)}${more(A, d.special.length)}` : A.staff.none },
   ];
   // the first three save by themselves; on a phone their sheet ends with «Готово»
   const done = () => setOpen(null);

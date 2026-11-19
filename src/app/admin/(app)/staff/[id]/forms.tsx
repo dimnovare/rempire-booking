@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { hhmm, momentAt } from "@/lib/admin/grid";
 import type { DayOverride, HoursDay, Offer, SpecialRow, TimeOffRow } from "@/lib/admin/staff";
+import { extraText, MAX_EXTRA_PCT } from "@/lib/slots";
 import { addDays } from "@/lib/tz";
 import { eur } from "../../../copy";
 import { useA } from "../../../lang";
@@ -488,12 +489,18 @@ export function TimeOffForm({ staffId, rows, tz, today }: { staffId: string; row
   );
 }
 
+/**
+ * Special time: the hours and their extra, which is an amount in euros or a
+ * percent of the visit's price («€ | %» next to the one number). Each way
+ * keeps its own number, so «20 €» never turns into «20 %» by a tap.
+ */
 export function SpecialForm({ staffId, rows, tz, today }: { staffId: string; rows: SpecialRow[]; tz: string; today: string }) {
   const A = useA();
   const [date, setDate] = useState(today);
   const [from, setFrom] = useState("20:00");
   const [to, setTo] = useState("22:00");
-  const [extra, setExtra] = useState("20");
+  const [unit, setUnit] = useState<"eur" | "pct">("eur");
+  const [extra, setExtra] = useState({ eur: "20", pct: "50" });
   const [note, setNote] = useState("");
   const s = useSaver();
   const f = dt(A.intl, tz);
@@ -506,7 +513,7 @@ export function SpecialForm({ staffId, rows, tz, today }: { staffId: string; row
           {rows.map((r) => (
             <li key={r.id}>
               <span>
-                {f.format(r.from)}–{t.format(r.to)} · +{eur(r.extraCents)}
+                {f.format(r.from)}–{t.format(r.to)} · {extraText(r)}
                 {r.note && <small> · {r.note}</small>}
               </span>
               <Remove disabled={s.busy} onClick={() => void s.run(() => removeSpecial(r.id))} />
@@ -530,16 +537,34 @@ export function SpecialForm({ staffId, rows, tz, today }: { staffId: string; row
           <input type="time" step={900} value={to} onChange={(e) => setTo(e.target.value)} />
         </label>
       </div>
-      <div className="adm-row">
-        <label className="adm-field">
-          <span>{A.staff.extra}</span>
-          <input type="number" inputMode="decimal" min={0} step="1" value={extra} onChange={(e) => setExtra(e.target.value)} />
-        </label>
-        <label className="adm-field">
-          <span>{A.block.note}</span>
-          <input value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} />
-        </label>
+      <div className="adm-field">
+        <span>{A.staff.extra}</span>
+        <div className="adm-row">
+          <input
+            type="number"
+            inputMode={unit === "pct" ? "numeric" : "decimal"}
+            min={unit === "pct" ? 1 : 0}
+            max={unit === "pct" ? MAX_EXTRA_PCT : undefined}
+            step="1"
+            aria-label={A.staff.extra}
+            value={extra[unit]}
+            onChange={(e) => setExtra({ ...extra, [unit]: e.target.value })}
+          />
+          <div className="adm-seg adm-seg-wide" role="group" aria-label={A.staff.extraUnit} style={{ flex: "0 0 112px" }}>
+            <button type="button" aria-pressed={unit === "eur"} onClick={() => setUnit("eur")}>
+              €
+            </button>
+            <button type="button" aria-pressed={unit === "pct"} onClick={() => setUnit("pct")}>
+              %
+            </button>
+          </div>
+        </div>
+        {unit === "pct" && <small className="adm-meta">{A.staff.extraPctHint}</small>}
       </div>
+      <label className="adm-field">
+        <span>{A.block.note}</span>
+        <input value={note} maxLength={200} onChange={(e) => setNote(e.target.value)} />
+      </label>
       <SaveBar>
         {s.view}
         <button
@@ -551,7 +576,9 @@ export function SpecialForm({ staffId, rows, tz, today }: { staffId: string; row
             const b = toMin(to);
             // «20:00–02:00» runs past midnight
             const end = b > a ? momentAt(date, b, tz) : momentAt(addDays(date, 1), b, tz);
-            void s.run(() => addSpecial({ staffId, from: momentAt(date, a, tz), to: end, extraCents: Math.round(Number(extra.replace(",", ".")) * 100), note }));
+            // euros become cents; a percent goes as typed (the server wants a whole one, 1–300)
+            const n = Number(extra[unit].replace(",", ".").trim());
+            void s.run(() => addSpecial({ staffId, from: momentAt(date, a, tz), to: end, ...(unit === "pct" ? { extraPct: n } : { extraCents: Math.round(n * 100) }), note }));
           }}
         >
           {A.add}

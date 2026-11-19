@@ -33,7 +33,10 @@ export type StartsAnswer = { ok: true; durationMin: number; starts: FreeStart[] 
 /**
  * The free start times on one day in his column, for these services (a new
  * visit) or for this visit's own services (a move; the visit itself is not
- * in the way). Nothing before now.
+ * in the way). Nothing before now. Each start has its special-time extra in
+ * money: a window priced in percent takes that percent of the visit's price
+ * (his prices for the services; for a move, the lines as the visit keeps
+ * them), the amount the booking or the move will then write.
  */
 export async function barberFreeStarts(
   q: Querier,
@@ -46,10 +49,12 @@ export async function barberFreeStarts(
   if (!isLocalDate(date)) return { ok: false, code: "invalid" };
   let durationMin = 0;
   let bufferMin = 0;
+  // the visit's price without a special-time extra
+  let baseCents = 0;
   let skip: string | null = null;
   if ("visitId" in what) {
-    const lines = await q<{ duration_min: number; buffer_after_min: number }>(
-      `select l.duration_min, sv.buffer_after_min
+    const lines = await q<{ duration_min: number; price_cents: number; buffer_after_min: number }>(
+      `select l.duration_min, l.price_cents, sv.buffer_after_min
          from appointments a join appointment_services l on l.appointment_id = a.id join services sv on sv.id = l.service_id
         where a.id = $1 and a.business_id = $2 and a.staff_id = $3 and a.status <> 'cancelled'`,
       [what.visitId, business.id, staffId],
@@ -57,6 +62,7 @@ export async function barberFreeStarts(
     if (!lines.length) return { ok: false, code: "not_found" };
     durationMin = lines.reduce((n, l) => n + l.duration_min, 0);
     bufferMin = Math.max(0, ...lines.map((l) => l.buffer_after_min));
+    baseCents = lines.reduce((n, l) => n + l.price_cents, 0);
     skip = what.visitId;
   } else {
     const ids = [...new Set(what.serviceIds.map(String))];
@@ -67,11 +73,12 @@ export async function barberFreeStarts(
       if (!o) return { ok: false, code: "not_offered" };
       durationMin += o.durationMin;
       bufferMin = Math.max(bufferMin, o.bufferMin);
+      baseCents += o.priceCents;
     }
   }
   const [day] = await loadBarberDays(q, business, staffId, date, 1);
   const free = freeGaps({ ...day, visits: day.visits.filter((v) => v.id !== skip) }, { now, stepMin: business.settings.slot_step_min });
-  return { ok: true, durationMin, starts: startsIn(free, { durationMin, bufferMin, stepMin: business.settings.slot_step_min }) };
+  return { ok: true, durationMin, starts: startsIn(free, { durationMin, bufferMin, baseCents, stepMin: business.settings.slot_step_min }) };
 }
 
 export type MyClient = { id: string; name: string; phone: string | null; visits: number; lastVisit: number | null };

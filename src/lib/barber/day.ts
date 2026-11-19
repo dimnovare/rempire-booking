@@ -38,7 +38,8 @@ export type BVisit = {
 };
 
 export type BBlock = { id: string; from: number; to: number; kind: string; status: string; note: string };
-export type BSpecial = { id: string; from: number; to: number; extraCents: number; note: string };
+/** A special-time window with its extra as written: an amount (extraCents) or a percent (extraPct), never both. */
+export type BSpecial = { id: string; from: number; to: number; extraCents: number; extraPct: number; note: string };
 
 export type BDay = {
   date: string;
@@ -119,8 +120,8 @@ export async function loadBarberDays(q: Querier, business: Business, staffId: st
         order by t.starts_at`,
       range,
     ),
-    q<{ id: string; starts_at: Date; ends_at: Date; extra_cents: number; note: string }>(
-      `select id, starts_at, ends_at, extra_cents, note from special_time
+    q<{ id: string; starts_at: Date; ends_at: Date; extra_cents: number; extra_pct: number; note: string }>(
+      `select id, starts_at, ends_at, extra_cents, extra_pct, note from special_time
         where staff_id = $1 and business_id = $2 and starts_at < $4 and ends_at > $3
         order by starts_at, created_at`,
       range,
@@ -152,7 +153,7 @@ export async function loadBarberDays(q: Querier, business: Business, staffId: st
     services: linesBy.get(v.id) ?? [],
   }));
   const blocks: BBlock[] = offRows.map((t) => ({ id: t.id, from: ms(t.starts_at), to: ms(t.ends_at), kind: t.kind, status: t.status, note: t.note }));
-  const special: BSpecial[] = specialRows.map((x) => ({ id: x.id, from: ms(x.starts_at), to: ms(x.ends_at), extraCents: x.extra_cents, note: x.note }));
+  const special: BSpecial[] = specialRows.map((x) => ({ id: x.id, from: ms(x.starts_at), to: ms(x.ends_at), extraCents: x.extra_cents, extraPct: x.extra_pct, note: x.note }));
 
   return dates.map((date) => {
     const d0 = startOfDay(date, tz);

@@ -263,6 +263,106 @@ describe("special time", () => {
     ];
     for (const x of bad) expect((await barberAddSpecial(demo.business, val, x, NOW)).ok).toBe(false);
   });
+
+  it("an amount or a percent: exactly one of the two, a whole percent from 1 to 300", async () => {
+    const hour = { date: DAY, start: "10:00", end: "11:00" };
+    const bad = [
+      { ...hour },
+      { ...hour, extraCents: 0 },
+      { ...hour, extraPct: 0 },
+      { ...hour, extraCents: 1000, extraPct: 50 },
+      { ...hour, extraPct: 301 },
+      { ...hour, extraPct: -5 },
+      { ...hour, extraPct: 12.5 },
+      { ...hour, extraPct: NaN },
+      { ...hour, extraCents: 100_001 },
+    ];
+    for (const x of bad) expect(await barberAddSpecial(demo.business, val, x, NOW), JSON.stringify(x)).toEqual({ ok: false, code: "invalid" });
+    expect(await query("select id from special_time")).toHaveLength(0);
+    expect(await query("select id from staff_requests")).toHaveLength(0);
+    expect((await barberAddSpecial(demo.business, val, { ...hour, extraPct: 300 }, NOW)).ok).toBe(true);
+    expect((await barberAddSpecial(demo.business, val, { ...hour, extraPct: 1, extraCents: 0 }, NOW)).ok).toBe(true);
+    expect((await barberAddSpecial(demo.business, val, { ...hour, extraCents: 100_000, extraPct: 0 }, NOW)).ok).toBe(true);
+  });
+
+  it("in percent: «+50 %» in his list, in Renat's push and in all three languages", async () => {
+    const r = await barberAddSpecial(demo.business, val, { date: DAY, start: "08:00", end: "10:00", extraPct: 50, weeks: 3 }, NOW);
+    expect(r).toMatchObject({ ok: true, status: "applied" });
+    const t = await myTime(query, demo.business, val.staffId, NOW);
+    expect(t.special.map((x) => [localParts(x.from, TZ).date, hm(x.from), hm(x.to), x.extraCents, x.extraPct, x.mine])).toEqual([
+      ["2026-12-01", "08:00", "10:00", 0, 50, true],
+      ["2026-12-08", "08:00", "10:00", 0, 50, true],
+      ["2026-12-15", "08:00", "10:00", 0, 50, true],
+    ]);
+    const p = (await pushes()).filter((x) => x.kind === "own_request");
+    expect(pushText("own_request", p[0].payload, "ru")!.body).toBe("Особое время +50 % · вт 1.12, 08:00–10:00 · 3 нед. подряд");
+    const [added] = await listRequests(query, demo.business.id, { staffId: val.staffId, now: NOW });
+    expect(added.what).toEqual({ kind: "special", action: "add", from: at(DAY, "08:00"), to: at(DAY, "10:00"), extraCents: 0, extraPct: 50, weeks: 3 });
+    expect(requestWords(added.what, TZ, "ru")).toBe("Особое время +50 % · вт 1.12, 08:00–10:00 · 3 нед. подряд");
+    expect(requestWords(added.what, TZ, "et")).toBe("Eriaeg +50 % · T 1.12, 08:00–10:00 · 3 nädalat järjest");
+    expect(requestWords(added.what, TZ, "en")).toBe("Special time +50 % · Tue 1.12, 08:00–10:00 · 3 weeks in a row");
+    // taking one away names the same window
+    expect(await barberRemoveSpecial(demo.business, val, t.special[0].id, NOW)).toEqual({ ok: true });
+    const removed = (await listRequests(query, demo.business.id, { staffId: val.staffId, now: NOW })).find((x) => x.what.kind === "special" && x.what.action === "remove")!;
+    expect(removed.what).toEqual({ kind: "special", action: "remove", from: at(DAY, "08:00"), to: at(DAY, "10:00"), extraCents: 0, extraPct: 50 });
+    expect(requestWords(removed.what, TZ, "ru")).toBe("Убрано: Особое время +50 % · вт 1.12, 08:00–10:00");
+    expect(requestWords(removed.what, TZ, "et")).toBe("Eemaldatud: Eriaeg +50 % · T 1.12, 08:00–10:00");
+    expect(requestWords(removed.what, TZ, "en")).toBe("Removed: Special time +50 % · Tue 1.12, 08:00–10:00");
+  });
+
+  it("an amount request is written as before the percent: no extraPct in it", async () => {
+    const r = await barberAddSpecial(demo.business, val, { date: DAY, start: "08:00", end: "10:00", extraCents: 1500 }, NOW);
+    if (!r.ok) throw new Error("no request");
+    const [row] = await query<{ payload: Record<string, unknown> }>("select payload from staff_requests where id = $1", [r.id]);
+    expect(row.payload).toEqual({ kind: "special", action: "add", from: at(DAY, "08:00"), to: at(DAY, "10:00"), extraCents: 1500 });
+    expect((await myTime(query, demo.business, val.staffId, NOW)).special.map((x) => [x.extraCents, x.extraPct])).toEqual([[1500, 0]]);
+  });
+
+  it("in percent with time «ask»: Renat's yes makes the windows at that percent", async () => {
+    const b = await switchTo("ask", "ask");
+    const r = await barberAddSpecial(b, val, { date: DAY, start: "20:00", end: "22:00", extraPct: 30, weeks: 2 }, NOW);
+    if (!r.ok) throw new Error("no request");
+    expect(r.status).toBe("requested");
+    expect((await myTime(query, b, val.staffId, NOW)).special).toEqual([]);
+    const ask = (await pushes()).filter((x) => x.kind === "own_request");
+    expect(pushText("own_request", ask[0].payload, "ru")).toMatchObject({ title: "Запрос: Valentin", body: "Особое время +30 % · вт 1.12, 20:00–22:00 · 2 нед. подряд" });
+    expect(await answerRequest(b, owner, r.id, "approved", "", NOW)).toEqual({ ok: true });
+    const t = await myTime(query, b, val.staffId, NOW);
+    expect(t.special.map((x) => [localParts(x.from, TZ).date, hm(x.from), hm(x.to), x.extraCents, x.extraPct])).toEqual([
+      ["2026-12-01", "20:00", "22:00", 0, 30],
+      ["2026-12-08", "20:00", "22:00", 0, 30],
+    ]);
+    const answer = (await pushes()).filter((x) => x.kind === "request_answer");
+    expect(pushText("request_answer", answer[0].payload, "et")!.body).toContain("Eriaeg +30 % · T 1.12, 20:00–22:00");
+  });
+
+  it("a request kept from before the percent (no extraPct in it) still reads and applies as an amount", async () => {
+    const b = await switchTo("ask", "ask");
+    const old = { kind: "special", action: "add", from: at(DAY, "08:00"), to: at(DAY, "10:00"), extraCents: 1500, weeks: 2 };
+    const [row] = await query<{ id: string }>(
+      "insert into staff_requests (business_id, staff_id, kind, payload, status, created_by) values ($1, $2, 'special', $3::jsonb, 'requested', $4) returning id",
+      [b.id, val.staffId, JSON.stringify(old), val.userId],
+    );
+    const [req] = await listRequests(query, b.id, { staffId: val.staffId, now: NOW });
+    expect(req.what).toEqual(old);
+    expect(requestWords(req.what, TZ, "ru")).toBe("Особое время +15 € · вт 1.12, 08:00–10:00 · 2 нед. подряд");
+    expect(requestWords(req.what, TZ, "et")).toBe("Eriaeg +15 € · T 1.12, 08:00–10:00 · 2 nädalat järjest");
+    expect(requestWords(req.what, TZ, "en")).toBe("Special time +15 € · Tue 1.12, 08:00–10:00 · 2 weeks in a row");
+    expect(await answerRequest(b, owner, row.id, "approved", "", NOW)).toEqual({ ok: true });
+    const made = await query<{ extra_cents: number; extra_pct: number }>("select extra_cents, extra_pct from special_time where staff_id = $1 order by starts_at", [val.staffId]);
+    expect(made).toEqual([
+      { extra_cents: 1500, extra_pct: 0 },
+      { extra_cents: 1500, extra_pct: 0 },
+    ]);
+    // and one from then at +0 € (002 allowed it): more bookable time at the usual price, as it was asked
+    const zero = { kind: "special", action: "add", from: at(DAY, "20:00"), to: at(DAY, "22:00"), extraCents: 0 };
+    const [z] = await query<{ id: string }>(
+      "insert into staff_requests (business_id, staff_id, kind, payload, status, created_by) values ($1, $2, 'special', $3::jsonb, 'requested', $4) returning id",
+      [b.id, val.staffId, JSON.stringify(zero), val.userId],
+    );
+    expect(await answerRequest(b, owner, z.id, "approved", "", NOW)).toEqual({ ok: true });
+    expect(await query("select id from special_time where staff_id = $1 and extra_cents = 0 and extra_pct = 0", [val.staffId])).toHaveLength(1);
+  });
 });
 
 describe("weekly hours", () => {

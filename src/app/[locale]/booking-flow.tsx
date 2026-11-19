@@ -8,6 +8,10 @@
  *
  *   /ru?b=<barber's slug>   opens with that barber picked, as the «book
  *                           now» buttons on rempire.ee do today.
+ *   /ru/visit/<token>/move  moves that visit (its own page renders this
+ *                           flow with `moving`): the day and time step
+ *                           alone, same barber and services, then back to
+ *                           the visit's page, as Altegio lets a client do.
  *
  * Free times come from /api/slots, special time included; «Book» posts to
  * /api/bookings with an Idempotency-Key. Screens: docs/client-flow.md and
@@ -35,7 +39,11 @@ type Props = {
   pushKey: string;
   /** ?b=<slug>: the barber the link asked for */
   initialBarber: string | null;
+  /** the visit being moved (/{locale}/visit/{token}/move); its barber and services stay */
+  moving: Moving | null;
 };
+
+export type Moving = { token: string; staffId: string; services: string[]; start: number; url: string };
 
 type Screen = "barber" | "services" | "time" | "details" | "done" | "bye";
 /** [start ms, the barber «anyone» gets, his special-time extra in cents] */
@@ -63,13 +71,15 @@ const dateOf = (d: string) => {
 const ymd = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}-${Math.random()}`);
 
-export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, reminderMin, demo, pushKey, initialBarber }: Props) {
+export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, reminderMin, demo, pushKey, initialBarber, moving }: Props) {
   const [lang, setLang] = useState<Locale>(locale);
   const c = COPY[lang];
   const asked = useMemo(() => catalog.staff.find((s) => s.slug === initialBarber)?.id ?? null, [catalog.staff, initialBarber]);
-  const [screen, setScreen] = useState<Screen>("barber");
-  const [barber, setBarber] = useState<string | null>(asked); // staff id, "any", or null
-  const [services, setServices] = useState<string[]>([]);
+  const [screen, setScreen] = useState<Screen>(moving ? "time" : "barber");
+  const [barber, setBarber] = useState<string | null>(moving ? moving.staffId : asked); // staff id, "any", or null
+  const [services, setServices] = useState<string[]>(moving ? moving.services : []);
+  const [moveBusy, setMoveBusy] = useState(false);
+  const [moveError, setMoveError] = useState("");
   const [avail, setAvail] = useState<Avail | null>(null);
   const [availError, setAvailError] = useState(false);
   const [day, setDay] = useState<string | null>(null);
@@ -110,7 +120,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
       }
       // the barber of last time, unless the link asked for one
       const l = JSON.parse(localStorage.getItem(LAST) || "null");
-      if (!asked && l && typeof l.barber === "string" && (l.barber === "any" || staffById.has(l.barber))) setBarber((b) => b ?? l.barber);
+      if (!asked && !moving && l && typeof l.barber === "string" && (l.barber === "any" || staffById.has(l.barber))) setBarber((b) => b ?? l.barber);
       // until the visit is over
       const v = JSON.parse(localStorage.getItem(VISIT) || "null");
       if (v && typeof v.url === "string" && /^\/(ru|et|en)\/visit\/[A-Za-z0-9_-]+$/.test(v.url) && typeof v.end === "number" && v.end > Date.now()) {
@@ -173,13 +183,15 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
     const ctl = new AbortController();
     setAvailError(false);
     const [staff, ids] = availKey.split("|");
-    fetch(`/api/slots?services=${ids}&staff=${staff}&days=${horizonDays}`, { signal: ctl.signal, cache: "no-store" })
+    // a visit being moved asks by its own link: it does not stand in its own way
+    fetch(moving ? `/api/visit/${moving.token}/slots?days=${horizonDays}` : `/api/slots?services=${ids}&staff=${staff}&days=${horizonDays}`, { signal: ctl.signal, cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((j: { offered: boolean; days: Day[] }) => setAvail({ key: availKey, offered: j.offered, days: j.days }))
       .catch((e) => {
         if ((e as Error).name !== "AbortError") setAvailError(true);
       });
     return () => ctl.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availKey, wantsTimes, avail?.key, horizonDays]);
 
   const ready = avail && avail.key === availKey ? avail : null;
@@ -320,6 +332,43 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
     } finally {
       setSubmitting(false);
     }
+  };
+
+  // the visit moves to the picked time; then its own page says so
+  const moveVisit = async () => {
+    if (!moving || !slot || moveBusy) return;
+    setMoveBusy(true);
+    setMoveError("");
+    try {
+      const res = await fetch(`/api/visit/${moving.token}/move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startsAt: new Date(slot.t).toISOString(), extraCents: slot.extra }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok) {
+        try {
+          const v = JSON.parse(localStorage.getItem(VISIT) || "null");
+          if (v && typeof v.url === "string" && j.startsAt && j.endsAt) localStorage.setItem(VISIT, JSON.stringify({ ...v, start: Date.parse(j.startsAt), end: Date.parse(j.endsAt) }));
+        } catch {
+          /* not remembered: the visit's page knows */
+        }
+        window.location.assign(`${moving.url.replace(/^\/(ru|et|en)\//, `/${lang}/`)}?moved=1`);
+        return;
+      }
+      if (res.status === 409 && j.error === "slot_taken") {
+        setSlot(null);
+        setAvail(null);
+        setMoveError(c.taken);
+      } else if (res.status === 409 || res.status === 404) {
+        setMoveError(c.moveGone);
+      } else {
+        setMoveError(c.errGeneric);
+      }
+    } catch {
+      setMoveError(c.errGeneric);
+    }
+    setMoveBusy(false);
   };
 
   // «Book again»: the same barber and services, another time
@@ -482,6 +531,8 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
         key={t}
         type="button"
         className="slot"
+        // the time the visit has now is no move
+        disabled={moving?.start === t}
         aria-pressed={slot?.t === t}
         aria-label={add > 0 ? `${fmtTime(t)}, ${c.special}, +${eur(add)}` : undefined}
         onClick={() => pickSlot(d, x)}
@@ -709,6 +760,17 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
 
     return (
       <>
+        {moving && (
+          <div className="moving">
+            <h1 className="t2">{c.movingTitle}</h1>
+            <p className="sub">{c.movingNow(dLong(localParts(moving.start, tz).date), fmtTime(moving.start))}</p>
+            {moveError && (
+              <p className="alert" role="alert">
+                {moveError}
+              </p>
+            )}
+          </div>
+        )}
         <div className="cal">
           <div className="cal-top">
             <button type="button" className="cal-month" aria-expanded={monthOpen} onClick={() => setMonthOpen((v) => !v)}>
@@ -1000,7 +1062,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
         )}
         {screen === "time" && (
           <>
-            {header(() => setScreen("services"))}
+            {header(moving ? () => window.location.assign(moving.url.replace(/^\/(ru|et|en)\//, `/${lang}/`)) : () => setScreen("services"))}
             {timeScreen()}
           </>
         )}
@@ -1020,7 +1082,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
       </main>
       {screen === "barber" && cta(c.cont, () => setScreen("services"), !barber)}
       {hasBasket && basket()}
-      {screen === "time" && timePicked && cta(c.cont, () => setScreen("details"))}
+      {screen === "time" && timePicked && (moving ? cta(moveBusy ? c.movingBusy : c.moveHere, moveVisit, moveBusy) : cta(c.cont, () => setScreen("details")))}
       {sheetView()}
     </>
   );

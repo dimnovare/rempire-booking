@@ -27,7 +27,11 @@ export type BookingInput = {
   locale: Locale;
   smsReminder: boolean;
   idempotencyKey: string;
-  /** the special-time extra the client was shown; the booking fails rather than charge another */
+  /**
+   * the special-time extra the client was shown, in cents (for a window
+   * priced in percent: that percent of the barber's price for these
+   * services, as /api/slots gave it); the booking fails rather than charge another
+   */
   extraCents?: number | null;
 };
 
@@ -60,6 +64,13 @@ export function hashToken(token: string): string {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/**
+ * No extra a client was shown is above this. An amount window stops at
+ * 1000 €, but a percent window (up to 300 %) of a long visit can come to
+ * more: five services at 10 000 € each, three times over. Only a bound on
+ * the number sent; the booking still wants exactly the server's own amount.
+ */
+const MAX_SEEN_EXTRA_CENTS = 15_000_000;
 
 type Clean = {
   serviceIds: string[];
@@ -95,7 +106,7 @@ export function validateBooking(input: BookingInput): { ok: true; value: Omit<Cl
   const key = String(input.idempotencyKey ?? "");
   if (key.length < 16 || key.length > 200) return { ok: false, field: "idempotencyKey" };
   const extra = input.extraCents ?? null;
-  if (extra !== null && !(Number.isInteger(extra) && extra >= 0 && extra <= 100_000)) return { ok: false, field: "extraCents" };
+  if (extra !== null && !(Number.isInteger(extra) && extra >= 0 && extra <= MAX_SEEN_EXTRA_CENTS)) return { ok: false, field: "extraCents" };
   return {
     ok: true,
     value: {
@@ -179,7 +190,10 @@ async function bookClean(q: Querier, business: Business, c: Clean, now: number):
   if (!slot) return (await replay()) ?? { ok: false, code: "slot_taken" };
 
   // The price the client saw stays the price: «anyone» only tries barbers
-  // at the same special-time extra.
+  // at the same special-time extra. slot.extras are money already: a
+  // percent window is worked out per barber, from his price for these
+  // services (src/lib/slots.ts), so the same «+50 %» is another amount for
+  // a barber with another price, and he is not a candidate.
   const extra = c.extraCents ?? slot.extraCents;
   const candidates = slot.staffIds.filter((_, i) => slot.extras[i] === extra);
 
@@ -208,6 +222,8 @@ async function insertVisit(tx: Querier, business: Business, c: Clean, staffId: s
   const look = await loadAvailability(tx, { business, serviceIds: c.serviceIds, staffId, from: date, days: 1, now });
   const quote = look.quotes[0];
   const slot = look.days[0]?.slots.find((s) => s.start === c.start);
+  // slot.extraCents is this barber's extra for quote.priceCents, read again
+  // inside the lock: a window or a price changed in between is «slot gone»
   if (!quote || !slot || slot.extraCents !== extra) throw new SlotGone();
 
   const services = await tx<{ id: string; name: unknown; duration_min: number; price_cents: number }>(

@@ -182,6 +182,92 @@ describe("admin: move, edit, cancel, status", () => {
   });
 });
 
+describe("admin: special time in percent", () => {
+  // Renat, 19.11.2026: a window is an amount in euros or a percent of the visit's price, «+50 %»
+  const pct = (staff: string, from: string, to: string, extraPct: number) => addSpecialTime(demo.business, { staffId: demo.staff[staff], from: at(TUE, from), to: at(TUE, to), extraPct }, ACTOR);
+  const money = async (id: string) => (await query<{ total_cents: number; extra_cents: number }>("select total_cents, extra_cents from appointments where id = $1", [id]))[0];
+
+  it("a window is an amount or a percent: exactly one, a whole percent from 1 to 300", async () => {
+    const add = (extra: { extraCents?: number; extraPct?: number }) => addSpecialTime(demo.business, { staffId: demo.staff.valentin, from: at(TUE, "20:00"), to: at(TUE, "22:00"), ...extra }, ACTOR);
+    for (const bad of [{ extraCents: 2000, extraPct: 50 }, {}, { extraCents: 0 }, { extraPct: 0 }, { extraCents: 0, extraPct: 0 }, { extraPct: 301 }, { extraPct: -10 }, { extraPct: 12.5 }, { extraPct: NaN }, { extraCents: 100_001 }, { extraCents: -1 }]) {
+      expect(await add(bad), JSON.stringify(bad)).toEqual({ ok: false, field: "extra" });
+    }
+    expect(await query("select id from special_time")).toHaveLength(0);
+    expect((await add({ extraPct: 300 })).ok).toBe(true);
+    expect((await add({ extraPct: 1, extraCents: 0 })).ok).toBe(true);
+    expect((await add({ extraCents: 2000, extraPct: 0 })).ok).toBe(true);
+    const rows = await query<{ extra_cents: number; extra_pct: number }>("select extra_cents, extra_pct from special_time order by extra_pct desc");
+    expect(rows.map((r) => [r.extra_cents, r.extra_pct])).toEqual([[0, 300], [0, 1], [2000, 0]]);
+  });
+
+  it("the barber page and the calendar get the window as it was set", async () => {
+    await pct("valentin", "20:00", "22:00", 50);
+    await addSpecialTime(demo.business, { staffId: demo.staff.valentin, from: at(TUE, "08:00"), to: at(TUE, "10:00"), extraCents: 1500 }, ACTOR);
+    const d = await staffDetail(query, demo.business, demo.staff.valentin, TUE);
+    expect(d?.special.map((s) => [s.extraCents, s.extraPct])).toEqual([[1500, 0], [0, 50]]);
+    const cal = await loadCalendar(query, demo.business, TUE, 1);
+    expect(cal.special.map((s) => [s.extraCents, s.extraPct])).toEqual([[1500, 0], [0, 50]]);
+  });
+
+  it("a new visit in a percent window: that percent of its own price, one service or two", async () => {
+    await pct("valentin", "20:00", "22:00", 50);
+    const one = await adminCreateVisit(demo.business, visit({ staff: "valentin", time: "20:00" }), ACTOR);
+    expect(one).toMatchObject({ ok: true, extraCents: 2000, totalCents: 6000 });
+    const two = await adminCreateVisit(demo.business, visit({ staff: "valentin", time: "20:45", services: ["clip", "beard"], phone: "+372 5555 0211" }), ACTOR);
+    expect(two).toMatchObject({ ok: true, extraCents: 3400, totalCents: 10200 });
+    if (!one.ok || !two.ok) return;
+    expect(await money(one.id)).toEqual({ total_cents: 6000, extra_cents: 2000 });
+    expect(await money(two.id)).toEqual({ total_cents: 10200, extra_cents: 3400 });
+    // another barber's percent is not his: Jevgeni at the same hour is outside his own hours
+    expect(await adminCreateVisit(demo.business, visit({ staff: "jevgeni", time: "20:00", phone: "+372 5555 0212" }), ACTOR)).toEqual({ ok: false, code: "outside_hours" });
+    expect(await adminCreateVisit(demo.business, visit({ staff: "jevgeni", time: "20:00", phone: "+372 5555 0212", force: true }), ACTOR)).toMatchObject({ ok: true, extraCents: 0, totalCents: 3800 });
+  });
+
+  it("moving in and out of a percent window prices the visit again", async () => {
+    await pct("renat", "20:00", "22:00", 50);
+    await addSpecialTime(demo.business, { staffId: demo.staff.renat, from: at(TUE, "08:00"), to: at(TUE, "10:00"), extraCents: 1500 }, ACTOR);
+    const r = await adminCreateVisit(demo.business, visit({ time: "12:00" }), ACTOR);
+    if (!r.ok) throw new Error("not booked");
+    expect(r).toMatchObject({ extraCents: 0, totalCents: 4000 });
+    // in: +50 % of 40 €
+    expect(await adminUpdateVisit(demo.business, r.id, { start: at(TUE, "20:00") }, ACTOR)).toMatchObject({ ok: true, extraCents: 2000, totalCents: 6000 });
+    expect(await money(r.id)).toEqual({ total_cents: 6000, extra_cents: 2000 });
+    // within the window: the same
+    expect(await adminUpdateVisit(demo.business, r.id, { start: at(TUE, "21:00") }, ACTOR)).toMatchObject({ ok: true, extraCents: 2000, totalCents: 6000 });
+    // on to an amount window: its euros
+    expect(await adminUpdateVisit(demo.business, r.id, { start: at(TUE, "08:00") }, ACTOR)).toMatchObject({ ok: true, extraCents: 1500, totalCents: 5500 });
+    // out: the usual price again
+    expect(await adminUpdateVisit(demo.business, r.id, { start: at(TUE, "15:00") }, ACTOR)).toMatchObject({ ok: true, extraCents: 0, totalCents: 4000 });
+    expect(await money(r.id)).toEqual({ total_cents: 4000, extra_cents: 0 });
+  });
+
+  it("other services or another barber in a percent window: the percent of the new price", async () => {
+    await pct("renat", "20:00", "22:00", 50);
+    await pct("milena", "20:00", "22:00", 10);
+    const r = await adminCreateVisit(demo.business, visit({ time: "20:00" }), ACTOR);
+    if (!r.ok) throw new Error("not booked");
+    // a note alone changes nothing
+    expect(await adminUpdateVisit(demo.business, r.id, { staffNote: "regular" }, ACTOR)).toMatchObject({ ok: true, extraCents: 2000, totalCents: 6000 });
+    // + beard: 68 € and half of it
+    expect(await adminUpdateVisit(demo.business, r.id, { serviceIds: [demo.services.clip, demo.services.beard] }, ACTOR)).toMatchObject({ ok: true, extraCents: 3400, totalCents: 10200 });
+    // back to the cut, then to Milena: her 35 € and her +10 %
+    expect(await adminUpdateVisit(demo.business, r.id, { serviceIds: [demo.services.clip] }, ACTOR)).toMatchObject({ ok: true, extraCents: 2000, totalCents: 6000 });
+    expect(await adminUpdateVisit(demo.business, r.id, { staffId: demo.staff.milena }, ACTOR)).toMatchObject({ ok: true, extraCents: 350, totalCents: 3850 });
+    expect(await money(r.id)).toEqual({ total_cents: 3850, extra_cents: 350 });
+  });
+
+  it("a move keeps the visit's prices as booked, and the percent is of those", async () => {
+    await pct("renat", "20:00", "22:00", 50);
+    const r = await adminCreateVisit(demo.business, visit({ time: "12:00" }), ACTOR);
+    if (!r.ok) throw new Error("not booked");
+    // his cut costs more from now on; this visit was booked at 40 €
+    await query("update staff_services set price_cents = 5000 where staff_id = $1 and service_id = $2", [demo.staff.renat, demo.services.clip]);
+    expect(await adminUpdateVisit(demo.business, r.id, { start: at(TUE, "20:00") }, ACTOR)).toMatchObject({ ok: true, extraCents: 2000, totalCents: 6000 });
+    // a new visit there is at the new price
+    expect(await adminCreateVisit(demo.business, visit({ time: "20:45", phone: "+372 5555 0213" }), ACTOR)).toMatchObject({ ok: true, extraCents: 2500, totalCents: 7500 });
+  });
+});
+
 describe("admin: calendar data", () => {
   it("has every barber's day: hours, visits with their lines, blocks and special time", async () => {
     await adminCreateVisit(demo.business, visit({ time: "12:00", services: ["clip", "beard"] }), ACTOR);

@@ -54,7 +54,8 @@ export type CalVisit = {
 };
 
 export type CalBlock = { id: string; staffId: string; from: number; to: number; kind: string; note: string; status: string };
-export type CalSpecial = { id: string; staffId: string; from: number; to: number; extraCents: number; note: string };
+/** A special-time band with its extra as written: an amount (extraCents) or a percent (extraPct), never both. */
+export type CalSpecial = { id: string; staffId: string; from: number; to: number; extraCents: number; extraPct: number; note: string };
 
 export type CalendarData = {
   tz: string;
@@ -148,8 +149,8 @@ export async function loadCalendar(q: Querier, business: Business, from: string,
         order by t.starts_at`,
       range,
     ),
-    q<{ id: string; staff_id: string; starts_at: Date; ends_at: Date; extra_cents: number; note: string }>(
-      `select id, staff_id, starts_at, ends_at, extra_cents, note from special_time
+    q<{ id: string; staff_id: string; starts_at: Date; ends_at: Date; extra_cents: number; extra_pct: number; note: string }>(
+      `select id, staff_id, starts_at, ends_at, extra_cents, extra_pct, note from special_time
         where business_id = $1 and starts_at < $3 and ends_at > $2 order by starts_at, created_at`,
       range,
     ),
@@ -214,7 +215,7 @@ export async function loadCalendar(q: Querier, business: Business, from: string,
       services: linesBy.get(v.id) ?? [],
     })),
     blocks: offRows.map((t) => ({ id: t.id, staffId: t.staff_id, from: ms(t.starts_at), to: ms(t.ends_at), kind: t.kind, note: t.note, status: t.status })),
-    special: specialRows.map((x) => ({ id: x.id, staffId: x.staff_id, from: ms(x.starts_at), to: ms(x.ends_at), extraCents: x.extra_cents, note: x.note })),
+    special: specialRows.map((x) => ({ id: x.id, staffId: x.staff_id, from: ms(x.starts_at), to: ms(x.ends_at), extraCents: x.extra_cents, extraPct: x.extra_pct, note: x.note })),
   };
 }
 

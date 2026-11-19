@@ -154,6 +154,46 @@ test.describe("the client app", () => {
   });
 });
 
+test.describe("moving a visit", () => {
+  test("from its own link: another time, the same barber; then its page says so", async ({ page }, info) => {
+    const iphone = info.project.name === "iphone";
+    await bookMilena(page, `+372 5555 04${iphone ? "06" : "05"}`, 5);
+    await page.goto("/ru");
+    await hydrated(page);
+    await page.locator(".next").click();
+    await page.waitForURL((u) => /^\/ru\/visit\/[^/]+$/.test(u.pathname));
+    await hydrated(page);
+    const when = page.locator(".sum-row").nth(1);
+    const before = await when.innerText();
+
+    // «Перенести»: the day and time step alone, for this visit
+    await page.getByRole("link", { name: c.moveBtn, exact: true }).click();
+    await page.waitForURL((u) => /^\/ru\/visit\/[^/]+\/move$/.test(u.pathname));
+    await hydrated(page);
+    await expect(page.getByRole("heading", { name: c.movingTitle })).toBeVisible();
+    await expect(page.locator(".slots .slot").first()).toBeVisible();
+    // nothing to press until a time is picked
+    await expect(page.getByRole("button", { name: c.moveHere })).toHaveCount(0);
+    await page.locator(".slots .slot:not([disabled])").first().click();
+    await expectNoSideScroll(page);
+    await shot(page, "move");
+    await page.getByRole("button", { name: c.moveHere }).click();
+
+    // back on the visit's page, at the new time
+    await page.waitForURL((u) => /^\/ru\/visit\/[^/]+$/.test(u.pathname) && u.searchParams.get("moved") === "1");
+    await hydrated(page);
+    await expect(page.getByRole("heading", { level: 1, name: c.movedTitle })).toBeVisible();
+    expect(await when.innerText()).not.toBe(before);
+    await expectNoSideScroll(page);
+    await shot(page, "moved");
+
+    // and it can still be cancelled
+    await page.getByRole("button", { name: c.cancel }).click();
+    await page.getByRole("button", { name: c.cancelYes }).click();
+    await expect(page.getByRole("heading", { level: 1, name: c.cancelled })).toBeVisible();
+  });
+});
+
 test.describe("the booking path", () => {
   test("a link with ?b= opens with that barber picked; the language and the salon open as sheets", async ({ page }) => {
     await page.goto("/ru?b=milena");

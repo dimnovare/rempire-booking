@@ -5,6 +5,7 @@
  * language, and the pages in theirs.
  */
 import type { Locale } from "../i18n";
+import { extraText } from "../slots";
 import { isoWeekday, localParts } from "../tz";
 
 type Text3 = { ru?: string; et?: string; en?: string };
@@ -19,10 +20,15 @@ export const MAX_WEEKS = 12;
 /** Spans a day in his weekly hours (a break is the gap between two). */
 export const MAX_SPANS = 3;
 
-/** What a barber asked for or did; moments are epoch milliseconds. */
+/**
+ * What a barber asked for or did; moments are epoch milliseconds. Special
+ * time has its extra as an amount (extraCents) or a percent of the visit's
+ * price (extraPct), never both; a request kept from before the percent
+ * (19.11.2026) has no extraPct, which reads as an amount.
+ */
 export type RequestWhat =
   | { kind: "time_off"; action: "add" | "remove"; offKind: OffKind; from: number; to: number }
-  | { kind: "special"; action: "add" | "remove"; from: number; to: number; extraCents: number; weeks?: number }
+  | { kind: "special"; action: "add" | "remove"; from: number; to: number; extraCents: number; extraPct?: number; weeks?: number }
   | { kind: "hours"; days: WeekHours }
   | { kind: "price"; serviceId: string; service: Text3; fromCents: number; toCents: number; fromMin: number; toMin: number };
 
@@ -118,7 +124,8 @@ export function requestWords(what: RequestWhat, tz: string, l: Locale): string {
     }
     case "special": {
       const weeks = what.weeks && what.weeks > 1 ? ` · ${w.weeks(what.weeks)}` : "";
-      const line = `${w.special} +${euro(what.extraCents)} · ${span(what.from, what.to, tz, l)}${weeks}`;
+      // «+15 €» or «+50 %»: the same in every language
+      const line = `${w.special} ${extraText(what)} · ${span(what.from, what.to, tz, l)}${weeks}`;
       return what.action === "remove" ? `${w.removed}: ${line}` : line;
     }
     case "hours":

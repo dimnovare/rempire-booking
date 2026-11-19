@@ -58,14 +58,19 @@ export async function removeOff(id: string): Promise<{ ok: true } | { ok: false;
   return after(await barberRemoveTimeOff(business, who, s(id)));
 }
 
-export async function addSpecial(input: { date: string; start: string; end: string; extraCents: number; weeks: number; note?: string }): Promise<ChangeResult> {
+/** Special time at an amount (extraCents) or at a percent of the visit's price (extraPct): the sheet sends the one it was set to. */
+export async function addSpecial(input: { date: string; start: string; end: string; extraCents?: number; extraPct?: number; weeks: number; note?: string }): Promise<ChangeResult> {
   const { business, who } = await ctx();
+  // the one not sent is 0; the rule «exactly one above zero» is barberAddSpecial's,
+  // and so is «a whole percent» (a percent is never rounded here)
+  const pct = input?.extraPct;
   return after(
     await barberAddSpecial(business, who, {
       date: s(input?.date),
       start: s(input?.start),
       end: s(input?.end),
-      extraCents: int(input?.extraCents),
+      extraCents: input?.extraCents == null ? 0 : int(input.extraCents),
+      extraPct: pct == null ? 0 : typeof pct === "number" ? pct : NaN,
       weeks: int(input?.weeks),
       note: s(input?.note, 300),
     }),

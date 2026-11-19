@@ -4,9 +4,11 @@
  * emergency cancel that never leaves his column. Fake people only.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { addSpecialTime } from "@/lib/admin/staff";
 import { adminCreateVisit, type AdminVisitInput } from "@/lib/admin/visits";
 import { barberBook, barberCancel, barberFreeStarts, barberMove, barberOffers, isMyClient, searchMyClients, type NewVisitInput } from "@/lib/barber/book";
-import { startsIn } from "@/lib/barber/gaps";
+import { loadBarberDays } from "@/lib/barber/day";
+import { freeGaps, startsIn } from "@/lib/barber/gaps";
 import { closeDb, query } from "@/lib/db";
 import { localParts, zonedToUtc } from "@/lib/tz";
 import { freshDemo, type Demo } from "./helpers";
@@ -55,11 +57,63 @@ describe("free start times", () => {
       { from: at(DAY, "10:00"), to: at(DAY, "11:00"), extraCents: 0 },
       { from: at(DAY, "11:20"), to: at(DAY, "12:00"), extraCents: 500 },
     ];
-    const s = startsIn(gaps, { durationMin: 30, bufferMin: 0, stepMin: 15 });
+    const s = startsIn(gaps, { durationMin: 30, bufferMin: 0, stepMin: 15, baseCents: 4000 });
     expect(s.map((x) => hm(x.start))).toEqual(["10:00", "10:15", "10:30", "11:20", "11:30"]);
     expect(s.map((x) => x.extraCents)).toEqual([0, 0, 0, 500, 500]);
-    expect(startsIn(gaps, { durationMin: 30, bufferMin: 10, stepMin: 15 }).map((x) => hm(x.start))).toEqual(["10:00", "10:15", "11:20"]);
-    expect(startsIn(gaps, { durationMin: 90, bufferMin: 0, stepMin: 15 })).toEqual([]);
+    expect(startsIn(gaps, { durationMin: 30, bufferMin: 10, stepMin: 15, baseCents: 4000 }).map((x) => hm(x.start))).toEqual(["10:00", "10:15", "11:20"]);
+    expect(startsIn(gaps, { durationMin: 90, bufferMin: 0, stepMin: 15, baseCents: 4000 })).toEqual([]);
+  });
+
+  it("a gap priced in percent gives each start that percent of the visit's price, in money", () => {
+    const gaps = [
+      { from: at(DAY, "10:00"), to: at(DAY, "10:30"), extraCents: 0, extraPct: 0 },
+      { from: at(DAY, "11:00"), to: at(DAY, "11:30"), extraCents: 500, extraPct: 0 },
+      { from: at(DAY, "12:00"), to: at(DAY, "12:30"), extraCents: 0, extraPct: 50 },
+    ];
+    const extras = (baseCents: number) => startsIn(gaps, { durationMin: 30, bufferMin: 0, stepMin: 15, baseCents }).map((x) => x.extraCents);
+    expect(extras(4000)).toEqual([0, 500, 2000]);
+    expect(extras(6800)).toEqual([0, 500, 3400]);
+    expect(extras(3333)).toEqual([0, 500, 1667]);
+  });
+
+  it("his free times in a percent window: the amount for these services, the one the booking then writes", async () => {
+    await addSpecialTime(demo.business, { staffId: demo.staff.renat, from: at(DAY, "20:00"), to: at(DAY, "22:00"), extraPct: 50 }, ACTOR);
+    // the day itself keeps the window as he set it: free time there is «+50 %», no money yet
+    const [day] = await loadBarberDays(query, demo.business, demo.staff.renat, DAY, 1);
+    expect(day.special.map((s) => [hm(s.from), hm(s.to), s.extraCents, s.extraPct])).toEqual([["20:00", "22:00", 0, 50]]);
+    expect(freeGaps(day, { now: NOW, stepMin: 15 }).map((g) => [hm(g.from), hm(g.to), g.extraCents, g.extraPct])).toEqual([
+      ["10:00", "20:00", 0, 0],
+      ["20:00", "22:00", 0, 50],
+    ]);
+    const extraAt = async (serviceIds: string[], time: string) => {
+      const r = await barberFreeStarts(query, demo.business, demo.staff.renat, DAY, { serviceIds }, NOW);
+      if (!r.ok) throw new Error(r.code);
+      return r.starts.find((s) => hm(s.start) === time)?.extraCents;
+    };
+    expect(await extraAt([demo.services.clip], "19:15")).toBe(0);
+    expect(await extraAt([demo.services.clip], "19:30")).toBeUndefined(); // would run into the window
+    expect(await extraAt([demo.services.clip], "20:00")).toBe(2000);
+    expect(await extraAt([demo.services.beard], "20:00")).toBe(1400);
+    expect(await extraAt([demo.services.clip, demo.services.beard], "20:00")).toBe(3400);
+    const r = await barberBook(demo.business, demo.staff.renat, ACTOR, mine({ start: at(DAY, "20:00"), serviceIds: [demo.services.clip, demo.services.beard] }));
+    expect(r).toMatchObject({ ok: true, extraCents: 3400, totalCents: 10200 });
+  });
+
+  it("a move into a percent window shows and charges the percent of the visit as it was booked", async () => {
+    await addSpecialTime(demo.business, { staffId: demo.staff.renat, from: at(DAY, "20:00"), to: at(DAY, "22:00"), extraPct: 50 }, ACTOR);
+    const v = await adminBook("renat", "12:00");
+    // his price goes up afterwards; the visit keeps its 40 €
+    await query("update staff_services set price_cents = 5000 where staff_id = $1 and service_id = $2", [demo.staff.renat, demo.services.clip]);
+    const shown = async (what: { visitId: string } | { serviceIds: string[] }) => {
+      const r = await barberFreeStarts(query, demo.business, demo.staff.renat, DAY, what, NOW);
+      if (!r.ok) throw new Error(r.code);
+      return r.starts.find((s) => hm(s.start) === "20:00")?.extraCents;
+    };
+    expect(await shown({ visitId: v.id })).toBe(2000);
+    expect(await shown({ serviceIds: [demo.services.clip] })).toBe(2500);
+    expect(await barberMove(demo.business, demo.staff.renat, ACTOR, v.id, at(DAY, "20:00"))).toMatchObject({ ok: true, extraCents: 2000, totalCents: 6000 });
+    // and out again
+    expect(await barberMove(demo.business, demo.staff.renat, ACTOR, v.id, at(DAY, "15:00"))).toMatchObject({ ok: true, extraCents: 0, totalCents: 4000 });
   });
 
   it("his services at his own prices; one he does not do is not there", async () => {

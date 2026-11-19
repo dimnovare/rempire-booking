@@ -14,6 +14,9 @@
  * Special time (Renat, 17.11.2026) is the barber's own, higher-priced time.
  * Inside his hours it replaces the normal price; outside them it adds
  * bookable time. Where two special windows overlap, the earlier one wins.
+ * A window's extra is an amount in euros or a percent of the visit's price
+ * (Renat, 19.11.2026: «+50 %»); extraFor() turns it into money for one
+ * visit, from that barber's price for the visit's services.
  * «Anyone» is the union over barbers; a start goes to the cheapest barber,
  * then the one with fewer visits that day, then the one listed first.
  */
@@ -22,8 +25,52 @@ import { localParts, startOfDay, timeToMinutes, zonedToUtc, isoWeekday } from ".
 /** [from, to) in epoch milliseconds. */
 export type Interval = [number, number];
 
-/** A special-time window: [from, to) plus the extra on top of the usual price. */
-export type Special = { from: number; to: number; extraCents: number };
+/**
+ * What a special-time window adds to the usual price, as its owner wrote it:
+ * an amount (extraCents) or a whole percent of the visit's price (extraPct).
+ * One of the two, never both (014_special_time_pct.sql). No extraPct is 0:
+ * rows and requests from before the percent have none.
+ */
+export type Extra = { extraCents: number; extraPct?: number };
+
+/** A special-time window: [from, to) plus its extra on top of the usual price. */
+export type Special = { from: number; to: number } & Extra;
+
+/** The most a window adds: 1000 € as an amount, 300 as a percent. */
+export const MAX_EXTRA_CENTS = 100_000;
+export const MAX_EXTRA_PCT = 300;
+
+/**
+ * A window's extra for one visit, in cents. `baseCents` is the visit's price
+ * without it: the sum of that barber's prices for the visit's services.
+ */
+export function extraFor(w: Extra, baseCents: number): number {
+  const pct = w.extraPct ?? 0;
+  return pct > 0 ? Math.round((baseCents * pct) / 100) : w.extraCents;
+}
+
+/**
+ * The extra of a new window, checked: whole numbers in range, and exactly
+ * one of the two above zero. null for anything else.
+ */
+export function cleanExtra(cents: unknown, pct: unknown): { extraCents: number; extraPct: number } | null {
+  const c = cents ?? 0;
+  const p = pct ?? 0;
+  if (typeof c !== "number" || !Number.isInteger(c) || c < 0 || c > MAX_EXTRA_CENTS) return null;
+  if (typeof p !== "number" || !Number.isInteger(p) || p < 0 || p > MAX_EXTRA_PCT) return null;
+  if ((c > 0) === (p > 0)) return null;
+  return { extraCents: c, extraPct: p };
+}
+
+/** Does the window add anything? (002 allowed a window at +0 €: more bookable time at the usual price.) */
+export const hasExtra = (w: Extra): boolean => w.extraCents > 0 || (w.extraPct ?? 0) > 0;
+
+/** A window's extra in words, where there is no visit yet: «+50 %» or «+20 €». The same in every language. */
+export function extraText(w: Extra): string {
+  if ((w.extraPct ?? 0) > 0) return `+${w.extraPct} %`;
+  const e = w.extraCents / 100;
+  return `+${Number.isInteger(e) ? e : e.toFixed(2)} €`;
+}
 
 export type StaffDay = {
   staffId: string;
@@ -32,6 +79,7 @@ export type StaffDay = {
   busy: Interval[];
   special?: Special[];
   durationMin: number; // this barber's time for the chosen services
+  priceCents: number; // and his price for them: what a percent window is a percent of
   bufferMin: number;
   bookings: number; // visits already that day, for «anyone»
   sort: number;
@@ -86,29 +134,31 @@ export function subtractIntervals(list: Interval[], cut: Interval[]): Interval[]
   return out;
 }
 
-export type PricedWindow = { from: number; to: number; extraCents: number };
+/** A piece of the day with its extra as written (an amount or a percent); extraFor() makes it money for a visit. */
+export type PricedWindow = { from: number; to: number; extraCents: number; extraPct: number };
 
 /**
  * The day as windows with a price: working time outside special time at
  * +0, then each special window at its own extra. Touching pieces with the
- * same extra join, so a visit can run from one into the next.
+ * same extra join, so a visit can run from one into the next. An amount and
+ * a percent are never the same extra, whatever they come to for one visit.
  */
 export function pricedWindows(windows: Interval[], special: Special[] = []): PricedWindow[] {
   const pieces: PricedWindow[] = [];
   const taken: Interval[] = [];
   for (const sp of [...special].filter((s) => s.to > s.from).sort((x, y) => x.from - y.from || x.to - y.to)) {
     for (const [from, to] of subtractIntervals([[sp.from, sp.to]], mergeIntervals(taken.map((t) => [t[0], t[1]] as Interval)))) {
-      pieces.push({ from, to, extraCents: sp.extraCents });
+      pieces.push({ from, to, extraCents: sp.extraCents, extraPct: sp.extraPct ?? 0 });
     }
     taken.push([sp.from, sp.to]);
   }
   const normal = subtractIntervals(windows, mergeIntervals(taken));
-  for (const [from, to] of normal) pieces.push({ from, to, extraCents: 0 });
+  for (const [from, to] of normal) pieces.push({ from, to, extraCents: 0, extraPct: 0 });
   pieces.sort((x, y) => x.from - y.from);
   const out: PricedWindow[] = [];
   for (const p of pieces) {
     const last = out[out.length - 1];
-    if (last && last.to === p.from && last.extraCents === p.extraCents) last.to = p.to;
+    if (last && last.to === p.from && last.extraCents === p.extraCents && last.extraPct === p.extraPct) last.to = p.to;
     else out.push({ ...p });
   }
   return out;
@@ -116,6 +166,7 @@ export function pricedWindows(windows: Interval[], special: Special[] = []): Pri
 
 const overlaps = (a: Interval, b: Interval) => a[0] < b[1] && b[0] < a[1];
 
+/** A free start and its special-time extra in money, for this barber's price for the chosen services. */
 export type PricedStart = { start: number; extraCents: number };
 
 /** Every free start of one barber on one day, ascending, with its special-time extra. */
@@ -130,6 +181,7 @@ export function freeStartsPriced(day: StaffDay, opts: { tz: string; stepMin: num
   const busy = mergeIntervals(day.busy.map((b) => [b[0], b[1]] as Interval));
   const out: PricedStart[] = [];
   for (const w of windows) {
+    const extraCents = extraFor(w, day.priceCents);
     let t = midnight + Math.ceil((Math.max(w.from, notBefore) - midnight) / step) * step;
     for (; t + dur <= w.to; t += step) {
       const span: Interval = [t, t + chair];
@@ -139,7 +191,7 @@ export function freeStartsPriced(day: StaffDay, opts: { tz: string; stepMin: num
         t = midnight + Math.ceil((hit[1] - midnight) / step) * step - step;
         continue;
       }
-      out.push({ start: t, extraCents: w.extraCents });
+      out.push({ start: t, extraCents });
     }
   }
   return out;
@@ -152,7 +204,9 @@ export function freeStarts(day: StaffDay, opts: { tz: string; stepMin: number; n
 
 /**
  * One free start. staffIds best first («anyone» takes [0]); extras[i] is
- * staffIds[i]'s special-time extra; extraCents is the first one's.
+ * staffIds[i]'s special-time extra in cents, worked out for his own price
+ * (a percent window gives each barber another amount); extraCents is the
+ * first one's.
  */
 export type Slot = { start: number; staffIds: string[]; extras: number[]; extraCents: number };
 

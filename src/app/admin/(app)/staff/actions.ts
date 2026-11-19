@@ -79,9 +79,16 @@ export async function removeOff(id: string): Promise<boolean> {
   return ok;
 }
 
-export async function addSpecial(s: { staffId: string; from: number; to: number; extraCents: number; note: string }): Promise<Result> {
+/** Special time at an amount (extraCents) or at a percent of the visit's price (extraPct): the form sends the one it was set to. */
+export async function addSpecial(s: { staffId: string; from: number; to: number; extraCents?: number; extraPct?: number; note: string }): Promise<Result> {
   const { user, business } = await requireAdmin();
-  const r = await addSpecialTime(business, { staffId: str(s?.staffId), from: Number(s?.from), to: Number(s?.to), extraCents: Number(s?.extraCents), note: str(s?.note) }, user.id);
+  // the one not sent is 0; the rule «exactly one above zero» is addSpecialTime's
+  const amount = (v: unknown) => (v == null ? 0 : Number(v));
+  const r = await addSpecialTime(
+    business,
+    { staffId: str(s?.staffId), from: Number(s?.from), to: Number(s?.to), extraCents: amount(s?.extraCents), extraPct: amount(s?.extraPct), note: str(s?.note) },
+    user.id,
+  );
   if (!r.ok) return r;
   refresh();
   return { ok: true };

@@ -30,6 +30,7 @@ and wording sense, in our own code and icons. Never Altegio's logo, name or
 | A barber's «book now» on rempire.ee | `/{locale}?b={staff-slug}` | Step 1, that barber picked (as rempire.ee's links to Altegio do) |
 | Any other «book now», the installed app | `/{locale}` | Step 1; the barber of the last booking on this device is picked |
 | The link in a confirmation, an SMS or a reminder | `/{locale}/visit/{token}` | The visit page |
+| «Перенести» on the visit page | `/{locale}/visit/{token}/move` | Step 3 alone, for that visit |
 
 `{locale}` is `ru`, `et` or `en`. The language button is top right on every
 step: Altegio has a client-account icon there, and we have no client
@@ -69,6 +70,27 @@ Each step ends on one «Продолжить» at the bottom, as in Altegio.
    goodbye by name, and after a few seconds the start again by itself, so
    nobody wonders what else to press. The start then shows «Ваш визит».
 
+## Moving and cancelling (the visit's own link)
+
+REMPIRE's Altegio is set to «Разрешить клиентам переносить записи онлайн»
+and «… отменять записи онлайн», both «Без ограничений» (read in its
+settings, 19.11). Ours does the same from `/{locale}/visit/{token}`:
+
+- **«Перенести»** opens `/{locale}/visit/{token}/move`: the day and time
+  step alone. The barber and the services stay as booked; the visit's own
+  time does not stand in its way; the time it has now is greyed. «Перенести
+  сюда» moves the visit itself (the same record, the same link), and its
+  page then says «Визит перенесён».
+  - Only a time the booking page would offer is taken, at the price shown
+    (special time is priced again for the new time).
+  - The barber hears of it by push; the client gets the «moved» letter if
+    the booking had an e-mail.
+  - Code: `src/lib/client-move.ts`, `/api/visit/{token}/slots` and
+    `/api/visit/{token}/move`.
+- **«Отменить визит»**: two taps, at any time before the visit.
+- A salon that sets `cancel_cutoff_min` above 0 closes both inside that
+  time, and the page says to call.
+
 ## What differs from Altegio, on purpose
 
 | Altegio | Ours | Why |
@@ -95,10 +117,10 @@ Each step ends on one «Продолжить» at the bottom, as in Altegio.
 
 - **The «booked» screen** is ours in the same look: Altegio's cannot be seen
   without booking. A screenshot from Renat makes it exact.
-- **Moving a visit** is still «book the new time, then cancel this one».
-  A real move from the client's link is not built.
-- **Special time in percent** («+50 %», Renat): today the extra is a sum in
-  euros (`special_time.extra_cents`).
-- **A privacy policy page** to link at the consent tick.
+- **A privacy policy page** to link at the consent tick. Checked 19.11:
+  rempire.ee has none; Altegio's widget links Altegio's own policy
+  (`alteg.io/en/info/privacy`); the shop has one
+  (`rempireshop.com/…/policies/privacy-policy`), but it speaks of the shop
+  and its orders only. Booking needs its own short text.
 - **«The main page»** after the goodbye is the booking start. Once booking
   sits on rempire.ee it may be the site's home.

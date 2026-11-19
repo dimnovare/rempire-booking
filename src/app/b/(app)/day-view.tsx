@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore, useTran
 import type { Offer } from "@/lib/barber/book";
 import type { BBlock, BDay, BVisit } from "@/lib/barber/day";
 import { coversDay, freeGaps, hoursText, nextVisit, type Gap } from "@/lib/barber/gaps";
+import { extraText, hasExtra } from "@/lib/slots";
 import { addDays, localParts, startOfDay } from "@/lib/tz";
 import { NextIcon, PlusIcon, PrevIcon } from "../../admin/icons";
 import { cap, dateWords, eur, hm, minsText, pick3 } from "../copy.shared";
@@ -172,7 +173,7 @@ export function DayView({ days, date, today, now: serverNow, tz, step, offers }:
         </p>
         {day.special.map((s) => (
           <p key={s.id} className="bx-sp">
-            {B.day.special(`+${eur(s.extraCents)}`)} · {hm(s.from, tz)}–{hm(s.to, tz)}
+            {B.day.special(extraText(s))} · {hm(s.from, tz)}–{hm(s.to, tz)}
           </p>
         ))}
       </header>
@@ -331,12 +332,13 @@ function Timeline({
                 </span>
                 <span className="bx-gap-main">
                   {free}
-                  {g.extraCents > 0 && <small> · +{eur(g.extraCents)}</small>}
+                  {/* free time has no visit yet: the window's own extra, «+20 €» or «+50 %» */}
+                  {hasExtra(g) && <small> · {extraText(g)}</small>}
                 </span>
               </>
             );
             return (
-              <li key={it.key} className={`bx-gap${g.extraCents ? " is-sp" : ""}`}>
+              <li key={it.key} className={`bx-gap${hasExtra(g) ? " is-sp" : ""}`}>
                 {g.to - g.from >= shortest ? (
                   <button type="button" aria-label={`${B.book.addAt(hm(g.from, tz))}. ${free}`} onClick={() => onFree(g.from)}>
                     {inner}

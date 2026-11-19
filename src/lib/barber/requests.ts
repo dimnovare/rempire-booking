@@ -28,6 +28,7 @@ import { withTx, type Querier } from "../db";
 import { queuePush } from "../push";
 import type { AnswerPayload, RequestPayload } from "../push-kinds";
 import { SELF_KEYS, type SelfKey, type SelfMode } from "../settings";
+import { cleanExtra, type Extra } from "../slots";
 import { addDays, isLocalDate, localParts, startOfDay, timeToMinutes, todayIn, zonedToUtc } from "../tz";
 import { isRequestWhat, MAX_OFF_DAYS, MAX_SPANS, MAX_WEEKS, type OffKind, type RequestWhat, type WeekHours } from "./request-words";
 
@@ -190,7 +191,8 @@ export async function barberRemoveTimeOff(business: Business, who: Who, timeOffI
 
 // ------------------------------------------------------------ special time
 
-export type SpecialInput = { date: string; start: string; end: string; extraCents: number; weeks?: number; note?: string };
+/** The extra is an amount (extraCents) or a percent of the visit's price (extraPct, 1–300): exactly one of the two. */
+export type SpecialInput = { date: string; start: string; end: string; extraCents?: number; extraPct?: number; weeks?: number; note?: string };
 
 /** The same hours on the same weekday, `weeks` weeks in a row, on the salon's clock. */
 export function specialSpans(date: string, start: string, end: string, weeks: number, tz: string): { from: number; to: number }[] {
@@ -208,38 +210,42 @@ function spansOf(what: Extract<RequestWhat, { kind: "special" }>, tz: string) {
   return specialSpans(a.date, a.time, endsNextDay && b.time === "00:00" ? "24:00" : b.time, Math.max(1, what.weeks ?? 1), tz);
 }
 
-async function insertSpecial(tx: Querier, business: Business, staffId: string, spans: { from: number; to: number }[], extraCents: number, text: string, by: string, now: number): Promise<string[]> {
+async function insertSpecial(tx: Querier, business: Business, staffId: string, spans: { from: number; to: number }[], extra: Extra, text: string, by: string, now: number): Promise<string[]> {
   const ids: string[] = [];
   for (const s of spans) {
     if (s.to <= now) continue;
     const [row] = await tx<{ id: string }>(
-      `insert into special_time (business_id, staff_id, starts_at, ends_at, extra_cents, note, created_by)
-       values ($1, $2, $3, $4, $5, $6, $7) returning id`,
-      [business.id, staffId, new Date(s.from), new Date(s.to), extraCents, text.slice(0, 200), by],
+      `insert into special_time (business_id, staff_id, starts_at, ends_at, extra_cents, extra_pct, note, created_by)
+       values ($1, $2, $3, $4, $5, $6, $7, $8) returning id`,
+      [business.id, staffId, new Date(s.from), new Date(s.to), extra.extraCents, extra.extraPct ?? 0, text.slice(0, 200), by],
     );
     ids.push(row.id);
   }
   return ids;
 }
 
-/** Special time with its own extra, once or for a few weeks. */
+/** A special-time request's extra, as its window has it: the percent is written only when there is one. */
+const extraOf = (e: Extra): Extra => ((e.extraPct ?? 0) > 0 ? { extraCents: e.extraCents, extraPct: e.extraPct } : { extraCents: e.extraCents });
+
+/** Special time with its own extra (an amount or a percent), once or for a few weeks. */
 export async function barberAddSpecial(business: Business, who: Who, input: SpecialInput, now = Date.now()): Promise<ChangeResult> {
   const tz = business.timezone;
   const today = todayIn(tz, now);
   const { date, start, end } = input ?? ({} as SpecialInput);
   const weeks = input?.weeks ?? 1;
   if (!isLocalDate(date) || !TIME_RE.test(String(start)) || !isEnd(String(end)) || endMin(end) <= timeToMinutes(start)) return { ok: false, code: "invalid" };
-  if (!Number.isInteger(input.extraCents) || input.extraCents < 0 || input.extraCents > 100_000) return { ok: false, code: "invalid" };
+  const extra = cleanExtra(input.extraCents, input.extraPct);
+  if (!extra) return { ok: false, code: "invalid" };
   if (!Number.isInteger(weeks) || weeks < 1 || weeks > MAX_WEEKS) return { ok: false, code: "invalid" };
   if (date < today || date > addDays(today, 366)) return { ok: false, code: "past" };
   const spans = specialSpans(date, start, end, weeks, tz);
   if (spans[0].to <= now) return { ok: false, code: "past" };
-  const what: RequestWhat = { kind: "special", action: "add", from: spans[0].from, to: spans[0].to, extraCents: input.extraCents, ...(weeks > 1 ? { weeks } : {}) };
+  const what: RequestWhat = { kind: "special", action: "add", from: spans[0].from, to: spans[0].to, ...extraOf(extra), ...(weeks > 1 ? { weeks } : {}) };
   const m = mode(business, who, "barber_self_time");
   return withTx(async (tx) => {
     if (!(await lockStaff(tx, business, who.staffId))) return { ok: false as const, code: "not_found" as const };
     const status = m === "ask" ? "requested" : "applied";
-    if (status === "applied") await insertSpecial(tx, business, who.staffId, spans, input.extraCents, note(input.note), who.userId, now);
+    if (status === "applied") await insertSpecial(tx, business, who.staffId, spans, extra, note(input.note), who.userId, now);
     const id = await insertRequest(tx, business, who, { what, status, note: input.note });
     await tellOwners(tx, business, who, id, status, what);
     return { ok: true as const, id, status };
@@ -251,8 +257,8 @@ export async function barberRemoveSpecial(business: Business, who: Who, specialI
   if (!isUuid(specialId)) return { ok: false, code: "not_found" };
   return withTx(async (tx) => {
     if (!(await lockStaff(tx, business, who.staffId))) return { ok: false as const, code: "not_found" as const };
-    const [s] = await tx<{ id: string; starts_at: Date; ends_at: Date; extra_cents: number; mine: boolean }>(
-      `select x.id, x.starts_at, x.ends_at, x.extra_cents, ${byHisLogin("x.created_by", "$2")} as mine
+    const [s] = await tx<{ id: string; starts_at: Date; ends_at: Date; extra_cents: number; extra_pct: number; mine: boolean }>(
+      `select x.id, x.starts_at, x.ends_at, x.extra_cents, x.extra_pct, ${byHisLogin("x.created_by", "$2")} as mine
          from special_time x where x.id = $1 and x.staff_id = $2 and x.business_id = $3 and x.ends_at > $4 for update of x`,
       [specialId, who.staffId, business.id, new Date(now)],
     );
@@ -262,9 +268,9 @@ export async function barberRemoveSpecial(business: Business, who: Who, specialI
     await tx(`insert into audit (actor, entity, entity_id, action, before) values ($1, 'special_time', $2, 'delete', $3::jsonb)`, [
       who.userId,
       s.id,
-      JSON.stringify({ staff_id: who.staffId, from: ms(s.starts_at), to: ms(s.ends_at), extra_cents: s.extra_cents, by: who.viewing ? "admin" : "barber" }),
+      JSON.stringify({ staff_id: who.staffId, from: ms(s.starts_at), to: ms(s.ends_at), extra_cents: s.extra_cents, extra_pct: s.extra_pct, by: who.viewing ? "admin" : "barber" }),
     ]);
-    const what: RequestWhat = { kind: "special", action: "remove", from: ms(s.starts_at), to: ms(s.ends_at), extraCents: s.extra_cents };
+    const what: RequestWhat = { kind: "special", action: "remove", from: ms(s.starts_at), to: ms(s.ends_at), ...extraOf({ extraCents: s.extra_cents, extraPct: s.extra_pct }) };
     const id = await insertRequest(tx, business, who, { what, status: "applied" });
     await tellOwners(tx, business, who, id, "applied", what);
     return { ok: true as const };
@@ -423,7 +429,8 @@ export async function answerRequest(business: Business, actor: string, requestId
         return { ok: false as const, code: "gone" as const };
       }
     } else if (answer === "approved") {
-      if (what.kind === "special") await insertSpecial(tx, business, r.staff_id, spansOf(what, business.timezone), what.extraCents, "", r.created_by ?? "staff", now);
+      // a request from before the percent has no extraPct: an amount, as it was asked
+      if (what.kind === "special") await insertSpecial(tx, business, r.staff_id, spansOf(what, business.timezone), { extraCents: what.extraCents, extraPct: what.extraPct ?? 0 }, "", r.created_by ?? "staff", now);
       else if (what.kind === "hours") {
         const week = cleanWeek(what.days);
         if (!week) return { ok: false as const, code: "invalid" as const };
@@ -521,7 +528,7 @@ export const openRequestCount = async (q: Querier, businessId: string) =>
   (await q<{ n: number }>("select count(*)::int as n from staff_requests where business_id = $1 and status = 'requested'", [businessId]))[0]?.n ?? 0;
 
 export type MyOff = { id: string; from: number; to: number; kind: OffKind; status: "requested" | "approved"; note: string; mine: boolean };
-export type MySpecial = { id: string; from: number; to: number; extraCents: number; mine: boolean };
+export type MySpecial = { id: string; from: number; to: number; extraCents: number; extraPct: number; mine: boolean };
 export type MyPrice = { serviceId: string; name: L10n; cents: number; min: number; waiting: { cents: number; min: number; requestId: string } | null };
 export type MyTime = { off: MyOff[]; special: MySpecial[]; hours: WeekHours; prices: MyPrice[]; requests: RequestRow[]; modes: Record<SelfKey, SelfMode> };
 
@@ -533,8 +540,8 @@ export async function myTime(q: Querier, business: Business, staffId: string, no
          from time_off t where t.staff_id = $1 and t.ends_at > $2 and t.status <> 'declined' order by t.starts_at limit 100`,
       [staffId, new Date(now)],
     ),
-    q<{ id: string; starts_at: Date; ends_at: Date; extra_cents: number; mine: boolean }>(
-      `select x.id, x.starts_at, x.ends_at, x.extra_cents, ${byHisLogin("x.created_by", "$1")} as mine
+    q<{ id: string; starts_at: Date; ends_at: Date; extra_cents: number; extra_pct: number; mine: boolean }>(
+      `select x.id, x.starts_at, x.ends_at, x.extra_cents, x.extra_pct, ${byHisLogin("x.created_by", "$1")} as mine
          from special_time x where x.staff_id = $1 and x.business_id = $3 and x.ends_at > $2 order by x.starts_at limit 100`,
       [staffId, new Date(now), business.id],
     ),
@@ -551,7 +558,7 @@ export async function myTime(q: Querier, business: Business, staffId: string, no
   for (const r of requests) if (r.status === "requested" && r.what.kind === "price" && !waiting.has(r.what.serviceId)) waiting.set(r.what.serviceId, { cents: r.what.toCents, min: r.what.toMin, requestId: r.id });
   return {
     off: off.map((t) => ({ id: t.id, from: ms(t.starts_at), to: ms(t.ends_at), kind: t.kind, status: t.status, note: t.note, mine: t.mine })),
-    special: special.map((x) => ({ id: x.id, from: ms(x.starts_at), to: ms(x.ends_at), extraCents: x.extra_cents, mine: x.mine })),
+    special: special.map((x) => ({ id: x.id, from: ms(x.starts_at), to: ms(x.ends_at), extraCents: x.extra_cents, extraPct: x.extra_pct, mine: x.mine })),
     hours,
     prices: prices.map((p) => ({ serviceId: p.id, name: p.name, cents: p.cents, min: p.min, waiting: waiting.get(p.id) ?? null })),
     requests,

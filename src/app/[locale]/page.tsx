@@ -64,6 +64,7 @@ async function Booking({ locale, searchParams }: { locale: Locale; searchParams:
       pushKey={clientPushOffered(business.settings) ? pushPublicKey() : ""}
       // ?b=<slug>: a «book now» button under one barber's photo opens with him picked
       initialBarber={typeof sp.b === "string" ? sp.b : null}
+      moving={null}
     />
   );
 }

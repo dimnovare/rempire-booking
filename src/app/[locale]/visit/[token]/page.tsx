@@ -1,6 +1,6 @@
 /**
  * The client's own link from the confirmation: see the visit, add it to the
- * calendar, cancel it, or book another time. In the look of the booking
+ * calendar, move it to another time, or cancel it. In the look of the booking
  * pages (globals.css). A client moves or cancels at any time before the
  * visit, as in Altegio (Renat, 19.11.2026); a salon that sets a cutoff
  * still gets «call the salon» inside it.
@@ -23,11 +23,11 @@ export const metadata = { title: "REMPIRE · Visit", referrer: "no-referrer" as 
 
 // The token is known only at request time, so nothing here awaits params
 // outside the Suspense boundary.
-export default function VisitPage({ params }: PageProps<"/[locale]/visit/[token]">) {
+export default function VisitPage({ params, searchParams }: PageProps<"/[locale]/visit/[token]">) {
   return (
     <main className="app ground">
       <Suspense fallback={<p className="wait" />}>
-        <Visit params={params} />
+        <Visit params={params} searchParams={searchParams} />
       </Suspense>
     </main>
   );
@@ -35,9 +35,9 @@ export default function VisitPage({ params }: PageProps<"/[locale]/visit/[token]
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-async function Visit({ params }: { params: PageProps<"/[locale]/visit/[token]">["params"] }) {
+async function Visit({ params, searchParams }: Pick<PageProps<"/[locale]/visit/[token]">, "params" | "searchParams">) {
   await connection();
-  const { locale: raw, token } = await params;
+  const [{ locale: raw, token }, sp] = await Promise.all([params, searchParams]);
   if (!isLocale(raw)) notFound();
   const locale: Locale = raw;
   const c = COPY[locale];
@@ -89,13 +89,15 @@ async function Visit({ params }: { params: PageProps<"/[locale]/visit/[token]">[
   const changeable = canChange(v, business);
   const hours = Math.round(business.settings.cancel_cutoff_min / 60);
   const phone = v.location.phone.replace(/\s/g, "");
+  // straight after a move from this link (?moved=1): say so
+  const moved = sp.moved === "1" && !cancelled && !past;
 
   return (
     <>
       {header}
       <div className="blk top">
         <div className={`mark${cancelled ? " off" : ""}`}>{cancelled ? <CrossIcon size={24} /> : <CheckIcon size={24} width={2.6} />}</div>
-        <h1 className="t1">{cancelled ? c.cancelled : c.yourVisit}</h1>
+        <h1 className="t1">{cancelled ? c.cancelled : moved ? c.movedTitle : c.yourVisit}</h1>
         <p className="lead">{cancelled ? c.cancelledLead : past ? c.past : c.seeYou(longDate, time(start))}</p>
         <div className="sum-row">
           <span className="ava" aria-hidden="true">
@@ -147,10 +149,9 @@ async function Visit({ params }: { params: PageProps<"/[locale]/visit/[token]">[
         )}
         {changeable && (
           <>
-            <a className="btn btn-soft" href={`/${locale}`}>
-              {c.move}
+            <a className="btn btn-soft" href={`/${locale}/visit/${encodeURIComponent(token)}/move`}>
+              {c.moveBtn}
             </a>
-            <p className="note">{c.moveHint}</p>
             <CancelButton action={cancelVisit.bind(null, locale, token)} label={c.cancel} sure={c.cancelSure} yes={c.cancelYes} keep={c.keep} />
             <p className="note">{hours > 0 ? c.cutoff(hours) : c.anyTime}</p>
           </>

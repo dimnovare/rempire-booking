@@ -153,6 +153,10 @@ a { color: inherit; }
 .cal-d.today span { background: var(--fill); }
 .cal-d[aria-pressed="true"] span { background: var(--primary); color: var(--on-primary); opacity: 1; }
 .cal-d.off[aria-pressed="true"] span { background: #767676; }
+/* moving a visit: what is being moved, above the calendar */
+.moving { padding: 8px var(--gut-r) 12px var(--gut-l); display: flex; flex-direction: column; gap: 2px; }
+.moving .alert { margin-top: 6px; }
+.slot:disabled { opacity: .4; }
 .empty { padding: 52px 24px 0; text-align: center; }
 .empty p { margin: 8px 0 0; color: var(--ink-2); }
 .empty .btn { margin-top: 32px; }

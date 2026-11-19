@@ -2,7 +2,8 @@
  * GET /api/slots?services=<id,id>&staff=<id|any>&from=YYYY-MM-DD&days=60
  * → { tz, days: [{ d, open, s: [[startMs, staffId, extraCents], …] }] }
  * staffId is the barber «anyone» would get; extraCents is his special-time
- * extra at that start (0 = the usual price).
+ * extra at that start (0 = the usual price), in money: a window priced in
+ * percent is already worked out for the chosen services at his prices.
  */
 import { loadAvailability } from "@/lib/availability";
 import { currentBusiness } from "@/lib/business";

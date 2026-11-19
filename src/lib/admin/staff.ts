@@ -6,6 +6,7 @@
 import type { Business } from "../availability";
 import type { L10n } from "../catalog";
 import { withTx, type Querier } from "../db";
+import { cleanExtra } from "../slots";
 import { addDays, isLocalDate, startOfDay, timeToMinutes } from "../tz";
 import { isUuid } from "./visits";
 
@@ -36,7 +37,8 @@ export type Offer = { serviceId: string; name: L10n; defaultMin: number; default
 export type HoursDay = { weekday: number; spans: [string, string][] };
 export type DayOverride = { date: string; spans: [string, string][]; note: string };
 export type TimeOffRow = { id: string; from: number; to: number; kind: string; note: string };
-export type SpecialRow = { id: string; from: number; to: number; extraCents: number; note: string };
+/** Special time with its extra as written: an amount (extraCents) or a percent of the visit's price (extraPct), never both. */
+export type SpecialRow = { id: string; from: number; to: number; extraCents: number; extraPct: number; note: string };
 
 export type StaffDetail = StaffRow & {
   offers: Offer[];
@@ -76,8 +78,8 @@ export async function staffDetail(q: Querier, business: Business, staffId: strin
       "select id, starts_at, ends_at, kind, note from time_off where staff_id = $1 and ends_at > $2 and status <> 'declined' order by starts_at",
       [staffId, new Date(now)],
     ),
-    q<{ id: string; starts_at: Date; ends_at: Date; extra_cents: number; note: string }>(
-      "select id, starts_at, ends_at, extra_cents, note from special_time where staff_id = $1 and ends_at > $2 order by starts_at",
+    q<{ id: string; starts_at: Date; ends_at: Date; extra_cents: number; extra_pct: number; note: string }>(
+      "select id, starts_at, ends_at, extra_cents, extra_pct, note from special_time where staff_id = $1 and ends_at > $2 order by starts_at",
       [staffId, new Date(now)],
     ),
   ]);
@@ -96,7 +98,7 @@ export async function staffDetail(q: Querier, business: Business, staffId: strin
     hours: [1, 2, 3, 4, 5, 6, 7].map((weekday) => ({ weekday, spans: hours.filter((h) => h.weekday === weekday).map((h) => [h.starts, h.ends] as [string, string]) })),
     overrides: overrides.map((o) => ({ date: o.day, spans: o.intervals, note: o.note })),
     timeOff: off.map((t) => ({ id: t.id, from: ms(t.starts_at), to: ms(t.ends_at), kind: t.kind, note: t.note })),
-    special: special.map((x) => ({ id: x.id, from: ms(x.starts_at), to: ms(x.ends_at), extraCents: x.extra_cents, note: x.note })),
+    special: special.map((x) => ({ id: x.id, from: ms(x.starts_at), to: ms(x.ends_at), extraCents: x.extra_cents, extraPct: x.extra_pct, note: x.note })),
   };
 }
 
@@ -259,20 +261,29 @@ export async function setDayOverride(business: Business, staffId: string, date: 
   });
 }
 
-/** Special time added by Renat for a barber (the barber app adds his own in Phase B). */
-export async function addSpecialTime(business: Business, input: { staffId: string; from: number; to: number; extraCents: number; note?: string | null }, actor: string): Promise<{ ok: true; id: string } | { ok: false; field: string }> {
+/**
+ * Special time added by Renat for a barber (the barber adds his own in his
+ * app, src/lib/barber/requests.ts). Its extra is an amount (extraCents) or a
+ * percent of the visit's price (extraPct, 1–300): exactly one of the two.
+ */
+export async function addSpecialTime(
+  business: Business,
+  input: { staffId: string; from: number; to: number; extraCents?: number; extraPct?: number; note?: string | null },
+  actor: string,
+): Promise<{ ok: true; id: string } | { ok: false; field: string }> {
   if (!isUuid(input.staffId)) return { ok: false, field: "staff" };
   if (!Number.isFinite(input.from) || !Number.isFinite(input.to) || input.to <= input.from || input.to - input.from > 24 * 3_600_000) return { ok: false, field: "to" };
-  if (!Number.isInteger(input.extraCents) || input.extraCents < 0 || input.extraCents > 100_000) return { ok: false, field: "extra" };
+  const extra = cleanExtra(input.extraCents, input.extraPct);
+  if (!extra) return { ok: false, field: "extra" };
   return withTx(async (tx) => {
     const [st] = await tx<{ id: string }>("select id from staff where id = $1 and business_id = $2 for update", [input.staffId, business.id]);
     if (!st) return { ok: false as const, field: "staff" };
     const [row] = await tx<{ id: string }>(
-      `insert into special_time (business_id, staff_id, starts_at, ends_at, extra_cents, note, created_by)
-       values ($1, $2, $3, $4, $5, $6, 'admin') returning id`,
-      [business.id, input.staffId, new Date(input.from), new Date(input.to), input.extraCents, t(input.note, 200)],
+      `insert into special_time (business_id, staff_id, starts_at, ends_at, extra_cents, extra_pct, note, created_by)
+       values ($1, $2, $3, $4, $5, $6, $7, 'admin') returning id`,
+      [business.id, input.staffId, new Date(input.from), new Date(input.to), extra.extraCents, extra.extraPct, t(input.note, 200)],
     );
-    await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'special_time', $2, 'create', $3::jsonb)`, [actor, row.id, JSON.stringify(input)]);
+    await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'special_time', $2, 'create', $3::jsonb)`, [actor, row.id, JSON.stringify({ ...input, ...extra })]);
     return { ok: true as const, id: row.id };
   });
 }

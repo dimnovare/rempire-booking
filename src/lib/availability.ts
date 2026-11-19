@@ -85,6 +85,13 @@ export type AvailabilityQuery = {
   from: string; // local date
   days: number;
   now?: number;
+  /** a visit being moved: it does not block its own old time */
+  ignoreAppointmentId?: string | null;
+  /**
+   * a visit being moved keeps its lines as booked: a percent window is a
+   * percent of this, not of the barber's price today (src/lib/client-move.ts)
+   */
+  basePriceCents?: number | null;
 };
 
 const ms = (v: unknown) => (v instanceof Date ? v.getTime() : Date.parse(String(v)));
@@ -126,8 +133,9 @@ export async function loadAvailability(q: Querier, a: AvailabilityQuery): Promis
     q<{ staff_id: string; starts_at: Date; blocked_until: Date }>(
       `select staff_id, starts_at, blocked_until from appointments
         where staff_id = any($1::uuid[]) and status <> 'cancelled'
-          and starts_at < $3 and blocked_until > $2`,
-      [staffIds, new Date(fromMs), new Date(toMs)],
+          and starts_at < $3 and blocked_until > $2
+          and ($4::uuid is null or id <> $4::uuid)`,
+      [staffIds, new Date(fromMs), new Date(toMs), a.ignoreAppointmentId ?? null],
     ),
     q<{ staff_id: string; starts_at: Date; ends_at: Date }>(
       `select staff_id, starts_at, ends_at from time_off
@@ -135,8 +143,8 @@ export async function loadAvailability(q: Querier, a: AvailabilityQuery): Promis
           and starts_at < $3 and ends_at > $2`,
       [staffIds, new Date(fromMs), new Date(toMs)],
     ),
-    q<{ staff_id: string; starts_at: Date; ends_at: Date; extra_cents: number }>(
-      `select staff_id, starts_at, ends_at, extra_cents from special_time
+    q<{ staff_id: string; starts_at: Date; ends_at: Date; extra_cents: number; extra_pct: number }>(
+      `select staff_id, starts_at, ends_at, extra_cents, extra_pct from special_time
         where staff_id = any($1::uuid[]) and business_id = $4
           and starts_at < $3 and ends_at > $2
         order by starts_at, created_at`,
@@ -159,13 +167,15 @@ export async function loadAvailability(q: Querier, a: AvailabilityQuery): Promis
         if (iv[0] >= dayFrom && iv[0] < dayTo) bookings++;
       }
       for (const t of off) if (t.staff_id === qt.staffId) busy.push([ms(t.starts_at), ms(t.ends_at)]);
-      // special time, cut to this day: a visit never runs past midnight
+      // special time, cut to this day: a visit never runs past midnight. A
+      // percent window becomes money in slots.ts, from this barber's price
+      // for the chosen services (priceCents below).
       const sp: Special[] = [];
       for (const x of special) {
         if (x.staff_id !== qt.staffId) continue;
         const from = Math.max(ms(x.starts_at), dayFrom);
         const to = Math.min(ms(x.ends_at), dayTo);
-        if (to > from) sp.push({ from, to, extraCents: x.extra_cents });
+        if (to > from) sp.push({ from, to, extraCents: x.extra_cents, extraPct: x.extra_pct });
       }
       return {
         staffId: qt.staffId,
@@ -174,6 +184,7 @@ export async function loadAvailability(q: Querier, a: AvailabilityQuery): Promis
         busy,
         special: sp,
         durationMin: qt.durationMin,
+        priceCents: a.basePriceCents ?? qt.priceCents,
         bufferMin: qt.bufferMin,
         bookings,
         sort: qt.sort,

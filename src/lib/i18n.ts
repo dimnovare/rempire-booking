@@ -189,6 +189,14 @@ const en = {
   editBarber: "Change the barber",
   editTime: "Change the day and time",
   editServices: "Change the services",
+  // the client moves his own visit from its link, as in Altegio (Dim, 19.11.2026)
+  moveBtn: "Move to another time",
+  movingTitle: "Moving your visit",
+  movingNow: (d: string, t: string) => `Now: ${d}, ${t}`,
+  moveHere: "Move here",
+  movingBusy: "Moving…",
+  movedTitle: "Your visit is moved",
+  moveGone: "This visit can no longer be moved.",
 };
 
 export type Copy = typeof en;
@@ -341,6 +349,13 @@ const ru: Copy = {
   editBarber: "Изменить барбера",
   editTime: "Изменить день и время",
   editServices: "Изменить услуги",
+  moveBtn: "Перенести",
+  movingTitle: "Перенос визита",
+  movingNow: (d, t) => `Сейчас: ${d}, ${t}`,
+  moveHere: "Перенести сюда",
+  movingBusy: "Переносим…",
+  movedTitle: "Визит перенесён",
+  moveGone: "Этот визит уже нельзя перенести.",
 };
 
 const et: Copy = {
@@ -491,6 +506,13 @@ const et: Copy = {
   editBarber: "Muuda meistrit",
   editTime: "Muuda päeva ja aega",
   editServices: "Muuda teenuseid",
+  moveBtn: "Muuda aega",
+  movingTitle: "Aja muutmine",
+  movingNow: (d, t) => `Praegu: ${d}, ${t}`,
+  moveHere: "Tõsta siia",
+  movingBusy: "Muudame…",
+  movedTitle: "Aeg on muudetud",
+  moveGone: "Seda aega ei saa enam muuta.",
 };
 
 export const COPY: Record<Locale, Copy> = { ru, et, en };

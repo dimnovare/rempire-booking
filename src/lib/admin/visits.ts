@@ -9,7 +9,8 @@
  *     after a second «yes» (force), as Altegio warns;
  *   - no minimum notice and no horizon: Renat may book a walk-in for now;
  *   - the price is the barber's own; a visit that starts in his special
- *     time gets that window's extra.
+ *     time gets that window's extra: its amount, or its percent of the
+ *     visit's own price (the sum of its service lines).
  * Every change takes the barber's staff row lock first (as src/lib/booking.ts)
  * and leaves an audit row with who did it.
  *
@@ -26,7 +27,7 @@ import { sendPushSoon } from "../outbox";
 import { pushVisitChange } from "../push";
 import { isLocale } from "../i18n";
 import { normalizePhone } from "../phone";
-import { pricedWindows, workWindows, type HoursRow, type Interval, type Special } from "../slots";
+import { extraFor, pricedWindows, workWindows, type HoursRow, type Interval, type Special } from "../slots";
 import { addDays, localParts, startOfDay } from "../tz";
 
 export type AdminProblem = "invalid" | "overlap" | "outside_hours" | "time_off" | "not_offered" | "not_found" | "cancelled";
@@ -101,22 +102,29 @@ export async function staffDay(tx: Querier, business: Business, staffId: string,
       [staffId],
     ),
     tx<{ intervals: [string, string][] }>("select intervals from staff_day_overrides where staff_id = $1 and day = $2::date", [staffId, date]),
-    tx<{ starts_at: Date; ends_at: Date; extra_cents: number }>(
-      "select starts_at, ends_at, extra_cents from special_time where staff_id = $1 and starts_at < $3 and ends_at > $2 order by starts_at, created_at",
+    tx<{ starts_at: Date; ends_at: Date; extra_cents: number; extra_pct: number }>(
+      "select starts_at, ends_at, extra_cents, extra_pct from special_time where staff_id = $1 and starts_at < $3 and ends_at > $2 order by starts_at, created_at",
       [staffId, new Date(d0), new Date(d1)],
     ),
   ]);
   return {
     windows: workWindows(date, tz, hours, ov[0] ? ov[0].intervals : null),
-    special: sp.map((x) => ({ from: Math.max(new Date(x.starts_at).getTime(), d0), to: Math.min(new Date(x.ends_at).getTime(), d1), extraCents: x.extra_cents })),
+    special: sp.map((x) => ({
+      from: Math.max(new Date(x.starts_at).getTime(), d0),
+      to: Math.min(new Date(x.ends_at).getTime(), d1),
+      extraCents: x.extra_cents,
+      extraPct: x.extra_pct,
+    })),
   };
 }
 
 /**
  * Can the chair take [start, start + duration + buffer)? Throws «overlap»
- * always, «outside_hours» and «time_off» unless forced. Returns the extra.
+ * always, «outside_hours» and «time_off» unless forced. Returns the extra
+ * in cents: the amount of the special window the visit starts in, or its
+ * percent of `baseCents` (the visit's price without it: its service lines).
  */
-async function checkPlace(tx: Querier, business: Business, staffId: string, start: number, durationMin: number, bufferMin: number, ignoreId: string | null, force: boolean): Promise<number> {
+async function checkPlace(tx: Querier, business: Business, staffId: string, start: number, durationMin: number, bufferMin: number, baseCents: number, ignoreId: string | null, force: boolean): Promise<number> {
   const end = start + durationMin * MIN;
   const chairEnd = end + bufferMin * MIN;
   const [clash] = await tx<{ id: string }>(
@@ -127,7 +135,8 @@ async function checkPlace(tx: Querier, business: Business, staffId: string, star
   if (clash) throw new Problem("overlap");
   const day = await staffDay(tx, business, staffId, start);
   const priced = pricedWindows(day.windows, day.special);
-  const extra = priced.find((w) => start >= w.from && start < w.to)?.extraCents ?? 0;
+  const at = priced.find((w) => start >= w.from && start < w.to);
+  const extra = at ? extraFor(at, baseCents) : 0;
   if (force) return extra;
   const [off] = await tx<{ id: string }>(
     "select id from time_off where staff_id = $1 and status <> 'declined' and starts_at < $3 and ends_at > $2 limit 1",
@@ -226,7 +235,8 @@ export async function adminCreateVisit(business: Business, input: AdminVisitInpu
         const lines = await quoteLines(tx, business.id, input.staffId, serviceIds);
         const duration = lines.reduce((n, l) => n + l.durationMin, 0);
         const buffer = Math.max(0, ...lines.map((l) => l.bufferMin));
-        const extra = await checkPlace(tx, business, input.staffId, start, duration, buffer, null, !!input.force);
+        const base = lines.reduce((n, l) => n + l.priceCents, 0);
+        const extra = await checkPlace(tx, business, input.staffId, start, duration, buffer, base, null, !!input.force);
 
         let cid = clientId;
         if (cid) {
@@ -245,7 +255,7 @@ export async function adminCreateVisit(business: Business, input: AdminVisitInpu
         }
         const [hasPhone] = await tx<{ phone_e164: string | null }>("select phone_e164 from clients where id = $1", [cid]);
         const end = start + duration * MIN;
-        const total = lines.reduce((n, l) => n + l.priceCents, 0) + extra;
+        const total = base + extra;
         const [row] = await tx<{ id: string }>(
           `insert into appointments (business_id, location_id, staff_id, client_id, starts_at, ends_at, blocked_until, source,
                                      client_comment, staff_note, reminder_min, total_cents, extra_cents, idempotency_key)
@@ -341,9 +351,13 @@ export async function adminUpdateVisit(business: Business, id: string, patch: Vi
       const duration = lines.reduce((n, l) => n + l.durationMin, 0);
       const buffer = Math.max(0, ...lines.map((l) => l.bufferMin));
       const moved = staffId !== cur.staff_id || start !== new Date(cur.starts_at).getTime();
-      const extra = moved || requote ? await checkPlace(tx, business, staffId, start, duration, buffer, id, !!patch.force) : cur.extra_cents;
+      // the extra follows the visit: a new time, barber or services ask the
+      // window at the new start again, and a percent window answers for the
+      // lines as they are now (kept as booked, or the new barber's prices)
+      const base = lines.reduce((n, l) => n + l.priceCents, 0);
+      const extra = moved || requote ? await checkPlace(tx, business, staffId, start, duration, buffer, base, id, !!patch.force) : cur.extra_cents;
       const end = start + duration * MIN;
-      const total = lines.reduce((n, l) => n + l.priceCents, 0) + extra;
+      const total = base + extra;
       await tx(
         `update appointments set staff_id = $2, starts_at = $3, ends_at = $4, blocked_until = $5, total_cents = $6, extra_cents = $7,
                 any_staff = any_staff and staff_id = $2, staff_note = $8, client_comment = $9, updated_at = now()

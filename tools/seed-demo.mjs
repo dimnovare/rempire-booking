@@ -244,13 +244,15 @@ export async function seedDemoSales(db, now = Date.now()) {
  * Example special time (Renat, 17.11.2026) for the next 14 days, so staging
  * shows it: after hours, a lunch hour inside the hours, a Saturday evening
  * and a Sunday. Weekday 1 = Monday … 7 = Sunday. Tests leave it out: they
- * add their own rows for fixed dates.
+ * add their own rows for fixed dates. `extra` is euros on top; `pct` is a
+ * percent of the visit's price instead (Renat, 19.11.2026: «+50 %»).
  */
 export const DEMO_SPECIAL = [
   { staff: "valentin", days: [1, 2, 3, 4, 5], from: "20:00", to: "22:00", extra: 20 },
   { staff: "jevgeni", days: [2, 4], from: "13:00", to: "14:00", extra: 15 },
   { staff: "renat", days: [6], from: "18:00", to: "20:00", extra: 25 },
   { staff: "slava", days: [7], from: "12:00", to: "16:00", extra: 25 },
+  { staff: "milena", days: [5], from: "19:00", to: "20:30", pct: 50 },
 ];
 
 /** @param {{query: (sql: string, params?: unknown[]) => Promise<{rows: any[]}>}} db */
@@ -268,12 +270,12 @@ export async function seedDemoSpecial(db, now = Date.now()) {
     for (const sp of DEMO_SPECIAL) {
       if (!sp.days.includes(weekday)) continue;
       const r = await db.query(
-        `insert into special_time (id, business_id, staff_id, starts_at, ends_at, extra_cents, note, created_by)
-         select $1, $2, s.id, ($4::date + $5::time) at time zone $7, ($4::date + $6::time) at time zone $7, $8, 'demo', 'demo'
+        `insert into special_time (id, business_id, staff_id, starts_at, ends_at, extra_cents, extra_pct, note, created_by)
+         select $1, $2, s.id, ($4::date + $5::time) at time zone $7, ($4::date + $6::time) at time zone $7, $8, $9, 'demo', 'demo'
            from staff s where s.business_id = $2 and s.slug = $3
          on conflict (id) do nothing
          returning id`,
-        [demoId("special", `${sp.staff}:${date}`), biz.id, sp.staff, date, sp.from, sp.to, tz, sp.extra * 100],
+        [demoId("special", `${sp.staff}:${date}`), biz.id, sp.staff, date, sp.from, sp.to, tz, (sp.extra ?? 0) * 100, sp.pct ?? 0],
       );
       added += r.rows.length;
     }
