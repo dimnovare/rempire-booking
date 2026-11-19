@@ -7,8 +7,8 @@ import { describe, expect, it } from "vitest";
 import { COPY } from "@/app/b/copy";
 import { GET as manifest } from "@/app/b/manifest.webmanifest/route";
 import { detectPlatform } from "@/app/b/use-install";
-import { afterLogin, loginPageFor, safeBarberPath, safeStaffPath, SESSION_COOKIE, START_PATH } from "@/lib/auth/cookie";
-import { SIDE_COOKIE, sideOf, startPath } from "@/lib/auth/side";
+import { afterLogin, loginPageFor, safeBarberPath, safeStaffPath, SESSION_COOKIE, START_PATH, VIEW_AS_COOKIE } from "@/lib/auth/cookie";
+import { appKind, SIDE_COOKIE, sideOf, startPath } from "@/lib/auth/side";
 import { proxy } from "@/proxy";
 
 describe("login «next» paths", () => {
@@ -37,13 +37,33 @@ describe("the staff app's start (docs/apps.md)", () => {
     expect(startPath({ role: "staff", staffId: "x" }, "admin")).toBe("/b");
   });
 
-  it("Renat and the front desk: the side open last; the first time, his own day if he cuts too", () => {
-    expect(startPath({ role: "owner", staffId: null })).toBe("/admin");
-    expect(startPath({ role: "admin", staffId: null }, "")).toBe("/admin");
-    expect(startPath({ role: "owner", staffId: "x" })).toBe("/b");
-    expect(startPath({ role: "owner", staffId: "x" }, "admin")).toBe("/admin");
-    expect(startPath({ role: "owner", staffId: null }, "b")).toBe("/b");
-    expect(startPath({ role: "owner", staffId: null }, "elsewhere")).toBe("/admin");
+  it("an owner or the front desk linked to a barber: what the device had open last of «Мой день» and «Журнал»; the first time, «Мой день»", () => {
+    for (const role of ["owner", "admin"] as const) {
+      expect(startPath({ role, staffId: "x" })).toBe("/b");
+      expect(startPath({ role, staffId: "x" }, "")).toBe("/b");
+      expect(startPath({ role, staffId: "x" }, "b")).toBe("/b");
+      expect(startPath({ role, staffId: "x" }, "admin")).toBe("/admin");
+      expect(startPath({ role, staffId: "x" }, "elsewhere")).toBe("/b");
+    }
+  });
+
+  it("an owner or the front desk not linked to a barber: the journal, whatever the device remembers", () => {
+    for (const role of ["owner", "admin"] as const) {
+      expect(startPath({ role, staffId: null })).toBe("/admin");
+      expect(startPath({ role, staffId: null }, "")).toBe("/admin");
+      expect(startPath({ role, staffId: null }, "admin")).toBe("/admin");
+      // (until 19.11.2026 «b» took such a login to the barber picker: the side switch's «Барбер»)
+      expect(startPath({ role, staffId: null }, "b")).toBe("/admin");
+      expect(startPath({ role, staffId: null }, "elsewhere")).toBe("/admin");
+    }
+  });
+
+  it("how the app is put together for a login", () => {
+    expect(appKind({ role: "staff", staffId: "x" })).toBe("barber");
+    expect(appKind({ role: "owner", staffId: "x" })).toBe("own");
+    expect(appKind({ role: "admin", staffId: "x" })).toBe("own");
+    expect(appKind({ role: "owner", staffId: null })).toBe("salon");
+    expect(appKind({ role: "admin", staffId: null })).toBe("salon");
   });
 
   it("a login with no page in mind goes to the start; a real page is kept", () => {
@@ -65,6 +85,20 @@ describe("the staff app's start (docs/apps.md)", () => {
     expect(side(START_PATH)).toBeUndefined();
     expect(side("/b/login")).toBeUndefined();
     expect(side("/admin/login")).toBeUndefined();
+  });
+
+  it("a salon page ends «looking at a barber's app»; a page of the barber's half keeps it", () => {
+    const viewAs = (path: string, cookie: string) => proxy(new NextRequest(`http://localhost:3400${path}`, { headers: { cookie } })).cookies.get(VIEW_AS_COOKIE);
+    const looking = `${SESSION_COOKIE}=x; ${VIEW_AS_COOKIE}=11111111-1111-4111-8111-111111111111`;
+    // forgotten: the cookie is sent back empty and already expired
+    for (const path of ["/admin", "/admin/staff", "/admin/more"]) {
+      expect(viewAs(path, looking)?.value).toBe("");
+      expect(new Date(viewAs(path, looking)?.expires ?? Number.NaN).getTime()).toBeLessThan(Date.now());
+    }
+    for (const path of ["/b", "/b/time", "/b/more", START_PATH]) expect(viewAs(path, looking)).toBeUndefined();
+    // nothing to forget, and a login page is not the salon yet
+    expect(viewAs("/admin", `${SESSION_COOKIE}=x`)).toBeUndefined();
+    expect(viewAs("/admin/login", looking)).toBeUndefined();
   });
 });
 

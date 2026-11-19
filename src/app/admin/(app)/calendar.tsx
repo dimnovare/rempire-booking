@@ -36,7 +36,7 @@ import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { CalBlock, CalendarData, CalMay, CalService, CalVisit } from "@/lib/admin/calendar";
 import { daySpan, hhmm, minutesInDay, momentAt, snap, weekStart } from "@/lib/admin/grid";
-import { dayNumbers, dayStaff, isVisitState, visitLook } from "@/lib/admin/journal";
+import { dayNumbers, dayStaff, isVisitState, visitLook, type MineToday } from "@/lib/admin/journal";
 import type { AdminOutcome } from "@/lib/admin/visits";
 import { extraText } from "@/lib/slots";
 import { addDays } from "@/lib/tz";
@@ -45,9 +45,10 @@ import { useA } from "../lang";
 import { Ava, CaretIcon, NextIcon, PlusIcon, PrevIcon, StatusMark, TickIcon } from "../icons";
 import { addBlock, cancelVisit, createVisit, deleteBlock, findClients, setVisitStatus, updateVisit } from "./actions";
 import { isZoom, JournalBar, type Zoom } from "./journal-bar";
+import { JournalMine, type MineLinks } from "./journal-mine";
 import { JournalSide } from "./journal-side";
 import { Sheet } from "./sheet";
-import { useTabState } from "./tab-state";
+import { MINE_KEY, rememberMine, useTabState, useWide } from "./tab-state";
 
 // a phone's pixels a minute (admin.css, --ppm): an hour is 72px in a day, 48px in a week. Here only to
 // know which visits are too short there for two lines; from 900px it is 1px a minute times the scale.
@@ -83,6 +84,13 @@ export type CalendarProps = {
   goodsCents: number | null;
   /** what the login may do here (its rights) */
   may: CalMay;
+  /**
+   * «Мой день | Весь салон» (docs/apps.md, «One app for Renat»): for a login
+   * linked to a barber whose column it sees, his column's id, today in it
+   * and the links of the panel «Моё»; `first`: the page opens on «Мой
+   * день» (what this device chose last). null for everyone else.
+   */
+  mine?: { staffId: string; today: MineToday; links: MineLinks; first: boolean } | null;
 };
 
 /** The calendar, with what the login may do in it handed down to its sheets. */
@@ -109,7 +117,7 @@ export function VisitWindow({ v, data, may, onClose, onDone }: { v: CalVisit; da
   );
 }
 
-function Journal({ data, view, date, today, staffId, now: serverNow, step, goodsCents, may }: CalendarProps) {
+function Journal({ data, view, date, today, staffId, now: serverNow, step, goodsCents, may, mine = null }: CalendarProps) {
   const A = useA();
   const router = useRouter();
   const tz = data.tz;
@@ -130,16 +138,21 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
   const zoom: Zoom = isZoom(zoomRaw) ? zoomRaw : "1";
   const [sideRaw, setSideRaw] = useTabState("adm-jr-side", "0");
   const side = sideRaw === "1";
+  // «Мой день | Весь салон», for a login linked to a barber: the tab's choice, and in a new tab what this
+  // device chose last (the server read it: MINE_COOKIE); the first time «Мой день». A week is his only
+  // while it is his own week.
+  const [mineRaw, setMineRaw] = useTabState(MINE_KEY, mine?.first === false ? "0" : "1");
+  const mineId = mine?.staffId ?? null;
+  const mineOn = !!mineId && mineRaw === "1" && (view === "day" || staffId === mineId);
+  // (the width is the styles' business; here it only says which columns the grid works with)
+  const wide = useWide();
 
-  const cols: Col[] = useMemo(
-    () =>
-      view === "week"
-        ? staffId
-          ? data.dates.map((d) => ({ key: `${staffId}:${d}`, staffId, date: d }))
-          : []
-        : dayStaff(data, date).map((id) => ({ key: `${id}:${date}`, staffId: id, date })),
-    [view, staffId, data, date],
-  );
+  const cols: Col[] = useMemo(() => {
+    if (view === "week") return staffId ? data.dates.map((d) => ({ key: `${staffId}:${d}`, staffId, date: d })) : [];
+    // «Мой день»: his column alone, also on a day he is off, so that he can still book himself
+    if (mineOn && wide && mineId) return [{ key: `${mineId}:${date}`, staffId: mineId, date }];
+    return dayStaff(data, date).map((id) => ({ key: `${id}:${date}`, staffId: id, date }));
+  }, [view, staffId, data, date, mineOn, wide, mineId]);
 
   // from the earliest start to the latest end among the columns shown
   const [lo, hi] = useMemo(() => {
@@ -171,9 +184,9 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
     const firstWork = Math.min(...cols.flatMap((c) => (data.work[c.staffId]?.[c.date] ?? []).map(([a]) => minutesInDay(a, c.date, tz))), Infinity);
     const target = cols.some((c) => c.date === today) ? minutesInDay(serverNow, today, tz) - 60 : Number.isFinite(firstWork) ? firstWork - 30 : lo;
     el.scrollTop = Math.max(0, ((target - lo) * col.getBoundingClientRect().height) / total);
-    // only on the first render of this day or week
+    // only on the first render of this day or week, and when «Мой день» changes the hours shown
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [mineOn && wide]);
 
   // another scale: the time that was at the top stays there
   const keepTop = useRef<number | null>(null);
@@ -201,6 +214,12 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
       if (s) p.set("s", s);
     }
     startTransition(() => router.push(`/admin?${p}`));
+  };
+  /** «Мой день | Весь салон». In another barber's week, «Мой день» is his own week. */
+  const pickMine = (on: boolean) => {
+    setMineRaw(on ? "1" : "0");
+    rememberMine(on);
+    if (on && view === "week" && mineId && staffId !== mineId) go(date, "week", mineId);
   };
 
   const problemText = (r: Extract<AdminOutcome, { ok: false }>) =>
@@ -344,7 +363,7 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
 
   return (
     <div
-      className={`cal${view === "week" ? " is-week" : ""}${pending ? " is-pending" : ""}${panel ? " has-panel" : ""}${hidden.map((k) => ` hide-${k}`).join("")}`}
+      className={`cal${view === "week" ? " is-week" : ""}${pending ? " is-pending" : ""}${panel ? " has-panel" : ""}${mineOn ? " is-mine" : ""}${hidden.map((k) => ` hide-${k}`).join("")}`}
       style={{ "--zoom": zoom } as React.CSSProperties}
     >
       {/* a phone's bar; from 900px the journal's own */}
@@ -420,6 +439,7 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
         side={side}
         onSide={() => setSideRaw(side ? "0" : "1")}
         onAdd={add}
+        mine={mineId ? { on: mineOn, staffId: mineId, pick: pickMine } : null}
         go={go}
       />
       {moving && (
@@ -467,14 +487,17 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
                 const load = workMin ? Math.min(100, Math.round((busyMin / workMin) * 100)) : 0;
                 // (a barber with no hours has a column for a visit, or for special time: then he is not off)
                 const line = mine.length ? `${A.cal.visits(mine.length)} · ${eur(sum)}` : work.length || data.special.some((x) => x.staffId === c.staffId) ? "—" : A.cal.closed;
+                const own = c.staffId === mineId;
+                // «Мой день»: his own head also says his hours, «Барбер · 10:00–19:00»
+                const hours = mineOn && own ? work.map(([a, b]) => `${timeOf(tz, a)}–${timeOf(tz, b)}`).join(", ") || A.cal.closed : "";
                 return (
-                  <div key={c.key} className="cal-head">
+                  <div key={c.key} className="cal-head" data-mine={own ? "" : undefined}>
                     <Ava src={s?.photoUrl} name={s?.name ?? "?"} className="cal-ava" />
                     <span className="cal-who2">
                       <b>{s?.name}</b>
                       {/* a phone: the day's visits and their sum; from 900px the label under the name, as the journal's heads */}
                       <small className="only-narrow">{line}</small>
-                      <small className="jr-role only-wide">{A.pick(s?.role)}</small>
+                      <small className="jr-role only-wide">{[A.pick(s?.role), hours].filter(Boolean).join(" · ")}</small>
                       <span className="cal-load only-narrow" aria-hidden="true">
                         <i style={{ width: `${load}%` }} />
                       </span>
@@ -500,7 +523,7 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
                 )}
               </div>
               {cols.map((c) => (
-                <div key={c.key} className={`cal-col${moving ? " is-target" : ""}`} data-col={c.key} data-date={c.date} onClick={(e) => onColumnClick(c, e)}>
+                <div key={c.key} className={`cal-col${moving ? " is-target" : ""}`} data-col={c.key} data-date={c.date} data-mine={c.staffId === mineId ? "" : undefined} onClick={(e) => onColumnClick(c, e)}>
                   {(data.work[c.staffId]?.[c.date] ?? []).map(([a, b], i) => (
                     <div key={`w${i}`} className="cal-work" style={at(minOf(a, c.date), (b - a) / MIN)} />
                   ))}
@@ -615,7 +638,8 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
             </div>
           </div>
         )}
-        {side && <JournalSide tz={tz} />}
+        {/* «Мой день» has its own panel; the clients' one is back with «Весь салон» */}
+        {mineOn && mine ? <JournalMine today={mine.today} links={mine.links} now={now} tz={tz} /> : side && <JournalSide tz={tz} />}
       </div>
 
       {sheet?.kind === "new" && (

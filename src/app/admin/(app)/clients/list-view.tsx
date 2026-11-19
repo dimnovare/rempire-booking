@@ -32,7 +32,7 @@
  * (CLIENTS_CHANGED), and the list asks for its page again.
  */
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { ClientColumn } from "@/lib/admin/client-columns";
 import { cleanCond, PAGE_SIZE, PAGE_SIZES, segmentConds, type ClientSort, type CondInput, type Join, type Segment } from "@/lib/admin/client-filter";
@@ -159,6 +159,21 @@ export function ClientsView({ initial, tz, may, columns, staff, services }: Clie
     setTicks(new Set());
     setF(next);
   };
+  // «Мои клиенты» in the journal's panel «Моё» (journal-mine.tsx): /admin/clients?barber=<id> opens the list
+  // on the clients who came to that barber, as the condition «По визитам: сотрудник» would. A barber's id is
+  // no client's data, so it may be in the address; what is typed in the search still never is.
+  const preset = useSearchParams().get("barber");
+  useEffect(() => {
+    if (!preset || !staff.some((s) => s.id === preset)) return;
+    const cond: CondInput = { kind: "barber", value: preset };
+    setSegment(null);
+    setRows([draftOf(cond)]);
+    setJoin("and");
+    setBad(new Set());
+    ask((cur) => ({ ...cur, conds: [cond], join: "and", page: 1 }));
+    // once, for the barber the address names
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preset]);
   const type = (v: string) => {
     setText(v);
     window.clearTimeout(r.current.timer);

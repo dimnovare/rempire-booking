@@ -9,6 +9,8 @@
  */
 import Link from "next/link";
 import { useState } from "react";
+// «Открыть его приложение»: the barber app's own action (it sets whose app is looked at and opens /b)
+import { viewAs } from "@/app/b/(app)/actions";
 import type { StaffDetail } from "@/lib/admin/staff";
 import { extraText } from "@/lib/slots";
 import { eur, type Copy } from "../../../copy";
@@ -41,7 +43,20 @@ export function weekText(A: Copy, hours: StaffDetail["hours"]): string {
 
 const more = (A: Copy, n: number) => (n > 1 ? ` · ${A.staff.more(n - 1)}` : "");
 
-export function BarberPage({ d, tz, today, back }: { d: StaffDetail; tz: string; today: string; back: React.ReactNode }) {
+export function BarberPage({
+  d,
+  tz,
+  today,
+  back,
+  app = false,
+}: {
+  d: StaffDetail;
+  tz: string;
+  today: string;
+  back: React.ReactNode;
+  /** «Открыть его приложение»: the login may see this barber's column, and the barber is not the login itself */
+  app?: boolean;
+}) {
   const A = useA();
   const [open, setOpen] = useState<Part | null>(null);
   const dt = new Intl.DateTimeFormat(A.intl, { timeZone: tz, day: "numeric", month: "short" });
@@ -121,6 +136,22 @@ export function BarberPage({ d, tz, today, back }: { d: StaffDetail; tz: string;
             </Pane>
           </div>
         ))}
+        {app && (
+          // support: his own app, as he sees it (docs/apps.md, «One app for Renat»); a salon page ends it
+          <div className="adm-part adm-part-app">
+            <form action={viewAs.bind(null, d.id)}>
+              <button className="adm-sumrow">
+                <span className="tx">
+                  <b>{A.app.openApp}</b>
+                  <small>{A.app.openAppHint}</small>
+                </span>
+                <span className="adm-chev">
+                  <NextIcon />
+                </span>
+              </button>
+            </form>
+          </div>
+        )}
       </div>
     </main>
   );

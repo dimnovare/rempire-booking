@@ -80,49 +80,31 @@ html, body { background: var(--ink); }
 .adm .test-banner { position: sticky; top: 0; z-index: 31; box-sizing: border-box; height: var(--test-h); padding-top: env(safe-area-inset-top, 0px); overflow: hidden; white-space: nowrap; }
 .adm:has(.test-banner) .adm-top { top: var(--test-h); height: var(--top-h); padding-top: 0; }
 .adm-brand { display: flex; align-items: center; min-height: 44px; }
-/* The staff app's side switch, «Мой день | Салон» (src/components/side-switch.tsx): for Renat and the
-   front desk, the same in the admin and in the barber app. A row under the top bar on a phone and a
-   tablet upright; beside the logo from 900px. The row's height joins --head-h, so the calendar still
-   fills the screen exactly. */
-.adm-side { display: flex; }
-.adm-side a { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px; padding: 0 14px; border: 1px solid var(--chrome-line); color: var(--chrome-mute); font: 600 13px/1 var(--display); text-decoration: none; white-space: nowrap; }
-.adm-side a:first-child { border-radius: 8px 0 0 8px; }
-.adm-side a:last-child { border-radius: 0 8px 8px 0; }
-.adm-side a + a { border-left: 0; }
-.adm-side a[aria-current="page"] { background: var(--lime); border-color: var(--lime); color: var(--on-lime); }
-.adm-side-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--lime); }
-.adm-side a[aria-current="page"] .adm-side-dot { background: var(--on-lime); }
-.adm-side-bar { display: none; }
-.adm-side-row { padding: 8px max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); background: var(--chrome); }
-.adm:has(.adm-side-row) { --side-h: 57px; --head-h: calc(var(--top-h) + env(safe-area-inset-top, 0px) + var(--side-h)); }
-.adm:has(.test-banner):has(.adm-side-row) { --head-h: calc(var(--top-h) + var(--test-h) + var(--side-h)); }
-@media (min-width: 900px) {
-  .adm-side-row { display: none; }
-  .adm-side-bar { display: flex; flex: none; }
-  .adm-side-bar a { flex: none; min-height: 36px; }
-  .adm:has(.adm-side-row) { --side-h: 0px; }
-}
+/* One app for an owner or the front desk (docs/apps.md, «One app for Renat»; the design boards «A»): on a
+   phone the top bar keeps the mark and the name only, 56px, and the same in both halves of the app (the
+   salon's pages here, the login's own barber pages at /b). A barber's own app keeps its bar (barber.css). */
+:root:has(.one-top) { --top-h: 56px; }
+.one-top { gap: 10px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.one-brand { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; min-height: 44px; text-decoration: none; }
+.one-mark { flex: none; width: 24px; height: 24px; border-radius: 7px; background: #fff; color: var(--chrome); display: grid; place-items: center; }
+.one-mark svg { height: 18px; width: auto; }
+.one-name { font: 500 16px/24px var(--body); color: #dfe4ed; }
 .adm-me { margin-left: auto; display: flex; align-items: center; gap: 6px; min-width: 0; }
 .adm-me form { display: contents; }
-/* the corner: «Доступ» (the person's own section) and «Выйти», two quiet links of one kind */
-.adm-out, .adm-acc { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; color: var(--chrome-mute); font-size: 14px; white-space: nowrap; text-decoration: none; }
-.adm-out:hover, .adm-acc:hover { color: var(--chrome-fg); }
-.adm-out svg, .adm-acc svg { flex: none; width: 20px; height: 20px; }
-.adm-acc[aria-current="page"] { color: var(--lime); }
 .adm-top .adm-tag.lime { border-color: var(--lime); color: var(--lime); }
-/* «Демо» (a local demo only) gives way to the two links on a narrow phone */
+/* «Демо» (a local demo only) gives way on a narrow phone */
 @media (max-width: 419px) { .adm-me .adm-tag { display: none; } }
-@media (max-width: 359px) { .adm-out, .adm-acc { padding: 0 6px; gap: 6px; } }
 .adm-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); height: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px)); padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); background: var(--chrome); }
 .adm-nav a { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; text-decoration: none; color: var(--chrome-mute); font: 500 11px/1 var(--display); border-top: 2px solid transparent; }
 .adm-nav a[aria-current="page"] { color: var(--lime); border-top-color: var(--lime); }
 /* the tabs share the width whatever their number (five at most, see nav.tsx); with five, the words need a little less room on a phone */
-@media (max-width: 899px) { .adm-nav:has(a:nth-child(5)) a { font-size: 10px; } }
-/* the admin's sections (sections.tsx) are one list of links. A phone's bar shows four of them and «Ещё»: the ones
-   behind «Ещё» (in-more) are hidden there and listed on /admin/more. The sidebar from 900px shows every section
-   and has no «Ещё» (is-more). */
-@media (max-width: 899px) { .adm-nav a.in-more { display: none; } }
-@media (min-width: 900px) { .adm-nav a.is-more { display: none; } }
+@media (max-width: 899px) { .adm-nav:not(.one-nav):has(a:nth-child(5)) a { font-size: 10px; } }
+/* The one bar of an owner or the front desk (src/components/app-bar.tsx), to the design board: 64px, five
+   columns, a 22px icon over an 11px word, yellow for the open tab, and a red dot on «Запросы» while requests
+   wait. The same bar in both halves of the app. A barber's own bar keeps the line over its open tab. */
+.adm-nav.one-nav a { position: relative; gap: 4px; border-top: 0; color: #c6cbd3; font: 500 11px/14px var(--body); }
+.adm-nav.one-nav a[aria-current="page"] { color: var(--lime); }
+.one-dot { position: absolute; top: 10px; left: calc(50% + 9px); width: 8px; height: 8px; border-radius: 50%; background: #f72c32; }
 .adm-main { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px)); }
 @media (min-width: 900px) {
   :root { --top-h: 56px; }
@@ -185,12 +167,6 @@ html, body { background: var(--ink); }
   .sb-mark svg { height: 15px; width: auto; }
   .sb-name { font-size: 14px; line-height: 20px; font-weight: 500; color: #dfe4ed; }
   .sb .adm-tag.lime { border-color: var(--lime); color: var(--lime); }
-  /* «Мой день | Салон»: under the head in both modes, where it was under the logo */
-  .sb-side:empty { display: none; }
-  .sb-side { flex: none; padding: 8px 12px 0; }
-  .sb.is-menu .sb-side { padding-bottom: 4px; }
-  .sb .adm-side-bar a { flex: 1; min-height: 32px; padding: 0 8px; border-color: var(--sb-line); color: var(--sb-soft); font: 500 12px/1 var(--display); }
-  .sb .adm-side-bar a[aria-current="page"] { border-color: var(--lime); color: var(--on-lime); }
   .sb-mid { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; }
   .sb-mid::-webkit-scrollbar { display: none; }
 
@@ -257,6 +233,8 @@ html, body { background: var(--ink); }
 
   /* the foot: who is signed in and the way out, the yellow bar, the thin row */
   .sb-me { flex: none; height: 49px; display: flex; align-items: center; gap: 8px; padding: 0 12px; }
+  .sb-ava { flex: none; width: 28px; height: 28px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: #7a5b6b; color: #fff; font: 600 12px/1 var(--body); }
+  .sb-ava img { width: 100%; height: 100%; object-fit: cover; }
   .sb-me .who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .sb-me .who > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sb-me b { font-size: 12px; line-height: 16px; font-weight: 500; }
@@ -641,6 +619,33 @@ button.cal-head:hover b { color: var(--accent); }
   .jr-hits a:hover { box-shadow: inset 0 0 0 1px #e0e3eb; }
   .jr-hits b { font: 500 12px/16px var(--body); overflow-wrap: anywhere; }
   .jr-hits small { color: #71757f; font-size: 12px; }
+
+  /* «Мой день | Весь салон» (docs/apps.md, «One app for Renat»; the design board «A: на компьютере»): for a
+     login linked to a barber. The control is a pair in the bar, yellow on the chosen half. «Мой день»: his
+     column alone with a 64px head and the time on the left only, and the panel «Моё» beside it, a third of
+     the width. The other columns are hidden here too, so the page is right before the browser takes it over
+     (calendar.tsx then works with his column alone). */
+  .jr-seg > .jr-btn + .jr-btn { border-left: 0; border-radius: 0 8px 8px 0; }
+  .jr-seg.jr-mine .jr-btn[aria-pressed="true"] { border-color: #ffcb00; background: #ffcb00; color: #2b3134; font-weight: 600; }
+  .cal.is-mine .cal-scroll { flex: 2 1 480px; }
+  .cal.is-mine:not(.is-week) .cal-grid { grid-template-columns: 60px minmax(96px, 1fr) 12px; }
+  .cal.is-mine:not(.is-week) :is(.cal-head, .cal-col):not([data-mine]) { display: none; }
+  .cal.is-mine:not(.is-week) :is(.cal-corner, .cal-head) { height: 64px; }
+  .cal.is-mine:not(.is-week) .cal-gutter-r { border-left: 0; }
+  .cal.is-mine:not(.is-week) .cal-gutter-r .jr-tick { display: none; }
+  .cal.is-mine:not(.is-week) .cal-col { border-right: 1px solid #e0e3eb; }
+  .jr-mine-side { flex: 1 1 300px; min-width: 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 16px; background: #f7f9fc; border-left: 1px solid #e0e3eb; color: #2b3134; font: 400 12px/16px var(--body); }
+  .cal.has-panel .jr-mine-side { display: none; }
+  .jr-mine-side h2 { margin: 0; font: 600 14px/20px var(--body); }
+  .jr-mine-card { margin: 0; display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; background: #fff; border: 1px solid #e0e3eb; border-radius: 12px; }
+  .jr-mine-card dt { color: #71757f; }
+  .jr-mine-card dd { margin: 0; font: 600 14px/20px var(--body); overflow-wrap: anywhere; }
+  .jr-mine-links { display: flex; flex-direction: column; background: #fff; border: 1px solid #e0e3eb; border-radius: 12px; overflow: hidden; }
+  .jr-mine-links a { display: flex; align-items: center; min-height: 44px; padding: 0 16px; color: #2b3134; font: 500 14px/20px var(--body); text-decoration: none; }
+  .jr-mine-links a + a { border-top: 1px solid #eef1f6; }
+  .jr-mine-links a::after { content: "›"; margin-left: auto; color: #9aa3b1; }
+  .jr-mine-links a:hover { background: #f7f9fc; }
+  .jr-mine-links a:focus-visible { outline-offset: -2px; }
 }
 
 /* ---------- sheets: from the bottom on phones, a panel on the right on wide screens ---------- */
@@ -807,6 +812,9 @@ button.cal-head:hover b { color: var(--accent); }
   .adm-parts { gap: 16px; border-top: 0; }
   .adm-part { border-bottom: 0; }
   .adm-part > .adm-sumrow { display: none; }
+  /* «Открыть его приложение»: a card of its own among the barber's parts */
+  .adm-part.adm-part-app { align-self: start; border: 1px solid var(--line-2); border-radius: 12px; background: var(--raise); overflow: hidden; }
+  .adm-part-app .adm-sumrow { padding: 10px 16px; }
 }
 .adm-sumrow { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 68px; padding: 10px 2px; text-align: left; }
 .adm-sumrow .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -912,8 +920,8 @@ button.cal-head:hover b { color: var(--accent); }
 /* on the indigo frame the current section is Isolta's darker pill, and yellow has no place */
 :root:has(.adm-inv) .adm-top:not(.bx-top) .adm-nav a[aria-current="page"] { background: var(--chrome-2); }
 :root:has(.adm-inv) .adm-nav a[aria-current="page"] { color: #fff; border-top-color: #fff; }
-:root:has(.adm-inv) .adm-side a[aria-current="page"] { background: #fff; border-color: #fff; color: #312e6b; }
-:root:has(.adm-inv) :is(.adm-top, .sb) .adm-tag.lime, :root:has(.adm-inv) .adm-acc[aria-current="page"] { border-color: #fff; color: #fff; }
+:root:has(.adm-inv) .adm-nav.one-nav a[aria-current="page"] { color: #fff; }
+:root:has(.adm-inv) :is(.adm-top, .sb) .adm-tag.lime { border-color: #fff; color: #fff; }
 
 .adm-inv-tabs { display: flex; align-self: flex-start; }
 .adm-inv-tabs a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; font: 600 13px/1 var(--display); color: var(--mute); text-decoration: none; }
@@ -1076,10 +1084,27 @@ button.cal-head:hover b { color: var(--accent); }
   .adm-two-cols { display: flex; flex-direction: column; gap: 14px; }
 }
 
-/* ---------- «Ещё» (/admin/more): the sections a phone's bar has no tab for, as large rows ---------- */
-.adm-more .adm-item { min-height: 72px; gap: 14px; }
-.adm-more .adm-item .txt b { font-size: 17px; }
-.adm-more-ico { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 8px; background: var(--raise); border: 1px solid var(--line-2); color: var(--fg); }
+/* ---------- «Ещё» (/admin/more), to the design board «A: Ещё, моё и салон» ----------
+   Who is signed in (a 48px round picture or initial, the name, the role), then three groups: a 12px grey
+   title over a white card with 12px corners, a 48px row per page with a thin line between rows and a grey
+   «›» at the right. A row of «Салон» is also an .adm-item, as the rows of this page were before the groups. */
+.adm-more { gap: 16px; padding-top: 16px; }
+.mo-who { display: flex; align-items: center; gap: 12px; }
+.mo-who > div { min-width: 0; display: flex; flex-direction: column; }
+.mo-who b { font: 600 17px/24px var(--body); overflow-wrap: anywhere; }
+.mo-who span:not(.mo-ava) { font: 400 13px/18px var(--body); color: #71757f; }
+.mo-ava { flex: none; width: 48px; height: 48px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: #7a5b6b; color: #fff; font: 600 18px/1 var(--body); }
+.mo-ava img { width: 100%; height: 100%; object-fit: cover; }
+.mo-group { display: flex; flex-direction: column; gap: 6px; }
+.mo-group h2 { margin: 0; font: 600 12px/16px var(--body); color: #71757f; }
+.mo-list { list-style: none; margin: 0; padding: 0; background: #fff; border: 1px solid #e0e3eb; border-radius: 12px; overflow: hidden; }
+.mo-list > li + li { border-top: 1px solid #eef1f6; }
+.mo-row, .adm-more .adm-item.mo-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 0 14px; color: #2b3134; text-align: left; text-decoration: none; }
+.mo-row b { flex: 1; min-width: 0; font: 500 15px/20px var(--body); }
+.mo-row small { flex: none; max-width: 55%; font: 400 13px/18px var(--body); color: #71757f; text-align: right; }
+.mo-row::after { content: "›"; flex: none; color: #9aa3b1; font: 400 14px/20px var(--body); }
+.mo-row:focus-visible { outline-offset: -2px; }
+@media (hover: hover) { .mo-row:hover { background: #f7f9fc; } }
 
 /* ---------- «Клиенты»: the client base (Dim, decisions round 8, 19.11.2026) ----------
    In the look of the rest of the admin (Altegio's, docs/reference-looks.md): the yellow main button, a search

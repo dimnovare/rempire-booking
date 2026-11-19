@@ -8,9 +8,13 @@
  * the day's numbers, «День | Неделя», the status filter, the scale, the
  * panel on the right, and the one yellow button, «Запись».
  *
- * A phone keeps its own bar (calendar.tsx). The filter, the scale and the
- * panel are the tab's choices (tab-state.ts); the calendar keeps them and
- * hands them down.
+ * A login linked to a barber also has «Мой день | Весь салон» before
+ * «Продать» (docs/apps.md, «One app for Renat»): a pair, yellow on the
+ * chosen half.
+ *
+ * A phone keeps its own bar (calendar.tsx). The filter, the scale, the
+ * panel and «Мой день | Весь салон» are the tab's choices (tab-state.ts);
+ * the calendar keeps them and hands them down.
  */
 import type { CalStaff } from "@/lib/admin/calendar";
 import { VISIT_STATES, type DayNumbers, type VisitState } from "@/lib/admin/journal";
@@ -50,10 +54,18 @@ export type JournalBarProps = {
   onAdd: (() => void) | null;
   /** «Продать» is offered: the login may sell products */
   sell: boolean;
+  /**
+   * «Мой день | Весь салон», for a login linked to a barber whose column it
+   * sees (docs/apps.md, «One app for Renat»); null for everyone else, who
+   * never see the control. While «Мой день» is on, the bar is his own: the
+   * week is his week, and the salon's numbers and the panel's button give
+   * way to the panel «Моё».
+   */
+  mine: { on: boolean; staffId: string; pick: (on: boolean) => void } | null;
   go: (date: string, view?: "day" | "week", staffId?: string | null) => void;
 };
 
-export function JournalBar({ view, date, today, title, dayText, staff, staffId, numbers, hidden, onHidden, zoom, onZoom, side, onSide, onAdd, sell, go }: JournalBarProps) {
+export function JournalBar({ view, date, today, title, dayText, staff, staffId, numbers, hidden, onHidden, zoom, onZoom, side, onSide, onAdd, sell, mine, go }: JournalBarProps) {
   const A = useA();
   const C = A.cal;
   const frame = useFrame();
@@ -92,13 +104,24 @@ export function JournalBar({ view, date, today, title, dayText, staff, staffId, 
       </h1>
       <div className="jr-space" />
 
+      {mine && (
+        <div className="jr-seg jr-mine" role="group" aria-label={A.app.scope}>
+          <button type="button" className="jr-btn" aria-pressed={mine.on} onClick={() => !mine.on && mine.pick(true)}>
+            {A.app.mine}
+          </button>
+          <button type="button" className="jr-btn" aria-pressed={!mine.on} onClick={() => mine.on && mine.pick(false)}>
+            {A.app.salon}
+          </button>
+        </div>
+      )}
+
       {sell && (
         <button type="button" className="jr-btn" onClick={() => frame.open("sale")}>
           {C.sell}
         </button>
       )}
 
-      {numbers && (
+      {numbers && !mine?.on && (
         <Pop
           kind="dialog"
           name={C.numbers}
@@ -139,40 +162,47 @@ export function JournalBar({ view, date, today, title, dayText, staff, staffId, 
         <button type="button" className="jr-btn" aria-pressed={view === "day"} onClick={() => view !== "day" && go(date, "day")}>
           {C.day}
         </button>
-        <Pop
-          kind="menu"
-          name={C.weekOf}
-          pressed={view === "week"}
-          button={
-            <>
-              <span>{who ? `${C.week} · ${who.name}` : C.week}</span>
-              <CaretIcon size={10} />
-            </>
-          }
-        >
-          {(close) =>
-            staff.map((s) => {
-              const on = view === "week" && s.id === staffId;
-              return (
-                <button
-                  key={s.id}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={on}
-                  className="jr-item"
-                  onClick={() => {
-                    close();
-                    if (!on) go(date, "week", s.id);
-                  }}
-                >
-                  <Ava src={s.photoUrl} name={s.name} className="jr-ava" />
-                  <span>{s.name}</span>
-                  {on && <TickIcon size={12} />}
-                </button>
-              );
-            })
-          }
-        </Pop>
+        {mine?.on ? (
+          // «Мой день»: the week is his own, nobody to pick
+          <button type="button" className="jr-btn" aria-pressed={view === "week"} onClick={() => view !== "week" && go(date, "week", mine.staffId)}>
+            {C.week}
+          </button>
+        ) : (
+          <Pop
+            kind="menu"
+            name={C.weekOf}
+            pressed={view === "week"}
+            button={
+              <>
+                <span>{who ? `${C.week} · ${who.name}` : C.week}</span>
+                <CaretIcon size={10} />
+              </>
+            }
+          >
+            {(close) =>
+              staff.map((s) => {
+                const on = view === "week" && s.id === staffId;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={on}
+                    className="jr-item"
+                    onClick={() => {
+                      close();
+                      if (!on) go(date, "week", s.id);
+                    }}
+                  >
+                    <Ava src={s.photoUrl} name={s.name} className="jr-ava" />
+                    <span>{s.name}</span>
+                    {on && <TickIcon size={12} />}
+                  </button>
+                );
+              })
+            }
+          </Pop>
+        )}
       </div>
 
       <Pop kind="menu" name={C.filter} label={C.filter} icon marked={hidden.length > 0} button={<FunnelIcon />}>
@@ -204,9 +234,12 @@ export function JournalBar({ view, date, today, title, dayText, staff, staffId, 
         )}
       </Pop>
 
-      <button type="button" className="jr-btn jr-ibtn" aria-label={C.panel} aria-pressed={side} onClick={onSide}>
-        <PanelIcon />
-      </button>
+      {/* «Мой день» has its own panel, «Моё» */}
+      {!mine?.on && (
+        <button type="button" className="jr-btn jr-ibtn" aria-label={C.panel} aria-pressed={side} onClick={onSide}>
+          <PanelIcon />
+        </button>
+      )}
 
       {onAdd && (
         <button type="button" className="jr-btn jr-main" aria-label={A.visit.new} onClick={onAdd}>

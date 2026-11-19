@@ -69,5 +69,7 @@ async function Detail({ params }: { params: PageProps<"/admin/staff/[id]">["para
   const today = todayIn(business.timezone);
   const d = await staffDetail(query, business, id, today);
   if (!d) notFound();
-  return <BarberPage key={d.id} d={d} tz={business.timezone} today={today} back={<BackToStaff A={A} />} />;
+  // his own app is «Мой день»; another barber's opens with the right to see his column
+  const app = d.id !== user.staffId && can(user, "journal.staff", { staffId: d.id });
+  return <BarberPage key={d.id} d={d} tz={business.timezone} today={today} back={<BackToStaff A={A} />} app={app} />;
 }

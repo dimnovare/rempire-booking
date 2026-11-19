@@ -262,8 +262,9 @@ test.describe("the frame", () => {
       await expect(menu(page).getByRole("link", { name: A.nav.staffList, exact: true })).toHaveAttribute("href", "/admin/staff");
       await expect(menu(page).getByRole("link", { name: A.nav.schedule, exact: true })).toHaveAttribute("href", "/admin/schedule");
       await menu(page).getByRole("button", { name: A.nav.team }).click();
-      // «Мой день | Салон» is where it was, in both modes
-      await expect(sb(page).getByRole("navigation", { name: A.side.label })).toBeVisible();
+      // the «Мой день | Салон» switch is gone (docs/apps.md, «One app for Renat»): the only navigation here is the menu
+      await expect(sb(page).getByRole("navigation")).toHaveCount(1);
+      await expect(sb(page).locator(".sb-side, .adm-side")).toHaveCount(0);
 
       // a group opens as a dark card with a yellow head; another one shuts it
       const goods = menu(page).getByRole("button", { name: A.nav.goods });

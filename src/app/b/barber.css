@@ -14,9 +14,12 @@
 .bx-who { gap: 8px; }
 .bx-me { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; min-width: 0; text-decoration: none; }
 .bx-me b { font: 600 15px/1 var(--display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bx-viewing { padding: 0 10px 0 4px; border: 1px solid var(--chrome-line); border-radius: 8px; color: var(--lime); font-size: 13px; }
-.bx-viewing span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46vw; }
 .adm-ava.bx-ava { width: 26px; height: 32px; font-size: 13px; }
+/* an owner or the front desk in a barber's own app (opened from «Барберы»): whose app it is, and the way back.
+   One line under the top bar that stays in view; the whole of it is the link. */
+.bx-as { position: sticky; top: var(--head-h); z-index: 29; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; padding: 6px max(16px, env(safe-area-inset-right, 0px)) 6px max(16px, env(safe-area-inset-left, 0px)); background: var(--lime-bg); border-bottom: 1px solid var(--line-2); color: var(--fg); font-size: 14px; line-height: 18px; text-decoration: none; }
+.bx-as span { min-width: 0; overflow-wrap: anywhere; }
+.bx-as b { flex: none; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 
 /* the sections stay at the bottom at every width */
 @media (min-width: 900px) {
@@ -281,4 +284,42 @@ html:has(.bx-day) { overscroll-behavior-y: contain; }
 .bx-scan-manual input { flex: 1; }
 .bx-scan-manual .adm-btn { flex: none; }
 /* five sections in the bottom bar */
-.bx-nav:has(a:nth-child(5)) a { font-size: 10px; }
+.bx-nav:not(.one-nav):has(a:nth-child(5)) a { font-size: 10px; }
+
+/* ---------- «Мой день» of an owner or the front desk who cuts too (docs/apps.md, «One app for Renat») ----------
+   His own day as a tab of the one app, to the design board «A: Мой день как вкладка»: the title with a line
+   of the day, the count and the sum; «День | Неделя»; a visit as a card in the journal's colours (the strip by
+   who made it, the body by its state: src/lib/admin/journal.ts); «+ Запись» as a pill. A barber's own day
+   keeps its look. */
+.bx-day.is-own { gap: 12px; padding-top: 16px; }
+.bx-own-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.bx-own-head > div { min-width: 0; }
+.bx-own-head .adm-h1 { font: 600 22px/28px var(--body); }
+.bx-own-line { margin: 0; font: 400 13px/18px var(--body); color: #71757f; }
+.bx-own-seg { flex: none; display: flex; }
+.bx-own-seg a { height: 36px; display: inline-flex; align-items: center; padding: 0 12px; border: 1px solid #e0e3eb; background: #fff; color: #2b3134; font: 500 13px/1 var(--body); text-decoration: none; white-space: nowrap; }
+.bx-own-seg a:first-child { border-radius: 8px 0 0 8px; }
+.bx-own-seg a:last-child { border-radius: 0 8px 8px 0; }
+.bx-own-seg a + a { border-left: 0; }
+.bx-own-seg a[aria-current="page"] { border-color: #2b3134; background: #2b3134; color: #fff; }
+.bx-own-seg a[aria-current="page"] + a { border-left: 0; }
+.bx-own-today { justify-content: flex-end; }
+.bx-day.is-own .bx-pull { margin: -16px 0 -12px; }
+.bx-day.is-own .bx-tl { gap: 8px; border-top: 0; }
+.bx-day.is-own .bx-tl > li { border-bottom: 0; }
+.bx-day.is-own .bx-v > button { min-height: 0; gap: 12px; padding: 10px 12px; border-left: 6px solid var(--h) !important; border-radius: 8px; background: var(--b); opacity: 1; }
+.bx-day.is-own .bx-v.is-now > button { box-shadow: rgba(226, 131, 14, .9) 0 0 7px 1px; }
+.bx-day.is-own .bx-v .bx-t { width: auto; gap: 0; }
+.bx-day.is-own .bx-v .bx-t :is(b, small) { font: 600 13px/18px var(--body); color: var(--n); }
+.bx-day.is-own .bx-v-main { gap: 0; }
+.bx-day.is-own .bx-v-main b { font: 600 15px/20px var(--body); color: var(--n); text-decoration: none; }
+.bx-day.is-own .bx-v-main small { font: 400 13px/18px var(--body); color: #273a49; }
+.bx-day.is-own .bx-v-side b { font: 600 14px/20px var(--body); color: var(--n); }
+/* the state is the card's colour here */
+.bx-day.is-own .bx-v-side .adm-tag { display: none; }
+.bx-day.is-own .bx-gap > :is(button, div) { min-height: 44px; padding: 4px 12px 4px 18px; border: 1px dashed var(--line-2) !important; border-radius: 8px; }
+.bx-day.is-own .bx-blk { min-height: 44px; padding: 4px 12px 4px 18px; border-radius: 8px; }
+.bx-day.is-own .bx-next { border-radius: 12px; }
+.bx-fab.bx-fab-pill { width: auto; height: 48px; display: inline-flex; align-items: center; gap: 6px; padding: 0 18px; border-radius: 24px; font: 600 15px/1 var(--body); box-shadow: rgba(6, 19, 51, .24) 0 6px 16px; }
+.bx-week.is-own { padding-top: 16px; }
+.bx-week.is-own .bx-own-head { margin-bottom: 6px; }

@@ -5,9 +5,11 @@
  * own (Russian, Estonian or English): read once here, handed to every
  * component below.
  *
- * The admin is the «Салон» side of the staff app (docs/apps.md), so it
+ * The admin is the salon's half of the one staff app (docs/apps.md), so it
  * carries the same manifest and home-screen tags as the barber app: added
- * to the home screen from here, it is the same one app.
+ * to the home screen from here, it is the same one app. The two halves keep
+ * their own root layouts and share the frame's pieces
+ * (src/components/app-bar.tsx; docs/apps.md, «One app for Renat»).
  */
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";

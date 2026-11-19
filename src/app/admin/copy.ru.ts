@@ -50,7 +50,9 @@ export const ru = {
   // the sections (sections.tsx lists them); `more` is the fifth tab of a phone's bar;
   // `goods` and `clientBase` are a group and a page of the wide sidebar's menu
   nav: {
-    calendar: "Календарь",
+    // «Мой день»: a tab for a login linked to a barber (docs/apps.md, «One app for Renat»)
+    mine: "Мой день",
+    calendar: "Журнал",
     clients: "Клиенты",
     staff: "Барберы",
     services: "Услуги",
@@ -725,10 +727,47 @@ export const ru = {
     copied: (n: number) => `Скопировано: ${n} ${plural(n, "день", "дня", "дней")}.`,
   },
 
-  more: { title: "Ещё" },
+  /** «Ещё» on a phone, in three groups (docs/apps.md, «One app for Renat»). */
+  more: {
+    title: "Ещё",
+    mineGroup: "Моё, как барбера",
+    salonGroup: "Салон",
+    accountGroup: "Аккаунт",
+    time: "Моё время",
+    timeHint: "смены, перерывы, отпуск",
+    sell: "Продать товар",
+    money: "Мои расчёты",
+    access: "Доступ и права",
+    notify: "Уведомления",
+    notifyHint: "на этом устройстве",
+    language: "Язык",
+    logout: "Выйти",
+    andBarber: (role: string) => `${role} и барбер`,
+  },
 
-  /** The staff app's two sides (docs/apps.md), for Renat and the front desk. */
-  side: { label: "Мой день или салон", mine: "Мой день", barber: "Барбер", salon: "Салон", waiting: (n: number) => `Запросов ждёт: ${n}` },
+  /**
+   * One app for an owner or the front desk who cuts too (docs/apps.md): the
+   * dot on «Запросы», «Мой день | Весь салон» and the panel «Моё» in the
+   * journal from 900px, and a barber's own app opened from «Барберы».
+   */
+  app: {
+    waiting: (n: number) => `Запросов ждёт: ${n}`,
+    scope: "Мой день или весь салон",
+    mine: "Мой день",
+    salon: "Весь салон",
+    panel: "Моё",
+    chair: "Сейчас в кресле",
+    until: (name: string, time: string) => `${name} · до ${time}`,
+    nobody: "Никого",
+    next: "Следующий",
+    noNext: "Больше никого",
+    today: "Сегодня",
+    myTime: "Моё время",
+    myMoney: "Мои расчёты",
+    myClients: "Мои клиенты",
+    openApp: "Открыть его приложение",
+    openAppHint: "Вы увидите приложение так же, как его видит барбер.",
+  },
 
   /** The wide frame (from 900px): the sidebar with its month, tiles and «Избранное», and the menu behind «Все разделы». */
   frame: {

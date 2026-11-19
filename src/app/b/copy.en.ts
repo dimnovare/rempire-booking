@@ -53,13 +53,13 @@ export const en: Copy = {
     install: "How to install it on your phone",
   },
 
-  /** The staff app's two sides (docs/apps.md), for Renat and the front desk. */
-  side: { label: "My day or salon", mine: "My day", barber: "Barber", salon: "Salon", waiting: (n: number) => `Requests waiting: ${n}` },
+  own: { title: "My day", view: "Day or week", day: "Day", week: "Week", add: "Visit" },
 
   pick: {
     title: "Whose day to see",
     lead: "You see the app the way that barber sees it.",
-    viewing: (name: string) => `Viewing: ${name}`,
+    viewing: (name: string) => `You are viewing ${name}'s app`,
+    back: "Back to the salon",
     change: "Change",
     none: "No barbers.",
     off: "not working",

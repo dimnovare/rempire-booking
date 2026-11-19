@@ -1,4 +1,11 @@
-/** /b/pick: Renat or the front desk choose whose day to see (a barber never gets here). */
+/**
+ * /b/pick: Renat or the front desk choose whose app to look at (a barber
+ * never gets here). Since 20.11.2026 a barber's app is opened from
+ * «Барберы» → the barber → «Открыть его приложение» (docs/apps.md, «One app
+ * for Renat»), and nothing links here: this is only where /b falls back to
+ * for an owner or the front desk with no barber of their own and nobody's
+ * app open (requireStaff, src/lib/auth/current.ts).
+ */
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { requireStaffUser } from "@/lib/auth/current";

@@ -33,6 +33,7 @@ import { useFrame } from "./frame";
 import { monthLoadAction } from "./frame-actions";
 import { MENU, SectionIcon, sectionOpen } from "./sections";
 import { StarShape } from "./star";
+import type { Who } from "./who";
 
 type Mode = "till" | "menu";
 const MODE_KEY = "adm-sb-mode";
@@ -54,7 +55,8 @@ const keep = (key: string, value: string) => {
 };
 
 export type SidebarProps = {
-  user: { name: string; email: string };
+  /** who is signed in: the name, the linked barber's picture, the role in words (who.ts) */
+  user: Who;
   /** a local demo: say so */
   demo: boolean;
   /** today in the salon's zone, YYYY-MM-DD */
@@ -63,11 +65,9 @@ export type SidebarProps = {
   load: MonthLoad | null;
   /** staging: the row with «Сообщить о проблеме» */
   report: boolean;
-  /** «Мой день | Салон» (src/components/side-switch.tsx) */
-  side: React.ReactNode;
 };
 
-export function Sidebar({ user, demo, today, load, report, side }: SidebarProps) {
+export function Sidebar({ user, demo, today, load, report }: SidebarProps) {
   const A = useA();
   const F = A.frame;
   const path = usePathname();
@@ -111,7 +111,6 @@ export function Sidebar({ user, demo, today, load, report, side }: SidebarProps)
           </span>
         )}
       </div>
-      <div className="sb-side">{side}</div>
 
       <div className="sb-mid">
         {mode === "till" ? (
@@ -168,9 +167,13 @@ export function Sidebar({ user, demo, today, load, report, side }: SidebarProps)
       </div>
 
       <div className="sb-me">
-        <div className="who">
-          <b>{user.name || user.email}</b>
-          {user.name && <span>{user.email}</span>}
+        <span className="sb-ava" aria-hidden="true">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {user.photoUrl ? <img src={user.photoUrl} alt="" /> : user.name.charAt(0).toUpperCase()}
+        </span>
+        <div className="who" title={user.email}>
+          <b>{user.name}</b>
+          <span>{user.role}</span>
         </div>
         <form action={logout}>
           <button className="sb-out" aria-label={A.account.logout} title={A.account.logout}>

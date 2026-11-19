@@ -12,20 +12,38 @@
  * else's did.
  */
 import { refresh } from "next/cache";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { VIEW_AS_COOKIE } from "@/lib/auth/cookie";
 import { setUserLocale } from "@/lib/auth/locale";
 import { changePassword, createUser, setUserActive, setUserStaff } from "@/lib/auth/login";
-import { endSession, requireAdmin } from "@/lib/auth/current";
+import { currentStaffUser, endSession, requireAdmin } from "@/lib/auth/current";
 import { can } from "@/lib/auth/rights";
 import { loadRights, mayAddLogin, rightsToCopy, saveRights, type RightsInput, type RightsSaved } from "@/lib/auth/rights-store";
 import type { StoredRights } from "@/lib/auth/rights";
 import { query } from "@/lib/db";
 import { isUuid } from "@/lib/admin/visits";
 import { isLocale, type Locale } from "@/lib/i18n";
+import { removeSubscription } from "@/lib/push";
 import { rememberLang } from "../../lang-server";
 
 export async function logout(): Promise<void> {
   await endSession();
+  redirect("/admin/login");
+}
+
+/**
+ * «Выйти» on a phone's «Ещё»: ends this device's session, and with it this
+ * device's push (`endpoint`), as «Выйти» in the barber app does, so nothing
+ * reaches a phone that left the app.
+ */
+export async function logoutDevice(endpoint?: string | null): Promise<void> {
+  if (typeof endpoint === "string" && endpoint) {
+    const user = await currentStaffUser();
+    if (user) await removeSubscription(query, user.id, endpoint, "logout").catch(() => false);
+  }
+  await endSession();
+  (await cookies()).delete(VIEW_AS_COOKIE);
   redirect("/admin/login");
 }
 

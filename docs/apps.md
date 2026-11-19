@@ -40,7 +40,100 @@ bottom bars behind it. Three variants were drawn on the design canvas (boards
 - **A barber** keeps his bar (День · Неделя · Моё время · Продать · Ещё).
 - The dot for waiting requests sits on «Запросы».
 
-## The staff app, as built (18.11)
+### As built (20.11.2026)
+
+**Who gets what** is the login's kind (`appKind`, `src/lib/auth/side.ts`): a
+barber; an owner or front desk linked to a barber («own»); one that is not
+(«salon»). The tabs and the rows of «Ещё» for a login are one list each
+(`barOf`, `moreOf`, `src/lib/admin/app-nav.ts`), cut by its rights.
+
+- **The switch is gone:** its component, its row under a phone's top bar, its
+  row in the sidebar, its styles and `/b/mine`. The mini month starts right
+  under the sidebar's head.
+- **Two root layouts stay, the frame's pieces are shared.** The salon's pages
+  are `/admin`, the barber pages `/b`, each with its own root layout, copy and
+  language provider; `/b` also has the service worker.
+  - Shared: the bottom bar (`src/components/app-bar.tsx`) and the top bar's
+    look (`.one-top`, `admin.css`). `src/app/b/(app)/layout.tsx` draws the
+    one app's frame for an owner or front desk and the barber's own for a
+    barber (`src/app/b/frame-server.ts`).
+  - The price: a tap between a tab of one half and a tab of the other loads a
+    whole page, as the switch did. Merging the two layouts would end that; it
+    was not done here, because it moves every staff page under one root and
+    the e2e suite counts on a fresh page between the halves.
+- **Phone, linked to a barber:** Мой день · Журнал · Клиенты · Запросы · Ещё
+  on every screen of both halves. The top bar is the mark and the name, 56px.
+  - «Мой день» is `/b` and `/b/week`: the barber's day with the board's head
+    («Мой день», the day with its count and sum, «День | Неделя», «+ Запись»)
+    and a visit as a card in the journal's colours. The week strip, «Дальше»
+    with «Позвонить» and «Пришёл», free time and the visit's sheet are the
+    barber's day as it was.
+  - «Запросы» has a red dot while requests wait.
+- **«Ещё»** (`/admin/more`): who is signed in (the linked barber's photo or
+  the initial, the name, «Владелец и барбер»), then three groups.
+  - «Моё, как барбера»: Моё время, Продать товар, Мои расчёты. The barber
+    pages `/b/time`, `/b/sell`, `/b/money`, in the same frame, «Ещё» lit.
+  - «Салон»: Барберы, График работы, Услуги, Каталог товаров, Записи, Счета
+    (for a linked login only: otherwise it is a tab) and «Продажа товара».
+    The order is the sections' own, not the board's.
+  - «Аккаунт»: Доступ и права, Уведомления, Язык, Выйти. «Уведомления» is not
+    on the board: it opens this device's notifications and the install guide
+    (`/b/more`), which had no other way in once the switch went. «Язык» opens
+    the three languages in a sheet. «Выйти» also turns this device's push off.
+- **Phone, not linked:** Журнал · Клиенты · Запросы · Счета · Ещё; «Ещё» has
+  «Салон» and «Аккаунт».
+- **A barber's own app, for support:** «Барберы» → the barber → «Открыть его
+  приложение» (not on the login's own barber). It opens his day in the
+  barber's frame with one line under the top bar, «Вы смотрите приложение
+  <имя> · Назад в салон», which leads back to his page.
+  - Any salon page ends the look (`src/proxy.ts` drops `rb_view_as`), and so
+    does the app's start. What is changed there applies at once, as before.
+  - `/b/pick`, the old list of barbers, is left only as the page `/b` falls
+    back to for a login with no barber. Nothing links to it.
+- **A barber:** nothing changed.
+- **Wide screen (from 900px), linked to a barber:** the journal's bar has
+  «Мой день | Весь салон» before «Продать».
+  - «Мой день»: his column alone (also on a day off, so he can still book
+    himself), a 64px head with his hours, and the panel «Моё»: who is in the
+    chair and until when, who is next, today's count and sum (the sum only
+    with «Показывать статистику»). The panel is about today whatever day is
+    shown. «Неделя» is his own week. The day's numbers and the clients' panel
+    are back with «Весь салон»; the status filter and the scale stay.
+  - Its links: «Моё время» is his page under «Барберы», «Мои расчёты» his
+    month under «Счета», «Мои клиенты» the client base on the clients who
+    came to him (`/admin/clients?barber=<id>`; a barber's id is no client's
+    data, and what is typed in the search is still never in the address).
+  - The choice is kept for the browser tab; a new tab opens the way the
+    device left it (the `rb_mine` cookie, so the server draws it right the
+    first time), «Мой день» the first time.
+  - His phone-wide pages are not used there: `/b`, `/b/week` and `/b/sell`
+    send a wide screen to the journal, `/b/time` and `/b/money` to his pages
+    in the salon (`src/app/b/(app)/wide-own.tsx`). `/b/more` stays, and
+    «Доступ» has a link to it.
+  - A login not linked to a barber never sees the control.
+- **Where the app opens** (`/b/start`, `startPath`): a barber on his day; a
+  linked login on what the device had open last of the two halves (`rb_side`,
+  as before), «Мой день» the first time; a login not linked in the journal.
+  The server does not know the width: when it sends a linked login to `/b`
+  on a wide screen, `/b` itself sends it on to the journal with «Мой день»
+  chosen.
+- **Words** in RU, ET and EN, per login. The journal's tab reads «Журнал» in
+  Russian now («Календарь» before).
+- **Tests:** `tests/app-nav.test.ts`, `tests/barber-shell.test.ts`,
+  `e2e/sides.spec.ts` (both phones, a tablet upright, 1440px; the pictures
+  are `e2e/.out/screens/*-a-*.png`).
+
+Not checked on a real phone or in an installed app. Differs from the boards:
+no bell in the top bar (nothing feeds one); the tower mark, not a letter;
+«Мой день» keeps the barber day's week strip, «Дальше» and free time; the
+order of «Салон» and the extra rows in «Ещё»; the journal's bar keeps the
+filter and the scale in «Мой день».
+
+## The staff app, as built (18.11): its side switch is replaced (20.11)
+
+*The switch, `/b/mine` and the «Барбер» half of it are gone: see «One app for
+Renat» above. What is said below about a login linked to a barber, the
+manifest and `/b/start` still holds, with the new start rule.*
 
 One app with two sides: «Мой день», the barber app at `/b`, and «Салон»,
 the admin at `/admin`.
@@ -52,9 +145,9 @@ the admin at `/admin`.
   - Renat and the front desk land on the side the device had open last
     (the `rb_side` cookie, kept by `src/proxy.ts`).
   - The first time: his own day if the login is linked to a barber, else
-    the salon.
+    the salon. *Since 20.11 a login not linked always lands in the journal.*
 - **The side switch** (`src/components/side-switch.tsx`), for an owner or
-  admin only; a barber never sees it.
+  admin only; a barber never sees it. *Removed 20.11.*
   - It reads «Мой день | Салон» for a login linked to a barber, and
     «Барбер | Салон» for one that is not.
   - A phone and a tablet upright: a row under the top bar. From 900px:
@@ -71,15 +164,15 @@ the admin at `/admin`.
     (`queuePush`), so Renat gets his own column's too.
 - **In the barber app** an owner or admin sees his own column by default.
   The name in the top bar opens the list of barbers (`/b/pick`), himself
-  first. What he changes there applies at once, as before.
+  first. What he changes there applies at once, as before. *Since 20.11 a
+  barber's app is opened from «Барберы», and the name is no link.*
 - **One install.** The manifest (`/b/manifest.webmanifest`) is linked from
   both sides: `start_url` `/b/start`, scope `/`, id `/b` as before.
 - **Tests:** `tests/auth.test.ts`, `tests/barber-shell.test.ts`,
   `e2e/sides.spec.ts` (phone, tablet and PC widths, with screenshots). The
   demo login `boss@example.test` is an owner linked to the barber Renat.
 
-Not checked on a real phone yet: the installed app's start, and the switch
-inside an installed app.
+Not checked on a real phone yet: the installed app's start.
 
 ## The client app, as built (18.11)
 

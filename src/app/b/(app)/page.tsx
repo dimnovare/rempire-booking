@@ -55,6 +55,8 @@ async function Day({ searchParams }: { searchParams: PageProps<"/b">["searchPara
       step={business.settings.slot_step_min}
       offers={offers}
       may={may}
+      // an owner or the front desk on his own column: «Мой день», a tab of the one app (docs/apps.md)
+      own={user.role !== "staff" && staff.id === user.staffId}
     />
   );
 }

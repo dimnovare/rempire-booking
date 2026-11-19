@@ -56,13 +56,19 @@ export const ru = {
     install: "Как установить на телефон",
   },
 
-  /** The staff app's two sides (docs/apps.md), for Renat and the front desk. */
-  side: { label: "Мой день или салон", mine: "Мой день", barber: "Барбер", salon: "Салон", waiting: (n: number) => `Запросов ждёт: ${n}` },
+  /**
+   * «Мой день» of an owner or the front desk who cuts too (docs/apps.md,
+   * «One app for Renat»): his own day as a tab of the one app, with its
+   * own head.
+   */
+  own: { title: "Мой день", view: "День или неделя", day: "День", week: "Неделя", add: "Запись" },
 
+  /** An owner or the front desk looking at a barber's own app, opened from «Барберы». */
   pick: {
     title: "Чей день смотреть",
     lead: "Вы видите приложение так же, как его видит барбер.",
-    viewing: (name: string) => `Смотрю: ${name}`,
+    viewing: (name: string) => `Вы смотрите приложение ${name}`,
+    back: "Назад в салон",
     change: "Сменить",
     none: "Нет барберов.",
     off: "не работает",

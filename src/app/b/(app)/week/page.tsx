@@ -17,6 +17,7 @@ import { cap, dateWords, eur, hm, pick3 } from "../../copy.shared";
 import { Wait } from "../../lang";
 import { getB } from "../../lang-server";
 import { NoRights } from "../may";
+import { OwnSeg } from "../own-head";
 import { Title } from "../title";
 
 export default function WeekPage({ searchParams }: PageProps<"/b/week">) {
@@ -43,16 +44,31 @@ async function Week({ searchParams }: { searchParams: PageProps<"/b/week">["sear
   const total = days.reduce((n, d) => n + d.totalCents, 0);
   const range = `${dateWords(from, B.lang, { day: "numeric", month: "short" })} – ${dateWords(addDays(from, 6), B.lang, { day: "numeric", month: "short" })}`;
   const isThis = days.some((d) => d.date === today);
+  // an owner or the front desk on his own column: «Мой день», a tab of the one app, with its own head (docs/apps.md)
+  const own = user.role !== "staff" && staff.id === user.staffId;
+  const WeekTitle = own ? "h2" : "h1";
 
   return (
-    <main className="adm-page bx-week">
-      <Title text={B.nav.week} />
+    <main className={`adm-page bx-week${own ? " is-own" : ""}`}>
+      <Title text={own ? B.own.title : B.nav.week} />
+      {own && (
+        <header className="bx-own-head">
+          <div>
+            <h1 className="adm-h1">{B.own.title}</h1>
+            <p className="bx-own-line">
+              {range} · {B.day.visits(count)}
+              {may.stats && ` · ${eur(total)}`}
+            </p>
+          </div>
+          <OwnSeg view="week" date={isThis ? today : from} today={today} words={B.own} />
+        </header>
+      )}
       <nav className="bx-wnav" aria-label={B.week.title}>
         <Link href={`/b/week?d=${addDays(from, -7)}`} className="adm-ibtn" aria-label={B.day.prevWeek} prefetch={false} replace>
           <PrevIcon />
         </Link>
         <div>
-          <h1 className="adm-h1">{B.week.title}</h1>
+          <WeekTitle className="adm-h1">{B.week.title}</WeekTitle>
           <p className="adm-meta">{range}</p>
         </div>
         <Link href={`/b/week?d=${addDays(from, 7)}`} className="adm-ibtn" aria-label={B.day.nextWeek} prefetch={false} replace>
@@ -64,18 +80,21 @@ async function Week({ searchParams }: { searchParams: PageProps<"/b/week">["sear
           {B.day.toToday}
         </Link>
       )}
-      <p className="bx-sum">
-        <span>{B.week.total}</span>
-        <span>
-          {B.day.visits(count)}
-          {may.stats && (
-            <>
-              {" "}
-              · <b>{eur(total)}</b>
-            </>
-          )}
-        </span>
-      </p>
+      {/* «Мой день» has the week's count and sum in its head */}
+      {!own && (
+        <p className="bx-sum">
+          <span>{B.week.total}</span>
+          <span>
+            {B.day.visits(count)}
+            {may.stats && (
+              <>
+                {" "}
+                · <b>{eur(total)}</b>
+              </>
+            )}
+          </span>
+        </p>
+      )}
       <ol className="bx-wk">
         {days.map((d) => {
           const whole = d.blocks.find((b) => coversDay(b, d.date, tz));

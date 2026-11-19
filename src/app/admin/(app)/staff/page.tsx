@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { listStaff, staffDetail } from "@/lib/admin/staff";
 import { requireAdmin } from "@/lib/auth/current";
-import { canGroup } from "@/lib/auth/rights";
+import { can, canGroup } from "@/lib/auth/rights";
 import { dbConfigured, query } from "@/lib/db";
 import { todayIn } from "@/lib/tz";
 import { getA } from "../../lang-server";
@@ -42,7 +42,7 @@ async function First() {
   if (!d) return null;
   return (
     <div className="only-wide">
-      <BarberPage key={d.id} d={d} tz={business.timezone} today={today} back={null} />
+      <BarberPage key={d.id} d={d} tz={business.timezone} today={today} back={null} app={d.id !== user.staffId && can(user, "journal.staff", { staffId: d.id })} />
     </div>
   );
 }

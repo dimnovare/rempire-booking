@@ -71,6 +71,10 @@ async function Loaded() {
             <span>{A.langLabel}</span>
             <MyLang />
           </div>
+          {/* this device's notifications live in the barber app's half (/b/more); a phone has the row on «Ещё», a wide screen this link */}
+          <a className="adm-btn adm-btn-ghost only-wide" href="/b/more">
+            {A.more.notify}: {A.more.notifyHint}
+          </a>
           <form action={logout}>
             <button className="adm-btn adm-btn-ghost">
               <OutIcon size={18} />

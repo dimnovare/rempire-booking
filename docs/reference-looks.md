@@ -131,8 +131,8 @@ gets it → send.
        платёж», is not built.
      - **«Избранное»:** a star beside each section's title; the starred
        pages are the login's own (`users.favourites`, migration 017).
-     - **Ours, not theirs:** «Мой день | Салон» sits under the head; no
-       bell, as nothing feeds one; the way out stays in the menu too.
+     - **Ours, not theirs:** no bell, as nothing feeds one; the way out
+       stays in the menu too.
    - **The journal: built 19.11.2026** (`calendar.tsx`, `journal-bar.tsx`
      and `journal-side.tsx` in `src/app/admin/(app)/`; its rules in
      `src/lib/admin/journal.ts`; the two calendar blocks of `admin.css`).
@@ -321,7 +321,7 @@ gets it → send.
    - **The sections:** «Клиенты» is the sixth, so a phone's bottom bar
      holds four of them and «Ещё» (`/admin/more` lists the others as large
      rows); the sidebar from 900 px lists every section. The words are
-     still ours («Календарь», «Барберы»), not Altegio's «Журнал» and
+     still ours («Журнал», «Барберы»), not Altegio's «Журнал» and
      «Сотрудники».
    - **Not built:** the import from Altegio and «Загрузить из Excel»
      (both will fill the same table); merging two clients; erasing one

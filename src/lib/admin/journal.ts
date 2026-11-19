@@ -9,6 +9,7 @@
  *
  * The hours the grid shows are in grid.ts (daySpan).
  */
+import type { L10n } from "../catalog";
 import { addDays, startOfDay } from "../tz";
 import type { CalendarData, CalVisit } from "./calendar";
 
@@ -96,4 +97,26 @@ export function dayNumbers(visits: Pick<CalVisit, "start" | "status" | "clientId
     bookedCents: sum(mine),
     doneCents: sum(mine.filter((v) => v.status === "arrived" || v.status === "done")),
   };
+}
+
+/* ---------- «Моё»: the panel beside a login's own column ---------- */
+
+/** One of today's visits in the login's own column, as the panel «Моё» needs it. */
+export type MineVisit = { id: string; start: number; end: number; status: string; clientName: string; service: L10n | null };
+
+/** Today in the login's own column: its visits in order, how many count, and their sum (null without the right to see sums). */
+export type MineToday = { visits: MineVisit[]; count: number; totalCents: number | null };
+
+/**
+ * Who is in the chair and who is next, as the barber app's «Дальше» has it
+ * (src/lib/barber/gaps.ts, nextVisit): of the visits still to end, the first
+ * one that has begun or is marked «Пришёл» is in the chair, and the one
+ * after it is next. A visit that is over, done, a no-show or cancelled is
+ * neither.
+ */
+export function mineNow(visits: MineVisit[], now: number): { chair: MineVisit | null; next: MineVisit | null } {
+  const live = visits.filter((v) => (v.status === "booked" || v.status === "arrived" || v.status === "pending") && v.end > now).sort((a, b) => a.start - b.start);
+  const chair = live.find((v) => v.status === "arrived" || v.start <= now) ?? null;
+  const next = live.find((v) => v !== chair && (!chair || v.start >= chair.start)) ?? null;
+  return { chair, next };
 }

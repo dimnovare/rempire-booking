@@ -10,11 +10,18 @@
  * moves it, cancels it (with a reason) or books the client again.
  * B6: the visit's sheet edits the client's shared note and the visit's own
  * note, and opens the client's card (his visits with this client).
+ *
+ * `own`: the same day as «Мой день» of an owner or the front desk who cuts
+ * too (docs/apps.md, «One app for Renat»), a tab of the one app. The head
+ * follows the design board: «Мой день», a line with the day, the count and
+ * the sum, «День | Неделя», and «+ Запись»; a visit is a card in the
+ * journal's colours. Everything it does is the barber's day.
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import type { Offer } from "@/lib/barber/book";
+import { visitLook } from "@/lib/admin/journal";
 import type { BBlock, BDay, BMay, BVisit } from "@/lib/barber/day";
 import { coversDay, freeGaps, hoursText, nextVisit, type Gap } from "@/lib/barber/gaps";
 import { extraText, hasExtra } from "@/lib/slots";
@@ -26,13 +33,14 @@ import { CancelSheet, MoveSheet, NewVisitSheet, type NewPrefill } from "./book-s
 import { ClientSheet, NoteEditor } from "./client-sheet";
 import { BSheet } from "./sheet";
 import { MayProvider, useMay } from "./may";
+import { OwnSeg } from "./own-head";
 import { saveClientNote, saveVisitNote, setVisitStatus } from "./visit-actions";
 
 const MIN = 60_000;
 /** how far to pull (px, after the drag is halved) before letting go refreshes */
 const PULL = 64;
 
-type Props = { days: BDay[]; date: string; today: string; now: number; tz: string; step: number; offers: Offer[]; may: BMay };
+type Props = { days: BDay[]; date: string; today: string; now: number; tz: string; step: number; offers: Offer[]; may: BMay; own?: boolean };
 const CAME = new Set(["arrived", "done"]);
 
 /** What is open over the day: a visit, a new visit, or a visit being moved or cancelled. */
@@ -47,9 +55,9 @@ export function DayView(props: Props) {
   );
 }
 
-function Day({ days, date, today, now: serverNow, tz, step, offers, may }: Props) {
+function Day({ days, date, today, now: serverNow, tz, step, offers, may, own = false }: Props) {
   const B = useB();
-  useTitle(B.nav.day);
+  useTitle(own ? B.own.title : B.nav.day);
   const router = useRouter();
   const [sel, setSel] = useState(days.some((d) => d.date === date) ? date : days[0].date);
   const [sheet, setSheet] = useState<Open | null>(null);
@@ -124,8 +132,26 @@ function Day({ days, date, today, now: serverNow, tz, step, offers, may }: Props
 
   // a new visit is offered only with the right to make one
   const canBook = offers.length > 0 && may.create;
+  const dayState = wholeDay ? `${B.day.kinds[wholeDay.kind] ?? wholeDay.kind} · ${B.day.allDay}` : hours ? B.day.hours(hours) : B.day.off;
+  const toToday =
+    !thisWeek || sel !== today ? (
+      thisWeek ? (
+        <button type="button" className="adm-txt" onClick={() => choose(today)}>
+          {B.day.toToday}
+        </button>
+      ) : (
+        <Link href="/b" className="adm-txt" prefetch={false} replace>
+          {B.day.toToday}
+        </Link>
+      )
+    ) : null;
+  const specials = day.special.map((s) => (
+    <p key={s.id} className="bx-sp">
+      {B.day.special(extraText(s))} · {hm(s.from, tz)}–{hm(s.to, tz)}
+    </p>
+  ));
   return (
-    <main className="adm-page bx-day">
+    <main className={`adm-page bx-day${own ? " is-own" : ""}`}>
       <div className="bx-pull" style={{ height: pulled }} aria-hidden={pulled === 0}>
         {pulled > 0 && <span>{pulled >= PULL ? B.day.release : B.day.pull}</span>}
       </div>
@@ -133,6 +159,24 @@ function Day({ days, date, today, now: serverNow, tz, step, offers, may }: Props
         <p className={`bx-state${online ? "" : " is-off"}`} role="status">
           {online ? B.day.refresh + "…" : B.offline}
         </p>
+      )}
+
+      {own && (
+        // «Мой день»: the head of the design board
+        <header className="bx-own-head">
+          <div>
+            <h1 className="adm-h1">{B.own.title}</h1>
+            <p className="bx-own-line">
+              {words}
+              {day.count > 0 && ` · ${B.day.visits(day.count)}`}
+              {/* the day's sum: «Показывать статистику» */}
+              {day.count > 0 && may.stats && ` · ${eur(day.totalCents)}`}
+            </p>
+            {/* a day he is not at work says so */}
+            {(wholeDay || !hours) && <p className="bx-own-line">{dayState}</p>}
+          </div>
+          <OwnSeg view="day" date={sel} today={today} words={B.own} />
+        </header>
       )}
 
       <nav className="bx-strip" aria-label={B.day.days}>
@@ -160,53 +204,55 @@ function Day({ days, date, today, now: serverNow, tz, step, offers, may }: Props
         </Link>
       </nav>
 
-      <header className="bx-head">
-        <div className="bx-head-row">
-          <h1 className="adm-h1">{rel ?? words}</h1>
-          {!thisWeek || sel !== today ? (
-            thisWeek ? (
-              <button type="button" className="adm-txt" onClick={() => choose(today)}>
-                {B.day.toToday}
-              </button>
-            ) : (
-              <Link href="/b" className="adm-txt" prefetch={false} replace>
-                {B.day.toToday}
-              </Link>
-            )
-          ) : null}
-        </div>
-        {rel && <p className="adm-meta">{words}</p>}
-        <p className="bx-sum">
-          <span>{wholeDay ? `${B.day.kinds[wholeDay.kind] ?? wholeDay.kind} · ${B.day.allDay}` : hours ? B.day.hours(hours) : B.day.off}</span>
-          {day.count > 0 && (
-            <span>
-              {B.day.visits(day.count)}
-              {/* the day's sum: «Показывать статистику» */}
-              {may.stats && (
-                <>
-                  {" "}
-                  · <b>{eur(day.totalCents)}</b>
-                </>
-              )}
-            </span>
-          )}
-        </p>
-        {day.special.map((s) => (
-          <p key={s.id} className="bx-sp">
-            {B.day.special(extraText(s))} · {hm(s.from, tz)}–{hm(s.to, tz)}
+      {own ? (
+        (toToday || specials.length > 0) && (
+          <div className="bx-head">
+            {toToday && <div className="bx-head-row bx-own-today">{toToday}</div>}
+            {specials}
+          </div>
+        )
+      ) : (
+        <header className="bx-head">
+          <div className="bx-head-row">
+            <h1 className="adm-h1">{rel ?? words}</h1>
+            {toToday}
+          </div>
+          {rel && <p className="adm-meta">{words}</p>}
+          <p className="bx-sum">
+            <span>{dayState}</span>
+            {day.count > 0 && (
+              <span>
+                {B.day.visits(day.count)}
+                {/* the day's sum: «Показывать статистику» */}
+                {may.stats && (
+                  <>
+                    {" "}
+                    · <b>{eur(day.totalCents)}</b>
+                  </>
+                )}
+              </span>
+            )}
           </p>
-        ))}
-      </header>
+          {specials}
+        </header>
+      )}
 
       {next && <NextCard v={next} now={now} tz={tz} busy={busy} onOpen={() => openVisit(next.id)} onStatus={status} />}
 
-      <Timeline day={day} now={now} tz={tz} step={step} shortest={may.create ? shortest : Infinity} onOpen={openVisit} onFree={(start) => book({ start })} />
+      <Timeline day={day} now={now} tz={tz} step={step} shortest={may.create ? shortest : Infinity} own={own} onOpen={openVisit} onFree={(start) => book({ start })} />
 
-      {canBook && (
-        <button type="button" className="bx-fab" aria-label={B.book.new} onClick={() => book({})}>
-          <PlusIcon size={26} />
-        </button>
-      )}
+      {canBook &&
+        (own ? (
+          // «+ Запись», as the design board's
+          <button type="button" className="bx-fab bx-fab-pill" aria-label={B.book.new} onClick={() => book({})}>
+            <PlusIcon size={14} />
+            <span>{B.own.add}</span>
+          </button>
+        ) : (
+          <button type="button" className="bx-fab" aria-label={B.book.new} onClick={() => book({})}>
+            <PlusIcon size={26} />
+          </button>
+        ))}
 
       {open && sheet?.kind === "visit" && (
         <VisitSheet
@@ -294,6 +340,7 @@ function Timeline({
   tz,
   step,
   shortest,
+  own,
   onOpen,
   onFree,
 }: {
@@ -303,6 +350,8 @@ function Timeline({
   step: number;
   /** his shortest service with its tidy-up, in ms: a gap shorter than that books nothing */
   shortest: number;
+  /** «Мой день»: a visit is a card in the journal's colours */
+  own: boolean;
   onOpen: (id: string) => void;
   onFree: (start: number) => void;
 }) {
@@ -325,8 +374,14 @@ function Timeline({
           if (it.kind === "visit") {
             const v = it.v;
             const live = now >= v.start && now < v.end;
+            // «Мой день»: the strip says who made it, the body its state (src/lib/admin/journal.ts)
+            const look = own ? visitLook(v.status, v.source) : null;
             return (
-              <li key={it.key} className={`bx-v st-${v.status}${v.extraCents ? " is-sp" : ""}${live ? " is-now" : ""}`}>
+              <li
+                key={it.key}
+                className={`bx-v st-${v.status}${v.extraCents ? " is-sp" : ""}${live ? " is-now" : ""}`}
+                style={look ? ({ "--h": look.strip, "--b": look.body, "--n": look.name } as React.CSSProperties) : undefined}
+              >
                 <button type="button" onClick={() => onOpen(v.id)}>
                   <span className="bx-t">
                     <b>{hm(v.start, tz)}</b>

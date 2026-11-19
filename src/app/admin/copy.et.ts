@@ -45,6 +45,7 @@ export const et: typeof ru = {
   pick: (t: Text3) => t?.et || t?.ru || t?.en || "",
   title: "Admin",
   nav: {
+    mine: "Minu päev",
     calendar: "Kalender",
     clients: "Kliendid",
     staff: "Barberid",
@@ -300,7 +301,6 @@ export const et: typeof ru = {
     needName: "Sisestage nimetus: ilma selleta ei saa salvestada.",
   },
 
-  /** The staff app's two sides (docs/apps.md), for Renat and the front desk. */
   clients: {
     title: "Kliendid",
     add: "Lisa klient",
@@ -688,9 +688,41 @@ export const et: typeof ru = {
     copied: (n: number) => `Kopeeritud: ${n} ${pl(n, "päev", "päeva")}.`,
   },
 
-  more: { title: "Veel" },
+  more: {
+    title: "Veel",
+    mineGroup: "Minu oma, barberina",
+    salonGroup: "Salong",
+    accountGroup: "Konto",
+    time: "Minu aeg",
+    timeHint: "vahetused, pausid, puhkus",
+    sell: "Müü toode",
+    money: "Minu arveldus",
+    access: "Ligipääs ja õigused",
+    notify: "Teavitused",
+    notifyHint: "selles seadmes",
+    language: "Keel",
+    logout: "Logi välja",
+    andBarber: (role: string) => `${role} ja barber`,
+  },
 
-  side: { label: "Minu päev või salong", mine: "Minu päev", barber: "Barber", salon: "Salong", waiting: (n: number) => `Ootel taotlusi: ${n}` },
+  app: {
+    waiting: (n: number) => `Ootel taotlusi: ${n}`,
+    scope: "Minu päev või kogu salong",
+    mine: "Minu päev",
+    salon: "Kogu salong",
+    panel: "Minu oma",
+    chair: "Praegu toolis",
+    until: (name: string, time: string) => `${name} · kuni ${time}`,
+    nobody: "Mitte keegi",
+    next: "Järgmine",
+    noNext: "Rohkem kedagi pole",
+    today: "Täna",
+    myTime: "Minu aeg",
+    myMoney: "Minu arveldus",
+    myClients: "Minu kliendid",
+    openApp: "Ava tema rakendus",
+    openAppHint: "Näete rakendust nii, nagu barber seda näeb.",
+  },
 
   frame: {
     sidebar: "Külgriba",

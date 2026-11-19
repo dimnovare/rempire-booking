@@ -3,9 +3,11 @@
  * (more/page.tsx) read the same list. No hooks and no "use client": a
  * server page and the client bar both import it.
  *
- * A phone's bottom bar has room for five: the four with `bar` and «Ещё»,
- * which opens /admin/more with the rest as large rows. A new section
- * without `bar` shows up there by itself.
+ * A phone's bottom bar has room for five (src/lib/admin/app-nav.ts, barOf):
+ * the sections with `bar` and «Ещё», which opens /admin/more with the rest
+ * as rows. For a login linked to a barber the first tab is «Мой день»
+ * (MINE, the barber app's own day) and «Счета» goes behind «Ещё». A new
+ * section without `bar` shows up on «Ещё» once it is listed there.
  *
  * From 900px the sections are the sidebar's menu (MENU below, sidebar.tsx):
  * an accordion, as in the product we follow (docs/reference-looks.md).
@@ -28,7 +30,10 @@ export const SECTIONS = [
 /** «Ещё»: only in a phone's bar. Lit while one of the sections behind it is open. */
 export const MORE = { href: "/admin/more", key: "more", icon: "more" } as const;
 
-/** «Доступ» is about the person, not the work: it sits in the corner beside «Выйти» (AccountLink). */
+/** «Мой день»: the own day of a login linked to a barber, in the barber app's half (/b). Only in a phone's bar. */
+export const MINE = { href: "/b", key: "mine", icon: "me" } as const;
+
+/** «Доступ» is about the person, not the work: on a phone it is a row of «Ещё», from 900px a row of the sidebar's menu. */
 export const ACCOUNT = { href: "/admin/account", key: "account", icon: "key" } as const;
 
 /**
@@ -155,6 +160,14 @@ export function SectionIcon({ name, size = 22 }: { name: string; size?: number }
     return (
       <svg viewBox="0 0 24 24" {...p}>
         <path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z" />
+      </svg>
+    );
+  // one person: «Мой день»
+  if (name === "me")
+    return (
+      <svg viewBox="0 0 24 24" {...p}>
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4.5 20.5c0-4 3.4-6.5 7.5-6.5s7.5 2.5 7.5 6.5" />
       </svg>
     );
   // three lines, as «Ещё» in the barber app

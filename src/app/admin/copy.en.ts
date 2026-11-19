@@ -45,6 +45,7 @@ export const en: typeof ru = {
   pick: (t: Text3) => t?.en || t?.ru || t?.et || "",
   title: "Admin",
   nav: {
+    mine: "My day",
     calendar: "Calendar",
     clients: "Clients",
     staff: "Barbers",
@@ -298,7 +299,6 @@ export const en: typeof ru = {
     needName: "Enter a name: it cannot be saved without one.",
   },
 
-  /** The staff app's two sides (docs/apps.md), for Renat and the front desk. */
   clients: {
     title: "Clients",
     add: "Add a client",
@@ -689,9 +689,41 @@ export const en: typeof ru = {
     copied: (n: number) => `Copied: ${n} ${pl(n, "day", "days")}.`,
   },
 
-  more: { title: "More" },
+  more: {
+    title: "More",
+    mineGroup: "Mine, as a barber",
+    salonGroup: "Salon",
+    accountGroup: "Account",
+    time: "My time",
+    timeHint: "shifts, breaks, vacation",
+    sell: "Sell a product",
+    money: "My statement",
+    access: "Access and rights",
+    notify: "Notifications",
+    notifyHint: "on this device",
+    language: "Language",
+    logout: "Log out",
+    andBarber: (role: string) => `${role} and barber`,
+  },
 
-  side: { label: "My day or salon", mine: "My day", barber: "Barber", salon: "Salon", waiting: (n: number) => `Requests waiting: ${n}` },
+  app: {
+    waiting: (n: number) => `Requests waiting: ${n}`,
+    scope: "My day or the whole salon",
+    mine: "My day",
+    salon: "Whole salon",
+    panel: "Mine",
+    chair: "In the chair now",
+    until: (name: string, time: string) => `${name} · until ${time}`,
+    nobody: "Nobody",
+    next: "Next",
+    noNext: "Nobody else",
+    today: "Today",
+    myTime: "My time",
+    myMoney: "My statement",
+    myClients: "My clients",
+    openApp: "Open the barber's app",
+    openAppHint: "You will see the app the way the barber sees it.",
+  },
 
   frame: {
     sidebar: "Sidebar",

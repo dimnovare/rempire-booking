@@ -501,7 +501,7 @@ export type RequestRow = {
   visitsInside: number;
 };
 
-/** How many requests wait for Renat's answer: the dot on «Салон» in the staff app's side switch. */
+/** How many requests wait for Renat's answer: the dot on «Запросы» in the staff app's bottom bar (src/components/app-bar.tsx). */
 export async function countWaitingRequests(q: Querier, businessId: string): Promise<number> {
   const [r] = await q<{ n: number }>("select count(*)::int as n from staff_requests where business_id = $1 and status = 'requested'", [businessId]);
   return r?.n ?? 0;
