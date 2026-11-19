@@ -194,15 +194,78 @@ gets it → send.
 3. **«Клиенты»: built 19.11.2026** (`src/app/admin/(app)/clients/`,
    `src/lib/admin/clients.ts`, the «Клиенты» block of `admin.css`; Dim's
    choice in decisions round 8).
-   - **The list:** a search field with an icon (a name, phone digits or
-     an e-mail), one category as a filter, the yellow «Добавить клиента».
-     From 900 px one table on a white sheet: Имя, Телефон, Email, Визиты,
-     Последний визит, Первый визит, Продано; on a phone a row per client.
-     25 a page, by name. From 900 to 1199 px the e-mail and the first
-     visit are left out, so the table fits beside the sidebar.
+   - **The list in full: built 19.11.2026** (the owner, the same day: the
+     tool's search, segments, filters, column chooser and every bulk
+     action, mass SMS included; `clients/list-view.tsx` and its
+     `base-*.tsx`, `src/lib/admin/client-filter.ts`, `client-bulk.ts`,
+     `client-export.ts`, `client-columns.ts`, `src/lib/xlsx.ts`, migration
+     019, the «cb-» block of `admin.css`). From 900 px, laid out as the
+     design board «Клиенты, список». **Its layout, not its controls:**
+     the board draws the tool's old style, and an old-style page gets the
+     new-style controls (round 9): 32 px fields and buttons, 8 px corners,
+     a 1 px `#e0e3eb` line, 12 px / 500 on buttons, yellow for the main
+     action, white popovers with 12 px corners, 50 px table rows.
+     - **Head:** «Клиентская база» with its star and the breadcrumb
+       «Клиенты»; right, «Операции с Excel» and the yellow «Добавить
+       клиента».
+     - **«Операции с Excel»:** «Выгрузить в Excel» is the filtered list as
+       a real .xlsx with the chosen columns, for the owner's login only;
+       every export is in the audit log with who, when and how many rows,
+       never the rows. «Загрузить из Excel» is shown, disabled, «Скоро».
+       The file is written by our own small writer over `fflate` (the one
+       package added; it also reads a sheet back, for the import).
+     - **Search:** one field across the page: a name, the digits of
+       either phone, an e-mail or a card number. It asks by itself a
+       moment after the last keystroke.
+     - **«Сегменты:»** «Новые» (a visit in the last 30 days and none
+       before them), «Повторные» (a visit in the last 30 days and one
+       before them), «Потерянные» (has visits, none in the last 60 days
+       and none ahead). A segment is a preset: it fills the conditions in
+       and asks at once; picked again, it is taken off.
+     - **«Фильтры:»** two dropdowns add a condition, a bin takes them all
+       off, the yellow «Найти» at the right asks. Each condition is a row
+       with its own fields and a cross; with two or more, one switch says
+       «И» or «Или» for the whole set. «По визитам»: has visits or none
+       (in some days, if wanted), came or did not come, the number of
+       visits, visited between two days, the barber, the services, the
+       sum of the services. «По клиентам»: gender, category, sold,
+       importance class, birthday (a month, or in the next N days), age
+       (a client whose year is not known is left out), received a mass
+       message, «no online booking». A visit here is what the «Визиты»
+       column counts; «came» is the journal's own state.
+     - **The table:** a tick per row and one for the page; Имя (opens the
+       card), Телефон, Email, Продано, Визиты, Скидка, Последний визит,
+       Первый визит («19 ноября 2026 г. в 10:00»). A round cog at the
+       head's right end picks the columns; the choice is the login's own
+       (`users.client_columns`). A click on the head of the name, the
+       visits, the sum or a visit's date sorts; again, the other way.
+       Beside the sidebar on a small laptop the table scrolls inside its
+       sheet, never the page.
+     - **The bar at the bottom, sticky:** 10 / 25 / 50 / 100 a page,
+       «Назад 1 2 3 … Вперёд», «Показаны результаты с 1 до 25 из N»,
+       «Действия». It acts on the ticked rows or, with none ticked, on the
+       whole filtered list, and says first on how many clients.
+     - **«Отправить сообщение»:** a text and the channels, each with who
+       gets it: a mass message is advertising, so whoever ticked
+       «Рекламные сообщения: не отправлять», switched the channel off or
+       has no address for it is left out, and for SMS the parts a message
+       and in all are counted. «Отправить» only opens the second question,
+       «Отправить N SMS (M частей) и K писем?»; nothing is queued before
+       the yes. Then one outbox row per client and channel (kind «mass»),
+       a mark on each client (`clients.mass_sent_at`) and one audit row.
+       While no SMS provider is set those rows wait in the queue, and the
+       window says so.
+     - **«Добавить в категорию»:** one of the categories in use, or a new
+       word, on every chosen client. **«Удалить из базы»:** the owner
+       only; exactly the clients one card's «Удалить» would delete, and
+       the answer says how many went, how many stayed and why.
+     - **A phone keeps its simple list:** the search, one category as a
+       filter, a row per client, 25 a page; of all the above it takes
+       only the segments, as three chips.
    - **What is typed in the search is never in the address:** the list is
      asked for by an action, so a client's name or phone stays out of
-     links, the browser's history and the request log.
+     links, the browser's history and the request log. The export is a
+     POST for the same reason.
    - **One client: the full card** (the owner, 19.11.2026: every field of
      Altegio's card and seven of its nine tabs, not loyalty and not
      accounts; `clients/[id]/`, `src/lib/admin/client-card.ts`, migration
@@ -241,11 +304,11 @@ gets it → send.
        channels as ticks, the yellow «Отправить». It is queued as a
        «manual» row per channel and the cron sends it. Push is offered
        only while he has a notification on for a visit ahead.
-     - **«Уведомления»:** «Рекламные сообщения: не отправлять» (kept;
-       nothing is sent as advertising yet), the channels he accepts (SMS,
-       e-mail, push), and a switch for each kind we really send a client:
-       the confirmation, the reminder, «the salon moved it», «the salon
-       cancelled it». Altegio lists 13 kinds; the other nine we do not
+     - **«Уведомления»:** «Рекламные сообщения: не отправлять» (a mass
+       message from the list goes to nobody who has it), the channels he
+       accepts (SMS, e-mail, push), and a switch for each kind we really
+       send a client: the confirmation, the reminder, «the salon moved
+       it», «the salon cancelled it». Altegio lists 13 kinds; the other nine we do not
        send, so they are not listed. The outbox honours all of it
        (`src/lib/client-notify.ts`).
      - **«Файлы»:** the note with the kinds and the size, «Загрузить
@@ -260,12 +323,18 @@ gets it → send.
      rows); the sidebar from 900 px lists every section. The words are
      still ours («Календарь», «Барберы»), not Altegio's «Журнал» and
      «Сотрудники».
-   - **Not built:** the import from Altegio (it will fill the same
-     table); merging two clients; erasing one who has history; sorting by
-     a column; an export; the card's «Лояльность» and «Счета клиентов»
-     tabs; a discount that changes a price; paid sums, a balance and
-     deposits among the card's numbers (payments are not built), and
-     products in «Продано»; calls; Altegio's own list of categories.
+   - **Not built:** the import from Altegio and «Загрузить из Excel»
+     (both will fill the same table); merging two clients; erasing one
+     who has history; the card's «Лояльность» and «Счета клиентов» tabs;
+     a discount that changes a price; paid sums, a balance and deposits
+     among the card's numbers (payments are not built), and products in
+     «Продано»; calls; Altegio's own list of categories («Категории
+     клиентов» in the menu). Of the list: the dropdown «По продажам»
+     (goods, certificates, subscriptions), the segment «Заканчивается
+     абонемент», the conditions «Баланс счёта», «Мобильное приложение»
+     and «Altegio.me», the column «Баланс счёта», pinning a column, the
+     head's menu button, and the two «PUSH в приложение» actions (a
+     notification is one of the message's channels instead).
 4. **Functionality** Altegio has and we do not (loyalty, stock, cash
    accounts, reports) is a list for Dim to choose from, not part of the
    look.

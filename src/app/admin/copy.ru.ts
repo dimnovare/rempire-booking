@@ -303,7 +303,7 @@ export const ru = {
   clients: {
     title: "Клиенты",
     add: "Добавить клиента",
-    search: "Имя, телефон или e-mail",
+    search: "Имя, телефон, e-mail или номер карты",
     label: "Категория",
     allLabels: "Все категории",
     count: (n: number, filtered: boolean) => (filtered ? `Найдено: ${n}` : `Всего: ${n}`),
@@ -340,6 +340,129 @@ export const ru = {
     capped: (n: number) => `Показаны последние ${n}.`,
     inCalendar: "Открыть день в календаре",
     since: (d: string) => `Клиент с ${d}`,
+    /**
+     * The list in full from 900px (the owner, 19.11.2026; docs/reference-looks.md, «Клиенты»): «Операции с
+     * Excel», the segments, the conditions, the table with its column chooser, the bottom bar with «Действия».
+     * A phone takes only the segments.
+     */
+    base: {
+      title: "Клиентская база",
+      // «Операции с Excel»
+      excel: "Операции с Excel",
+      exportXlsx: "Выгрузить в Excel",
+      importXlsx: "Загрузить из Excel",
+      soon: "Скоро",
+      ownerOnly: "Только для владельца",
+      exported: (n: number) => `Файл готов: ${n} ${plural(n, "клиент", "клиента", "клиентов")}`,
+      xlsx: { sold: "Продано, €", discount: "Скидка, %" },
+      // the segments
+      segments: "Сегменты:",
+      segment: { new: "Новые", returning: "Повторные", lost: "Потерянные" } as Record<string, string>,
+      segmentHint: {
+        new: "Первый визит был в последние 30 дней",
+        returning: "Был визит в последние 30 дней и ещё один до них",
+        lost: "Визиты были, но не в последние 60 дней, и впереди записи нет",
+      } as Record<string, string>,
+      // the conditions
+      filters: "Фильтры:",
+      byVisits: "По визитам",
+      byClients: "По клиентам",
+      clear: "Сбросить фильтры",
+      find: "Найти",
+      conds: "Условия",
+      join: "Как соединить условия",
+      and: "И",
+      or: "Или",
+      condRemove: (name: string) => `Убрать условие «${name}»`,
+      condBad: "Заполните условие или уберите его.",
+      condsFull: (n: number) => `Больше ${n} условий не добавить.`,
+      kinds: {
+        hasVisits: "Наличие визитов",
+        visitStatus: "Статус визитов",
+        visitCount: "Количество визитов",
+        period: "Период",
+        barber: "Барбер",
+        services: "Услуги",
+        serviceSum: "Сумма оказанных услуг, €",
+        gender: "Пол",
+        category: "Категория",
+        sold: "Продано, €",
+        importance: "Класс важности",
+        birthday: "День рождения",
+        age: "Возраст",
+        massSent: "Получал рассылку",
+        noOnline: "Онлайн-запись запрещена",
+      } as Record<string, string>,
+      has: { yes: "Есть визиты", no: "Нет визитов" },
+      status: { came: "Пришёл", noShow: "Не пришёл" },
+      yes: "Да",
+      no: "Нет",
+      from: "от",
+      to: "до",
+      dateFrom: "с",
+      dateTo: "по",
+      pick: "Выберите",
+      pickServices: "Выберите услуги",
+      servicesN: (n: number) => `Услуг выбрано: ${n}`,
+      inMonth: "В месяце",
+      inDays: "В ближайшие дни",
+      month: "Месяц",
+      days: "Сколько дней",
+      // the table
+      cols: { name: "Имя", phone: "Телефон", email: "Email", sold: "Продано", visits: "Визиты", discount: "Скидка", last: "Последний визит", first: "Первый визит" },
+      columns: "Столбцы",
+      tickAll: "Выбрать всех на странице",
+      tick: (name: string) => `Выбрать: ${name}`,
+      /** «31 октября 2026 г. в 12:30» */
+      at: (date: string, time: string) => `${date} в ${time}`,
+      // the bottom bar
+      perPage: "результатов на странице",
+      perPageLabel: "Клиентов на странице",
+      shown: (from: number, to: number, total: number) => `Показаны результаты с ${from} до ${to} из ${total}`,
+      pageN: (n: number) => `Страница ${n}`,
+      forward: "Вперёд",
+      actions: "Действия",
+      chosen: (n: number) => `Выбрано: ${n} ${plural(n, "клиент", "клиента", "клиентов")}`,
+      whole: (n: number) => `Весь список: ${n} ${plural(n, "клиент", "клиента", "клиентов")}`,
+      // «Отправить сообщение»
+      send: "Отправить сообщение",
+      counting: "Считаем получателей…",
+      sendAds: (n: number) => `Рассылка считается рекламой. Кто просил не присылать рекламу, её не получит: таких ${n}.`,
+      gets: (n: number) => `получат: ${n}`,
+      leftNone: { sms: "нет телефона", email: "нет e-mail", push: "уведомления не включены" } as Record<string, string>,
+      leftOff: "канал выключен",
+      smsParts: (per: number, total: number) => `${per} ${plural(per, "часть", "части", "частей")} на сообщение, всего ${total} ${plural(total, "часть", "части", "частей")}`,
+      smsWaits: "SMS пока не подключены: такие сообщения останутся в очереди, пока их не подключат.",
+      confirmTitle: "Отправить рассылку?",
+      confirm: (c: { sms: number; parts: number; email: number; push: number }) => {
+        const what = [
+          c.sms ? `${c.sms} SMS (${c.parts} ${plural(c.parts, "часть", "части", "частей")})` : "",
+          c.email ? `${c.email} ${plural(c.email, "письмо", "письма", "писем")}` : "",
+          c.push ? `${c.push} ${plural(c.push, "уведомление", "уведомления", "уведомлений")}` : "",
+        ].filter(Boolean);
+        return `Отправить ${what.length > 1 ? `${what.slice(0, -1).join(", ")} и ${what[what.length - 1]}` : what[0]}?`;
+      },
+      confirmYes: "Да, отправить",
+      queued: (c: { sms: number; email: number; push: number }) =>
+        `Рассылка в очереди: ${[c.sms ? `SMS: ${c.sms}` : "", c.email ? `писем: ${c.email}` : "", c.push ? `уведомлений: ${c.push}` : ""].filter(Boolean).join(", ")}.`,
+      nobody: "Никому из этих клиентов так написать нельзя.",
+      // «Добавить в категорию»
+      addLabel: "Добавить в категорию",
+      labelPick: "Категория: выберите готовую или впишите новую",
+      labelDone: (c: { label: string; added: number; had: number; full: number }) =>
+        `«${c.label}»: добавлено ${c.added}${c.had ? `, уже была у ${c.had}` : ""}${c.full ? `, не поместилась у ${c.full}` : ""}.`,
+      // «Удалить из базы»
+      del: "Удалить из базы",
+      delAsk: "Удалятся только клиенты без визитов и покупок. Их комментарии, файлы и фото тоже удалятся. Вернуть будет нельзя.",
+      delYes: "Да, удалить",
+      delDone: (n: number) => `Удалено: ${n}.`,
+      delKept: (k: { visits: number; sales: number; merged: number }) => {
+        const n = k.visits + k.sales + k.merged;
+        if (!n) return "";
+        const why = [k.visits ? `есть визиты: ${k.visits}` : "", k.sales ? `есть покупки: ${k.sales}` : "", k.merged ? `с ним объединён другой клиент: ${k.merged}` : ""].filter(Boolean);
+        return `Осталось в базе: ${n} (${why.join(", ")}).`;
+      },
+    },
     /**
      * The full card (the owner, 19.11.2026; docs/reference-looks.md, «Клиенты»): a drawer over
      * the list from 900px, a page on a phone, seven tabs.
@@ -404,7 +527,7 @@ export const ru = {
       monthSum: (month: string, sum: string) => `${month}: ${sum}`,
       // «Сообщения»
       msgCols: { text: "Сообщение", at: "Отправлено", kind: "Тип", status: "Статус", channel: "Канал" },
-      kinds: { confirmation: "Подтверждение записи", reminder: "Напоминание о визите", client_reminder: "Напоминание о визите", moved: "Перенос записи", cancelled: "Отмена записи", manual: "Сообщение вручную" } as Record<string, string>,
+      kinds: { confirmation: "Подтверждение записи", reminder: "Напоминание о визите", client_reminder: "Напоминание о визите", moved: "Перенос записи", cancelled: "Отмена записи", manual: "Сообщение вручную", mass: "Рассылка" } as Record<string, string>,
       about: (when: string) => `Визит ${when}`,
       statuses: { queued: "в очереди", sending: "отправляется", sent: "отправлено", failed: "не доставлено", cancelled: "отменено", skipped: "не отправлено" } as Record<string, string>,
       channels: { sms: "SMS", email: "E-mail", push: "Push" } as Record<string, string>,

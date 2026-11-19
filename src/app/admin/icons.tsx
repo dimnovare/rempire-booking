@@ -69,6 +69,19 @@ export const PanelIcon = ({ size = 16 }: P) => (
   </svg>
 );
 
+// the client base (clients/): the bin that clears the conditions, the cog that picks the table's columns
+export const BinIcon = ({ size = 16 }: P) => (
+  <svg {...svg(size, 1.8)}>
+    <path d="M4 7h16M10 4h4M6.5 7l1 13h9l1-13M10 11v5M14 11v5" />
+  </svg>
+);
+export const CogIcon = ({ size = 16 }: P) => (
+  <svg {...svg(size, 1.8)}>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.2 2.2M16.2 16.2l2.2 2.2M5.6 18.4l2.2-2.2M16.2 7.8l2.2-2.2" />
+  </svg>
+);
+
 /**
  * The small mark at the right of a visit's strip: a clock while it waits, a
  * plus once the client is in, a tick when the visit is done, a minus if he

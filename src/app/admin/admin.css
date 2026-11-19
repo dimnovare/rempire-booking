@@ -1130,6 +1130,123 @@ button.cal-head:hover b { color: var(--accent); }
 }
 @media (min-width: 900px) { .cl-listpart { gap: 20px; } }
 
+/* ---------- the client base in full (clients/list-view.tsx and its base-*.tsx; the owner, 19.11.2026) ----------
+   Laid out as the design board «Клиенты, список»: the title with a thin breadcrumb under it and two buttons on
+   the right; one search field across the page; «Сегменты:» and three links; «Фильтры:», two 224px dropdowns, a
+   bin and «Найти» at the far right, then a row per condition; the table with a tick column, 50px rows and a
+   round cog at the head's right end; a bar that stays at the bottom with the page size, the pager, «Показаны
+   результаты…» and «Действия». The board draws the tool's old controls; these are the new ones, as the
+   journal's bar has them (the «jr-» block): 32px, 8px corners, a 1px #e0e3eb line, 12px/500 on buttons, yellow
+   for «Добавить клиента» and «Найти», white popovers with 12px corners. Its own classes (cb-).
+   A phone takes only the segments, as three chips under the search. */
+.cb-titles { min-width: 0; }
+.cb-crumb { margin: 0; }
+.cb-head-btns { display: flex; align-items: center; gap: 8px; }
+.cb-segs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; }
+.cb-segs > b { font-weight: 600; }
+.cb-seg { display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--raise); font-size: 14px; white-space: nowrap; }
+.cb-seg[aria-pressed="true"] { border-color: var(--lime); background: var(--lime); color: var(--on-lime); }
+@media (min-width: 900px) {
+  /* the page is as tall as the screen, so the bar rests at its foot until the table outgrows it */
+  .adm-page.adm-wide.adm-cl { min-height: calc(100dvh - var(--head-h)); padding: 16px 24px 0; }
+  .adm-cl > .cb { flex: 1 0 auto; gap: 12px; color: #2b3134; font: 400 13px/18px var(--body); }
+  .cb .cl-top { align-items: flex-start; }
+  .cb .adm-h1 { font: 500 20px/24px var(--body); }
+  .cb .adm-titled { min-height: 28px; }
+  .cb-crumb { color: #9aa3b1; font-size: 12px; line-height: 16px; }
+  .cb-head-btns .adm-btn-sm { height: 32px; min-height: 32px; padding: 0 12px; gap: 6px; font: 500 12px/16px var(--body); }
+  .cb-head-btns .adm-btn-sm svg { width: 12px; height: 12px; }
+  /* the fields of the page and of its windows; not those of «Добавить клиента», which is the admin's own sheet */
+  :where(.adm) :is(.cb-searchrow, .cb-filterpart, .cb-bar, .cb-dialog) :is(input, select):not([type="checkbox"]) { width: auto; height: 32px; min-height: 32px; padding: 0 9px; border-color: #e0e3eb; color: #2b3134; font-size: 12px; }
+  :where(.adm) :is(.cb-table, .cb-dialog) input[type="checkbox"] { width: 16px; height: 16px; min-height: 16px; }
+  .cb .cl-search { flex: 1 1 100%; max-width: none; }
+  .cb .cl-search svg { left: 9px; width: 16px; height: 16px; }
+  :where(.adm) .cb .cl-search input { width: 100%; padding-left: 32px; }
+  /* the field's own dark line says it has the keyboard; the frame's second ring is too much for 32px */
+  .cb :is(.cl-search, .cb-in) input:focus-visible, .cb :is(.cb-cond, .cb-size) select:focus-visible { outline: none; }
+  .cb-segs { gap: 12px; font-size: 13px; line-height: 19px; }
+  .cb-segs > b, .cb-filters > b { font-weight: 700; }
+  .cb-seg { min-height: 24px; padding: 0; border: 0; border-radius: 0; background: none; color: #003acc; font-size: 13px; }
+  .cb-seg:hover { text-decoration: underline; }
+  .cb-seg[aria-pressed="true"] { background: none; color: #2b3134; font-weight: 600; box-shadow: inset 0 -2px 0 #ffcb00; }
+  .cb-filterpart { display: flex; flex-direction: column; gap: 8px; }
+  .cb-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .cb-space { flex: 1; }
+  .cb-drop { width: 224px; justify-content: space-between; }
+  .cb-find { min-width: 117px; }
+  /* what a control of this page opens: under it from its left edge, or above it (the bar at the bottom) */
+  .cb .jr-pop { max-height: 336px; padding: 6px; border-radius: 12px; overflow-y: auto; }
+  .jr-pop-left { right: auto; left: 0; }
+  .jr-pop-up { top: auto; bottom: 36px; }
+  .cb .jr-item:disabled { opacity: .5; }
+  .cb .jr-item > small { flex: none; color: #71757f; font-weight: 400; }
+  .cb-who { margin: 0 0 4px; padding: 6px 8px 8px; border-bottom: 1px solid #eef1f6; color: #2b3134; font: 600 12px/16px var(--body); white-space: nowrap; }
+  .cb-danger { color: var(--warn); }
+  /* the conditions: one row each */
+  .cb-conds { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  .cb-conds > p { margin: 0; font-size: 12px; }
+  .cb-conds ul { list-style: none; width: 100%; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .cb-cond { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 44px; padding: 5px 6px 5px 12px; border: 1px solid #e0e3eb; border-radius: 8px; background: #fff; }
+  .cb-cond.is-bad { border-color: var(--warn); }
+  .cb-cond > b { flex: 0 0 200px; font: 500 12px/16px var(--body); }
+  .cb-in { display: inline-flex; align-items: center; gap: 6px; color: #71757f; font-size: 12px; }
+  :where(.adm) .cb-cond input[type="text"] { width: 88px; }
+  .cb-x { flex: none; width: 28px; height: 28px; margin-left: auto; display: grid; place-items: center; border-radius: 8px; color: #71757f; }
+  .cb-x:hover { background: #f0f3f8; color: var(--warn); }
+  .cb-join { display: flex; }
+  .cb-join .jr-btn { min-width: 48px; }
+  .cb-join .jr-btn:first-child { border-radius: 8px 0 0 8px; }
+  .cb-join .jr-btn:last-child { border-left: 0; border-radius: 0 8px 8px 0; }
+  .cb-join .jr-btn[aria-pressed="true"] { border-color: #2b3134; background: #2b3134; color: #fff; }
+  /* the table: a 50px head and 50px rows on a white sheet; too many columns scroll inside the sheet, never the page */
+  .cb-sheetwrap { position: relative; }
+  .cb-sheet { border-color: #e0e3eb; }
+  .cb-table { color: #2b3134; font-size: 13px; line-height: 18px; }
+  .cb-table th { height: 50px; padding: 0 10px; border-bottom-color: #e0e3eb; color: #2b3134; font: 600 13px/18px var(--body); }
+  .cb-table td { height: 50px; padding: 0 10px; border-bottom-color: #eef1f6; }
+  .cb-table .cb-tick { width: 50px; padding: 0 10px 0 16px; }
+  .cb-table .cb-tick input { display: block; }
+  .cb-table .c-name { min-width: 160px; white-space: nowrap; }
+  .cb-table .c-name a { color: #003acc; font-weight: 500; }
+  .cb-table .cl-tags { flex-wrap: nowrap; margin-top: 1px; }
+  .cb-table .adm-tag { height: 16px; font-size: 10px; }
+  .cb-table td[data-col="email"] { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+  .cb-table tbody tr.is-ticked td { background: #fffbe6; }
+  .cb-sort { display: inline-flex; align-items: center; gap: 4px; height: 32px; margin: 0 -4px; padding: 0 4px; border-radius: 6px; font: inherit; color: inherit; }
+  .cb-sort:hover { background: #f0f3f8; }
+  .cb-sort svg { opacity: .3; }
+  .cb-sort.is-desc svg { opacity: 1; }
+  .cb-sort.is-asc svg { opacity: 1; transform: rotate(180deg); }
+  /* the cog's own cell stays at the sheet's right end, and the cog lies over it */
+  .cb-table .cb-cogcell { position: sticky; right: 0; width: 44px; min-width: 44px; padding: 0; background: #fff; }
+  .cb-table tbody tr:hover .cb-cogcell { background: var(--ink); }
+  .cb-table tbody tr.is-ticked .cb-cogcell { background: #fffbe6; }
+  /* (above the bar at the bottom, so its menu is never cut by it on a short screen) */
+  .cb-cogpos { position: absolute; top: 10px; right: 7px; z-index: 5; }
+  .cb-cog { border-radius: 50%; }
+  /* the bar at the bottom: it stays in view while the table scrolls under it */
+  .cb-bar { position: sticky; bottom: 0; z-index: 4; margin-top: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 0; background: var(--ink); color: #676a6c; font-size: 13px; line-height: 18px; }
+  .cb-size { display: flex; align-items: center; gap: 8px; }
+  .cb-pager { display: flex; }
+  .cb-pager > * { min-width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0 10px; border: 1px solid #e0e3eb; border-left-width: 0; background: #fff; color: #2b3134; font: 500 12px/16px var(--body); }
+  .cb-pager > :first-child { border-left-width: 1px; border-radius: 8px 0 0 8px; }
+  .cb-pager > :last-child { border-radius: 0 8px 8px 0; }
+  .cb-pager > button:not(:disabled):hover { background: #f7f9fc; }
+  .cb-pager > [aria-current="page"], .cb-pager > [aria-current="page"]:hover { background: #eaeef4; }
+  .cb-pager > span { color: #71757f; }
+  /* its windows: the question's own white box (cc-ask), a little wider, with the page's 32px fields */
+  .cb-dialog { max-width: 520px; color: #2b3134; font: 400 13px/18px var(--body); }
+  .cb-dialog .cb-who { margin: 0; padding: 0; border: 0; white-space: normal; }
+  :where(.adm) .cb-dialog input:not([type="checkbox"]) { width: 100%; font-size: 14px; }
+  :where(.adm) .cb-dialog textarea { min-height: 0; padding: 6px 9px; border-color: #e0e3eb; color: #2b3134; font-size: 14px; line-height: 20px; resize: vertical; }
+  .cb-dialog .cc-field { color: #71757f; font-size: 12px; line-height: 16px; }
+  .cb-form { display: flex; flex-direction: column; gap: 12px; }
+  .cb-channels .cc-check { align-items: flex-start; padding: 6px 0; }
+  .cb-channels .cc-check input { margin-top: 2px; }
+  /* the frame's line («в очереди», «добавлено») goes above the bar, not over it */
+  :root:has(.cb-bar) .adm-frame-toast { bottom: 68px; }
+}
+
 /* ---------- one client's card (clients/[id]/; the owner, 19.11.2026; the design board «Карточка клиента») ----------
    From 900px a 900px drawer on the right, to the board's sizes: white, the name 20/24 as its title, chip tabs
    32px high with 8px corners (the open one on #f0f3f8), two columns 558px and the rest with 32px between,

@@ -9,23 +9,88 @@
  * history and the server's request log.
  *
  * A client's files are uploaded and downloaded by routes of their own
- * ([id]/files): a file is larger than an action may carry.
+ * ([id]/files): a file is larger than an action may carry. So is the
+ * list as an .xlsx file (export/route.ts).
+ *
+ * What is done to many clients at once (a mass message, a category,
+ * deleting) names its clients as a target: the ticked rows, or the list's
+ * own filter (src/lib/admin/client-bulk.ts). Who may do it is checked
+ * there, by the login's role.
  */
 import { refresh } from "next/cache";
 import { addComment, cleanStatsPeriod, clientStats, deleteComment, deleteFile, queueClientMessage, removeClientPhoto, saveClientPhoto, type ClientStats, type MessageQueued } from "@/lib/admin/client-card";
+import { bulkAddLabel, bulkDelete, cleanTarget, massPreview, queueMassMessage, type BulkDeleted, type BulkLabeled, type MassPreview, type MassQueued } from "@/lib/admin/client-bulk";
+import { setClientColumns, type ClientColumn } from "@/lib/admin/client-columns";
 import { clientDetail, deleteClient, listClients, saveClient, type ClientDeleted, type ClientInput, type ClientList, type ClientSaved } from "@/lib/admin/clients";
 import { PHOTO_MAX_BYTES } from "@/lib/admin/staff";
 import { requireAdmin } from "@/lib/auth/current";
 import { CLIENT_KINDS } from "@/lib/client-notify";
 import { query } from "@/lib/db";
+import { smsTransport } from "@/lib/sms";
 import { cardFieldsOf, type CardFields, type NotifyFields } from "./card-fields";
+import { filterOf, type ClientQuery } from "./query";
 
-export type ClientQuery = { q: string; label: string; page: number };
+export type { ClientQuery };
 
-/** One page of the list for this search and category. */
+/** One page of the list for this search, category and conditions, in this order. */
 export async function listClientsAction(f: ClientQuery): Promise<ClientList> {
   const { business } = await requireAdmin();
-  return listClients(query, business.id, { q: String(f?.q ?? ""), label: String(f?.label ?? ""), page: Number(f?.page) });
+  return listClients(query, business.id, filterOf(f), Date.now(), business.timezone);
+}
+
+/** The columns this login keeps in the table; answers with them as they are kept. */
+export async function setColumnsAction(columns: string[]): Promise<ClientColumn[] | null> {
+  const { user } = await requireAdmin();
+  return setClientColumns(query, user.id, Array.isArray(columns) ? columns.slice(0, 20).map(String) : null);
+}
+
+/* ---------- «Действия»: many clients at once ---------- */
+
+/** The ticked rows (`ids`), or with none ticked the list's own question (`filter`). */
+export type TargetInput = { ids: string[] } | { filter: ClientQuery };
+
+function targetOf(t: TargetInput | null | undefined) {
+  const ids = (t as { ids?: unknown })?.ids;
+  if (Array.isArray(ids)) return cleanTarget({ ids: ids.slice(0, 1000).map(String) });
+  const f = (t as { filter?: ClientQuery })?.filter;
+  return f && typeof f === "object" ? cleanTarget({ filter: filterOf(f) }) : null;
+}
+
+/** `smsReady`: an SMS can go now; false while there is no provider and it waits in the queue. */
+export type MassPreviewed = (MassPreview & { smsReady: boolean }) | null;
+
+/** Who a mass message to these clients would reach, by channel. Null: no such target. */
+export async function massPreviewAction(t: TargetInput): Promise<MassPreviewed> {
+  const { business } = await requireAdmin();
+  const target = targetOf(t);
+  if (!target) return null;
+  return { ...(await massPreview(query, business, target)), smsReady: smsTransport() !== "disabled" };
+}
+
+/** Queue the mass message: one outbox row per client and channel; the cron sends them. */
+export async function massSendAction(t: TargetInput, m: { text: string; channels: string[] }): Promise<MassQueued> {
+  const { user, business } = await requireAdmin();
+  const r = await queueMassMessage(business, targetOf(t), { text: str(m?.text), channels: Array.isArray(m?.channels) ? m.channels.slice(0, 10).map(String) : [] }, { id: user.id, role: user.role });
+  if (r.ok) refresh();
+  return r;
+}
+
+/** «Добавить в категорию»: one category on every chosen client. */
+export async function bulkLabelAction(t: TargetInput, label: string): Promise<BulkLabeled> {
+  const { user, business } = await requireAdmin();
+  const r = await bulkAddLabel(business, targetOf(t), str(label), user.id);
+  if (r.ok) refresh();
+  return r;
+}
+
+/**
+ * «Удалить из базы»: only the owner, and only clients with no history. No
+ * refresh, as for one client's «Удалить»: a card that is open would be
+ * asked for a client who is gone. The list asks for its page again itself.
+ */
+export async function bulkDeleteAction(t: TargetInput): Promise<BulkDeleted> {
+  const { user, business } = await requireAdmin();
+  return bulkDelete(business, targetOf(t), { id: user.id, role: user.role });
 }
 
 /** What «Добавить клиента» sends. */

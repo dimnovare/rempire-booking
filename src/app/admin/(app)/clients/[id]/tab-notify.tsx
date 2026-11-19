@@ -4,8 +4,9 @@
  * «Уведомления»: what this client lets us send him
  * (src/lib/client-notify.ts).
  *
- *   - «Рекламные сообщения: не отправлять»: kept for the day we send
- *     advertising; the tab «Отправить сообщение» shows it as a reminder;
+ *   - «Рекламные сообщения: не отправлять»: a mass message from the client
+ *     base goes to nobody who has it (src/lib/admin/client-bulk.ts); the
+ *     tab «Отправить сообщение» shows it as a reminder;
  *   - the channels he accepts: SMS, e-mail, push;
  *   - a switch per kind of message we send a client by ourselves: the
  *     booking's confirmation, the reminder, and the letters when the salon

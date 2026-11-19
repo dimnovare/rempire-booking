@@ -19,6 +19,11 @@
  * A message written by hand on his card («manual») has no switch: somebody
  * chose to send it. It still goes only by a channel he accepts.
  *
+ * A mass message from the client base («mass») is advertising: it goes only
+ * by a channel he accepts, and not at all to a client who ticked «Рекламные
+ * сообщения: не отправлять» (clients.marketing_opt_out). Those two rules
+ * are kept where it is queued, src/lib/admin/client-bulk.ts.
+ *
  * Whoever queues a message for a client asks here first, so a kind that is
  * off is never queued for him. No Next.js and no other module of ours in
  * here: booking.ts and outbox.ts both read it.

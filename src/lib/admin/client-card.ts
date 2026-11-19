@@ -12,7 +12,8 @@
  *               kinds. The kind is told three ways and all must agree: the
  *               name's ending, the type the browser declared, and, where a
  *               kind has a signature, its first bytes.
- *   messages    what we sent him, from the outbox (notifications), and a
+ *   messages    what we sent him, from the outbox (notifications), a mass
+ *               message among them (kind «mass», client-bulk.ts), and a
  *               message written by hand: one row of kind «manual» per
  *               channel, sent by the cron like every other row
  *               (src/lib/outbox.ts). SMS has no provider yet, so an SMS
@@ -286,18 +287,20 @@ export const MESSAGE_MAX = 1000;
 /** The messages a card lists, newest first. */
 export const MESSAGES_MAX = 200;
 /** The kinds of outbox row that are a message to a client (src/lib/client-notify.ts, and «manual»). */
-const TO_CLIENT = ["confirmation", "reminder", "client_reminder", "moved", "cancelled", "manual"];
+/** The kinds whose words are their own, kept in the payload: written by hand on the card, or to many clients at once (client-bulk.ts). */
+const WRITTEN = ["manual", "mass"];
+const TO_CLIENT = ["confirmation", "reminder", "client_reminder", "moved", "cancelled", ...WRITTEN];
 
 export type ClientMessage = {
   id: string;
-  /** an outbox kind: confirmation, reminder, client_reminder, moved, cancelled, manual */
+  /** an outbox kind: confirmation, reminder, client_reminder, moved, cancelled, manual, mass */
   kind: string;
   channel: ClientChannel;
   /** queued, sending, sent, failed, cancelled, skipped */
   status: string;
   /** when it went; for one that has not gone, when it is due */
   at: number;
-  /** the words, for a message written by hand; null for the ones built at send time */
+  /** the words, for a message written by hand or sent to many; null for the ones built at send time */
   text: string | null;
   /** the visit it is about, when it is about one */
   visitAt: number | null;
@@ -312,14 +315,14 @@ export async function listMessages(q: Querier, businessId: string, clientId: str
   if (!isUuid(clientId)) return [];
   const rows = await q<{ id: string; kind: string; channel: ClientChannel; status: string; send_at: Date; sent_at: Date | null; text: string | null; visit_at: Date | null }>(
     `select n.id, n.kind, n.channel, n.status, n.send_at, n.sent_at,
-            case when n.kind = 'manual' then n.payload->>'text' end as text,
-            case when n.kind <> 'manual' then a.starts_at end as visit_at
+            case when n.kind = any($4::text[]) then n.payload->>'text' end as text,
+            case when not (n.kind = any($4::text[])) then a.starts_at end as visit_at
        from notifications n left join appointments a on a.id = n.appointment_id
       where n.business_id = $1 and n.user_id is null and n.kind = any($3::text[])
         and (n.client_id = $2 or (n.client_id is null and a.client_id = $2))
       order by coalesce(n.sent_at, n.send_at) desc, n.created_at desc, n.id
       limit ${MESSAGES_MAX}`,
-    [businessId, clientId, TO_CLIENT],
+    [businessId, clientId, TO_CLIENT, WRITTEN],
   );
   return rows.map((r) => ({ id: r.id, kind: r.kind, channel: r.channel, status: r.status, at: ms(r.sent_at ?? r.send_at), text: r.text, visitAt: r.visit_at ? ms(r.visit_at) : null }));
 }

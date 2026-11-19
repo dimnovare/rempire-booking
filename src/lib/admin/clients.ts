@@ -3,13 +3,16 @@
  * 19.11.2026: Altegio's «Клиенты», «a list of every client with phone,
  * visit history, notes and categories»).
  *
- *   - the list: a search by name, phone digits or e-mail, one category as a
- *     filter, 25 a page, each client with his numbers;
+ *   - the list: a search by name, the digits of either phone, e-mail or
+ *     card number, one category as a filter, the conditions of the client
+ *     base (client-filter.ts) joined by «И» or «Или», sorted by a column,
+ *     10, 25, 50 or 100 a page, each client with his numbers;
  *   - one client: his fields and his visits with every barber;
  *   - add a client, change one, delete one who has no history.
  *
  * The card's other parts (comments, photo, files, messages, statistics)
- * are in client-card.ts.
+ * are in client-card.ts; what is done to many clients at once (a mass
+ * message, a category, deleting) in client-bulk.ts.
  *
  * The numbers of a client:
  *   visits      his visits that are not cancelled, the ones ahead included
@@ -46,11 +49,14 @@ import { query, withTx, type Querier } from "../db";
 import { isLocale, type Locale } from "../i18n";
 import { normalizePhone } from "../phone";
 import { todayIn } from "../tz";
+import { cleanConds, condsSql, isClientSort, isJoin, PAGE_SIZE, PAGE_SIZES, type ClientSort, type Join } from "./client-filter";
 import { isUuid } from "./visits";
 
 export { NOTE_MAX };
-/** Clients on one page of the list. */
-export const PAGE_SIZE = 25;
+// the list's page sizes and sort columns are in client-filter.ts: the list in the browser reads them too
+export { isClientSort, PAGE_SIZE, PAGE_SIZES, SORTS, type ClientSort, type SortDir } from "./client-filter";
+/** The salon's time zone when nobody says another. */
+const TZ = "Europe/Tallinn";
 /** One category: at most this many characters. */
 export const LABEL_MAX = 30;
 /** Categories on one client. */
@@ -99,15 +105,27 @@ export type ClientRow = {
   firstVisit: number | null;
   lastVisit: number | null;
   soldCents: number;
+  /** whole percent, 0 to 100; stored and shown only */
+  discountPct: number;
 };
 
 export type ClientFilter = {
-  /** a name, phone digits or an e-mail, or a part of one */
+  /** a name, phone digits, an e-mail or a card number, or a part of one */
   q?: string | null;
   /** only clients of this category */
   label?: string | null;
+  /** the conditions of the client base, as the list sent them (client-filter.ts); what is not whole is left out */
+  conds?: unknown;
+  /** how the conditions are joined: «and» unless «or» */
+  join?: unknown;
+  /** the column to sort by: name, unless one of `SORTS` */
+  sort?: unknown;
+  /** «asc» unless «desc» */
+  dir?: unknown;
   /** from 1; a page past the end is the last one */
   page?: number | null;
+  /** clients a page: one of `PAGE_SIZES`, else 25 */
+  size?: number | null;
 };
 
 export type ClientList = {
@@ -116,6 +134,8 @@ export type ClientList = {
   total: number;
   page: number;
   pages: number;
+  /** clients a page, as it was answered */
+  size: number;
   /** every category in use, for the filter and for the «add» field */
   labels: string[];
 };
@@ -124,21 +144,90 @@ type StatsRow = { visits: number; first_visit: Date | null; last_visit: Date | n
 
 /**
  * What was typed in the search field, as a WHERE part: looked for inside
- * the name and inside the e-mail. Mostly digits is a phone as well («5555
- * 0903», «+372 55»), whatever spaces and brackets it was typed with: its
- * digits are looked for inside the stored number.
+ * the name, the e-mail and the card number. Mostly digits is a phone as
+ * well («5555 0903», «+372 55»), whatever spaces and brackets it was typed
+ * with: its digits are looked for inside both stored numbers.
  */
 function searchPart(raw: unknown, params: unknown[]): string {
   const s = text(raw, 60);
   if (!s) return "";
   params.push(likeText(s));
-  const words = `c.name ilike '%' || $${params.length} || '%' or coalesce(c.email, '') ilike '%' || $${params.length} || '%'`;
+  const at = `'%' || $${params.length} || '%'`;
+  const words = `c.name ilike ${at} or coalesce(c.email, '') ilike ${at} or c.card_no ilike ${at}`;
   const digits = s.replace(/\D/g, "");
   const byPhone = digits.length >= 3 && digits.length >= s.replace(/[\s+()-]/g, "").length - 1;
   if (!byPhone) return ` and (${words})`;
   // «00372…» is «+372…»
   params.push(digits.replace(/^00/, ""));
-  return ` and (${words} or replace(coalesce(c.phone_e164, ''), '+', '') like '%' || $${params.length} || '%')`;
+  const has = `like '%' || $${params.length} || '%'`;
+  return ` and (${words} or replace(coalesce(c.phone_e164, ''), '+', '') ${has} or replace(coalesce(c.phone2_e164, ''), '+', '') ${has})`;
+}
+
+/**
+ * Which clients a filter leaves, as a WHERE over `clients c` with its
+ * values: this business's, not merged away, then the search, the category
+ * and the conditions. The list, the export and the bulk actions all ask
+ * with this one, so they always mean the same clients. Paging and sorting
+ * are not part of it.
+ */
+export function clientWhere(businessId: string, filter: ClientFilter = {}, now = Date.now(), tz = TZ): { where: string; params: unknown[] } {
+  const params: unknown[] = [businessId];
+  let where = "c.business_id = $1 and c.merged_into is null";
+  where += searchPart(filter.q, params);
+  const label = text(filter.label, LABEL_MAX);
+  if (label) {
+    params.push(label);
+    where += ` and $${params.length} = any(c.labels)`;
+  }
+  const p = (value: unknown) => {
+    params.push(value);
+    return `$${params.length}`;
+  };
+  where += condsSql(cleanConds(filter.conds), isJoin(filter.join) ? (filter.join as Join) : "and", { p, now, tz });
+  return { where, params };
+}
+
+/**
+ * ORDER BY for the list. Only names from this map ever get into the text.
+ * A client with no visit at all comes last when the list is sorted by a
+ * visit's date, whichever way; ties go by name.
+ */
+const ORDER: Record<ClientSort, (dir: string) => string> = {
+  name: (dir) => `lower(c.name) ${dir}, c.name ${dir}, c.id`,
+  visits: (dir) => `v.visits ${dir}, lower(c.name), c.name, c.id`,
+  sold: (dir) => `v.sold ${dir}, lower(c.name), c.name, c.id`,
+  last: (dir) => `v.last_visit ${dir} nulls last, lower(c.name), c.name, c.id`,
+  first: (dir) => `v.first_visit ${dir} nulls last, lower(c.name), c.name, c.id`,
+};
+
+type ListRow = { id: string; name: string; phone_e164: string | null; email: string | null; labels: string[]; discount_pct: number } & StatsRow;
+
+const rowOf = (r: ListRow): ClientRow => ({
+  id: r.id,
+  name: r.name,
+  phone: r.phone_e164,
+  email: r.email,
+  labels: r.labels ?? [],
+  visits: r.visits,
+  firstVisit: r.first_visit ? ms(r.first_visit) : null,
+  lastVisit: r.last_visit ? ms(r.last_visit) : null,
+  soldCents: r.sold,
+  discountPct: r.discount_pct,
+});
+
+/** The clients a WHERE leaves, with their numbers, in the asked order: `limit` of them from `offset`. */
+export async function clientRows(q: Querier, found: { where: string; params: unknown[] }, order: { sort?: unknown; dir?: unknown }, limit: number, offset: number, now = Date.now()): Promise<ClientRow[]> {
+  const nowAt = found.params.length + 1;
+  const by = ORDER[isClientSort(order.sort) ? order.sort : "name"](order.dir === "desc" ? "desc" : "asc");
+  const rows = await q<ListRow>(
+    `select c.id, c.name, c.phone_e164, c.email, c.labels, c.discount_pct, v.visits, v.first_visit, v.last_visit, v.sold
+       from clients c ${STATS.replaceAll("$NOW", `$${nowAt}`)}
+      where ${found.where}
+      order by ${by}
+      limit $${nowAt + 1} offset $${nowAt + 2}`,
+    [...found.params, new Date(now), limit, offset],
+  );
+  return rows.map(rowOf);
 }
 
 /** Every category in use in the business, A to Z. */
@@ -151,49 +240,22 @@ export async function clientLabels(q: Querier, businessId: string): Promise<stri
   return rows.map((r) => r.label);
 }
 
-/** One page of the client base, by name. */
-export async function listClients(q: Querier, businessId: string, filter: ClientFilter = {}, now = Date.now()): Promise<ClientList> {
-  const params: unknown[] = [businessId];
-  let where = "c.business_id = $1 and c.merged_into is null";
-  where += searchPart(filter.q, params);
-  const label = text(filter.label, LABEL_MAX);
-  if (label) {
-    params.push(label);
-    where += ` and $${params.length} = any(c.labels)`;
-  }
-  const [labels, [count]] = await Promise.all([clientLabels(q, businessId), q<{ n: number }>(`select count(*)::int as n from clients c where ${where}`, params)]);
-  const total = count?.n ?? 0;
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+/** How many clients a WHERE leaves. */
+export async function countClients(q: Querier, found: { where: string; params: unknown[] }): Promise<number> {
+  const [count] = await q<{ n: number }>(`select count(*)::int as n from clients c where ${found.where}`, found.params);
+  return count?.n ?? 0;
+}
+
+/** One page of the client base: by name unless another column is asked for. `tz` is the salon's, for the conditions' days. */
+export async function listClients(q: Querier, businessId: string, filter: ClientFilter = {}, now = Date.now(), tz = TZ): Promise<ClientList> {
+  const found = clientWhere(businessId, filter, now, tz);
+  const [labels, total] = await Promise.all([clientLabels(q, businessId), countClients(q, found)]);
+  const size = (PAGE_SIZES as readonly number[]).includes(filter.size as number) ? (filter.size as number) : PAGE_SIZE;
+  const pages = Math.max(1, Math.ceil(total / size));
   const asked = Number.isInteger(filter.page) ? (filter.page as number) : 1;
   const page = Math.min(Math.max(1, asked), pages);
-  const nowAt = params.length + 1;
-  const rows = total
-    ? await q<{ id: string; name: string; phone_e164: string | null; email: string | null; labels: string[] } & StatsRow>(
-        `select c.id, c.name, c.phone_e164, c.email, c.labels, v.visits, v.first_visit, v.last_visit, v.sold
-           from clients c ${STATS.replaceAll("$NOW", `$${nowAt}`)}
-          where ${where}
-          order by lower(c.name), c.name, c.id
-          limit $${nowAt + 1} offset $${nowAt + 2}`,
-        [...params, new Date(now), PAGE_SIZE, (page - 1) * PAGE_SIZE],
-      )
-    : [];
-  return {
-    rows: rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      phone: r.phone_e164,
-      email: r.email,
-      labels: r.labels ?? [],
-      visits: r.visits,
-      firstVisit: r.first_visit ? ms(r.first_visit) : null,
-      lastVisit: r.last_visit ? ms(r.last_visit) : null,
-      soldCents: r.sold,
-    })),
-    total,
-    page,
-    pages,
-    labels,
-  };
+  const rows = total ? await clientRows(q, found, filter, size, (page - 1) * size, now) : [];
+  return { rows, total, page, pages, size, labels };
 }
 
 export type ClientVisit = {
@@ -232,7 +294,7 @@ export type ClientDetail = ClientRow & {
   discountPct: number;
   /** an online booking with his phone is refused (src/lib/booking.ts) */
   noOnline: boolean;
-  /** kept for the day we send advertising; nothing reads it yet */
+  /** «Рекламные сообщения: не отправлять»: a mass message goes to nobody who has it (client-bulk.ts) */
   marketingOptOut: boolean;
   pushOptOut: boolean;
   /** the kinds of message he has switched off (src/lib/client-notify.ts) */

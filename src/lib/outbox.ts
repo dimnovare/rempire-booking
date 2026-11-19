@@ -50,6 +50,11 @@
  * (src/lib/admin/client-card.ts queues it). By SMS or e-mail it goes like
  * any other row; as a notification it goes to the phones turned on for the
  * visit named in the row, the client's next one.
+ *
+ * A mass message from the client base is a row of kind «mass» per client
+ * and channel (src/lib/admin/client-bulk.ts queues them): the same words in
+ * the payload, the client in client_id, and it goes exactly as a «manual»
+ * row does.
  */
 import { after } from "next/server";
 import { getBusinessById } from "./availability";
@@ -415,7 +420,7 @@ async function deliver(q: Querier, rows: OutboxRow[], now: number, env: Env, sen
       } else if (row.channel === "push" && "push" in msg) {
         // a login's phones, or the phones turned on for this one visit
         const r =
-          row.kind === "client_reminder" || row.kind === "manual"
+          row.kind === "client_reminder" || row.kind === "manual" || row.kind === "mass"
             ? await (senders.pushClient ?? sendPushToClient)(q, row.appointment_id ?? "", msg.push, env)
             : await (senders.push ?? sendPushToUser)(q, row.recipient, msg.push, env);
         if (!r.devices) {
@@ -478,8 +483,8 @@ async function composePush(q: Querier, row: OutboxRow, now: number): Promise<Com
     const text = clientReminderText(row, `/v/${await mintVisitLink(q, row.appointment_id, "push", 12)}`);
     return text ? { push: text } : { skip: "no text" };
   }
-  if (row.kind === "manual") {
-    // written by hand on the client's card: its own words, to the phones of the visit it names
+  if (row.kind === "manual" || row.kind === "mass") {
+    // written by hand on the client's card, or to many clients at once: its own words, to the phones of the visit it names
     if (!row.appointment_id) return { skip: "no visit" };
     const p = row.payload as { text?: unknown; subject?: unknown };
     const body = typeof p.text === "string" ? p.text.trim() : "";
