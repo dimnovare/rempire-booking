@@ -1656,3 +1656,235 @@ button.cal-head:hover b { color: var(--accent); }
   .rt-toggle > .rt-lock { grid-column: 3; }
   .rt-save { bottom: 0; margin: 0; padding: 8px 0; }
 }
+
+/* ---------- «Записи» (records/; the owner, 19.11.2026): every visit in one table ----------
+   Laid out as the design board «Записи» (docs/reference-looks.md): the title with a thin breadcrumb and two
+   buttons on the right; two rows of dates behind their bold words; a grid of four selects a row, with the
+   services and the client's name or phone in it; the page size on the left and a 392px «Показать» on the
+   right; «Найдено N» in the middle; the table (a tick, a round photo, the barber, the services, the client,
+   the visit's time, who made it, the status, the source, a pencil) with a pale red row for a cancelled visit;
+   the pager at the bottom right. The board draws the tool's old controls; these are the new ones, as the
+   client base has them: 32px, 8px corners, a 1px #e0e3eb line, 12px/500 on buttons, yellow for «Показать».
+   Its own classes (rc-). A phone: a row per visit, the filters in a sheet. */
+.rc { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.rc-top { flex-wrap: wrap; }
+.rc-top .adm-btn { width: auto; }
+.rc-found { margin: 0; display: flex; align-items: center; gap: 6px; color: var(--mute); font-size: 14px; }
+.rc-found b { color: var(--fg); font-weight: 600; }
+.rc-found.is-bad { color: var(--warn); }
+.rc-list.is-busy { opacity: .55; transition: opacity .2s .15s; }
+.rc-rows .adm-item { padding: 10px 8px; }
+.rc-item .txt small { overflow-wrap: anywhere; }
+.rc-item.is-cancelled { background: #fdeeee; }
+.rc-item.is-cancelled, .rc-item.is-cancelled .txt small { color: #b42318; }
+.rc-svcs { min-width: 0; margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; }
+.rc-svcs legend { margin-bottom: 2px; padding: 0; font-size: 13px; color: var(--mute); }
+/* a cancelled visit in the visit sheet: only shown */
+.adm-gone { margin: 0; }
+@media (min-width: 900px) {
+  .adm-page.adm-wide.adm-rc { padding: 16px 24px 24px; }
+  .rc { gap: 12px; color: #2b3134; font: 400 13px/18px var(--body); }
+  /* the visit sheet is the admin's panel on the right: the table gives it room */
+  .rc.has-panel { padding-right: calc(var(--panel-w) - 24px); }
+  .rc .rc-top { align-items: flex-start; }
+  .rc .adm-h1 { font: 500 20px/24px var(--body); }
+  .rc .adm-titled { min-height: 28px; }
+  .rc-head-btns { display: flex; align-items: center; gap: 8px; }
+  /* «Отменить выбранные» has the board's yellow line once something is ticked */
+  .rc-cancel:not(:disabled), .rc-cancel:not(:disabled):hover { border-color: #ffcb00; }
+  /* the filters: 32px fields with 8px corners and a 1px line */
+  .rc-filters { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+  :where(.adm) .rc-filters :is(input, select) { width: 100%; height: 32px; min-height: 32px; padding: 0 9px; border-color: #e0e3eb; color: #2b3134; font-size: 12px; }
+  /* the field's own dark line says it has the keyboard; the frame's second ring is too much for 32px */
+  .rc-filters :is(input, select):focus-visible { outline: none; }
+  .rc-dates { display: grid; grid-template-columns: 120px repeat(2, minmax(0, 1fr)); gap: 12px 16px; align-items: center; }
+  .rc-dates > b { font-weight: 700; }
+  .rc-date { display: flex; align-items: center; gap: 8px; min-width: 0; color: #71757f; font-size: 12px; }
+  .rc-date > span { flex: none; min-width: 14px; }
+  .rc-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 16px; }
+  .rc-grid > .jr-pop-wrap { min-width: 0; }
+  .rc-grid .rc-drop { flex: 1; min-width: 0; justify-content: space-between; }
+  .rc-grid .rc-drop > span { overflow: hidden; text-overflow: ellipsis; }
+  .rc-client { grid-column: span 2; min-width: 0; }
+  .rc-run { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+  .rc-size { display: flex; align-items: center; gap: 8px; color: #676a6c; }
+  :where(.adm) .rc-size select { width: auto; }
+  .rc-show { width: 392px; max-width: 100%; }
+  .rc .jr-pop { max-height: 336px; padding: 6px; border-radius: 12px; overflow-y: auto; }
+  .rc .jr-item:disabled { opacity: .5; }
+  .rc .jr-item > small { flex: none; color: #71757f; font-weight: 400; }
+  /* «Найдено N»: in the middle, over the table */
+  .rc-found { align-self: center; gap: 0; margin-top: 8px; border: 1px solid #e0e3eb; border-radius: 8px; overflow: hidden; background: #fff; color: #676a6c; font: 500 12px/16px var(--body); }
+  .rc-found > span { padding: 4px 10px; }
+  .rc-found > b { padding: 4px 10px; background: #2b3134; color: #fff; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .rc-found.is-bad { padding: 4px 10px; border-color: var(--warn); }
+  /* the table: a 36px head and rows of two lines on a white sheet; it scrolls inside the sheet, never the page */
+  .rc-sheet { border-color: #e0e3eb; }
+  .rc-table { min-width: 980px; color: #2b3134; font-size: 13px; line-height: 18px; }
+  .rc-table th { height: 36px; padding: 8px; border-bottom-color: #e0e3eb; color: #676a6c; font: 700 13px/18px var(--body); }
+  .rc-table td { height: 64px; padding: 8px; border-bottom-color: #eef1f6; white-space: normal; }
+  .rc-table td > :is(b, span, small) { display: block; }
+  .rc-table td > b { font-weight: 700; }
+  .rc-table td > small { color: #676a6c; font-size: 13px; }
+  .rc-table .rc-tick { width: 36px; padding-left: 12px; }
+  :where(.adm) .rc-table input[type="checkbox"] { display: block; width: 16px; height: 16px; min-height: 16px; }
+  .rc-table .rc-ava { width: 48px; }
+  .rc-photo { width: 32px; height: 32px; border-radius: 50%; font: 700 12px/1 var(--body); }
+  .rc-table td[data-col="services"] { min-width: 180px; }
+  .rc-table td[data-col="visit"] { white-space: nowrap; }
+  .rc-table td[data-col="client"] > small, .rc-table td[data-col="by"] > small { white-space: nowrap; }
+  .rc-table .rc-act { width: 48px; }
+  .rc-table tbody tr.is-ticked td { background: #fffbe6; }
+  .rc-table tbody tr.is-cancelled td, .rc-table tbody tr.is-cancelled:hover td { background: #fdeeee; color: #b42318; }
+  .rc-table tbody tr.is-cancelled td > small { color: #b42318; }
+  .rc-pager { display: flex; justify-content: flex-end; }
+}
+
+/* ---------- «График работы» (schedule/; the owner, 19.11.2026): the month grid of shifts ----------
+   From 900px its sizes, colours and fonts are the design board's of the same name (measured in the product
+   we follow, docs/altegio-pages.md): the title (20px/24px, 500) and a 36px outlined «Печать»; a row of 32px
+   controls 24px under it, the first with a yellow line, the month at 16px/24px, «Неделя | Месяц» with the
+   open one dark; the grid on a white sheet with 8px corners, 16px under that: an 83px head and 64px rows
+   with a #eaeef4 line; a 264px column of barbers (a 24px square photo, the name at 12px/16px 500, «…») and a
+   91px «Итого», both in place while the days scroll; 38px days with a 29 × 40 chip (the number 14px/20px
+   500, the weekday 12px/16px), red on a weekend, yellow (#ffd940) today over a tinted column, and how many
+   work in #9aa3b1; a shift a 33 × 60 block (#cdf4cd, 4px corners, 8px/10px 500 #19803b) with the day's
+   visits at its foot on the left and a 4px dot on the right for a break (#29c235). Ours: a vacation and a
+   sick day in their own pale colours with a short word, a marked cell with a dark frame, the panel.
+   Its own classes (sc-). A phone: the same grid in its own box, a narrower column of barbers. */
+.sc { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.sc.is-pending .sc-box { opacity: .6; transition: opacity .2s .15s; }
+.sc-top { flex-wrap: wrap; }
+.sc-print { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border: 2px solid #e0e3eb; border-radius: 8px; background: #fff; color: #2b3134; font: 500 12px/16px var(--body); white-space: nowrap; }
+.sc-print:hover { border-color: #c6cbd3; }
+/* the toolbar: the journal's 32px controls (the «jr-» block is from 900px only; a phone gets them here) */
+.sc-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #2b3134; font: 400 12px/16px var(--body); }
+.sc-bar .jr-btn { position: relative; flex: none; height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 1px solid #e0e3eb; border-radius: 8px; background: #fff; color: #2b3134; font: 500 12px/16px var(--body); white-space: nowrap; }
+.sc-bar .jr-btn:hover { border-color: #c6cbd3; }
+.sc-bar .jr-ibtn { width: 32px; padding: 0; }
+.sc-bar .jr-ibtn[aria-expanded="true"] { background: #eaeef4; }
+.sc-bar .sc-filter, .sc-bar .sc-filter:hover { border-color: #ffcb00; }
+.sc-bar .jr-btn.is-marked::after { content: ""; position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: #f72c32; box-shadow: 0 0 0 1.5px #fff; }
+.sc-month { margin: 0 8px; font: 500 16px/24px var(--body); white-space: nowrap; }
+.sc-space { flex: 1; }
+.sc-seg { display: flex; }
+.sc-seg .jr-btn:first-child { border-right: 0; border-radius: 8px 0 0 8px; }
+.sc-seg .jr-btn:last-child { border-radius: 0 8px 8px 0; }
+.sc-seg .jr-btn[aria-pressed="true"] { border-color: #2b3134; background: #2b3134; color: #fff; }
+/* what a control opens: who is shown, and the cog's two switches */
+.sc-bar .jr-pop-wrap { position: relative; flex: none; display: flex; }
+.sc-bar .jr-pop { position: absolute; top: 36px; right: 0; z-index: 20; min-width: 220px; padding: 6px; border-radius: 12px; background: #fff; box-shadow: rgba(0, 29, 102, .16) 0 6px 24px; color: #2b3134; font: 400 12px/16px var(--body); }
+.sc-bar .jr-pop-left { right: auto; left: 0; }
+.sc-bar .jr-pop-dialog { width: 300px; padding: 16px; }
+.sc-bar .jr-item { width: 100%; min-height: 32px; display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 6px; font: 500 12px/16px var(--body); white-space: nowrap; }
+.sc-bar .jr-item:hover { background: #f7f9fc; }
+.sc-bar .jr-box { flex: none; width: 16px; height: 16px; display: grid; place-items: center; border: 1px solid #c6cbd3; border-radius: 4px; color: transparent; }
+.sc-bar .jr-box.is-on { border-color: #2b3134; background: #2b3134; color: #fff; }
+.sc-pop-title { margin: 0 0 4px; padding: 6px 8px 8px; border-bottom: 1px solid #eef1f6; font: 600 12px/16px var(--body); }
+.sc-set .sc-pop-title { margin-bottom: 8px; padding: 0 0 8px; }
+.sc-all { color: #003acc; }
+.sc-switch { display: flex; align-items: center; gap: 12px; min-height: 40px; cursor: pointer; }
+.sc-switch > span { flex: 1; min-width: 0; }
+.sc-hint { margin: -4px 0 0; }
+/* the grid */
+.sc-box { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; background: #fff; border-radius: 8px; }
+.sc-grid { --staff-w: 132px; --total-w: 72px; min-width: max-content; color: #2b3134; font: 400 12px/16px var(--body); }
+/* (the line is under the row's 64px, as on the board: a cell is 2 + 60 + 2) */
+.sc-row { box-sizing: content-box; display: flex; height: 64px; border-bottom: 1px solid #eaeef4; }
+.sc-row.sc-head { height: 83px; }
+.sc-staff { position: sticky; left: 0; z-index: 2; flex: 0 0 var(--staff-w); min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 12px; background: #fff; }
+.sc-head .sc-staff { font: 500 14px/20px var(--body); }
+.sc-badge { flex: none; min-width: 20px; height: 20px; padding: 0 4px; border-radius: 10px; background: #ffd940; font: 400 12px/20px var(--body); text-align: center; }
+.sc-ava { width: 24px; height: 24px; border-radius: 4px; font: 700 10px/1 var(--body); }
+.sc-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12px/16px var(--body); }
+.sc-more { flex: none; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: #71757f; }
+.sc-more:hover, .sc-more[aria-expanded="true"] { background: #f0f3f8; color: #2b3134; }
+.sc-total { flex: 0 0 var(--total-w); display: flex; flex-direction: column; justify-content: center; align-items: center; background: #fff; color: #71757f; white-space: nowrap; }
+.sc-head .sc-total { color: #2b3134; }
+.sc-head .sc-total b { font: 500 14px/20px var(--body); }
+.sc-head .sc-total small { color: #71757f; font: 400 11px/14px var(--body); }
+.sc-day { flex: 0 0 38px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; }
+.sc-chip { width: 29px; height: 40px; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.sc-chip b { font: 500 14px/20px var(--body); }
+.sc-chip i { font: normal 400 12px/16px var(--body); }
+.sc-day.is-weekend .sc-chip { color: #f96065; }
+.sc-day.is-today { background: rgba(255, 249, 223, .5); }
+.sc-day.is-today .sc-chip { background: #ffd940; }
+.sc-count { color: #9aa3b1; font: 400 12px/16px var(--body); }
+.sc-cell { flex: 0 0 38px; display: block; height: 100%; padding: 2px; }
+.sc-cell.is-today { background: rgba(255, 249, 223, .5); }
+button.sc-cell:not(.is-on):hover { background: #f0f3f8; }
+/* a marked cell: a dark frame on a pale yellow ground */
+.sc-cell.is-on { background: #fff6cf; box-shadow: inset 0 0 0 2px #2b3134; }
+.adm button.sc-cell:focus-visible { outline-offset: -2px; }
+.sc-shift { width: 33px; height: 60px; border-radius: 4px; padding: 6px 2px 2px; display: flex; flex-direction: column; align-items: center; background: #cdf4cd; color: #19803b; font: 500 8px/10px var(--body); }
+.sc-foot { align-self: stretch; min-height: 10px; margin-top: auto; padding: 0 2px; display: flex; justify-content: space-between; align-items: center; color: #29c235; }
+.sc-n { font-style: normal; }
+.sc-dot { flex: none; width: 4px; height: 4px; margin-left: auto; border-radius: 50%; background: #29c235; }
+/* a vacation and a sick day: their own pale colours and a short word */
+.sc-cell:is(.k-vacation, .k-sick) .sc-shift { justify-content: center; padding: 2px; }
+.sc-cell.k-vacation .sc-shift { background: #e6e1fd; color: #4a32cf; }
+.sc-cell.k-sick .sc-shift { background: #ffe4e5; color: #c7252b; }
+/* a week: the seven days share the width */
+.sc-box.is-week :is(.sc-day, .sc-cell) { flex: 1 0 38px; }
+.sc-box.is-week .sc-shift { width: 100%; }
+/* a barber's «…»: beside its button, over everything */
+.sc-menu { position: fixed; z-index: 40; min-width: 216px; display: flex; flex-direction: column; padding: 6px; border-radius: 12px; background: #fff; box-shadow: rgba(0, 29, 102, .16) 0 6px 24px; color: #2b3134; }
+.sc-menu > * { width: 100%; min-height: 32px; display: flex; align-items: center; padding: 4px 8px; border-radius: 6px; font: 500 12px/16px var(--body); text-decoration: none; white-space: nowrap; }
+.sc-menu > *:hover { background: #f7f9fc; }
+/* a phone: what is marked, over the bottom bar */
+.sc-selbar { position: fixed; left: 0; right: 0; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px)); z-index: 25; display: flex; align-items: center; gap: 8px; padding: 10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px)); background: var(--raise); border-top: 1px solid var(--line-2); box-shadow: 0 -4px 16px rgba(34, 34, 46, .08); font-size: 14px; }
+.sc-selbar > span { flex: 1; min-width: 0; }
+.sc-selbar .adm-btn { width: auto; }
+/* the panel's own rows */
+.sc-picked { font-weight: 600; color: var(--fg); }
+.sc-modes button { padding: 0 4px; font-size: 12px; }
+.sc-wd { display: flex; flex-wrap: wrap; gap: 6px; }
+.sc-wd .adm-chip { min-width: 44px; justify-content: center; }
+.sc-breaks { gap: 8px; }
+.sc-break { display: flex; align-items: center; gap: 8px; }
+.sc-break input { flex: 1 1 0; }
+.sc-addbreak { align-self: flex-start; }
+.sc-copy { max-width: 440px; }
+.sc-copy-dates { display: flex; flex-wrap: wrap; gap: 10px; }
+.sc-copy-dates .cc-field { flex: 1 1 140px; }
+@media (max-width: 899px) {
+  /* the panel waits behind «Изменить»; what a control opens rests over the bottom bar, whatever the button's place */
+  .sc-panel:not(.is-open) { display: none; }
+  .sc-bar .jr-pop, .sc-bar .jr-pop-dialog { position: fixed; top: auto; left: 16px; right: 16px; bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom, 0px)); width: auto; max-height: 60dvh; overflow-y: auto; }
+  .sc-month { margin: 0 4px; }
+}
+@media (min-width: 900px) {
+  .adm-page.adm-wide.adm-sc { padding: 16px 24px 24px; }
+  .sc { gap: 0; color: #2b3134; font: 400 12px/16px var(--body); }
+  /* the panel on the right: the grid gives it room and scrolls in what is left */
+  .sc.has-panel { padding-right: calc(var(--panel-w) - 24px); }
+  .sc .sc-top { min-height: 36px; }
+  .sc .adm-h1 { font: 500 20px/24px var(--body); }
+  .sc-bar { margin-top: 24px; }
+  .sc-box { margin-top: 16px; }
+  .sc-grid { --staff-w: 264px; --total-w: 91px; }
+  .sc-staff { padding: 0 16px; }
+  .sc-total { position: sticky; left: var(--staff-w); z-index: 2; }
+}
+/* «Печать»: the grid alone, on a landscape page of its own kind (no other page of the admin turns);
+   the days share the width, so a whole month fits */
+@page sched { size: A4 landscape; margin: 8mm; }
+.adm-sc { page: sched; }
+@media print {
+  :root:has(.adm-sc), :root:has(.adm-sc) body { background: #fff !important; }
+  :root:has(.adm-sc) .adm-app > :not(.adm-main), :root:has(.adm-sc) nextjs-portal { display: none !important; }
+  :root:has(.adm-sc) .adm-main { margin: 0 !important; padding: 0 !important; }
+  .adm-page.adm-wide.adm-sc, .adm-page.adm-sc { max-width: none; padding: 0; }
+  .sc.has-panel { padding-right: 0; }
+  .sc-print, .sc-hint, .sc-selbar, .sc-panel, .sc-menu, .sc-more, .sc .adm-star, .sc-bar > :not(.sc-month) { display: none !important; }
+  .sc-bar { margin-top: 4px; }
+  .sc-month { margin: 0; }
+  .sc-box { margin-top: 8px; overflow: visible; border-radius: 0; }
+  .sc-grid { --staff-w: 150px; --total-w: 64px; min-width: 0; width: 100%; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .sc-staff, .sc-total { position: static; padding: 0 6px; }
+  .sc-row { break-inside: avoid; }
+  :is(.sc-day, .sc-cell) { flex: 1 1 0; min-width: 0; }
+  .sc-shift { width: 100%; }
+  .sc-cell.is-on { background: none; box-shadow: none; }
+}

@@ -398,14 +398,16 @@ Sources: https://alteg.io/ru/support/knowledge-base/19029472943261/ and https://
 | 7. Уведомления | 2 | 0 | 2 |
 | 8. Настройки | 10 | 6 | 4 |
 | 9. Клиентская база | 26 | 16 | 10 |
-| 10. Отчёты | 25 | 0 | 25 |
+| 10. Отчёты | 25 | 3 | 22 |
 | 11. Лояльность | 8 | 0 | 8 |
 | 12. Лицензия | 1 | 0 | 1 |
 | 13. Онлайн-запись | 1 | 0 | 1 |
 | Single rights | 4 | 1 | 3 |
-| **Total** | **213** | **55** | **158** |
+| **Total** | **213** | **58** | **155** |
 
-A group's switch works in the six groups that have an enforced right: with it off, everything inside answers no, and for «Сотрудники», «Услуги» and «Клиентская база» the section itself is closed (its page says «Нет доступа», the menus leave it out).
+A group's switch works in the seven groups that have an enforced right: with it off, everything inside answers no, and for «Сотрудники», «Услуги» and «Клиентская база» the section itself is closed (its page says «Нет доступа», the menus leave it out). «Сотрудники» is two pages now, the barbers' list and «График работы»; with «Отчёты» off, or without «Просматривать список записей», «Записи» is closed the same way.
+
+*«Отчёты», 19.11.2026:* its first three rights came alive with the page «Записи» (`/admin/records`). They were locked until then, so every login had kept its role's default for them: the owner and the front desk have all three from the start (the list gives «Администратор» the file too, unlike the client base's), a barber's login none.
 
 ### Each enforced right, and the file that asks
 
@@ -414,8 +416,8 @@ Paths are under `src/`. «→» names the function.
 | Right | Key | Asked in |
 |---|---|---|
 | **1. Журнал записей** | | |
-| Просматривать расписание и записи сотрудников (all, or chosen barbers) | `journal.staff` | `lib/admin/calendar.ts` → `calendarFor` (the columns shown); `lib/admin/visits.ts` → every change, for the visit's column; `app/admin/(app)/actions.ts` → `addBlock`; `app/admin/(app)/frame-actions.ts` → the sale's barber; `lib/barber/day.ts` → `barberDaysFor`; `lib/auth/current.ts` → `requireStaff`, `app/b/(app)/pick/page.tsx` and `app/b/(app)/actions.ts` → `viewAs` (whose column an admin may open); `app/admin/(app)/page.tsx` (a login that sees no column gets «Нет доступа») |
-| Ограничить доступ к истории расписания и записей (no limit, or days back) | `journal.history` | `lib/admin/calendar.ts` → `calendarFor`, `clampDay`; `lib/barber/day.ts` → `barberDaysFor` |
+| Просматривать расписание и записи сотрудников (all, or chosen barbers) | `journal.staff` | `lib/admin/calendar.ts` → `calendarFor` (the columns shown); `lib/admin/visits.ts` → every change, for the visit's column; `app/admin/(app)/actions.ts` → `addBlock`; `app/admin/(app)/frame-actions.ts` → the sale's barber; `lib/barber/day.ts` → `barberDaysFor`; `lib/auth/current.ts` → `requireStaff`, `app/b/(app)/pick/page.tsx` and `app/b/(app)/actions.ts` → `viewAs` (whose column an admin may open); `app/admin/(app)/page.tsx` (a login that sees no column gets «Нет доступа»); `lib/admin/schedule.ts` → `loadSchedule` (the grid's rows) and `mayChange` (every barber a cell, a template or a copy names, the one copied from too); `lib/admin/records.ts` → `scopeSql` (the list, its count, its file, «Отменить выбранные», the pencil) |
+| Ограничить доступ к истории расписания и записей (no limit, or days back) | `journal.history` | `lib/admin/calendar.ts` → `calendarFor`, `clampDay`; `lib/barber/day.ts` → `barberDaysFor`; `lib/admin/records.ts` → `scopeSql` |
 | Изменять график работы и время для записи сотрудника в журнале | `journal.schedule` | `app/admin/(app)/actions.ts` → `addBlock`, `deleteBlock`; `lib/barber/requests.ts` → `whoOf` (a barber's own break, day off, special time, weekly hours: at once with it, a request without) and `answerRequest` |
 | Показывать номера телефонов | `journal.phones` | `lib/admin/calendar.ts` → `calendarFor`; `lib/barber/day.ts` → `barberDaysFor` (masked without it) |
 | Перенос записи | `journal.move` | `lib/admin/visits.ts` → `adminUpdateVisit` (a move needs this or «Изменять сотрудника и время записи») |
@@ -431,7 +433,7 @@ Paths are under `src/`. «→» names the function.
 | ↳ Изменять сотрудника и время записи | `visit.edit.staff_time` | `lib/admin/visits.ts` → `adminUpdateVisit` |
 | ↳ Изменять комментарий | `visit.edit.comment` | `lib/admin/visits.ts` → `adminUpdateVisit`; `lib/barber/clients.ts` → `setVisitNote` |
 | ↳ Изменять состав услуг | `visit.edit.services` | `lib/admin/visits.ts` → `adminUpdateVisit` |
-| Удалять записи (ours: cancel; a visit is never deleted) | `visit.delete` | `lib/admin/visits.ts` → `adminCancelVisit` |
+| Удалять записи (ours: cancel; a visit is never deleted) | `visit.delete` | `lib/admin/visits.ts` → `adminCancelVisit` (the calendar's sheet, and each visit of «Записи» → «Отменить выбранные») |
 | ↳ Удаление записей со статусом «Клиент пришел» | `visit.delete.arrived` | `lib/admin/visits.ts` → `adminCancelVisit` |
 | Проводить продажу товаров | `visit.sell` | `app/b/(app)/sell/actions.ts` → `searchAction`, `barcodeAction`, `photoAction`; `app/b/(app)/sell/page.tsx` |
 | ↳ Создание товарных транзакций (period: a sale dated before today) | `visit.sell.create` | `app/admin/(app)/frame-actions.ts` → `sellAction`; `app/b/(app)/sell/actions.ts` → `sellAction` |
@@ -440,7 +442,7 @@ Paths are under `src/`. «→» names the function.
 | Создание сотрудников | `staff.create` | `lib/admin/staff.ts` → `saveStaffProfile` |
 | Редактирование сотрудников | `staff.edit` | `lib/admin/staff.ts` → `saveStaffProfile`; `app/admin/(app)/staff/actions.ts` → `uploadPhoto` |
 | Увольнение сотрудников (ours: the barber's «active» switch) | `staff.dismiss` | `lib/admin/staff.ts` → `saveStaffProfile` |
-| Редактирование графика работы | `staff.schedule` | `app/admin/(app)/staff/actions.ts` → `saveHours`, `saveDay`, `addOff`, `removeOff`, `addSpecial`, `removeSpecial` |
+| Редактирование графика работы | `staff.schedule` | `app/admin/(app)/staff/actions.ts` → `saveHours`, `saveDay`, `addOff`, `removeOff`, `addSpecial`, `removeSpecial`; `lib/admin/schedule.ts` → `saveDays`, `fillTemplate`, `copySchedule` («График работы»: the marked cells, a template, a copy) |
 | **6. Услуги** | | |
 | Создание услуг (with «Редактирование услуг») | `services.create` | `lib/admin/services.ts` → `saveService` |
 | Редактирование услуг | `services.edit` | `lib/admin/services.ts` → `saveService` |
@@ -471,8 +473,12 @@ Paths are under `src/`. «→» names the function.
 | Просматривать и скачивать файлы | `clients.files` | `lib/admin/client-card.ts` → `listFiles`; `app/admin/(app)/clients/[id]/files/[fileId]/route.ts` |
 | ↳ Загружать файлы | `clients.files.upload` | `app/admin/(app)/clients/[id]/files/route.ts` |
 | ↳ Удалять файлы | `clients.files.delete` | `app/admin/(app)/clients/actions.ts` → `deleteFileAction` |
-| Показывать клиентов (all, or those of chosen barbers) | `clients.show` | `lib/admin/client-scope.ts` → `clientSeen`, `seenClientsSql`, used by the list, the card, the export, the bulk actions, the calendar's client search and a new visit; `lib/barber/book.ts` → `columnClientsSeen` |
+| Показывать клиентов (all, or those of chosen barbers) | `clients.show` | `lib/admin/client-scope.ts` → `clientSeen`, `seenClientsSql`, used by the list, the card, the export, the bulk actions, the calendar's client search and a new visit; `lib/barber/book.ts` → `columnClientsSeen`; `lib/admin/records.ts` → `scopeSql` («Записи» has only the visits of clients the login is shown) |
 | Просмотр истории посещений клиента | `clients.history` | `lib/admin/clients.ts` → `clientDetail`; `app/admin/(app)/clients/actions.ts` → `clientStatsAction`; `lib/barber/clients.ts` → `clientCard` |
+| **10. Отчёты** | | |
+| Просматривать список записей (ours: the page «Записи»; no «Период», and «События» is not built) | `reports.bookings` | `lib/admin/records.ts` → `listRecords`, `exportRecords`, `cancelRecords`, `visitForSheet`; `app/admin/(app)/records/page.tsx` («Нет доступа» without it); `app/admin/(app)/layout.tsx` and `more/page.tsx` (the menus) |
+| ↳ Выгружать список записей в Excel | `reports.bookings.export` | `lib/admin/records.ts` → `exportRecords` (the route `app/admin/(app)/records/export/route.ts`; each export is an audit row) |
+| ↳ Показывать номера телефонов в записях | `reports.bookings.phones` | `lib/admin/records.ts` → `listRecords` (masked without it), `recordWhere` (digits then find nobody), `exportRecords` (no phone column) |
 | **Single** | | |
 | Совершать SMS рассылки клиентам (ours: a mass message by any channel, and a message by hand) | `single.bulk_sms` | `lib/admin/client-bulk.ts` → `queueMassMessage`; `app/admin/(app)/clients/actions.ts` → `massPreviewAction`, `sendMessageAction` |
 

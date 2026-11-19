@@ -94,6 +94,21 @@ export function Calendar(props: CalendarProps) {
   );
 }
 
+/**
+ * The visit sheet on its own, for a page that is not the calendar: the
+ * pencil of «Записи» (records/) opens the very same sheet. `data` holds the
+ * one visit with the barbers and services its form picks from
+ * (src/lib/admin/calendar.ts, loadVisitData). There is no grid to tap a new
+ * time on here, so «Перенести» is not offered: «Изменить» moves it.
+ */
+export function VisitWindow({ v, data, may, onClose, onDone }: { v: CalVisit; data: CalendarData; may: CalMay; onClose: () => void; onDone: (text: string) => void }) {
+  return (
+    <May.Provider value={may}>
+      <VisitSheet v={v} data={data} onClose={onClose} onDone={onDone} />
+    </May.Provider>
+  );
+}
+
 function Journal({ data, view, date, today, staffId, now: serverNow, step, goodsCents, may }: CalendarProps) {
   const A = useA();
   const router = useRouter();
@@ -1034,15 +1049,18 @@ function NewSheet({ data, staffId, date, min, onClose, onDone }: { data: Calenda
   );
 }
 
-function VisitSheet({ v, data, onClose, onMove, onDone }: { v: CalVisit; data: CalendarData; onClose: () => void; onMove: () => void; onDone: (t: string) => void }) {
+function VisitSheet({ v, data, onClose, onMove, onDone }: { v: CalVisit; data: CalendarData; onClose: () => void; onMove?: () => void; onDone: (t: string) => void }) {
   const A = useA();
   const may = useContext(May);
+  // a cancelled visit (the calendar has none; «Записи» opens one) is only shown: nothing about it can change
+  const gone = v.status === "cancelled";
   // a visit the client has come to has rights of its own
   const came = CAME.has(v.status);
-  const canEdit = may.edit && (!came || may.editCame);
+  const canEdit = !gone && may.edit && (!came || may.editCame);
   const canForm = canEdit && (may.moveWindow || may.services || may.note);
-  const canMove = may.move && (!came || may.editCame);
-  const canCancel = came ? may.cancelCame : may.cancel;
+  // «Перенести» needs the grid to tap the new time on
+  const canMove = !gone && !!onMove && may.move && (!came || may.editCame);
+  const canCancel = !gone && (came ? may.cancelCame : may.cancel);
   const tz = data.tz;
   const [mode, setMode] = useState<"view" | "edit" | "cancel">("view");
   const [busy, setBusy] = useState(false);
@@ -1196,13 +1214,19 @@ function VisitSheet({ v, data, onClose, onMove, onDone }: { v: CalVisit; data: C
           <span className="adm-phone">{v.clientPhone}</span>
         ))}
       {v.clientNote && <p className="adm-note">{v.clientNote}</p>}
-      <div className="adm-status" role="group" aria-label={A.visit.status.booked}>
-        {(["arrived", "done", "no_show"] as const).map((s) => (
-          <button key={s} type="button" aria-pressed={v.status === s} disabled={busy || !canEdit} onClick={() => void status(v.status === s ? "booked" : s)}>
-            {A.visit.status[s]}
-          </button>
-        ))}
-      </div>
+      {gone ? (
+        <p className="adm-gone">
+          <span className="adm-tag warn">{A.visit.status.cancelled}</span>
+        </p>
+      ) : (
+        <div className="adm-status" role="group" aria-label={A.visit.status.booked}>
+          {(["arrived", "done", "no_show"] as const).map((s) => (
+            <button key={s} type="button" aria-pressed={v.status === s} disabled={busy || !canEdit} onClick={() => void status(v.status === s ? "booked" : s)}>
+              {A.visit.status[s]}
+            </button>
+          ))}
+        </div>
+      )}
       <ul className="adm-lines">
         {v.services.map((s, i) => (
           <li key={i}>

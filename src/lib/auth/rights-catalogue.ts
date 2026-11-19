@@ -59,7 +59,7 @@ export const GROUPS: Record<GroupKey, Words & { size: number; on: string; built:
   notify: { ru: "Уведомления", et: "Teavitused", en: "Notifications", size: 2, on: "SM MG OW", built: false },
   settings: { ru: "Настройки", et: "Seaded", en: "Settings", size: 10, on: "SM AD CC MG OW", built: true },
   clients: { ru: "Клиентская база", et: "Kliendibaas", en: "All clients", size: 26, on: "SM VW AD CC MG OW", built: true },
-  reports: { ru: "Отчёты", et: "Aruanded", en: "Reports", size: 25, on: "SM VW AD MG OW", built: false },
+  reports: { ru: "Отчёты", et: "Aruanded", en: "Reports", size: 25, on: "SM VW AD MG OW", built: true },
   loyalty: { ru: "Лояльность", et: "Lojaalsus", en: "Loyalty", size: 8, on: "SM VW AD CC MG OW", built: false },
   licence: { ru: "Лицензия", et: "Litsents", en: "Billing", size: 1, on: "SM AC MG OW", built: false },
   online: { ru: "Онлайн-запись", et: "Veebibroneering", en: "Online booking", size: 1, on: "SM MG OW", built: false },
@@ -296,9 +296,9 @@ const ROWS = [
 
   // ---- 10. Отчёты (25)
   ["reports.dashboard", null, REP, 0, "Основные показатели", "Main dashboard", "Põhinäitajad"],
-  ["reports.bookings", null, REP_AD, 0, "Просматривать список записей", "View the list of bookings", "Vaadata broneeringute loendit"],
-  ["reports.bookings.export", "reports.bookings", "SM AD MG OW", 0, "Выгружать список записей в Excel", "Export the list of bookings to Excel", "Eksportida broneeringute loend Excelisse"],
-  ["reports.bookings.phones", "reports.bookings", REP_AD, 0, "Показывать номера телефонов в записях", "Show phone numbers in bookings", "Näidata broneeringutes telefoninumbreid"],
+  ["reports.bookings", null, REP_AD, 1, "Просматривать список записей", "View the list of bookings", "Vaadata broneeringute loendit"],
+  ["reports.bookings.export", "reports.bookings", "SM AD MG OW", 1, "Выгружать список записей в Excel", "Export the list of bookings to Excel", "Eksportida broneeringute loend Excelisse"],
+  ["reports.bookings.phones", "reports.bookings", REP_AD, 1, "Показывать номера телефонов в записях", "Show phone numbers in bookings", "Näidata broneeringutes telefoninumbreid"],
   ["reports.events", null, REP_AD, 0, "События", "Events", "Sündmused"],
   ["reports.visits", null, REP_AD, 0, "Визиты", "Visits", "Külastused"],
   ["reports.visits.phones", "reports.visits", REP_AD, 0, "Показывать номера телефонов в сводке", "Show phone numbers in the summary", "Näidata kokkuvõttes telefoninumbreid"],

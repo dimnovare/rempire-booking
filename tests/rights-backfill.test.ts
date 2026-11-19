@@ -100,6 +100,10 @@ const WAS: { right: RightKey; scope?: Scope; what: string; was: (role: Role, sw:
   { right: "clients.show", scope: { staffIds: [OTHER] }, what: "a client of another barber only: isMyClient refused a barber", was: desk },
   { right: "clients.history", what: "the visit history: the admin's tab; a barber's past visits with his client", was: anyone },
   { right: "single.bulk_sms", what: "the mass message and a message by hand: role owner or admin", was: desk },
+  // ---- «Записи» (built after the rights): the salon's side has it as the roles' list gives it, a barber's login has not
+  { right: "reports.bookings", what: "the list of every visit: the admin's side, as the calendar was (requireAdmin)", was: desk },
+  { right: "reports.bookings.export", what: "its file: «Администратор» has it in the list, unlike the client base's", was: desk },
+  { right: "reports.bookings.phones", what: "phones in it: the admin's calendar showed them", was: desk },
 ];
 
 const SWITCHES: Switch[] = [undefined, "now", "ask"];

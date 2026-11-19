@@ -82,6 +82,32 @@ export const CogIcon = ({ size = 16 }: P) => (
   </svg>
 );
 
+// «Записи» (records/): the pencil that opens a visit, and the «i» of a cancelled one
+export const PencilIcon = ({ size = 16 }: P) => (
+  <svg {...svg(size, 1.8)}>
+    <path d="M4 20l1-4.5L15.5 5l3.5 3.5L8.5 19zM13.5 7l3.5 3.5" />
+  </svg>
+);
+export const InfoIcon = ({ size = 16 }: P) => (
+  <svg {...svg(size, 1.8)}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 11v5.5M12 7.5v.5" />
+  </svg>
+);
+// «График работы» (schedule/): the printer, and the three dots of a barber's own menu
+export const PrintIcon = ({ size = 16 }: P) => (
+  <svg {...svg(size, 1.8)}>
+    <path d="M7 9V4h10v5M7 17H4.5V9h15v8H17M7 14h10v6H7z" />
+  </svg>
+);
+export const DotsIcon = ({ size = 16 }: P) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="currentColor" aria-hidden="true">
+    <circle cx="5" cy="12" r="1.7" />
+    <circle cx="12" cy="12" r="1.7" />
+    <circle cx="19" cy="12" r="1.7" />
+  </svg>
+);
+
 /**
  * The small mark at the right of a visit's strip: a clock while it waits, a
  * plus once the client is in, a tick when the visit is done, a minus if he

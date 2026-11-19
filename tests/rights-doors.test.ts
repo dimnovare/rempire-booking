@@ -43,7 +43,10 @@ import { GET as fileRoute } from "@/app/admin/(app)/clients/[id]/files/[fileId]/
 import { POST as uploadRoute } from "@/app/admin/(app)/clients/[id]/files/route";
 import * as frame from "@/app/admin/(app)/frame-actions";
 import * as invoices from "@/app/admin/(app)/invoices/actions";
+import * as records from "@/app/admin/(app)/records/actions";
+import { POST as recordsExportRoute } from "@/app/admin/(app)/records/export/route";
 import * as requests from "@/app/admin/(app)/requests/actions";
+import * as schedule from "@/app/admin/(app)/schedule/actions";
 import * as services from "@/app/admin/(app)/services/actions";
 import * as staffActs from "@/app/admin/(app)/staff/actions";
 import * as bSell from "@/app/b/(app)/sell/actions";
@@ -700,6 +703,120 @@ describe("a section whose group switch is off", () => {
     const c = await fresh("barber");
     await grant(c.me, "clients.export", true);
     await expect(clients.listClientsAction({ q: "", label: "", page: 1 })).rejects.toThrow("REDIRECT /b");
+  });
+});
+
+/* ------------------------------------------------------------------ 10. Отчёты: «Записи»; and «График работы» */
+
+describe("Отчёты: «Записи»", () => {
+  /** Every visit there is, whenever it is. */
+  const ALL = { visitFrom: "2020-01-01", visitTo: "2099-12-31" };
+  const request = (url: string, init: RequestInit = {}) => new Request(`http://localhost${url}`, { ...init, headers: { origin: "http://localhost", host: "localhost", ...(init.headers ?? {}) } });
+  const file = async (body = JSON.stringify(ALL)) => recordsExportRoute(request("/admin/records/export", { method: "POST", body }));
+  const statusOfVisit = async (id: string) => (await query<{ status: string }>("select status from appointments where id = $1", [id]))[0].status;
+
+  both("reports.bookings", "desk", () => records.listRecordsAction(ALL), (r, c) => r.total === 1 && r.rows[0]?.id === c.visit);
+  both("reports.bookings", "desk", (c) => records.openVisitAction(c.visit), (r) => r !== null);
+  both("reports.bookings", "desk", (c) => records.cancelRecordsAction([c.visit]), (r) => r.ok);
+  both("reports.bookings.export", "desk", async () => (await file()).status, (status) => status === 200);
+  both("reports.bookings.phones", "desk", async () => (await records.listRecordsAction(ALL)).rows[0]?.clientPhone, (phone) => phone === PHONE);
+
+  it("reports.bookings: without it the file is refused too, and nothing is cancelled", async () => {
+    const c = await fresh("desk");
+    await grant(c.me, "reports.bookings", false);
+    expect((await file()).status).toBe(403);
+    expect(await records.cancelRecordsAction([c.visit])).toEqual({ ok: false, code: "forbidden" });
+    expect(await statusOfVisit(c.visit)).toBe("booked");
+  });
+
+  it("the file is ours alone: a request from another site is refused, and each export is in the audit", async () => {
+    const c = await fresh("desk");
+    expect((await recordsExportRoute(new Request("http://localhost/admin/records/export", { method: "POST", body: "{}", headers: { origin: "https://elsewhere.example", host: "localhost" } }))).status).toBe(403);
+    expect((await recordsExportRoute(new Request("http://localhost/admin/records/export", { method: "POST", body: "{}", headers: { host: "localhost" } }))).status).toBe(403);
+    const ok = await file();
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("x-rows")).toBe("1");
+    expect(ok.headers.get("content-disposition")).toMatch(/^attachment; filename="rempire-records-\d{4}-\d{2}-\d{2}\.xlsx"$/);
+    expect(await query("select 1 from audit where actor = $1 and entity = 'appointment' and action = 'export'", [c.me])).toHaveLength(1);
+  });
+
+  it("journal.staff: the list, its file, the pencil and «Отменить выбранные» have only the barbers the login sees", async () => {
+    for (const sees of [true, false]) {
+      const c = await fresh("desk");
+      // the fixture's visit is in Valentin's column
+      await setValue(c.me, "journal.staff", sees ? "all" : [c.jev]);
+      expect((await records.listRecordsAction(ALL)).total, "in the list").toBe(sees ? 1 : 0);
+      // a question that names him is answered as one that names nobody
+      expect((await records.listRecordsAction({ ...ALL, staffId: c.val })).total, "asked for by name").toBe(sees ? 1 : 0);
+      expect((await file()).headers.get("x-rows"), "in the file").toBe(sees ? "1" : "0");
+      expect((await records.openVisitAction(c.visit)) !== null, "the pencil").toBe(sees);
+      expect(await records.cancelRecordsAction([c.visit]), "cancelling").toEqual({ ok: true, cancelled: sees ? 1 : 0, refused: { already: 0, forbidden: 0, notFound: sees ? 0 : 1 } });
+      expect(await statusOfVisit(c.visit)).toBe(sees ? "cancelled" : "booked");
+    }
+  });
+
+  it("clients.show: a visit of a client the login is not shown is not in the list, not in the file and not cancelled", async () => {
+    for (const all of [true, false]) {
+      const c = await fresh("desk");
+      // Anna came to Valentin; the login is shown Jevgeni's clients only
+      await setValue(c.me, "clients.show", all ? "all" : [c.jev]);
+      expect((await records.listRecordsAction(ALL)).total, "in the list").toBe(all ? 1 : 0);
+      expect((await file()).headers.get("x-rows"), "in the file").toBe(all ? "1" : "0");
+      expect((await records.openVisitAction(c.visit)) !== null, "the pencil").toBe(all);
+      expect((await records.cancelRecordsAction([c.visit])), "cancelling").toMatchObject({ ok: true, cancelled: all ? 1 : 0 });
+    }
+  });
+
+  it("visit.delete: «Отменить выбранные» asks the calendar's own right", async () => {
+    for (const has of [true, false]) {
+      const c = await fresh("desk");
+      await grant(c.me, "visit.delete", has);
+      expect(await records.cancelRecordsAction([c.visit])).toEqual({ ok: true, cancelled: has ? 1 : 0, refused: { already: 0, forbidden: has ? 0 : 1, notFound: 0 } });
+    }
+  });
+});
+
+describe("Сотрудники: «График работы»", () => {
+  /** A day far enough ahead to have no visit on it. */
+  const far = (c: Ctx, days = 40) => addDays(c.today, days);
+  const off = (c: Ctx, staffId: string) => schedule.saveCellsAction({ cells: [{ staffId, date: far(c) }], kind: "off" });
+  const template = (c: Ctx, staffIds: string[]) => schedule.templateAction({ staffIds, mode: "weekdays", dateFrom: far(c), dateTo: far(c, 46), weekdays: [1, 2, 3, 4, 5, 6, 7], from: "10:00", to: "19:00" });
+  const copy = (c: Ctx, from: string, to: string[]) => schedule.copyAction({ fromStaffId: from, toStaffIds: to, dateFrom: c.today, dateTo: addDays(c.today, 6), breaks: true });
+  const dated = async (staffId: string) => (await query("select 1 from staff_day_overrides where staff_id = $1 and day >= $2::date", [staffId, todayIn(TZ)])).length;
+
+  both("staff.schedule", "desk", (c) => off(c, c.val), (r) => r.ok);
+  both("staff.schedule", "desk", (c) => template(c, [c.val]), (r) => r.ok);
+  both("staff.schedule", "desk", (c) => copy(c, c.val, [c.jev]), (r) => r.ok);
+
+  it("journal.staff: a login changes only the days of the barbers it sees: a cell, a template, a copy from him, a copy to him", async () => {
+    for (const sees of [true, false]) {
+      const c = await fresh("desk");
+      const before = { val: await dated(c.val), jev: await dated(c.jev) };
+      // Jevgeni's column only, or everyone's
+      await setValue(c.me, "journal.staff", sees ? "all" : [c.jev]);
+      const NO = { ok: false, code: "forbidden" };
+      const want = (r: unknown, what: string) => (sees ? expect(r, what).toMatchObject({ ok: true }) : expect(r, what).toEqual(NO));
+      want(await off(c, c.val), "a cell of Valentin");
+      want(await template(c, [c.jev, c.val]), "a template for both");
+      want(await copy(c, c.val, [c.jev]), "a copy from Valentin");
+      want(await copy(c, c.jev, [c.val]), "a copy to Valentin");
+      if (!sees) {
+        // nothing of Valentin's was written, and nothing of Jevgeni's by the refused ones
+        expect(await dated(c.val)).toBe(before.val);
+        expect(await dated(c.jev)).toBe(before.jev);
+        // his own barber he still changes
+        expect(await off(c, c.jev)).toMatchObject({ ok: true, written: 1 });
+      }
+    }
+  });
+
+  it("the refusal does not say whether a barber has visits: his day with a visit is «forbidden», not «has visits»", async () => {
+    const c = await fresh("desk");
+    await setValue(c.me, "journal.staff", [c.jev]);
+    // the fixture's visit is Valentin's, tomorrow
+    expect(await schedule.saveCellsAction({ cells: [{ staffId: c.val, date: c.tomorrow }], kind: "off" })).toEqual({ ok: false, code: "forbidden" });
+    await setValue(c.me, "journal.staff", "all");
+    expect(await schedule.saveCellsAction({ cells: [{ staffId: c.val, date: c.tomorrow }], kind: "off" })).toEqual({ ok: false, code: "visits", refused: [{ staffId: c.val, date: c.tomorrow, visits: 1 }] });
   });
 });
 

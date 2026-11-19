@@ -335,6 +335,44 @@ gets it → send.
      and «Altegio.me», the column «Баланс счёта», pinning a column, the
      head's menu button, and the two «PUSH в приложение» actions (a
      notification is one of the message's channels instead).
-4. **Functionality** Altegio has and we do not (loyalty, stock, cash
+4. **«Записи» and «График работы»: built 19.11.2026** (the owner; the
+   design boards of the same names; `src/app/admin/(app)/records/` and
+   `schedule/`, `src/lib/admin/records.ts`, `schedule.ts` and
+   `schedule-plan.ts`, the «rc-» and «sc-» blocks of `admin.css`).
+   - **The menu:** «Отчёты» (its first page, «Записи») and «Сотрудники»
+     («Список», the barbers' own page, and «График работы») are groups,
+     first in the menu as in the tool's. A phone has both pages on «Ещё».
+     Each has its star.
+   - **«Записи»** (`/admin/records`): every visit in one table, laid out
+     as its board in the new-style controls (as the client base). Filters:
+     created and visit between two days (a new page: the last month to one
+     month ahead), barber, who made it, cancelled or not, status, source,
+     services, the client by name or phone; «Показать» asks, and what is
+     asked is never in the address. The table: a tick, the barber, the
+     services joined by «;», the client, the visit's time, who made it and
+     when, status, source, and a pencil that opens the calendar's own
+     visit sheet. A cancelled row is pale red. «Отменить выбранные» asks
+     first and cancels each visit through the calendar's cancel; «Выгрузить
+     в Excel» is the filtered list, each export in the audit. A phone: a
+     row per visit, the filters in a sheet.
+   - **«График работы»** (`/admin/schedule`): the month grid of shifts, to
+     its board's sizes and colours from 900px. A cell is the day booking
+     sees (`effectiveDay`: the dated day, else the weekly hours, less time
+     off). A click marks cells; the panel on the right gives them a kind
+     and hours, or fills a period by a template («По дням недели», «По
+     сменам»); a barber's «…» copies his days onto others. A working day
+     and a day off are dated days, a vacation and a sick day time off. A
+     visit is never cut: such a day is refused, by name and count.
+     «Печать» is the browser's print, the grid alone on a landscape page.
+   - **Whose:** both pages show and change only the barbers a login sees
+     in the journal; «Записи» also only the clients it is shown.
+   - **Not built:** on «Записи»: the head's menu button and its list of
+     all reports; the filters by a visit's category, by payment and «with
+     or without services»; the import from Excel; a source's second line.
+     On «График работы»: the head's menu button; the filters by position
+     and the like (ours: who is shown); unpaid and paid leave and «missed
+     shift»; templates of one's own that are kept; two months in a row;
+     special time on the grid. «Выгрузить в PDF» is «Печать».
+5. **Functionality** Altegio has and we do not (loyalty, stock, cash
    accounts, reports) is a list for Dim to choose from, not part of the
    look.

@@ -52,7 +52,13 @@ async function Framed({ children }: { children: React.ReactNode }) {
   const favs = user && canUseAdmin(user) ? await listFavourites(query, user.id).catch(() => []) : [];
   // what the login has no right to is left out of the menus (each page refuses by itself as well)
   const off = user
-    ? [...(["clients", "staff", "services"] as const).filter((g) => !canGroup(user, g)), ...(can(user, "visit.sell") && can(user, "visit.sell.create") ? [] : ["sale"])]
+    ? [
+        ...(["clients", "staff", "services"] as const).filter((g) => !canGroup(user, g)),
+        // «График работы» goes with the section «Сотрудники», «Записи» with its own right
+        ...(canGroup(user, "staff") ? [] : ["schedule"]),
+        ...(can(user, "reports.bookings") ? [] : ["records"]),
+        ...(can(user, "visit.sell") && can(user, "visit.sell.create") ? [] : ["sale"]),
+      ]
     : [];
   return (
     <FrameProvider favs={favs} off={off}>

@@ -248,12 +248,20 @@ test.describe("the frame", () => {
       const all = sb(page).getByRole("button", { name: F.all });
       await expect(all).toHaveCSS("background-color", "rgb(255, 203, 0)");
       await all.click();
-      // black, no month and no tiles; the sections that exist, the two groups shut
+      // black, no month and no tiles; the sections that exist, the four groups shut
       await expect(sb(page)).toHaveCSS("background-color", "rgb(8, 8, 12)");
       await expect(month(page)).toHaveCount(0);
       await expect(page.getByRole("group", { name: F.tiles })).toHaveCount(0);
-      await expect(menu(page).getByRole("button")).toHaveText([A.nav.clients, A.nav.goods]);
-      await expect(menu(page).getByRole("link")).toHaveText([A.nav.staff, A.nav.services, A.nav.requests, A.nav.invoices, A.nav.account]);
+      await expect(menu(page).getByRole("button")).toHaveText([A.nav.reports, A.nav.team, A.nav.clients, A.nav.goods]);
+      await expect(menu(page).getByRole("link")).toHaveText([A.nav.services, A.nav.requests, A.nav.invoices, A.nav.account]);
+      // «Отчёты» has «Записи»; «Сотрудники» has «Список» (the barbers' page) and «График работы»
+      await menu(page).getByRole("button", { name: A.nav.reports }).click();
+      await expect(menu(page).getByRole("link", { name: A.nav.records, exact: true })).toHaveAttribute("href", "/admin/records");
+      await menu(page).getByRole("button", { name: A.nav.team }).click();
+      await expect(menu(page).getByRole("link", { name: A.nav.records, exact: true })).toHaveCount(0);
+      await expect(menu(page).getByRole("link", { name: A.nav.staffList, exact: true })).toHaveAttribute("href", "/admin/staff");
+      await expect(menu(page).getByRole("link", { name: A.nav.schedule, exact: true })).toHaveAttribute("href", "/admin/schedule");
+      await menu(page).getByRole("button", { name: A.nav.team }).click();
       // «Мой день | Салон» is where it was, in both modes
       await expect(sb(page).getByRole("navigation", { name: A.side.label })).toBeVisible();
 
@@ -525,7 +533,7 @@ test.describe("the frame", () => {
       await page.goto("/admin/more");
       await hydrated(page);
       const rows = page.locator(".adm-more .adm-item:visible");
-      await expect(rows).toHaveText([A.nav.staff, A.nav.services, A.nav.catalogue, A.sale.title]);
+      await expect(rows).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.sale.title]);
       await expectNoSideScroll(page);
       expect(await smallTargets(page)).toEqual([]);
       await phoneShot(page, "more");

@@ -224,6 +224,108 @@ export async function loadCalendar(q: Querier, business: Business, from: string,
 }
 
 /**
+ * One visit with what its sheet needs around it: every barber, the services
+ * and who does them. For a page that opens the calendar's visit sheet
+ * without the calendar («Записи»). A cancelled visit comes too (the
+ * calendar never has one): its sheet only shows it. Null: no such visit in
+ * this business. Cut it with `calendarFor` before it leaves the server, as
+ * the calendar's own data is.
+ */
+export async function loadVisitData(q: Querier, business: Business, id: string): Promise<CalendarData | null> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(id))) return null;
+  const tz = business.timezone;
+  const [v] = await q<{
+    id: string;
+    staff_id: string;
+    starts_at: Date;
+    ends_at: Date;
+    blocked_until: Date;
+    status: string;
+    source: string;
+    any_staff: boolean;
+    client_id: string;
+    client_name: string;
+    phone_e164: string | null;
+    client_note: string;
+    client_comment: string;
+    staff_note: string;
+    reminder_min: number | null;
+    total_cents: number;
+    extra_cents: number;
+    day: string;
+  }>(
+    `select a.id, a.staff_id, a.starts_at, a.ends_at, a.blocked_until, a.status, a.source, a.any_staff,
+            a.client_id, c.name as client_name, c.phone_e164, c.staff_note as client_note,
+            a.client_comment, a.staff_note, a.reminder_min, a.total_cents, a.extra_cents,
+            to_char(a.starts_at at time zone $3::text, 'YYYY-MM-DD') as day
+       from appointments a join clients c on c.id = a.client_id
+      where a.id = $1 and a.business_id = $2`,
+    [id, business.id, tz],
+  );
+  if (!v) return null;
+  const [staffRows, serviceRows, offerRows, lines] = await Promise.all([
+    q<{ id: string; display_name: string; role: L10n; photo_url: string | null; sort: number; bookable: boolean; active: boolean }>(
+      "select id, display_name, role, photo_url, sort, bookable, active from staff where business_id = $1 order by sort, display_name",
+      [business.id],
+    ),
+    q<{ id: string; name: L10n; duration_min: number; price_cents: number; buffer_after_min: number; active: boolean }>(
+      "select id, name, duration_min, price_cents, buffer_after_min, active from services where business_id = $1 order by sort, slug",
+      [business.id],
+    ),
+    q<{ staff_id: string; service_id: string; price_cents: number; duration_min: number }>(
+      `select ss.staff_id, ss.service_id, coalesce(ss.price_cents, sv.price_cents) as price_cents,
+              coalesce(ss.duration_min, sv.duration_min) as duration_min
+         from staff_services ss join services sv on sv.id = ss.service_id
+        where sv.business_id = $1 and ss.active`,
+      [business.id],
+    ),
+    q<{ service_id: string; name: L10n; duration_min: number; price_cents: number }>(
+      "select service_id, name, duration_min, price_cents from appointment_services where appointment_id = $1 order by position",
+      [id],
+    ),
+  ]);
+  return {
+    tz,
+    dates: [v.day],
+    staff: staffRows.filter((s) => s.active || s.id === v.staff_id).map((s) => ({ id: s.id, name: s.display_name, role: s.role, photoUrl: s.photo_url, sort: s.sort, bookable: s.bookable, active: s.active })),
+    services: serviceRows.map((sv) => ({
+      id: sv.id,
+      name: sv.name,
+      durationMin: sv.duration_min,
+      priceCents: sv.price_cents,
+      bufferMin: sv.buffer_after_min,
+      active: sv.active,
+      offers: Object.fromEntries(offerRows.filter((o) => o.service_id === sv.id).map((o) => [o.staff_id, [o.price_cents, o.duration_min] as [number, number]])),
+    })),
+    work: {},
+    visits: [
+      {
+        id: v.id,
+        staffId: v.staff_id,
+        start: ms(v.starts_at),
+        end: ms(v.ends_at),
+        blockedUntil: ms(v.blocked_until),
+        status: v.status,
+        source: v.source,
+        anyStaff: v.any_staff,
+        clientId: v.client_id,
+        clientName: v.client_name,
+        clientPhone: v.phone_e164,
+        clientNote: v.client_note,
+        comment: v.client_comment,
+        staffNote: v.staff_note,
+        reminder: v.reminder_min != null,
+        totalCents: v.total_cents,
+        extraCents: v.extra_cents,
+        services: lines.map((l) => ({ serviceId: l.service_id, name: l.name, durationMin: l.duration_min, priceCents: l.price_cents })),
+      },
+    ],
+    blocks: [],
+    special: [],
+  };
+}
+
+/**
  * What the calendar's screen offers a login, each a right of its own
  * (src/lib/auth/rights.ts). The screen only hides by these; the actions
  * and src/lib/admin/visits.ts ask the same rights again.

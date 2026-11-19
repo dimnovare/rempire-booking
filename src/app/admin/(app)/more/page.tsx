@@ -30,7 +30,8 @@ async function Loaded() {
   if (!dbConfigured()) return <p className="adm-wait">{A.noDb}</p>;
   const { user } = await requireAdmin();
   // a section the login has no right to is not listed
-  const shown = (key: string) => (key === "clients" || key === "staff" || key === "services" ? canGroup(user, key) : true);
+  const shown = (key: string) =>
+    key === "clients" || key === "staff" || key === "services" ? canGroup(user, key) : key === "schedule" ? canGroup(user, "staff") : key === "records" ? can(user, "reports.bookings") : true;
   return (
     <>
       <h1 className="adm-h1">{A.more.title}</h1>

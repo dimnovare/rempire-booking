@@ -225,9 +225,13 @@ function Menu({ path }: { path: string }) {
   const here = MENU.find((row) => row.pages?.some((p) => sectionOpen(p.href, path)))?.key ?? null;
   const [picked, setPicked] = useState<{ path: string; key: string | null } | null>(null);
   const open = picked && picked.path === path ? picked.key : here;
+  // a page the login has no right to is left out, and a group with no page left
+  const rows = MENU.filter((row) => !off.includes(row.off ?? row.key))
+    .map((row) => (row.pages ? { ...row, pages: row.pages.filter((p) => !off.includes(p.key)) } : row))
+    .filter((row) => !row.pages || row.pages.length > 0);
   return (
     <nav className="sb-menu" aria-label={A.sections}>
-      {MENU.filter((row) => !off.includes(row.key)).map((row) => {
+      {rows.map((row) => {
         if (!row.pages) {
           const on = sectionOpen(row.href!, path);
           return (

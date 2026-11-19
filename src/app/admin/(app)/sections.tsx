@@ -14,9 +14,13 @@ export const SECTIONS = [
   { href: "/admin", key: "calendar", icon: "cal", bar: true },
   { href: "/admin/clients", key: "clients", icon: "cli", bar: true },
   { href: "/admin/staff", key: "staff", icon: "staff", bar: false },
+  // the month grid of shifts (schedule/)
+  { href: "/admin/schedule", key: "schedule", icon: "sched", bar: false },
   { href: "/admin/services", key: "services", icon: "svc", bar: false },
   // the shop's products, read through the shop link (docs/one-place.md)
   { href: "/admin/catalogue", key: "catalogue", icon: "box", bar: false },
+  // every visit in one table (records/), the first page of «Отчёты»
+  { href: "/admin/records", key: "records", icon: "rep", bar: false },
   { href: "/admin/requests", key: "requests", icon: "req", bar: true },
   { href: "/admin/invoices", key: "invoices", icon: "inv", bar: true },
 ] as const;
@@ -31,13 +35,28 @@ export const ACCOUNT = { href: "/admin/account", key: "account", icon: "key" } a
  * The sidebar's menu from 900px («Все разделы»): a row per section, or a
  * group that opens its pages under it. The calendar is not in it: the
  * yellow bar at the foot goes there. `key` and each page's `key` are words
- * of copy `nav`.
+ * of copy `nav`. The order is the menu's we follow: «Отчёты», «Сотрудники»,
+ * «Клиенты», then the rest.
+ *
+ * What a login has no right to is left out by the frame's `off` list
+ * (frame.tsx): a page by its own key, a row by `off` or its key; a group
+ * with no page left is not drawn.
  */
-export type MenuPage = { href: string; key: "clientBase" | "catalogue" };
-export type MenuRow = { key: "clients" | "staff" | "services" | "goods" | "requests" | "invoices" | "account"; icon: string; href?: string; pages?: readonly MenuPage[] };
+export type MenuPage = { href: string; key: "records" | "staffList" | "schedule" | "clientBase" | "catalogue" };
+export type MenuRow = { key: "reports" | "team" | "clients" | "services" | "goods" | "requests" | "invoices" | "account"; icon: string; href?: string; pages?: readonly MenuPage[]; off?: string };
 export const MENU: readonly MenuRow[] = [
+  { key: "reports", icon: "rep", pages: [{ href: "/admin/records", key: "records" }] },
+  // «Список» is the barbers' own page (staff/), «График работы» the month grid of shifts (schedule/)
+  {
+    key: "team",
+    icon: "staff",
+    off: "staff",
+    pages: [
+      { href: "/admin/staff", key: "staffList" },
+      { href: "/admin/schedule", key: "schedule" },
+    ],
+  },
   { key: "clients", icon: "cli", pages: [{ href: "/admin/clients", key: "clientBase" }] },
-  { key: "staff", icon: "staff", href: "/admin/staff" },
   { key: "services", icon: "svc", href: "/admin/services" },
   { key: "goods", icon: "box", pages: [{ href: "/admin/catalogue", key: "catalogue" }] },
   { key: "requests", icon: "req", href: "/admin/requests" },
@@ -93,6 +112,21 @@ export function SectionIcon({ name, size = 22 }: { name: string; size?: number }
     return (
       <svg viewBox="0 0 24 24" {...p}>
         <path d="M5.5 3h13v18l-2.2-1.5-2.1 1.5-2.2-1.5-2.1 1.5-2.2-1.5-2.2 1.5zM9 8h6M9 12h6M9 16h3" />
+      </svg>
+    );
+  // three bars: «Отчёты»
+  if (name === "rep")
+    return (
+      <svg viewBox="0 0 24 24" {...p}>
+        <path d="M5 20V10M12 20V4M19 20v-8" />
+      </svg>
+    );
+  // a month with its days ticked off: «График работы»
+  if (name === "sched")
+    return (
+      <svg viewBox="0 0 24 24" {...p}>
+        <rect x="3.5" y="5" width="17" height="15.5" />
+        <path d="M3.5 10h17M8 3v4M16 3v4M7.5 14h3M13.5 14h3M7.5 17h3" />
       </svg>
     );
   // a box: the shop's products

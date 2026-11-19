@@ -58,7 +58,7 @@ test.describe("clients", () => {
     await expect(page.getByRole("heading", { level: 1, name: A.more.title })).toBeVisible();
     const others = page.locator(".adm-more .adm-item:visible");
     // (the last two are the sidebar's tiles on a wide screen: e2e/frame.spec.ts)
-    await expect(others).toHaveText([A.nav.staff, A.nav.services, A.nav.catalogue, A.sale.title]);
+    await expect(others).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.sale.title]);
     await expect(bar(page).getByRole("link", { name: A.nav.more })).toHaveAttribute("aria-current", "page");
     await expect(bar(page).locator('a[aria-current="page"]:visible')).toHaveCount(1);
     await expect(page).toHaveTitle(`${A.nav.more} · REMPIRE`);
@@ -371,9 +371,9 @@ test.describe("clients", () => {
       await page.goto("/admin/clients");
       await hydrated(page);
       // opened on this page, the sidebar is the menu (e2e/frame.spec.ts): every section and no «Ещё»;
-      // «Клиенты» is a group, open on its page «Клиентская база»; «Товары» is the other group, shut
-      await expect(bar(page).getByRole("link")).toHaveText([A.nav.clientBase, A.nav.staff, A.nav.services, A.nav.requests, A.nav.invoices, A.nav.account]);
-      await expect(bar(page).getByRole("button")).toHaveText([A.nav.clients, A.nav.goods]);
+      // «Клиенты» is a group, open on its page «Клиентская база»; «Отчёты», «Сотрудники» and «Товары» are the other groups, shut
+      await expect(bar(page).getByRole("link")).toHaveText([A.nav.clientBase, A.nav.services, A.nav.requests, A.nav.invoices, A.nav.account]);
+      await expect(bar(page).getByRole("button")).toHaveText([A.nav.reports, A.nav.team, A.nav.clients, A.nav.goods]);
       await expect(bar(page).getByRole("link", { name: A.nav.clientBase })).toHaveAttribute("aria-current", "page");
       const cols = BASE.cols;
       // a tick column, the name, the seven columns a login may hide, and the cog's own cell
@@ -416,7 +416,7 @@ test.describe("clients", () => {
       // «Ещё» by its address still works here: the same rows
       await page.goto("/admin/more");
       await hydrated(page);
-      await expect(page.locator(".adm-more .adm-item:visible")).toHaveText([A.nav.staff, A.nav.services, A.nav.catalogue, A.sale.title]);
+      await expect(page.locator(".adm-more .adm-item:visible")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.sale.title]);
     });
 
     test("a client's card is a 900px drawer over the list: its seven tabs, «Сохранить», the question before leaving, a comment, a file, a message", async ({ page, browser }, info) => {
