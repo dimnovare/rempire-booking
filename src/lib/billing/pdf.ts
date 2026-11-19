@@ -252,7 +252,8 @@ export async function renderInvoicePdf(data: InvoicePdfData): Promise<Uint8Array
     [lab(W.number, L), number, F.mono],
     [lab(W.date, L), humanDate(data.issueDate), F.body],
     ...(credit ? [] : ([[lab(W.due, L), humanDate(data.dueDate), F.body]] as [string, string, PDFFont][])),
-    [lab(W.period, L), `${humanDate(data.periodFrom)}–${humanDate(data.periodTo)}`, F.body],
+    // a free invoice is of one day, which the date above says already
+    ...(data.periodFrom === data.periodTo ? [] : ([[lab(W.period, L), `${humanDate(data.periodFrom)}–${humanDate(data.periodTo)}`, F.body]] as [string, string, PDFFont][])),
     ...(data.creditOfNumber ? ([[lab(W.creditOf, L), clean(data.creditOfNumber, 40), F.mono]] as [string, string, PDFFont][]) : []),
   ];
   let my = metaTop;

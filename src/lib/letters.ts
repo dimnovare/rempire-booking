@@ -434,7 +434,7 @@ export function invoiceLetter(
   const k = INVOICE[L] ?? INVOICE.et;
   const credit = inv.kind === "credit";
   const subject = k.subject(inv.number, credit);
-  const period = `${dmy(inv.periodFrom)}–${dmy(inv.periodTo)}`;
+  const period = inv.periodFrom === inv.periodTo ? dmy(inv.periodFrom) : `${dmy(inv.periodFrom)}–${dmy(inv.periodTo)}`;
   const rows: [string, string][] = [
     [k.number, esc(inv.number)],
     [k.period, esc(period)],

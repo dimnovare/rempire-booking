@@ -629,9 +629,33 @@ button.cal-head:hover b { color: var(--accent); }
 .adm-req-row .adm-btns { margin-top: 4px; }
 .adm-req-n { margin-left: 8px; }
 
-/* ---------- «Счета»: sales, invoices, receivers, the company (Phase C) ---------- */
+/* ---------- «Счета»: sales, invoices, receivers, the company (Phase C) ----------
+   This section wears Isolta's colours (Dim, 19.11.2026: «as Isolta as possible, even the colors and
+   the buttons»; docs/reference-looks.md): indigo for the frame and the main button, a lilac-grey
+   ground, white sheets. Only the tokens change, so every control here follows by itself. */
+:root:has(.adm-inv) {
+  --ink: #f3f3f7;
+  --fg: #1b1b25;
+  --mute: #5b5b6b;
+  --dim: #6f6f80;
+  --lime: #312e6b;
+  --on-lime: #f3f3f7;
+  --lime-bg: #ecebf8;
+  --accent: #312e6b;
+  --sel: #312e6b;
+  --chrome: #312e6b;
+  --chrome-2: #252442;
+  --chrome-line: #4a4790;
+  --chrome-mute: #cfcdea;
+}
+/* on the indigo frame the current section is Isolta's darker pill, and yellow has no place */
+:root:has(.adm-inv) .adm-top:not(.bx-top) .adm-nav a[aria-current="page"] { background: var(--chrome-2); }
+:root:has(.adm-inv) .adm-nav a[aria-current="page"] { color: #fff; border-top-color: #fff; }
+:root:has(.adm-inv) .adm-side a[aria-current="page"] { background: #fff; border-color: #fff; color: #312e6b; }
+:root:has(.adm-inv) .adm-top .adm-tag.lime, :root:has(.adm-inv) .adm-acc[aria-current="page"] { border-color: #fff; color: #fff; }
+
 .adm-inv-tabs { display: flex; align-self: flex-start; }
-.adm-inv-tabs a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; font: 600 12px/1 var(--display); color: var(--mute); text-decoration: none; }
+.adm-inv-tabs a { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; font: 600 13px/1 var(--display); color: var(--mute); text-decoration: none; }
 .adm-inv-tabs a[aria-current="page"] { background: var(--lime); color: var(--on-lime); }
 .adm-inv-month { display: flex; align-items: center; gap: 8px; }
 .adm-inv-month h2 { margin: 0; min-width: 0; font: 600 20px/1 var(--display); }
@@ -677,6 +701,113 @@ button.cal-head:hover b { color: var(--accent); }
 .adm-inv-rent .adm-btn-sm { align-self: flex-start; }
 .adm-inv-fs { margin: 0; padding: 0; border: 0; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 .adm-inv-fs:disabled { opacity: .6; }
+
+/* the list, as Isolta's «Инвойсы»: a search, a status filter, one table on a white sheet */
+.inv-top { flex-wrap: wrap; }
+.inv-top .adm-btn { width: auto; }
+.inv-filters { display: flex; flex-wrap: wrap; gap: 10px; }
+.inv-filters select { flex: 1 1 180px; max-width: 260px; }
+.inv-search { position: relative; flex: 2 1 240px; max-width: 420px; display: block; }
+.inv-search svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--dim); pointer-events: none; }
+:where(.adm) .inv-search input { padding-left: 42px; }
+.inv-card, .inv-sheet { background: var(--raise); border: 1px solid var(--line-2); border-radius: 8px; }
+.inv-card { overflow-x: auto; }
+.inv-table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.inv-table th { padding: 14px 12px; border-bottom: 1px solid var(--line-2); font: 500 13px/1.2 var(--display); color: var(--mute); text-align: left; white-space: nowrap; }
+.inv-table td { height: 52px; padding: 6px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.inv-table tbody tr:last-child td { border-bottom: 0; }
+.inv-table tbody tr:hover td { background: var(--ink); }
+.inv-table .n { text-align: right; }
+.inv-table td a { font-weight: 700; color: var(--fg); text-decoration: none; white-space: normal; }
+.inv-table td a:hover { text-decoration: underline; }
+.inv-table td small { display: block; color: var(--mute); font-size: 12px; white-space: normal; }
+/* the status: Isolta's outlined pill */
+.adm-tag.inv-st { height: 22px; padding: 0 8px; border-radius: 100px; font-weight: 500; background: var(--raise); }
+.inv-st.st-draft { border-color: #e08a1e; color: #a85f00; }
+.inv-st.st-overdue { border-color: var(--warn); color: #b3261e; }
+.inv-st.st-issued { border-color: var(--sel); color: var(--accent); }
+.inv-st.st-paid { border-color: var(--ok); color: var(--ok); }
+/* «Новый счёт»: the receivers to pick from, as Isolta's list under its one field */
+.inv-pick { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; }
+.inv-pick li + li { border-top: 1px solid var(--line); }
+.inv-pick button { width: 100%; min-height: 56px; padding: 8px 12px; display: flex; align-items: center; gap: 12px; }
+.inv-pick button:hover { background: var(--ink); }
+.inv-pick-ico { flex: none; width: 36px; height: 36px; border-radius: 50%; background: var(--lime-bg); color: var(--accent); display: grid; place-items: center; }
+.inv-pick .n { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.inv-pick b { font-weight: 600; overflow-wrap: anywhere; }
+.inv-pick small { color: var(--mute); font-size: 13px; overflow-wrap: anywhere; }
+
+/* one invoice, as Isolta's editor: the title and its buttons, then one sheet */
+.inv-back { align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; min-height: 36px; padding: 0 12px 0 8px; background: var(--raise); border: 1px solid var(--sel); border-radius: 8px; color: var(--accent); font-size: 13px; text-decoration: none; }
+.inv-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; }
+.inv-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
+.inv-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.inv-acts .adm-btn { width: auto; }
+.inv-sheet { padding: 16px; display: flex; flex-direction: column; gap: 20px; }
+.inv-parties { display: flex; flex-direction: column; gap: 16px; }
+.inv-who { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.inv-party { display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.inv-party small { color: var(--mute); font-size: 13px; }
+.inv-party b { font-size: 16px; }
+.inv-party b a { color: var(--fg); }
+.inv-party span { color: var(--mute); font-size: 14px; }
+/* the number and the dates: Isolta's small ruled table on the right */
+.inv-meta { margin: 0; align-self: flex-start; width: 100%; border: 1px solid var(--line-2); border-radius: 8px; font-size: 14px; }
+.inv-meta > div { display: flex; }
+.inv-meta > div + div { border-top: 1px solid var(--line-2); }
+.inv-meta dt { flex: 0 0 46%; padding: 10px 12px; color: var(--mute); border-right: 1px solid var(--line-2); }
+.inv-meta dd { flex: 1; min-width: 0; margin: 0; padding: 10px 12px; font-variant-numeric: tabular-nums; }
+.inv-meta dd i { font-style: normal; color: var(--dim); }
+/* the lines: a small form each on a phone, one table row each from 900px */
+.inv-lines-wrap { display: flex; flex-direction: column; gap: 10px; }
+.inv-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.inv-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 10px; align-items: end; padding: 12px; border: 1px solid var(--line-2); border-radius: 8px; font-variant-numeric: tabular-nums; }
+.inv-row.inv-row-head { display: none; }
+.inv-row > label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.inv-row > label > span { font-size: 12px; color: var(--mute); }
+.inv-row > label > small { font-size: 12px; color: var(--dim); }
+.inv-row .inv-c-text, .inv-row .inv-c-err { grid-column: 1 / -1; }
+.inv-row .n { text-align: right; }
+.inv-row > span[data-label]::before { content: attr(data-label) " "; color: var(--mute); font-size: 12px; }
+.inv-row > span:empty { display: none; }
+.inv-c-sum { font-size: 16px; }
+.inv-c-x { width: 40px; height: 40px; justify-self: end; font-size: 20px; color: var(--mute); }
+.inv-c-x:hover { color: var(--warn); }
+.inv-add { border-style: dashed; }
+.inv-add-btns { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; }
+.inv-add-btns .adm-btn, .inv-add-btn { width: auto; }
+.inv-add-btn { align-self: flex-start; }
+.inv-foot { display: flex; flex-direction: column; gap: 16px; }
+.inv-totals { margin: 0; align-self: flex-end; width: 100%; max-width: 320px; font-variant-numeric: tabular-nums; }
+.inv-totals > div { display: flex; justify-content: space-between; gap: 16px; padding: 6px 0; }
+.inv-totals dt { color: var(--mute); }
+.inv-totals dd { margin: 0; }
+.inv-totals .tot { margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--line-2); font: 700 18px/1.2 var(--display); }
+.inv-totals .tot dt { color: var(--fg); }
+@media (min-width: 900px) {
+  .inv-sheet { padding: 24px; gap: 24px; }
+  .inv-parties { flex-direction: row; justify-content: space-between; gap: 32px; }
+  .inv-who { flex: 1; }
+  .inv-meta { flex: 0 0 360px; width: auto; }
+  .inv-lines-wrap, .inv-lines { gap: 0; }
+  .inv-lines-wrap { border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; }
+  .inv-row, .inv-row.inv-row-head { display: grid; grid-template-columns: minmax(0, 1fr) 120px 76px 104px 64px 110px 40px; gap: 0 10px; align-items: center; padding: 8px 12px; border: 0; border-radius: 0; }
+  .inv-row.inv-row-head { padding: 12px; background: var(--ink); border-bottom: 1px solid var(--line-2); font: 500 13px/1.2 var(--display); color: var(--mute); }
+  .inv-lines > .inv-row + .inv-row { border-top: 1px solid var(--line); }
+  .inv-row > label > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .inv-row > span[data-label]::before { content: none; }
+  .inv-row > span:empty { display: block; }
+  .inv-row .inv-c-text { grid-column: auto; }
+  :where(.adm) .inv-row input { min-height: 40px; }
+  .inv-row > label:not(.inv-c-text) input { text-align: right; }
+  .inv-row > .adm-meta, .inv-lines-wrap > .adm-meta { padding: 8px 12px; }
+  .inv-add { border-top: 1px dashed var(--line-2); grid-template-columns: minmax(0, 1fr) 120px 76px minmax(0, auto); }
+  .inv-add-btns { grid-column: auto; }
+  .inv-add-btn { margin: 10px 12px; }
+  .inv-foot { flex-direction: row; justify-content: space-between; align-items: flex-start; gap: 32px; }
+  .inv-note { flex: 1; max-width: 520px; }
+  .inv-totals { flex: 0 0 320px; }
+}
 @media (min-width: 900px) {
   .adm-two-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.6fr) minmax(220px, .8fr); gap: 16px; align-items: start; }
 }

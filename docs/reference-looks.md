@@ -111,9 +111,29 @@ gets it → send.
      dashed amber frame.
    - **Not built:** the sidebar's mini month, the four tiles and
      «Избранное»; the journal's large hour numbers.
-2. **Invoices (not built yet):** the list as Isolta's table, and a free
-   «Новый счёт» that starts from the receiver, beside the monthly drafts we
-   make per barber.
+2. **Invoices: built 19.11.2026** (`src/app/admin/(app)/invoices/`, the
+   «Счета» block of `admin.css`).
+   - **The section wears Isolta's colours:** in «Счета» the frame turns
+     indigo (`#312e6b`), the main button is indigo, the ground lilac-grey
+     (`#f3f3f7`), sheets white with 8 px corners. Only tokens change
+     (`:root:has(.adm-inv)`); the rest of the admin keeps Altegio's. The
+     font stays Inter: Figtree has no Cyrillic.
+   - **«Счета» (the list):** a search, a status filter, one table: status
+     as an outlined pill (draft orange, overdue red, issued indigo, paid
+     green), receiver, number, date, due date, without and with VAT.
+   - **«Новый счёт»:** one field to find the receiver; his name opens the
+     draft (`openDraft`): the one he has, else the month being invoiced
+     with its rent and sales already in, else an empty **free invoice**
+     dated today (migration 015), as many a month as Renat likes.
+   - **One invoice:** the title with «Выставить и отправить» and «Удалить
+     черновик»; one sheet with from and to, the number and dates in a
+     ruled table on the right, the lines as a table, the note, the totals.
+   - **The month's sums per barber** moved to the tab «Месяц»
+     (`/admin/invoices/month`); «Получатели» is Isolta's «Контакты»,
+     «Компания» its settings.
+   - **Not built:** a PDF preview before sending (the PDF exists once an
+     invoice is issued); Isolta's reference number for payments; its
+     products list, reports and attachments.
 3. **Functionality** Altegio has and we do not (clients base, loyalty,
    stock, cash accounts, reports) is a list for Dim to choose from, not
    part of the look.

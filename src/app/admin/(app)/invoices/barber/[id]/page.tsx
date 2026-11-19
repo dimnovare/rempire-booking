@@ -47,7 +47,7 @@ async function Loaded({ params, searchParams }: { params: P["params"]; searchPar
   return (
     <>
       <Title text={`${staff.name} · ${A.inv.statement}`} />
-      <Link className="adm-back" href={`/admin/invoices?m=${m}`}>
+      <Link className="adm-back" href={`/admin/invoices/month?m=${m}`}>
         <PrevIcon />
         {A.inv.title}
       </Link>

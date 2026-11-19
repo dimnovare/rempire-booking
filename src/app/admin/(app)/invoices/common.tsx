@@ -1,5 +1,5 @@
 /**
- * What every «Счета» page shares: the three tabs, the month switcher, the
+ * What every «Счета» page shares: the four tabs, the month switcher, the
  * status tag and the date format. No server-only code: the client views
  * use it too.
  */
@@ -7,7 +7,7 @@ import Link from "next/link";
 import type { Copy } from "../../copy";
 import { NextIcon, PrevIcon } from "../../icons";
 
-export type Tab = "month" | "receivers" | "company";
+export type Tab = "list" | "month" | "receivers" | "company";
 
 const MONTH = /^(\d{4})-(0[1-9]|1[0-2])$/;
 
@@ -38,7 +38,8 @@ export const dayOf = (at: string | null | undefined, tz: string) => (at ? dmy(ne
 export function InvTabs({ A, here, m }: { A: Copy; here: Tab; m?: string }) {
   const q = m ? `?m=${m}` : "";
   const tabs: [Tab, string][] = [
-    ["month", `/admin/invoices${q}`],
+    ["list", "/admin/invoices"],
+    ["month", `/admin/invoices/month${q}`],
     ["receivers", "/admin/invoices/receivers"],
     ["company", "/admin/invoices/company"],
   ];
@@ -67,7 +68,8 @@ export function MonthNav({ A, m, base }: { A: Copy; m: string; base: string }) {
   );
 }
 
+/** The status as Isolta shows it: an outlined pill. «overdue» is an issued invoice past its day. */
 export function StatusTag({ A, status }: { A: Copy; status: string }) {
-  const tone = status === "paid" ? " lime" : status === "draft" ? " warn" : "";
-  return <span className={`adm-tag${tone}`}>{A.inv.status[status] ?? status}</span>;
+  const text = status === "overdue" ? A.inv.overdue : (A.inv.status[status] ?? status);
+  return <span className={`adm-tag inv-st st-${status}`}>{text.charAt(0).toUpperCase() + text.slice(1)}</span>;
 }

@@ -18,6 +18,7 @@ import {
   dropDraftLine,
   issueInvoice,
   makeDrafts,
+  openDraft,
   resendInvoice,
   setDraftNote,
   setPaid,
@@ -129,6 +130,15 @@ export async function makeDraftsAction(month: string): Promise<{ made: number; e
   const r = await makeDrafts(business, str(month, 7), user.id);
   refresh();
   return { made: r.made, exists: r.exists, nothing: r.nothing, problems: r.problems.map((p) => p.receiver) };
+}
+
+/** «Новый счёт» → the receiver: the draft to open for him (the one he has, the month's, or a free one). */
+export async function newInvoiceAction(receiverId: string): Promise<{ ok: true; id: string } | { ok: false; code: string }> {
+  const { user, business } = await requireAdmin();
+  const r = await openDraft(business, str(receiverId, 40), user.id);
+  if (!r.ok) return r;
+  refresh();
+  return { ok: true, id: r.id };
 }
 
 const line = (f: LineInput): LineInput => ({ text: str(f?.text, 300), qty: int(f?.qty), unitCents: int(f?.unitCents), discountCents: int(f?.discountCents ?? 0) });

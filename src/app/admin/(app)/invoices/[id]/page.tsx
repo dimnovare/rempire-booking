@@ -1,13 +1,14 @@
 /**
- * /admin/invoices/<id>: one invoice. A draft has its lines to change, drop
- * or add, its note, «Выставить» and «Удалить черновик». An issued one is
- * read only: the PDF, «Оплачен», «Отправить ещё раз» and «Кредитовать».
+ * /admin/invoices/<id>: one invoice, laid out as Isolta's. A draft has its
+ * lines to change, drop or add, its note, «Выставить и отправить» and
+ * «Удалить черновик». An issued one is read only: the PDF, «Оплачен»,
+ * «Отправить ещё раз» and «Кредитовать».
  */
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { requireAdmin } from "@/lib/auth/current";
 import { invoiceById, invoiceLines } from "@/lib/billing/invoices";
-import { receiverById } from "@/lib/billing/parties";
+import { issuerById, receiverById } from "@/lib/billing/parties";
 import { dbConfigured, query } from "@/lib/db";
 import { Title, Wait } from "../../../lang";
 import { getA } from "../../../lang-server";
@@ -35,9 +36,11 @@ async function Loaded({ params }: { params: PageProps<"/admin/invoices/[id]">["p
   const inv = await invoiceById(query, business.id, id);
   if (!inv) notFound();
   const tz = business.timezone;
-  const [lines, receiver, creditNote] = await Promise.all([
+  // a draft shows both parties as they are now; an issued one as they were printed
+  const [lines, receiver, issuer, creditNote] = await Promise.all([
     invoiceLines(query, inv.id),
     inv.status === "draft" ? receiverById(query, business.id, inv.receiverId) : Promise.resolve(null),
+    inv.seller ? Promise.resolve(null) : issuerById(query, business.id, inv.issuerId),
     inv.creditedBy ? invoiceById(query, business.id, inv.creditedBy) : Promise.resolve(null),
   ]);
   return (
@@ -51,9 +54,14 @@ async function Loaded({ params }: { params: PageProps<"/admin/invoices/[id]">["p
           kind: inv.kind,
           number: inv.number,
           month: inv.periodFrom.slice(0, 7),
+          from: inv.seller?.name ?? issuer?.legalName ?? "",
+          fromAddress: inv.seller?.address ?? issuer?.address ?? "",
           to: inv.buyer?.name ?? receiver?.legalName ?? inv.receiverName,
+          toAddress: inv.buyer?.address ?? receiver?.address ?? "",
           email: inv.buyer?.email ?? receiver?.email ?? "",
-          period: `${dmy(inv.periodFrom)}–${dmy(inv.periodTo)}`,
+          // a free invoice is of one day: its date says it
+          period: inv.free ? "" : `${dmy(inv.periodFrom)}–${dmy(inv.periodTo)}`,
+          termsDays: receiver?.termsDays ?? null,
           issuedOn: dmy(inv.issuedOn),
           dueOn: dmy(inv.dueOn),
           netCents: inv.netCents,

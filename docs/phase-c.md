@@ -109,8 +109,14 @@ Everything below runs on staging with demo barbers, demo companies
     the basis or the share never rewrites old sales.
   - «Себе» = the shop's purchase price (without VAT) × 1.24, no
     commission. A product with no purchase price can't be taken «себе».
-- **«Счета» in the admin** (the fifth tab):
-  - **Месяц:** per barber: sold, 17 %, self, rent, billed, paid, open.
+- **«Счета» in the admin** (the fifth tab; since 19.11.2026 in Isolta's
+  look and order, `docs/reference-looks.md`):
+  - **Счета** (the tab it opens on): every invoice in one table, with a
+    search and a status filter. «Новый счёт» asks for the receiver and
+    opens his draft: the one he has, the month being invoiced, or an empty
+    free invoice (`invoices.free`, 015).
+  - **Месяц** (`/admin/invoices/month`): per barber: sold, 17 %, self,
+    rent, billed, paid, open.
     «Собрать черновики», the month's invoices, and two CSVs for the
     accountant (invoices, lines). It opens on the month before.
   - **Счёт:**

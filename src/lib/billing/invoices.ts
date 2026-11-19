@@ -17,6 +17,11 @@
  *              back. Its sales and its month are free again for a new draft.
  *   discarded  a draft thrown away. Nothing is deleted.
  *
+ * «Новый счёт» → the receiver (Dim, 19.11.2026: Renat's whole routine in
+ * Isolta) is openDraft(): the draft he has open, else the month being
+ * invoiced as above, else a free invoice (015): dated today, beside the
+ * month's own, with only the lines he types.
+ *
  * VAT (decision 13): a line carries the issuer's rate only when the issuer is
  * VAT-registered and the receiver's vat_mode is 'vat'; a product line takes
  * the rate it was sold at. Every amount is what the barber pays, VAT inside
@@ -65,6 +70,8 @@ export type Invoice = {
   creditOfNumber: string | null;
   creditedBy: string | null;
   status: InvoiceStatus;
+  /** a free invoice: beside the month's own, only typed lines (015) */
+  free: boolean;
   number: string | null;
   periodFrom: string;
   periodTo: string;
@@ -127,6 +134,7 @@ type InvoiceRow = {
   credit_of_number: string | null;
   credited_by: string | null;
   status: InvoiceStatus;
+  free: boolean;
   number: string | null;
   period_from: string;
   period_to: string;
@@ -146,7 +154,7 @@ type InvoiceRow = {
 
 const INVOICE_SQL = `
   select i.id, i.issuer_id, i.receiver_id, r.legal_name as receiver_name, i.staff_id, s.display_name as staff_name,
-         i.kind, i.credit_of, o.number as credit_of_number, c.id as credited_by, i.status, i.number,
+         i.kind, i.credit_of, o.number as credit_of_number, c.id as credited_by, i.status, i.free, i.number,
          to_char(i.period_from, 'YYYY-MM-DD') as period_from, to_char(i.period_to, 'YYYY-MM-DD') as period_to,
          to_char(i.issued_on, 'YYYY-MM-DD') as issued_on, to_char(i.due_on, 'YYYY-MM-DD') as due_on,
          i.seller, i.buyer, i.locale, i.net_cents, i.vat_cents, i.gross_cents, i.note, i.sent_at, i.paid_at,
@@ -169,6 +177,7 @@ const invoiceOf = (r: InvoiceRow): Invoice => ({
   creditOfNumber: r.credit_of_number,
   creditedBy: r.credited_by,
   status: r.status,
+  free: r.free,
   number: r.number,
   periodFrom: r.period_from,
   periodTo: r.period_to,
@@ -236,15 +245,15 @@ export async function invoiceLines(q: Querier, invoiceId: string, withDropped = 
   return rows.map(lineOf);
 }
 
-/** Invoices for a month (by the month they bill), or one barber's, newest first. */
+/** Invoices for a month (by the month they bill; a free one by its day), or one barber's, or all of them, newest first. */
 export async function listInvoices(q: Querier, businessId: string, opts: { month?: string; staffId?: string; issuedOnly?: boolean } = {}): Promise<Invoice[]> {
   const where = ["i.business_id = $1"];
   const params: unknown[] = [businessId];
   if (opts.month) {
     const r = monthRange(opts.month);
     if (r) {
-      params.push(r.from);
-      where.push(`i.period_from = $${params.length}::date`);
+      params.push(r.from, r.to);
+      where.push(`i.period_from between $${params.length - 1}::date and $${params.length}::date`);
     }
   }
   if (opts.staffId) {
@@ -317,7 +326,7 @@ export async function buildDraft(business: Business, receiverId: string, month: 
     if (receiver.staffId) await tx("select 1 from staff where id = $1 for update", [receiver.staffId]);
     const issuer = receiver.issuerId ? await issuerById(tx, business.id, receiver.issuerId) : await defaultIssuer(tx, business.id);
     if (!issuer || !issuer.active) return { ok: false as const, code: "no_issuer" as const };
-    const [exists] = await tx<{ id: string }>(`select id from invoices where receiver_id = $1 and period_from = $2::date and kind = 'invoice' and status in ${LIVE}`, [receiverId, range.from]);
+    const [exists] = await tx<{ id: string }>(`select id from invoices where receiver_id = $1 and period_from = $2::date and kind = 'invoice' and not free and status in ${LIVE}`, [receiverId, range.from]);
     if (exists) return { ok: true as const, id: null, reason: "exists" as const };
 
     const lines: NewLine[] = [];
@@ -362,6 +371,42 @@ export async function buildDraft(business: Business, receiverId: string, month: 
     await retotal(tx, inv.id);
     await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'invoice', $2, 'draft', $3::jsonb)`, [actor ?? "cron", inv.id, JSON.stringify({ month, lines: lines.length })]);
     return { ok: true as const, id: inv.id };
+  });
+}
+
+export type OpenDraftResult = { ok: true; id: string; made: "found" | "month" | "free" } | Fail<"no_issuer" | "no_receiver">;
+
+/**
+ * «Новый счёт» → the receiver: the draft to open for him now.
+ *   found  he has a draft already: that one (the newest);
+ *   month  the month being invoiced (the one before today's) had none: it
+ *          is built as the cron would, with the rent and the sales;
+ *   free   nothing is due, or the month is invoiced already: an empty free
+ *          invoice dated today, for whatever is typed into it.
+ */
+export async function openDraft(business: Business, receiverId: string, actor: string | null, now = Date.now()): Promise<OpenDraftResult> {
+  if (!/^[0-9a-f-]{36}$/i.test(receiverId)) return { ok: false, code: "no_receiver" };
+  const [open] = await query<{ id: string }>(
+    "select id from invoices where business_id = $1 and receiver_id = $2 and status = 'draft' order by created_at desc limit 1",
+    [business.id, receiverId],
+  );
+  if (open) return { ok: true, id: open.id, made: "found" };
+  const today = todayIn(business.timezone, now);
+  const month = await buildDraft(business, receiverId, shiftMonth(today.slice(0, 7), -1), actor);
+  if (!month.ok) return month;
+  if (month.id) return { ok: true, id: month.id, made: "month" };
+  return withTx(async (tx) => {
+    const receiver = await receiverById(tx, business.id, receiverId);
+    if (!receiver || !receiver.active) return { ok: false as const, code: "no_receiver" as const };
+    const issuer = receiver.issuerId ? await issuerById(tx, business.id, receiver.issuerId) : await defaultIssuer(tx, business.id);
+    if (!issuer || !issuer.active) return { ok: false as const, code: "no_issuer" as const };
+    const [inv] = await tx<{ id: string }>(
+      `insert into invoices (business_id, issuer_id, receiver_id, staff_id, period_from, period_to, locale, created_by, free)
+       values ($1, $2, $3, $4, $5::date, $5::date, $6, $7, true) returning id`,
+      [business.id, issuer.id, receiver.id, receiver.staffId, today, receiver.locale, actor && /^[0-9a-f-]{36}$/i.test(actor) ? actor : null],
+    );
+    await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'invoice', $2, 'draft', $3::jsonb)`, [actor ?? "cron", inv.id, JSON.stringify({ free: true, day: today })]);
+    return { ok: true as const, id: inv.id, made: "free" as const };
   });
 }
 
