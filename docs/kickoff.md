@@ -279,8 +279,17 @@ No secrets are written here. The full registry for the shop is
   - **Twilio**;
   - D7 Networks (lists ~$0.032 local).
 - **Real volume** (Renat's Messaggio chart, October 2026): about 565 SMS a
-  month, 15–30 on most days. He pays about €35 a month, which is about
-  1 020 parts at €0.03417: his Russian texts go out as two parts.
+  month, 15–30 on most days. He says he pays about €35 a month. At the
+  list price that would be about 1 020 parts, but Altegio's reminder
+  template is in English and short, so one part each (scan, 19.11): either
+  his rate is nearer €0.06 an SMS, or «about 35» is rough. Ask for one
+  Messaggio invoice.
+- **What Altegio sends for REMPIRE today** (its «Уведомления», 19.11): the
+  reminder by SMS 2 hours before and by e-mail 12 hours before; e-mails for
+  a booking made, confirmed and cancelled; a birthday greeting and an
+  invitation to no-shows (SMS and e-mail); the phone's confirmation code in
+  the widget (SMS). To barbers: e-mail and app for a new and a cancelled
+  booking. The notification language is English for everyone.
 - **Prices per part to Estonia, without VAT** (the providers' own pages,
   19.11.2026): BulkGate €0.0296, **Messaggio €0.03417**, Messente (Tallinn)
   €0.0372, GatewayAPI €0.0375, SMSAPI €0.040; Sinch, ClickSend, Infobip,
