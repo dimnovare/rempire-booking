@@ -165,12 +165,40 @@ settings), which is a second scan.
 - **Onboarding (not dismissed):** a dark hint «Комментарий, ресурсы, категория и цвет записи — Эти настройки переехали в расширенные поля» («Не сейчас», «Далее»), and a box «Познакомьтесь с новым окном за 1 минуту» → «Пройти обучение».
 - Esc closes the whole drawer without asking.
 
-### Existing visit window (seen once; not read in full)
-- Same drawer.
-- Two more tiles: «Списание расходников», «История изменений».
-- The centre adds «К оплате € NN» above the services.
-- The same service showed 45 мин. for Renat and 1 ч. for Jevgeni, so length is per barber.
-- Not read: the top, the client column, the footer buttons, any tabs.
+### Existing visit window (opened by the pencil in «Записи»; closed with Esc, nothing saved)
+- **Shape:** the same drawer as «Новая запись»: three columns on `#f7f9fc`, a white footer.
+  The page behind is dimmed; a round «›» on the seam closes it.
+- **Left column (grey, 228 px):**
+  - The barber: avatar, name, role; a small bin icon at the right (delete the visit).
+  - The day («19 ноября») and under it the time and length («18:15–18:45 · 30 мин»),
+    then a wide button «✎ Изменить».
+  - «Закрепленные поля» → «Комментарий к записи» (textarea).
+  - Tiles, two in a row, icon over a two-line label: «Расширенные поля», «Повторение
+    записи», «Уведомления о визите», «Списание расходников», «История изменений».
+- **Centre (white, 584 px):**
+  - Status chips with icons: «Ожидание» (the chosen one dark), «Клиент пришел», «Не
+    пришёл», «Подтвердил».
+  - The visit's services: one row each, the name left, the price and a chevron right.
+  - The «Платёжная политика» banner with «Настроить».
+  - «К оплате € NN» left, «Оплатить» (white, yellow line, a card icon) right.
+  - Tabs «Услуги» / «Товары», «Поиск по услугам», then service cards three in a row:
+    name, a violet tag «Последний визит» on the one he had last, price, length.
+  - «Все услуги» → «Услуга ▾».
+- **Right column (white, 340 px):**
+  - The client: a round tile with initials, name, phone, «✎ Изменить» at the right.
+  - «Написать:» with two round icons (WhatsApp, Telegram).
+  - Three tiles in a row: «Профиль клиента», «История визитов», «Ещё».
+  - A violet tag, for example «Не посещал 20 дней».
+  - «Примечание о клиенте»; a checkbox «Записывает другого посетителя».
+  - «Дополнительно» → «+ Добавить примечание о клиенте».
+  - «Статистика», two columns: «Последний визит», «Всего визитов», «Баланс»,
+    «Продано», «Оплачено».
+  - «Данные записи»: «Дата создания» and further rows below the fold (not read).
+- **Footer:** «Сохранить изменения» (yellow), right.
+- The same service showed 45 мин. for one barber and 1 ч. for another, so the length
+  is per barber.
+- Not read: what «Изменить», the five tiles, «Профиль клиента», «История визитов» and
+  «Ещё» open; the rows under «Данные записи».
 
 ### «Добавить сотрудника в расписание» (dialog)
 - 400 × 320, radius 12, × top right.
@@ -330,7 +358,7 @@ Read from the sidebar's DOM; company id 337850.
 
 **Journal**
 - Week mode.
-- An existing visit's window in full: its top, client column, footer buttons and any tabs.
+- In an existing visit's window: what «Изменить», the tiles, «Профиль клиента», «История визитов» and «Ещё» open.
 - The tiles «Повторение записи», «Уведомления о визите», «Списание расходников», «История изменений».
 - The «Товары» tab, the «Услуга ▾» picker, and the «Специалист» and length option lists in the new visit drawer.
 - The options of «Цвет записи».
