@@ -7,11 +7,13 @@ the look is `docs/reference-looks.md`; this file is the detail, so that
 our pages can repeat Altegio's functions and layout (Dim, 19.11.2026:
 «use their UI/UX exactly as is»), in our own code, icons and words.*
 
-**Two parts.** Part 1 is the daily work: the sidebar, the journal, the visit
-window, «Записи». Part 2 is the rest: reports, finance, goods, online
-booking, settings, and **what this salon uses** of it all. Each part ends
-with what is not opened yet; «Клиентская база», «График работы»,
-«Сотрудники», «Должности» and «Услуги» are a third pass.
+**Three parts.** Part 1 is the daily work: the sidebar, the journal, the
+visit window, «Записи». Part 2: reports, finance, goods, online booking,
+settings, and **what this salon uses** of it all. Part 3: «Клиентская
+база» and a client's card, categories and loyalty, «График работы»,
+«Сотрудники» and one barber's card, «Услуги» and one service,
+«Уведомления». Each part ends with what is not opened or not verified.
+Not opened at all: salaries, integrations, licence and billing.
 
 **Two corrections to `docs/reference-looks.md`:**
 
@@ -795,3 +797,500 @@ There is no «роли и права» item here.
 - Which tick is on in the non-fiscal receipt.
 - The exact line and colour of the new form fields (drawn inside web components; sizes measured, the line read from a screenshot).
 - `/dashboard_records` and `/labels/client` were skipped as the other agent's pages.
+
+---
+
+# Part 3: clients, work schedule, staff, services, notifications
+
+## Клиенты
+
+### `/clients/337850/base/` «Клиентская база»
+- **For:** the searchable list of all clients, with bulk actions.
+- **In use:** yes, 3 207 clients.
+- **Look:** old style.
+- **Head:** burger, title, (i), star, breadcrumb «Клиенты». Right: «Операции с Excel ▾» (white, 151 × 36) and «Добавить клиента» (yellow, 157 × 36).
+- **«Операции с Excel»:** «Выгрузить в Excel», «Загрузить из Excel». Menu 160 px wide.
+- **Search:** one field, 1655 × 30, «Поиск (по имени, телефону, Email или номеру карты)».
+- **«Сегменты:»** four blue links: «Новый», «Повторные», «Потерянные», «Заканчивается абонемент».
+  - From the help: new and returning look at the last month, lost is no visit for 60 days; click one, then the search button.
+- **«Фильтры:»** three dropdown buttons (224 × 30), a trash button (28 × 30) and «Найти» (orange, 117 × 30, far right). Each dropdown ends with a red «Очистить».
+
+  | Dropdown | Conditions |
+  |---|---|
+  | «По визитам» | Наличие записей · Статус записей · Количество записей · Период · Сотрудник · Услуги · Сумма оказанных услуг |
+  | «По клиентам» | Пол · Altegio.me · Мобильное приложение · Категория клиента · Продано · Баланс счета · Получал sms-рассылку · Важность клиента · День рождения · Возраст |
+  | «По продажам» | Товары · Сертификаты · Абонементы |
+
+- **What a condition asks for (from the help, not opened):**
+  - Наличие записей: has or has no bookings, with a period.
+  - Статус записей: came or did not come.
+  - Количество записей: a number range.
+  - Период: dates, and booked or not booked in them.
+  - Сотрудник: one barber or all.
+  - Услуги: chosen services.
+  - Сертификаты: name, usage, balance, duration, date of sale.
+  - Абонементы: name, usage, status, freeze, duration, date of sale, services left.
+  - After the first condition a «+» offers «И» / «Или». Each condition is confirmed with its own button. The trash clears all.
+- **Table** (div-based, not `<table>`). Head 50 px, rows 50 px, 25 rows.
+
+  | Column | px | Holds |
+  |---|---|---|
+  | checkbox | 50 | fixed |
+  | Имя | 200 | blue link, fixed, opens the card |
+  | Телефон | 264 | |
+  | Email | 180 | |
+  | Продано | 120 | «20 €» |
+  | Баланс счета | 180 | «0 €» |
+  | Визиты | 125 | number |
+  | Скидка | 130 | «0 %» |
+  | Последний визит | 200 | «29 мая 2020 г. в 17:00» |
+  | Первый визит | 200 | same |
+
+  - Each head cell has a small lock icon that pins the column; «Имя» is pinned.
+  - Default order is newest client first (`order_by=id desc`). Whether a head click sorts is not verified.
+- **Column chooser:** a round cog (30 × 30) at the head's right end. Popup 175 × 266 with nine ticked checkboxes, exactly the nine columns above.
+- **Bottom bar (sticky):** page size 10 / 25 / 50 / 100 «результатов на странице»; «Назад 1 2 3 4 ... Вперед»; right «Показаны результаты с 1 до 25 из 3 207»; blue «Действия» (134 × 30).
+- **«Действия»** (popup 321 × 204): an orange line «Найдены Все (3207 клиентов)», then «Отправить сообщение», «Отправить PUSH в мобильные приложения», «Отправить PUSH в Altegio.me», «Добавить в категорию», «Удалить из базы». It acts on the whole filtered list.
+
+### Client card (drawer over «Клиентская база»)
+- **Path:** same page, with `client_id` in the query.
+- **Layout:** a new-style drawer, 900 px wide at x 1020, full height. The left menu hides and the list stays visible in the remaining 980 px.
+- **Top:** the client's name (20/24, 500); a burger; a row of chip tabs that scrolls sideways.
+- **Nine tabs:** Карточка клиента · История визитов · Статистика · Сообщения и звонки · Отправить сообщение · Лояльность · Счета клиентов · Уведомления · Файлы.
+- **«Карточка клиента», left column (558 px):**
+  - Имя (text).
+  - Телефон: country-code select and number.
+  - Дополнительный телефон: the same.
+  - Email.
+  - Дата рождения (text, «01.01.2000»).
+  - Пол (select, «Не выбран»).
+  - Класс важности (select, «Без класса важности»).
+  - Номер карты.
+  - Скидка, %.
+  - Switch «Запретить записываться через онлайн-запись».
+  - Примечание (textarea).
+  - Категория (select, «Не выбрана»).
+- **«Карточка клиента», right column (253 px):**
+  - Photo box and «Загрузить изображение» (12 MB limit).
+  - «История комментариев»: «Новый комментарий» textarea and «Добавить».
+  - Four number fields: «Продано услуг и товаров, €» (with «за N посещений»), «Оплачено в кассу, €», «Баланс, €», «Резерв(Депозиты), €».
+  - «Посмотреть историю посещений»; a block «Мобильное приложение».
+- **Footer:** «Удалить» (white), «Сохранить» (yellow).
+- **«История визитов»:** a select «Все записи»; a table.
+  - Columns: Сотрудник 217 · Статус 116 · Услуга 240 · Стоимость 87 · Оплачено 79 · Способ оплаты 113.
+  - Rows are grouped under a date line («14 Ноября 2023 · Rempire», 50 px).
+  - A visit row is 69 px: avatar, barber, time, link «Подробнее»; a status with a coloured dot («Ожидание»); the service; sums.
+- **«Статистика»:** a date-range field; a card «Выручка по клиенту» (line chart); two cards «Услуги» and «Сотрудники».
+- **«Сообщения и звонки»:** sub-tabs «Отправленные сообщения» | «История звонков» with the yellow line. Table: Сообщение 341 · Отправлено 181 · Тип 169 · Статус 98 · Канал 63; rows 53 px.
+- **«Отправить сообщение»:** «Текст сообщения» textarea; «Каналы отправки» checkboxes SMS, Push, Email; yellow «Отправить».
+- **«Лояльность»:** empty state «В данной локации у клиента нет карт лояльности, сертификатов или абонементов».
+- **«Счета клиентов»:** «Открытие нового счета», a lilac note «Тип счета» with the link «Перейти к управлению счетами»; no account types here.
+- **«Уведомления»:** «Настройки уведомлений».
+  - «Рекламные рассылки»: checkbox «Не отправлять».
+  - «Доступные каналы»: Push, SMS, Email.
+  - «Типы уведомлений», 13 switches:
+    - Предстоящий визит
+    - Запрос отзыва после визита (виджет)
+    - Запрос отзыва после визита (журнал)
+    - Создание записи через виджет
+    - Создание записи через журнал
+    - Поздравление с днём рождения
+    - Подтверждение записи клиента (виджет)
+    - Удаление записи (виджет)
+    - Новая скидка
+    - Окончание действия скидки
+    - Приглашение на повторный визит
+    - Приглашение на визит недошедших клиентов
+    - Отмена записи администратором или сотрудником
+- **«Файлы»:** a lilac note with the formats (jpeg, jpg, png, gif, doc, docx, pdf, xls, xlsx, txt), «Загрузить файлы», 12 MB, «Файлов пока нет».
+
+### `/labels/client/337850/` «Список категорий»
+- **For:** the list of client categories (tags).
+- **In use:** defaults only: VIP, Loyal, Permanent.
+- **Head:** yellow «Добавить категорию».
+- **Left box (about 400 px):** three links: «Категории клиентов» (active, orange `#fa8a42`, bold), «Категории записи» → `/labels/record/337850/`, «Категории событий» → `/labels/activity/337850/`.
+- **Right:** a row per category, 65 px: the tag with a small icon, and a pencil (40 × 34) that edits in a popup with «Сохранить» / «Удалить».
+- **Tag colours:** VIP `#fbca04` with black text, Loyal `#bfd4f2` with black, Permanent `#009800` with white.
+
+### `/clients_settings/clients_classes/337850` «Программа лояльности» → «Правила для классов важности»
+- **For:** automatic Бронза / Серебро / Золото classes.
+- **In use:** no; only the default 365 days is filled.
+- **Left box:** «Правила для классов важности», «Правила для категорий» (`/auto_labels/`), «Настройки» (`/settings/`).
+- **Form:** three blocks, three rows each, in the shape «label → number field → class with a coloured square»:
+  - «По проданному»: «Продано от [ ] €».
+  - «По оплаченному»: «Оплачено от [ ] €».
+  - «По количеству визитов»: «Визитов от [ ]».
+- **«Отмена класса важности»:** «Не посещал более [365] дня».
+- Full-width cyan «Сохранить» (1197 × 34).
+
+### `/clients_settings/auto_labels/337850` «Правила для категорий»
+- **For:** adding or removing a category automatically.
+- **In use:** no (all 8 fields empty).
+- **«Автодобавление в категорию»:**
+  - Four rows with a field, a category select (VIP / Loyal / Permanent) and a blue «+» for another rule: «Продано от € →», «Оплачено от € →», «Визитов от →», «Не посещал более … дня →».
+  - Two rows with only a select («Не устанавливать категорию» or a category): «Установлен статус визита "Клиент пришел"» and «…"Клиент не пришел"».
+- **«Автоудаление из категории»:** the same six rows; the select starts at «Не удалять категорию».
+
+### `/clients_settings/settings/337850` «Настройки»
+- One block «SMS-уведомление о прекращении действия скидки»: select «Уведомлять за»: «Не уведомлять», then 1 to 15 days. Set to «Не уведомлять». Cyan «Сохранить».
+
+### `/clients_settings/discounts/337850/` «Правила для скидок»
+- **For:** an automatic discount by spend or visits.
+- **In use:** no.
+- Blocks «По проданному», «По оплаченному», «По количеству визитов»: one row each «… от [ ] → [ ] %» with a blue «+».
+- «Отмена скидки»: «Не посещал более [365] дня». Cyan «Сохранить».
+
+### `/loyalty/info/337850` «Лояльность»
+- A promo page, not in use.
+- A hero card with yellow «Подробнее», then four white cards, each with an outlined «Настроить»: «Карты лояльности, скидки и кэшбэк», «Сертификаты», «Абонементы», «Депозиты на счетах клиентов».
+
+## Сотрудники
+
+### `/work_schedule/337850/` «График работы»
+- **For:** who works which day, set in bulk.
+- **In use:** yes; five barbers, shifts filled to late November or mid-December.
+- **Look:** new style.
+- **Head:** title, (i), yellow star; right an outlined «Выгрузить в PDF».
+- **Toolbar (y 114, 32 px controls):** «Фильтры ▾» (yellow line, 107 px) · ‹ › · «Ноябрь 2026» · «Сегодня» · far right a segmented «Неделя | Месяц» (Месяц dark) · a gear.
+- **«Фильтры»** opens an inline panel of five selects (300 × 32): «Сотрудники и должности», «Специализации», «Удаленные / Неудаленные», «Уволенные / Неуволенные», «Есть график / Нет графика».
+- **Gear:** popover «Настройка графика» with two switches, both on: «Отображать у сотрудников сумму смен и часов», «Отображать количество сотрудников за день».
+- **Grid:**
+
+  | Part | Measure |
+  |---|---|
+  | Staff column | 264 px, sticky. Head «Сотрудники» with a yellow count badge. |
+  | Staff row | 64 px, bottom line `#eaeef4`: photo 24 × 24 (radius 4), name 12/16 500, a «…» button 16 × 16 |
+  | «…» menu | «Скопировать график», «Редактировать сотрудника» |
+  | «Итого» column | 91 px, one per month, sticky after the staff column. Head «Итого» 14/20 500 and the month 11/14 `#71757f`. Cell: a case icon with the number of shifts and a clock with hours («133.25 ч»), 12 px `#71757f`. |
+  | Day column | 38 px. Two months in a row, 2536 px in all, scrolled sideways. |
+  | Day head | 83 px: number 14/20 500, weekday 12/16, then a person icon and how many work that day (12/16 `#9aa3b1`), or «–» |
+  | Weekend | number and weekday `#f96065` |
+  | Next month's days | `#9aa3b1`; its weekends `#fb9599` |
+  | Today | head chip 29 × 40, `#ffd940`, radius 6; the whole column tinted `rgba(255,249,223,.5)` |
+  | Shift cell | slot 38 × 64 with 2 px padding; block 33 × 60, `#cdf4cd`, radius 4; start and end time on two lines, 8/10 500 `#19803b` |
+  | In a shift, bottom | left a number 8 px `#29c235` (class `busy-intervals-count`); right a 4 px dot `#29c235` (class `breaks-tag`) |
+  | Day off | an empty white cell |
+
+  - The class names say the number counts visits and the dot marks breaks. The help says the opposite (numbers are breaks, dots are visits). Hover was not tried, so this is open.
+  - Only green shifts were on screen. No legend and no side panel are shown until a cell is clicked.
+- **Editing (from the help, not tried):**
+  - A click on a cell opens a panel on the right.
+  - Template: none, by weekdays (tick days, number of weeks), by shifts (2/2, 5/2), or your own («Create a template»).
+  - Type: workday, sick leave, annual leave, unpaid leave, missed shift, paid leave.
+  - Hours 00:00 to 24:00; a «Break» button.
+  - Further clicks mark more cells, for several barbers; «Save» is bottom right.
+  - To remove: type «Non-working day», mark the days (they turn red), «Delete». A day with bookings is refused.
+  - «Скопировать график»: choose barbers, a period (two weeks by default, at most this and next month), a tick to copy breaks. It cannot be undone.
+
+### `/settings/sidebar/staff/337850/` «Список сотрудников»
+- **For:** the staff list with their booking, role and licence state.
+- **In use:** yes, «Найдено: 6» (five barbers and one system user).
+- **Head:** star; right «Управление лицензией».
+- **Row 1:** search «Поиск по имени» and yellow «+ Добавить».
+- **Filters (selects, 32 px):** «Должность» (Все) · «Уволенные / Неуволенные» · «Удаленные / Неудаленные» · «Доступ» (Все) · «Учет в лицензии» (Все). Then yellow «Найти», «Сбросить», the count.
+- A lilac note «Мы обновились!…» with ×.
+- **Tabs (yellow line):** «Должность» · «Специализация» · «Cистемные пользователи».
+- **«Должность»:** collapsible groups; here one, «Без должности · Сотрудников: 5».
+  - Column heads (14/16 500): Сотрудник · Расписание · Онлайн-запись · Услуги · Роль · Лицензия.
+  - Row 96 px, white, radius 8:
+    - photo, name (blue link `#003acc`), then speciality, phone, e-mail (12/16 `#71757f`);
+    - a green tag «до 28.11.2026» (schedule filled until);
+    - a switch for online booking;
+    - the number of services (link);
+    - the role «Специалист» or «Владелец» (link);
+    - «Платный» with a pencil;
+    - «…».
+- **«Специализация»:** the same rows as one flat list.
+- **«Cистемные пользователи»:** columns Сотрудник · Доступ · Учет в лицензии. One row: «Altegio.me MCP» with a tag «Интеграция», «Неизвестно», «Бесплатный».
+
+### Staff member (drawer), `/settings/sidebar/staff/337850/employee/{id}/info`
+- The same 900 px drawer. Each tab has its own path. Footer on every tab: «Удалить», «Уволить», yellow «Сохранить».
+- **«Информация»** `/info`:
+  - «Отображаемое имя»;
+  - «Должность (необязательно)», a searchable select with the hint «Для создания новой должности напишите ее название и нажмите Enter»;
+  - «Специализация»;
+  - the photo with «Изменить изображение» (JPEG or PNG, 12 MB).
+- **«Услуги»** `/services` (badge with the count): «Услуги сотрудника»; «Назначить услуги», «Создать услугу»; a search; a collapsible category «Услуга · Оказывает: 4 из 12».
+  - Columns: Услуга (link, base price under it) · Цена сотрудника (field) · Онлайн-запись (switch) · Журнал записи (switch) · Длительность («01 ч 00 м» field) · Технологическая карта · an unlink icon.
+  - His price can differ from the base (40 € against 39 €).
+- **«Онлайн-запись»** `/online-booking`:
+  - Two radio cards: «Доступен для онлайн записи» / «Недоступен для онлайн записи».
+  - «Страница сотрудника»: «Описание»; checkbox «Рейтинг сотрудника».
+  - «Правила записи»: «Платёжная политика» with a link; checkbox «Пропуск выбора сотрудника» (bookable under «Любой специалист»).
+  - «Доступное время для онлайн-записи»: radio «Общее по локации» / «Персонально для сотрудника».
+- **«Расчет зарплат»** `/payroll`: empty, «Пока не задана схема расчета зарплаты», yellow «Добавить схему».
+- **«График работы»** `/schedule`: only a note «График работы сотрудника теперь в Настройках» with «Убрать из графика» and yellow «Настроить».
+- **«Доступ»** `/access`:
+  - Switch «Предоставить доступ в систему»; Email; Номер телефона; Информация.
+  - «Права доступа»: a role select («Специалист»); «История изменений прав», «Скопировать права»; a search.
+  - Groups with a switch and a count: Журнал записей (7 из 8 прав), Окно записи (26 из 29), Финансы (2 из 38), Товары (1 из 39).
+  - Then single rights: «Разрешить доступ к локации только с IP-адресов», «Ресурсы», «Совершать SMS рассылки клиентам», «Добавление локации в сети».
+- **«Уведомления»** `/notifications`:
+  - Select «Типы уведомлений» («На основе прав доступа»).
+  - Checkbox «Данные клиента: отправлять имя и номер телефона клиента».
+  - A table «Тип уведомления | Каналы отправки»; each row has a switch and SMS / Email / Push checkboxes:
+    - Создание записи клиентом
+    - Создание записи администратором
+    - Удаление записи клиентом или администратором
+    - Перенос записи клиентом или администратором
+    - Окончание действия лицензии
+    - Письмо с автоматически созданными платёжными документами
+    - Отмена записи администратором
+  - «Уведомления в Web-версии»: «Операции с записями», «Входящие звонки».
+- **«Настройки»** `/settings`:
+  - «Записи»: select «Разметка в журнале записи»; checkbox «Не отображать сотрудника в журнале записи».
+  - «Статистика»: checkbox «Учитывать сотрудника в заполненности».
+  - «Внедрение»: «Синхронизация с Google Календарем» («Войти через Google»); checkbox «Выгружать данные клиентов в Google Календарь»; «Внешний ID».
+- **«Юр. информация»** `/legal-info`: Имя, Фамилия, Отчество, Гражданство, Пол, Паспортные данные, ИНН, Страховой номер, Дата приема на работу, Дата окончания регистрации/патента, Дополнительный телефон.
+
+### `/positions/list/337850/` «Должности»
+- Empty. Yellow «Добавить должность» in the head.
+- Centred: «Пока не создана ни одна должность», «Добавьте должности для фильтрации сотрудников.», a cyan «Добавить должность» (→ `/positions/edit/337850/0/`).
+
+## Услуги
+
+### `/settings/sidebar/service_categories/337850/` «Категории услуг»
+- **For:** categories and their services, edited in place.
+- **In use:** yes; one category «Услуга» with 12 services.
+- **Head:** yellow star, breadcrumb «Услуги»; right «Операции с Excel ▾».
+- **Row 1:** search «Введите название услуги» and yellow «Создать».
+- **Category row (56 px, grey, radius 8):** a drag handle, the name (14/20 500), «Количество услуг: 12», a pencil, a chevron.
+- **Services table inside.** Rows 52 px.
+
+  | Column | px | Holds |
+  |---|---|---|
+  | Название | 463 | drag handle and the name; a click opens the service |
+  | Онлайн-запись | 200 | a switch with «Вкл» |
+  | Цена | 200 | «€ 40», «от € 45», «€ 30 – 35»; edits in place |
+  | Длительность | 200 | «01 ч», «45 мин», «Индивидуально» (differs per barber), «Сотрудники не назначены» |
+  | Тех. перерыв | 148 | «Без перерыва» |
+  | Технологическая карта | about 200 | «Не указано» |
+  | Сотрудники | about 150 | stacked photos and «+1», or «Не назначены» |
+  | pencil | about 50 | |
+
+
+### One service (drawer), `/settings/sidebar/services_edit/basic/337850/{category}/{service}`
+- The 900 px drawer; the opened row gets a yellow outline. Footer: «Удалить», yellow «Сохранить».
+- **«Основные настройки»** `/basic/`:
+  - «Название» (text).
+  - «Категория» (select).
+  - «Базовая цена» (number, €) and a checkbox «Указать цену в диапазоне».
+  - «Длительность»: two selects, hours and minutes.
+  - «Технический перерыв после записи» (select, «Без перерыва — общий»), with a link to «Цифровой журнал».
+  - «Тип»: radio «Запись» / «Групповое событие».
+  - «API Id» with a copy icon.
+  - **«Сотрудники, оказывающие услугу»**, a table with a row per barber: Название (searchable select) · Цена (number, €) · Длительность (hours and minutes) · Технологическая карта.
+  - Under it «Назначить сотрудника», «Создать сотрудника», and a note that the plan's staff limit is reached.
+  - «Итоговая цена» and «Итоговая длительность».
+- **«Онлайн-запись»** `/booking/`:
+  - A head switch (service bookable online).
+  - «Название для онлайн-записи»; «Описание» (textarea); an image with «Загрузить изображение».
+  - «Платёжная политика» with a link.
+  - Switch «Запретить онлайн-запись без абонемента».
+  - Switch «Услуга доступна ограниченное время» (by period, time or weekdays).
+- **«Расширенные настройки»** `/extended/`: «Название в чеке»; «Система налогообложения» and «Налог» (both «По умолчанию»); «Напоминание о повторном визите» («Использовать общие настройки локации»); switch «Автоматическое списание с абонементов».
+- **«Ресурсы»** `/resources/`: empty, «Ресурсов пока нет», yellow «Создать».
+- **«Языки»** `/translations/`: a row per language: a language select («Английский», «Эстонский»), the translated name, a trash; «+ Добавить перевод». Both are filled.
+
+## Ресурсы
+
+### `/resources/337850` «Ресурсы»
+- Empty. Yellow «Добавить ресурс»; a white card «Пока не создан ни один ресурс».
+
+## Уведомления
+
+### `/notifications/337850` «Уведомления» → «Типы уведомлений»
+- **For:** which automatic messages go out, and by which channel.
+- **In use:** yes.
+- **Tabs (yellow line):** «Типы уведомлений» | «Каналы отправки» (`/channels`).
+- A list 1098 px wide, in collapsible sections. A row is 65 px: a switch, the name, grey channel tags, a chevron; the row opens `/notifications/337850/type/{n}`.
+
+**Клиенту**
+
+| Group | Message | State | Channels |
+|---|---|---|---|
+| Увеличение посещаемости | Создание записи через виджет онлайн-записи | on | Email, Altegio.me |
+| | Создание записи через журнал записи | on | Email, Altegio.me |
+| | Уведомление о подтверждении записи | on | Email, Altegio.me |
+| | Изменение записи | off | SMS, Email, Altegio.me |
+| | Запрос подтверждения записи | off | SMS, Email, Altegio.me |
+| | Напоминание о визите | on | SMS, Email |
+| | Отмена записи | on | Email, Altegio.me |
+| | Отмена записи с помощью статуса «Клиент не пришел» | off | SMS, Email, Altegio.me |
+| | Приглашение на визит недошедших клиентов | on | SMS, Email, Altegio.me |
+| Контроль качества | Запрос отзыва после визита (виджет) | off | SMS, Email, Altegio.me |
+| | Запрос отзыва после визита (журнал) | off | SMS, Email, Altegio.me |
+| Работа с возвращаемостью | Поздравление с днём рождения | on | SMS, Email, Altegio.me |
+| | Новая скидка | off | SMS, Email, Altegio.me |
+| | Окончание действия скидки | off | SMS, Email, Altegio.me |
+| | Приглашение на повторный визит | off | SMS, Email, Altegio.me |
+| Другой | Ссылка на привязку карты | off | none shown |
+| | Ссылка на предоплату | off | none shown |
+| | Уведомление клиенту со ссылкой на оплату | off | none shown |
+| | Подтверждение номера клиента в виджете онлайн-записи | on | SMS |
+| | Уведомление клиента об успешной онлайн-оплате | off | SMS, Altegio.me |
+
+**Администратору**
+
+| Message | State | Channels |
+|---|---|---|
+| Создание записи клиентом | off | SMS, Email, Приложение администратора |
+| Создание записи администратором | off | SMS, Email, Приложение администратора |
+| Перенос записи, созданной через виджет | off | SMS, Email, Приложение администратора |
+| Отмена записи клиентом через виджет | on | Email, Приложение администратора |
+| Скорое завершение расписания работы сотрудников | off | none shown |
+
+**Сотруднику**
+
+| Message | State | Channels |
+|---|---|---|
+| Создание записи клиентом | on | Email, Приложение администратора |
+| Создание записи администратором | on | Email, Приложение администратора |
+| Перенос записи клиентом или администратором | off | SMS, Email, Приложение администратора |
+| Отмена записи клиентом или администратором | on | SMS, Email, Приложение администратора |
+| Отмена записи администратором с помощью статуса «Клиент не пришел» | off | SMS, Email, Приложение администратора |
+
+**Администратору и сотруднику:** «Окончание действия лицензии», off, SMS, Email, Приложение администратора.
+
+
+### `/notifications/337850/type/1` «Напоминание о визите»
+- «‹ Назад»; title (20/24 500); a description. Tabs «Основные настройки» | «Шаблоны уведомлений» (`/templates`). Yellow «Сохранить» bottom right.
+- **«Условия отправки»:**
+  - Select «Отправлять уведомление»: «За 2 часа до визита».
+  - Checkbox «Другое время для отправки на email», ticked.
+  - Select «Отправлять уведомление на email:»: «За 12 часов до визита».
+- **«Отправка уведомлений»:**
+  - «Подключенные», each with a tag «Активная» and a select: Email «Всегда отправлять»; Altegio.me «Не отправлять»; SMS (messaggio.com) «Всегда отправлять».
+  - «Не подключенные»: «Брендированное приложение», WhatsApp, each with «Подключить».
+- **«Шаблоны уведомлений»**, a collapsible card per channel:
+  - **Email:** «Дополнительная информация в Email» (collapsed) and «Предпросмотр письма».
+  - **Altegio.me:** «Текст сообщения», an editor where variables are grey chips; «+ Добавить переменную»; a phone preview with iPhone / Android tabs.
+  - **SMS:** the same editor; right «Предпросмотр уведомления с тестовыми данными».
+  - The salon's SMS is in English: the barber's name, the time left, and a short link to the visit.
+- **The 21 variables in the SMS list** («Количество дней до сгорания скидки» is there twice):
+  - Company: Название компании · Ссылка на онлайн-запись · Адрес компании · Номер телефона компании · Сайт компании · Ссылка на карты.
+  - Discount: Количество дней до сгорания скидки.
+  - Visit: Дата записи · Дата и время записи · Дата и время записи (сокр.) · Время записи · Время до записи · Имя сотрудника · Ссылка на детали записи · Ссылка на форму отзыва · Услуги в визите · Услуги в отдельной записи.
+  - Client: Имя клиента · Фамилия клиента · Телефон клиента.
+
+### `/notifications/337850/channels` «Каналы отправки»
+- **«Подключенные»:**
+  - SMS (messaggio.com): «Активная» in amber, «Настроить».
+  - Email: «Активная» in green, «Настроить».
+  - Altegio.me («Что это?»): «Активная», «Подробнее».
+  - «Приложение администратора»: «Активная».
+- **«Не подключенные»:** WhatsApp, «Брендированное приложение», each with yellow «Подключить».
+
+## Components
+
+**Old-style list («Клиентская база»)**
+
+| Part | Measure |
+|---|---|
+| Breadcrumb | 12/16, `#c6cbd3` |
+| Search field | 30 px, `#fafafa`, 1 px `#e4e4e4`, radius 0, 12 px, padding 1 10 |
+| Filter dropdown button | 224 × 30, white, 1 px `#ddd`, radius 3, 12/28 500 `#606060` |
+| Filter dropdown list | 224 px, white, 1 px `rgba(0,0,0,.19)`, shadow `rgba(0,0,0,.13) 0 4px 4px`, radius 0 |
+| «Найти» | 117 × 30, `#efb250`, white 12 px 500, radius 3 |
+| «Действия» | 134 × 30, `#1c86c4`, white 13 px 500, radius 3 |
+| Segment links | 13/19, `#1c86c4`; the label «Сегменты:» 13 px 700 |
+| Table head | 50 px, white, title 13 px 700 `#676a6c`, padding 16 10 0, line `#ededed` |
+| Table row | 50 px, 13 px 400 `#676a6c`, cell `#fafafa`, line `#ededed`; link `#337ab7` |
+| Paging | 30 px, 1 px `#ddd`, 13 px; current `#eee` |
+| Column chooser | 175 px, white, radius 4 |
+| Head dropdown menu | radius 12, shadow `rgba(33,47,65,.35) 0 1px 2px` |
+| «Действия» popup | 321 px, radius 3, shadow `rgba(0,0,0,.25) 0 3px 5px` |
+
+**Old-style settings forms (loyalty, categories)**
+
+| Part | Measure |
+|---|---|
+| Sub-menu box | about 400 px, links 13/18; active `#fa8a42` 700, others `#666` |
+| Block title | 16/17, 600 |
+| Row label | 13/18; row pitch 46 px |
+| Field | 30 px, 1 px `#e5e6e7`, radius 1, padding 6 8, 14 px; a 34 px unit box («€», «%», «дня») |
+| Save | full width, 34 px, `#58cde5`, white 14 px, radius 3 |
+| Category tag | 25 px, padding 3 8, radius 3.5, 14/14 700 |
+| Old empty state | centred: h3 16/17 600, text 13/18, a cyan button |
+
+**New-style drawer (client, barber, service)**
+
+| Part | Measure |
+|---|---|
+| Drawer | 900 px, white, full height; the page keeps 980 px, the left menu hides |
+| Chip tab | 32 px, radius 8, padding 8, 12/16 500, icon left; open one on `#f7f9fc` |
+| Section title | 20/24, 500 |
+| Field | 32 px box, white, 1 px `#e0e3eb`, radius 8, padding 3 9; text 14/24 `#2b3134`; label above 12/16 `#71757f` |
+| Footer buttons | 32 px, radius 8, 12/16 500: yellow `#ffcb00` without a border; white with 1 px `#e0e3eb` |
+| Switch | 42 × 24, yellow when on |
+
+**Tabs with the yellow line**
+
+| Where | Measure |
+|---|---|
+| Inside a drawer | tab 48 px, padding 14 12, label 14/20 500; open `#2b3134`, others `#71757f`; line 3 px `#ffcb00` |
+| «Уведомления» page | tab 64 px, padding 0 22, label 16/24 (open 500, others 400 `#71757f`); line 4 px `#ffcb00` |
+| «Список сотрудников» | label 14/20 500, same colours |
+
+**New-style tables and lists**
+
+| Part | Measure |
+|---|---|
+| Visit history head | 48 px, `#f0f3f8`, radius 12, 12/18 600 `#999ea7`, padding 8 10 |
+| Visit history rows | date line 50 px (12/18, padding 16 20); visit 69 px, 12/18 `#36393e` |
+| Messages table | head 36 px, 14 px 500 `#2b3134` on white, padding 8 6; row 53 px, 12/18 |
+| Staff list row | 96 px, white, radius 8; name 14/20 `#003acc`; second lines 12/16 `#71757f`; column heads 14/16 500 |
+| Services row | 52 px, 14/20 `#262626` |
+| Notification row | 65 px; section title 14/20 500; group label 14/24 `#71757f` |
+
+**Tags, empty states, cards**
+
+| Part | Measure |
+|---|---|
+| Green tag | 24 px, padding 4 6, radius 4, 12 px, `#219c2b` on `#e9f7e9` |
+| Channel tag | 24 px, padding 4 8, radius 4, 12 px `#2b3134` on `#e0e3eb` |
+| Status text | green `#29c235`; amber `#997a00` |
+| New empty state | a 48 px circle `#eaeef4` with a 24 px icon; under it 12/16 500 `#9aa3b1`, centred |
+| Promo card | white, radius 12, padding 48; outlined button 48 px, 1 px `#ffcb00`, radius 8, 16/24 500 |
+| Row buttons on channels | 32 px, radius 8: white with `#e0e3eb`, or yellow |
+
+## Not opened or not verified
+
+**Клиентская база**
+- The sub-controls of each filter condition: adding one means clicking a menu item, so they come from the help.
+- Sorting by a head click, the lock icons, the (i) and the star.
+- «Добавить клиента», the Excel import and export dialogs, every «Действия» item.
+- Whether the drawer's burger swaps the chip row for a 224 px side menu («Компактный вид» is in the DOM).
+- An older client dialog is also in the DOM, hidden, with nearly the same tabs.
+
+**Categories and loyalty**
+- The add and edit popup of a category (name, colour).
+- «Категории записи» and «Категории событий».
+- Every «Настроить» on «Лояльность».
+
+**График работы**
+- The right panel, the templates, the «Скопировать график» dialog, «Неделя» mode, the month picker, «Выгрузить в PDF». The toggle has no ref, so it was not clicked.
+- What the number and the dot in a shift mean (see the page's note).
+- Colours of leave types and of past days: only green shifts were on screen.
+
+**Сотрудники**
+- A staff row's «…» in the list, the licence pencil, «Добавить», «Управление лицензией».
+- The option lists of the five filters.
+- The inside of each rights group on «Доступ».
+
+**Услуги**
+- «Операции с Excel», «Создать», the category pencil, the «Сотрудники» cell's popup: these sit in shadow DOM without refs.
+- The exact widths of the last three columns.
+- Options of the break, tax and reminder selects.
+- The «limited time» settings of a service.
+
+**Уведомления**
+- Every type except «Напоминание о визите».
+- The e-mail's extra text and its preview.
+- The Altegio.me variable list.
+- «Настроить» on SMS and Email.
+
+**Help articles used**
+- [Editing work schedules](https://alteg.io/en/support/knowledge-base/10128987037085/)
+- [Client database filters](https://alteg.io/en/support/knowledge-base/4861296116253/)
+- [Client management, list of articles](https://alteg.io/en/support/knowledge-base/categories/clients-management/)
