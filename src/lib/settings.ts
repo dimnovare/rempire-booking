@@ -10,7 +10,7 @@ export type BusinessSettings = {
   horizon_days: number;
   /** The earliest a client can book from now. */
   min_notice_min: number;
-  /** A client can change or cancel online until this long before. Q7: 24 h placeholder. */
+  /** A client can change or cancel online until this long before. 0 = at any time before the visit (Renat, 19.11.2026: as in Altegio). */
   cancel_cutoff_min: number;
   /** The SMS reminder goes this long before the visit. */
   reminder_min: number;
@@ -57,7 +57,7 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   slot_step_min: 15,
   horizon_days: 60,
   min_notice_min: 30,
-  cancel_cutoff_min: 24 * 60,
+  cancel_cutoff_min: 0,
   reminder_min: 120,
   barber_self_time: "now",
   barber_self_price: "ask",

@@ -1,124 +1,104 @@
-# Client flow: draft 1
+# Client flow: Altegio's path, our words
 
-*17.11.2026. Screens and taps only. Altegio's flow is in kickoff §3. This
-draft keeps its logic and cuts its taps.*
+*19.11.2026, built. It replaces design v2 (17.11), which had REMPIRE's own
+dark look and a shorter path.*
 
-**Mock, draft 1 (17.11.2026):** <https://claude.ai/artifact/TPBgoNWMpgQa5cwbHYztsN>,
-in rempire.ee's look (Dim's `look` answer). Dim's notes per screen are in
-its `feedback` collection.
+## Why it changed
 
-**Design v2 (Dim, 17.11.2026), built:**
-<https://claude.ai/artifact/Dg7tYCfjpba275Q5GWatFA>.
+Renat, 19.11.2026, after trying the staging booking:
 
-- **One bar at the bottom, at every width**, as Altegio does it. It holds who
-  and what, the price, and the one next step. There is no side panel.
+> «По поводу оформления, оставить все так же как в оригинале (цвета,
+> последовательность, дизайн).»
 
-  | Screen | The bar's button |
-  |---|---|
-  | 1 | «Choose a time». A returning client with nothing picked gets «Same as last time». |
-  | 2 | «Earliest: today 16:45». Tapping a time still goes straight to the details. |
-  | 3 | «Book». |
+In his voice notes he added: all light, «чтобы не давило»; he likes the
+colours, the order and how it clicks. Dim's ruling the same day:
+**Altegio's visuals, our texts.** The same colours, layout, order of steps
+and wording sense, in our own code and icons. Never Altegio's logo, name or
+«Powered by».
 
-- **Steps line:** 1 Barber and service, 2 Time, 3 Details. A step behind you
-  is a way back.
-- **Special time** sits among the normal times, with a dashed lime frame and
-  the full price on the time. The bar shows «60 € + 20 € special time».
-- **«My visits»** in the header opens the latest visit booked on this device,
-  until A8 adds the SMS login.
-- Phones get a calendar button on the time screen. From 1024px the month
-  calendar sits beside the times.
-
-## Target
-
-| Visit | Altegio today | Ours |
-|---|---|---|
-| First visit | about 9 taps + name and phone | **4 taps** + name and phone |
-| Returning, from a link | the same 9 | **2 taps** |
+- **Reference:** the live widget, `b353848.alteg.io/company/337850/…`,
+  walked up to the details form (nothing booked) and measured. The numbers
+  are in `docs/brand.md`, «Booking look».
+- **Drawing Dim approved:** <https://claude.ai/artifact/5F78oNUN8bRrPQzoBcFLyr>
+  (a clickable phone prototype).
+- **Code:** `src/app/[locale]/booking-flow.tsx`, `src/app/globals.css`.
 
 ## Entry points
 
 | From | Link | Lands on |
 |---|---|---|
-| A barber card on rempire.ee | `/{locale}/b/{staff-slug}` | Screen 1, that barber already picked. Altegio drops the barber here. |
-| Any other «book now» | `/{locale}` | Screen 1, nothing picked |
-| «Book again» in a confirmation, reminder or the done screen | `/{locale}/again/{token}` | Screen 2, same barber and services, details pre-filled |
+| A barber's «book now» on rempire.ee | `/{locale}?b={staff-slug}` | Step 1, that barber picked (as rempire.ee's links to Altegio do) |
+| Any other «book now», the installed app | `/{locale}` | Step 1; the barber of the last booking on this device is picked |
+| The link in a confirmation, an SMS or a reminder | `/{locale}/visit/{token}` | The visit page |
 
-`{locale}` is `ru`, `et` or `en`, taken from the rempire.ee page the client
-came from. A switcher sits in the header.
+`{locale}` is `ru`, `et` or `en`. The language button is top right on every
+step: Altegio has a client-account icon there, and we have no client
+accounts.
 
-## Screens
+## Steps
 
-### 1. Who and what (one screen, not two)
+Each step ends on one «Продолжить» at the bottom, as in Altegio.
 
-- **Barbers:** a row of photo chips. The first is «Anyone · earliest». Each
-  shows ★ and the review count, as Altegio does.
-- **Services:** a list under the chips. Each row shows duration and price.
-  Several can be ticked.
-- Tapping a barber first narrows the services and shows **that barber's**
-  prices.
-- Tapping a service first narrows the barbers and shows each one's price.
-  - One screen covers both of Altegio's flows, barber-first and
-    service-first.
-- A bar at the bottom shows the total time and price. It turns into «Choose
-  a time» once there is at least one service.
-- **Taps:** barber (1), service (2). No «Continue»: picking a service with a
-  barber moves on by itself.
-  - Several services: each row has a **+** that adds the service without
-    moving on. Then the bottom bar's «Choose a time» moves on. Most clients
-    pick one service (the combos, like haircut + beard, are services of
-    their own), so the common path keeps 4 taps.
+1. **Barber.** The salon's mark, name and address (the name opens a sheet
+   with the address and the phone). «Любой свободный барбер», then each
+   barber with photo, role, stars and review count, and a radio. An «i»
+   opens the barber's own words when `staff.bio` has any. «Продолжить»
+   waits until one is picked.
+2. **Services.** That barber's services with his own time and price, each
+   with a tick box; several can be ticked. With «любой» the price is a
+   range, and a service nobody does together with the ticked ones is
+   greyed. The bar with the count, the time and the price comes with the
+   first tick.
+3. **Day and time.** A month calendar, Monday first, that stays on top; the
+   month's name folds it to one week. Full days are grey: tapping one says
+   «На этот день свободного времени нет» and offers the nearest date. Times
+   are pills under «Утро / День / Вечер», each foldable. «Продолжить» comes
+   once a time is picked.
+   - The page opens on the nearest day with a free time, not on a full
+     «today»: one dead end less than Altegio.
+   - Special time carries its extra on the pill («+20 €») and one line of
+     legend under the times.
+4. **Details.** The visit with a pencil on the barber, the day and the
+   services; «Ваши данные»: name, phone, e-mail, comment, the reminder
+   (SMS at the salon's time, or none) and a consent tick; the total;
+   «Записаться».
+5. **«Вы записаны».** The visit again, then «Добавить в календарь»,
+   «Перенести или отменить», «Записаться снова», the reminder as a
+   notification (when the salon offers it) and the install offer.
+6. **«Скоро увидимся».** After «Добавить в календарь» (Renat, 19.11): a
+   goodbye by name, and after a few seconds the start again by itself, so
+   nobody wonders what else to press. The start then shows «Ваш визит».
 
-### 2. When
+## What differs from Altegio, on purpose
 
-- **The earliest free slot** is the bottom bar's button, for example
-  «Earliest: Thu 26.11 11:15» (design v2; it was a big button on top).
-- Below it, a strip of the next 14 days. Days with no free time are greyed
-  out.
-- Under that, the chosen day's slots, grouped Morning / Day / Evening.
-- **A full day says why** and offers the next free date, as Altegio does.
-- **Taps:** a slot (3).
+| Altegio | Ours | Why |
+|---|---|---|
+| Their texts; «Комментарий к записи» in Russian inside the English page | Our own texts in RU, ET, EN | Dim: our texts |
+| A client-account icon | The language button | No client accounts |
+| «Powered by Altegio» | Nothing | Never their name |
+| A «Service» category chip above the list | No chip | REMPIRE has one category; a chip that does nothing is noise |
+| The reminder: 16 choices, from 1 hour to 7 days | The salon's time, or none | That is what the SMS queue does today |
+| Privacy policy and user agreement links at the tick | The tick alone | No policy page yet (open) |
+| Change or cancel until the salon's cutoff | At any time before the visit | Renat, 19.11: no «позвоните в салон». `cancel_cutoff_min` is 0 |
 
-### 3. Your details
+## Kept from before
 
-- **Name** and **phone**. The phone starts at +372 and accepts any country.
-- E-mail (optional, it gets the confirmation and the `.ics`).
-- Comment (optional).
-- Reminder: «SMS 2 hours before», on by default with a switch to turn it off.
-  The time is fixed, not Altegio's 17-option dropdown.
-  - SMS goes out only as this reminder (kickoff §8).
-- A short privacy line under the button. No consent checkbox.
-  - Booking data is processed to deliver the booking, so a notice is enough
-    and saves a tap.
-  - Have it checked once against the privacy policy text.
-- The browser remembers the client's own details on that device, so the
-  next visit is pre-filled.
-  - Never look a name up by the phone typed in: anyone could type someone
-    else's number and see their name.
-- **Taps:** «Book» (4).
+- **«Ваш визит»** on step 1: the visit this device booked, until it is over
+  or cancelled, with the way to change it.
+- **A returning client:** name, phone and e-mail are filled in; the barber
+  of last time is picked.
+- **A time taken meanwhile:** the details show the nearest free times, and
+  what was typed stays.
+- **Desktop:** the same 600 px column, centred, as Altegio's.
 
-### 4. Done
+## Open
 
-- A summary: barber, date and time, services, total, address.
-- «Add to calendar» (`.ics`).
-- «Change or cancel», which works until the cutoff. **[open]** Renat Q7 sets
-  the cutoff. After it, the button shows the salon's phone number.
-- If deposits come in (Renat Q6), the payment step sits between screens 3
-  and 4.
-
-## Returning client: 2 taps
-
-The confirmation, the reminder and the done screen carry «Book again».
-
-1. The link opens screen 2 with the same barber and services. The earliest
-   slot is the big button. Tap it, or tap another slot (1).
-2. Screen 3 is already filled in. Tap «Book» (2).
-
-## Edge cases the mock must show
-
-- The barber has no free time in the next 60 days: «Ask for a slot» shows
-  the salon's phone number, and offers «Anyone».
-- A slot is taken while the client types: «This time was just taken», with
-  the nearest three other slots on that screen. The database constraint
-  makes this safe (data-model.md).
-- The page is open past midnight or across a DST change: times always come
-  from the server, in Tallinn time.
+- **The «booked» screen** is ours in the same look: Altegio's cannot be seen
+  without booking. A screenshot from Renat makes it exact.
+- **Moving a visit** is still «book the new time, then cancel this one».
+  A real move from the client's link is not built.
+- **Special time in percent** («+50 %», Renat): today the extra is a sum in
+  euros (`special_time.extra_cents`).
+- **A privacy policy page** to link at the consent tick.
+- **«The main page»** after the goodbye is the booking start. Once booking
+  sits on rempire.ee it may be the site's home.

@@ -3,6 +3,11 @@
 *17.11.2026. Dim chose rempire.ee's look for booking (decisions page,
 `look`). Dim approved mock draft 1's look the same day.*
 
+*19.11.2026: the client booking pages changed to the look of REMPIRE's
+Altegio widget (Renat; `docs/kickoff.md`, decision 23). See «Booking look»
+at the end. The fonts and colours below still describe rempire.ee and the
+marks.*
+
 ## Which logo where
 
 REMPIRE has three marks. Booking uses the first.
@@ -43,3 +48,33 @@ REMPIRE has three marks. Booking uses the first.
 
 Square edges, uppercase headings with wide letter-spacing, lime outlined
 tags, a 2 px lime rule on the left of quoted text. All from rempire.ee.
+
+## Booking look (the client pages, 19.11.2026)
+
+Measured on the live Altegio widget at 375 px (`b353848.alteg.io`), then
+written as tokens in `src/app/globals.css`. The admin and the barber app
+keep their own styles.
+
+| Token | Value | Use |
+|---|---|---|
+| ink | `#262626` | text |
+| ink-2 | the ink at 66 % | second lines, labels (Altegio: 60 %; ours passes 4.5:1 on white) |
+| ground | `#f2f2f2` | the page under the white blocks |
+| surface | `#fff` | the column and the blocks |
+| primary | `#060f07` | buttons, the picked day and time, ticks |
+| fill | the ink at 7 % | time pills, icon discs, the second button |
+| line / edge | the ink at 15 % / 20 % | rules / outlines of fields, radios and tick boxes |
+| star | `#f8bc3a` | ratings |
+| danger | `#b3261e` | «cancel», errors |
+
+- **Font:** Inter, 400 for text, 500 for prices and pills, 700 for titles
+  (24/28 and 20/24). Text 16/24, second lines 14/20, labels 12/16.
+- **Shapes:** blocks 24 px corners with 8 px between them; buttons 50 px
+  high with 16 px corners; fields 50 px with 12 px corners; pills fully
+  round; tick boxes 6 px.
+- **Layout:** 16 px gutters; a 64 px header; one 600 px column, centred, at
+  every width.
+- **The mark:** the thin REMPIRE in white on a dark disc (80 px on the first
+  step, 48 px in the header), as the widget shows the salon's picture.
+- **Touch:** day cells and pills are 44 px high (Altegio: 40), so a thumb
+  does not miss.

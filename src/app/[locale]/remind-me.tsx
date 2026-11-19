@@ -132,7 +132,7 @@ export function RemindMe({ token, publicKey, c }: { token: string; publicKey: st
         </>
       ) : (
         <>
-          <button type="button" className="btn btn-line" disabled={busy} onClick={enable}>
+          <button type="button" className="btn btn-soft" disabled={busy} onClick={enable}>
             {c.ask}
           </button>
           <p>{c.lead}</p>

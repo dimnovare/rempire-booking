@@ -6,7 +6,7 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { Logo } from "@/components/brand";
+import { LogoMark } from "@/components/brand";
 import { dbConfigured, dbKind, query } from "@/lib/db";
 import { OG_CARDS, OG_SIZE } from "@/lib/og-cards";
 import { findForm, loadAnswers } from "@/lib/owner-qa";
@@ -29,9 +29,9 @@ export const metadata: Metadata = {
 
 export default function QaPage({ params }: PageProps<"/[locale]/q/[token]">) {
   return (
-    <main className="app gut qa-app" lang="ru">
-      <header className="top">
-        <Logo />
+    <main className="app qa-app" lang="ru">
+      <header className="hd plain">
+        <LogoMark />
       </header>
       <Suspense fallback={<p className="wait" />}>
         <Qa params={params} />

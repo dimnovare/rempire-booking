@@ -36,8 +36,8 @@ export async function GET(_request: Request, ctx: RouteContext<"/[locale]/manife
     scope: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#000000",
-    theme_color: "#000000",
+    background_color: "#ffffff",
+    theme_color: "#f2f2f2",
     icons: [
       { src: "/icons/app-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icons/app-512.png", sizes: "512x512", type: "image/png", purpose: "any" },

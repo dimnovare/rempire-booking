@@ -36,8 +36,13 @@ Languages: RU, ET, EN.
 It is built and shown first on Dim's domain (`*.diipsolutions.eu`, noindex),
 then moved to rempire.ee.
 
-Goal: as simple as Altegio or Fresha, with fewer clicks, in REMPIRE's own
-look. Copy their flows and features, never their branding, texts or visuals.
+Goal: as simple as Altegio or Fresha. Copy their flows and features freely.
+
+- **The client booking looks and works as REMPIRE's Altegio widget does
+  today** (Renat and Dim, 19.11.2026): the same colours, layout and order of
+  steps, in our own code, icons and texts. See `docs/client-flow.md` and
+  `docs/brand.md`, «Booking look».
+- Never Altegio's or Fresha's logo, name, texts or «Powered by».
 
 ## Hard rules
 

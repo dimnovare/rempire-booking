@@ -19,6 +19,8 @@ export type CatalogStaff = {
   slug: string;
   name: string;
   role: L10n;
+  /** his own words about himself: the «i» button opens them; {} = no button */
+  bio: L10n;
   photoUrl: string | null;
   rating: number | null;
   reviewCount: number;
@@ -45,8 +47,8 @@ export async function loadCatalog(q: Querier, businessId: string): Promise<Catal
         where business_id = $1 and active and online order by sort, slug`,
       [businessId],
     ),
-    q<{ id: string; slug: string; display_name: string; role: L10n; photo_url: string | null; rating: string | null; review_count: number }>(
-      `select id, slug, display_name, role, photo_url, rating::text as rating, review_count from staff
+    q<{ id: string; slug: string; display_name: string; role: L10n; bio: L10n | null; photo_url: string | null; rating: string | null; review_count: number }>(
+      `select id, slug, display_name, role, bio, photo_url, rating::text as rating, review_count from staff
         where business_id = $1 and active and bookable order by sort, display_name`,
       [businessId],
     ),
@@ -68,6 +70,7 @@ export async function loadCatalog(q: Querier, businessId: string): Promise<Catal
       slug: s.slug,
       name: s.display_name,
       role: s.role,
+      bio: s.bio ?? {},
       photoUrl: s.photo_url,
       rating: s.rating == null ? null : Number(s.rating),
       reviewCount: s.review_count,

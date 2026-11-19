@@ -19,6 +19,53 @@ export function Logo() {
   return <img className="logo" src="/brand/rempire-logo-white.svg" alt="REMPIRE" width={118} height={30} />;
 }
 
+/** The client pages' mark, as in the booking widget Renat knows: the thin REMPIRE on a dark disc. */
+export function LogoMark({ size = 48 }: { size?: number }) {
+  return (
+    <span className="mark-logo" style={{ width: size, height: size }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/brand/rempire-logo-white.svg" alt="REMPIRE" width={118} height={30} />
+    </span>
+  );
+}
+
+const stroke = { fill: "none", stroke: "currentColor", strokeLinecap: "round", strokeLinejoin: "round" } as const;
+export const ChevronIcon = ({ dir = "down", size = 24, width = 2 }: { dir?: "down" | "up" | "left" | "right"; size?: number; width?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} {...stroke} strokeWidth={width} aria-hidden="true">
+    <path d={dir === "down" ? "M6 9l6 6 6-6" : dir === "up" ? "M6 15l6-6 6 6" : dir === "left" ? "M15 5l-7 7 7 7" : "M9 5l7 7-7 7"} />
+  </svg>
+);
+export const PeopleIcon = () => (
+  <svg viewBox="0 0 24 24" width="24" height="24" {...stroke} strokeWidth="1.8" aria-hidden="true">
+    <circle cx="9" cy="8" r="3" />
+    <path d="M3 19c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+    <circle cx="17" cy="9" r="2.4" />
+    <path d="M17 13.4c2.4.4 4 2.6 4 5.6" />
+  </svg>
+);
+export const PencilIcon = () => (
+  <svg viewBox="0 0 24 24" width="24" height="24" {...stroke} strokeWidth="1.6" aria-hidden="true">
+    <path d="M4 20h4L19 9l-4-4L4 16v4z" />
+    <path d="M13 7l4 4" />
+  </svg>
+);
+export const DayIcon = () => (
+  <svg viewBox="0 0 24 24" width="24" height="24" {...stroke} strokeWidth="1.8" aria-hidden="true">
+    <rect x="4" y="5" width="16" height="15" rx="3" />
+    <path d="M8 3v4M16 3v4M8 12h8" />
+  </svg>
+);
+export const InfoIcon = () => (
+  <svg viewBox="0 0 10 12" width="10" height="12" {...stroke} strokeWidth="1.8" aria-hidden="true">
+    <path d="M5 5.4v5M5 1.6v.2" />
+  </svg>
+);
+export const StarIcon = ({ on = true }: { on?: boolean }) => (
+  <svg viewBox="0 0 16 16" width="16" height="16" fill={on ? "var(--star)" : "var(--edge)"} aria-hidden="true">
+    <path d="M8 1.6l1.98 4.01 4.42.64-3.2 3.12.76 4.41L8 11.7l-3.96 2.08.76-4.41-3.2-3.12 4.42-.64z" />
+  </svg>
+);
+
 export const BackIcon = () => (
   <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
     <path d="M15 5l-7 7 7 7" />
@@ -34,8 +81,8 @@ export const CheckIcon = ({ size = 16, width = 2.4 }: { size?: number; width?: n
     <path d="M5 12.5l4.5 4.5L19 7.5" />
   </svg>
 );
-export const CrossIcon = () => (
-  <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" strokeWidth="2.6" aria-hidden="true">
+export const CrossIcon = ({ size = 28 }: { size?: number }) => (
+  <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
     <path d="M6 6l12 12M18 6L6 18" />
   </svg>
 );

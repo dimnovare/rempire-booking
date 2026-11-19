@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import localFont from "next/font/local";
-import { Questrial } from "next/font/google";
+import { Inter } from "next/font/google";
 import { notFound } from "next/navigation";
 import { isLocale, LOCALES, type Locale } from "@/lib/i18n";
 import { robotsMeta } from "@/lib/indexing";
@@ -9,16 +8,9 @@ import { siteUrl } from "@/lib/site";
 import { ClientTestBanner } from "@/components/test-banner";
 import "../globals.css";
 
-// rempire.ee's faces: Akrobat ExtraBold for headings, Questrial for text.
-// Both are served from this app's own domain (docs/brand.md).
-const display = localFont({
-  src: "../fonts/akrobat-extrabold.woff",
-  weight: "800",
-  display: "swap",
-  variable: "--font-display",
-  fallback: ["Arial Narrow", "sans-serif"],
-});
-const body = Questrial({ weight: "400", subsets: ["latin", "latin-ext"], display: "swap", variable: "--font-body" });
+// Inter, the face of the booking widget Renat's clients know (docs/brand.md,
+// «Booking look»). Served from this app's own domain, Cyrillic included.
+const body = Inter({ subsets: ["latin", "latin-ext", "cyrillic"], display: "swap", variable: "--font-body" });
 
 // Title, description and the link-preview card (/api/og/<locale>) per language.
 const META: Record<Locale, { title: string; description: string; og: string }> = {
@@ -38,7 +30,7 @@ export async function generateMetadata({ params }: LayoutProps<"/[locale]">): Pr
     robots: robotsMeta(),
     // the client app (docs/apps.md): the booking site on the home screen
     manifest: `/${locale}/manifest.webmanifest`,
-    appleWebApp: { capable: true, title: "REMPIRE", statusBarStyle: "black" },
+    appleWebApp: { capable: true, title: "REMPIRE", statusBarStyle: "default" },
     openGraph: {
       title: m.title,
       description: m.description,
@@ -53,8 +45,8 @@ export async function generateMetadata({ params }: LayoutProps<"/[locale]">): Pr
 }
 
 export const viewport: Viewport = {
-  themeColor: "#000000",
-  colorScheme: "dark",
+  themeColor: "#f2f2f2",
+  colorScheme: "light",
   viewportFit: "cover",
 };
 
@@ -66,7 +58,7 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[lo
   const { locale } = await params;
   if (!isLocale(locale)) notFound();
   return (
-    <html lang={locale} className={`${display.variable} ${body.variable}`}>
+    <html lang={locale} className={body.variable}>
       <body>
         <ClientTestBanner locale={locale} />
         {children}

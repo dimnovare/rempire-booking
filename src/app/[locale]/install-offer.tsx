@@ -39,10 +39,10 @@ export function InstallOffer({ c }: { c: Copy["install"] }) {
   };
   return (
     <section className="install" aria-label={c.title}>
-      <h2 className="label">{c.title}</h2>
+      <h2 className="t2">{c.title}</h2>
       <p>{c.lead}</p>
       {prompt ? (
-        <button type="button" className="btn btn-line" onClick={install}>
+        <button type="button" className="btn btn-soft" onClick={install}>
           {c.add}
         </button>
       ) : platform === "ios" ? (

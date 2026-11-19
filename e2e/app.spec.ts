@@ -10,6 +10,9 @@ import { A, asBarber, asOwner, B, expect, expectNoSideScroll, hydrated, test } f
  * this device booked on top of the booking page until it is over or
  * cancelled. A fake client books Milena, whom no other test uses, and
  * cancels at the end.
+ *
+ * The path is the Altegio widget's (docs/client-flow.md): barber, services,
+ * day and time, details, each ending on «Продолжить».
  */
 const c = COPY.ru;
 const shot = async (page: Page, name: string) => {
@@ -17,18 +20,46 @@ const shot = async (page: Page, name: string) => {
   await test.info().attach(`app-${name}`, { body, contentType: "image/png" });
 };
 
-/** A fake client books Milena some days ahead, so the visit can still be cancelled. Ends on the confirmation. */
-async function bookMilena(page: Page, phone: string, dayIndex = 3) {
+const cont = (page: Page) => page.getByRole("button", { name: new RegExp(`^${c.cont}`) });
+
+/**
+ * A fake client books Milena some days ahead, so the visit can still be
+ * cancelled. Ends on the confirmation. `snap` takes a picture of each step.
+ */
+async function bookMilena(page: Page, phone: string, dayIndex = 3, snap: (name: string) => Promise<void> = async () => {}) {
   await page.goto("/ru");
   await hydrated(page);
-  await page.locator(".chip", { hasText: "Milena" }).click();
-  await page.locator(".svc-main").first().click();
-  await expect(page.getByRole("heading", { level: 1, name: c.when })).toBeVisible();
-  await page.locator(".days .day:not(.off)").nth(dayIndex).click();
-  await page.locator(".slots button").first().click();
+  // 1 the barber
+  await page.getByRole("radio", { name: /Milena/ }).click();
+  await expect(page.getByRole("radio", { name: /Milena/ })).toHaveAttribute("aria-checked", "true");
+  await snap("1-barber");
+  await cont(page).click();
+  // 2 the services: the bar with the count comes with the first tick
+  await expect(page.getByRole("heading", { level: 1, name: c.chooseServices })).toBeVisible();
+  await expect(page.locator(".basket")).toHaveCount(0);
+  await page.getByRole("checkbox").first().click();
+  await expect(page.locator(".basket")).toContainText(c.nServices(1));
+  await snap("2-services");
+  await cont(page).click();
+  // 3 the day and the time: a free day some days ahead, in this month or the next
+  const free = page.locator(".cal-d:not(.off):not([disabled])");
+  await expect(free.first()).toBeVisible();
+  if ((await free.count()) <= dayIndex) await page.getByRole("button", { name: c.nextMonth }).click();
+  await free.nth(Math.min(dayIndex, (await free.count()) - 1)).click();
+  // «Продолжить» only once a time is picked
+  await expect(cont(page)).toHaveCount(0);
+  await page.locator(".slots .slot").first().click();
+  await snap("3-time");
+  await cont(page).click();
+  // 4 the details: nothing is booked without the tick
+  await expect(page.getByRole("heading", { level: 1, name: c.visitDetails })).toBeVisible();
   await page.locator("#f-name").fill("App Test Client");
   await page.locator("#f-phone").fill(phone);
-  await page.locator(".bar-go").click();
+  await page.getByRole("button", { name: c.book, exact: true }).click();
+  await expect(page.getByText(c.errConsent)).toBeVisible();
+  await page.locator("#f-consent").click();
+  await snap("4-details");
+  await page.getByRole("button", { name: c.book, exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: c.booked })).toBeVisible();
 }
 
@@ -73,8 +104,13 @@ test.describe("the client app", () => {
     await expect(page.locator(".install")).toHaveCount(0);
     await expect(page.locator(".next")).toHaveCount(0);
 
-    // barber, service, a time some days ahead, details: booked
-    await bookMilena(page, phone);
+    // barber, services, a time some days ahead, details: booked
+    await bookMilena(page, phone, 3, async (name) => {
+      await expectNoSideScroll(page);
+      await shot(page, name);
+    });
+    // a client moves or cancels at any time: no cutoff, no «call the salon»
+    await expect(page.getByText(c.anyTime)).toBeVisible();
 
     // this server has no push keys (unless E2E_VAPID=yes), so the reminder as a notification is not offered
     if (process.env.E2E_VAPID !== "yes") await expect(page.locator(".remind")).toHaveCount(0);
@@ -105,6 +141,9 @@ test.describe("the client app", () => {
     await next.click();
     await page.waitForURL((u) => /^\/ru\/visit\//.test(u.pathname));
     await hydrated(page);
+    await expect(page.getByText(c.anyTime)).toBeVisible();
+    await expectNoSideScroll(page);
+    await shot(page, "visit");
     await page.getByRole("button", { name: c.cancel }).click();
     await page.getByRole("button", { name: c.cancelYes }).click();
     await expect(page.getByRole("heading", { level: 1, name: c.cancelled })).toBeVisible();
@@ -112,6 +151,46 @@ test.describe("the client app", () => {
     await hydrated(page);
     await expect(page.locator(".next")).toHaveCount(0);
     await expect(page.locator(".install")).toHaveCount(0);
+  });
+});
+
+test.describe("the booking path", () => {
+  test("a link with ?b= opens with that barber picked; the language and the salon open as sheets", async ({ page }) => {
+    await page.goto("/ru?b=milena");
+    await hydrated(page);
+    await expect(page.getByRole("radio", { name: /Milena/ })).toHaveAttribute("aria-checked", "true");
+    await expect(cont(page)).toBeEnabled();
+
+    // the salon
+    await page.getByRole("button", { name: "REMPIRE" }).click();
+    const sheet = page.getByRole("dialog");
+    await expect(sheet).toContainText("Mardi 1");
+    await sheet.getByRole("button", { name: c.close }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    // the language: the page turns Estonian, the barber stays picked
+    await page.getByRole("button", { name: new RegExp(`^${c.lang}`) }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Eesti" }).click();
+    await expect(page.getByRole("button", { name: new RegExp(`^${COPY.et.cont}`) })).toBeVisible();
+    await expect(page).toHaveURL(/\/et\?b=milena$/);
+    await expect(page.getByRole("radio", { name: /Milena/ })).toHaveAttribute("aria-checked", "true");
+    await expectNoSideScroll(page);
+  });
+
+  test("without a barber «Продолжить» waits; another barber keeps only the services he does", async ({ page }) => {
+    await page.goto("/ru");
+    await hydrated(page);
+    await expect(cont(page)).toBeDisabled();
+    await page.getByRole("radio", { name: c.anyBarber }).click();
+    await cont(page).click();
+    await page.getByRole("checkbox").first().click();
+    await expect(page.locator(".basket")).toContainText(c.nServices(1));
+    // back, a barber by name: his own price is on the bar now
+    await page.getByRole("button", { name: c.back }).click();
+    await page.getByRole("radio", { name: /Milena/ }).click();
+    await cont(page).click();
+    await expect(page.getByRole("checkbox").first()).toHaveAttribute("aria-checked", "true");
+    await expect(page.locator(".basket")).toContainText("€");
   });
 });
 

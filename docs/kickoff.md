@@ -23,10 +23,10 @@ moved to rempire.ee.
 | 6 | Shop link | Through an **API** on rempireshop, never a shared database. |
 | 7 | Invoices | **Our own invoicing replaces Isolta**, with no integration. It needs: rent of the barber's chair, items, a choice of who the invoice is for, CRUD for invoice receivers, then print or e-mail. The reason is cost; it pays for itself over time. |
 | 8 | SMS | Renat uses **Messaggio** now. It must be cheap, simple and reliable. |
-| 9 | Reference | Altegio's logic and data, and Fresha's simplicity, in our look and with fewer clicks. Dim will get Altegio access. |
+| 9 | Reference | Altegio's logic and data, and Fresha's simplicity. Dim has Altegio access since 19.11. The look: see 23. |
 | 10 | Universal? | **Open.** Renat's questions page, question 5: REMPIRE only, or any service later (tattoo, a massage salon, others). |
 | 11 | Hosting plan | **Open.** Vercel Pro might stay because two services already run there. Think it through. |
-| 12 | Copying | Altegio's and Fresha's features and flows, logic and simplicity. Their look, no. |
+| 12 | Copying | Altegio's and Fresha's features and flows, logic and simplicity. Their logo, name and texts, never. Altegio's look for the client booking: yes, see 23. |
 | 13 | Barber companies | Each barber has an FIE or OÜ. VAT applies or not depending on the invoice receiver, so each receiver needs its own setup. |
 | 14 | Languages | RU, ET, EN. |
 | 15 | Deposits / prepayment | **None for now** (Dim, 17.11): REMPIRE takes none today, so neither do we. |
@@ -37,6 +37,8 @@ moved to rempire.ee.
 | 20 | Special-time extra | **Goes to the barber whole** (Dim, 17.11). |
 | 21 | What we read ourselves | Altegio and Isolta access answer the rest (services, prices, hours, the cancel rule; the invoicing company, VAT, chair rent, invoice layout). Renat is not asked those. |
 | 22 | Apps | **Two** (Dim, 18.11): one staff app where the role decides what opens, and the client booking site, installable. Renat is owner and barber at once. The final addresses are open. See `docs/apps.md`. |
+| 23 | Booking look | **As Altegio's widget** (Renat, 19.11: «оставить все так же как в оригинале: цвета, последовательность, дизайн»; Dim: Altegio's visuals, our texts). Light, the same order of steps, our own code, icons and words. A client cancels at any time; after «Add to calendar» a goodbye and the start again. See `docs/client-flow.md`. |
+| 24 | Keep it simple | Dim, 19.11: «let's not try to overcomplicate our solution and make exactly what is asked». For invoices Renat only does «new invoice → pick who gets it» in Isolta. |
 
 ### Round 1 answers (Dim, decisions page, 17.11.2026)
 
@@ -51,7 +53,7 @@ moved to rempire.ee.
 | DB layer | Plain SQL migrations + `pg`, like the shop |
 | Staff login | **Password, plus Google login**, with a 6-digit e-mail code as the backup |
 | E-mail | A new free Resend account for booking |
-| Look | Follow rempire.ee |
+| Look | Follow rempire.ee. **Replaced 19.11** for the client booking: Altegio's look (decision 23) |
 | Renat's questions | Dim forwards them on 17.11, unchanged |
 | Altegio / Isolta logins | Neither yet |
 

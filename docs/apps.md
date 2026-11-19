@@ -65,7 +65,8 @@ The booking site itself, installable. No separate pages.
   client page: one app in three languages (id `/`), named «REMPIRE», opening
   on the booking page of the language it was added in.
 - **Its own icon:** the tower, white on black (`/icons/…`,
-  `src/app/[locale]/apple-icon.tsx`). The staff app is the other way round,
+  `src/app/[locale]/apple-icon.tsx`); the pages themselves are light since
+  19.11 (`docs/client-flow.md`). The staff app is the other way round,
   dark on white, and is named «REMPIRE Team», so one phone tells them apart.
 - **«Ваш визит» on top of the booking page** (`.next` in
   `booking-flow.tsx`): the visit this device booked, with the day, the time,
