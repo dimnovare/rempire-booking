@@ -278,9 +278,31 @@ No secrets are written here. The full registry for the shop is
   - **Messente** (Tallinn company);
   - **Twilio**;
   - D7 Networks (lists ~$0.032 local).
-- **Rough volume:** 5 barbers × ~8 visits/day × ~26 days ≈ 1 000 reminders a
-  month, about €35/month at €0.034. This is an estimate; get the real
-  numbers from Renat.
+- **Real volume** (Renat's Messaggio chart, October 2026): about 565 SMS a
+  month, 15–30 on most days. He pays about €35 a month, which is about
+  1 020 parts at €0.03417: his Russian texts go out as two parts.
+- **Prices per part to Estonia, without VAT** (the providers' own pages,
+  19.11.2026): BulkGate €0.0296, **Messaggio €0.03417**, Messente (Tallinn)
+  €0.0372, GatewayAPI €0.0375, SMSAPI €0.040; Sinch, ClickSend, Infobip,
+  Twilio and Plivo cost €0.057 to about €0.09. No monthly fee at the first
+  four. Estonia has no sender-name registry; the name is checked by the
+  provider (Messaggio 1–5 working days, Messente about 48 h). Altegio sells
+  no SMS of its own: today's bill is Messaggio's.
+- **Our reminder** (`messageText` in `src/lib/outbox.ts`): Estonian and
+  English fit one part; Russian with the change link is two parts (Dim,
+  round 4: a short link, two parts).
+- **565 reminders a month cost** (Messaggio / Messente / BulkGate):
+  - every text one part: €19 / €21 / €17;
+  - 70 % Russian in two parts (960 parts): €33 / €36 / €28;
+  - all Russian in two parts (1 130 parts): €39 / €42 / €33.
+- **So the provider moves the bill by €3–6 a month; the text's length moves
+  it by €15–20.** A Russian reminder in one part (70 characters) has no room
+  for the label and `https://`; it fits only as «REMPIRE: запись 20.11 в
+  14:30, Valentin.» plus a bare short link. A client who takes the reminder
+  as a notification costs nothing.
+- **Not known yet:** Messaggio's rate on Renat's own account (its page calls
+  the price flexible); the minimum top-up at Messaggio and Messente; how
+  many clients read Russian.
 - **Cost savers:**
   - Send SMS only as the 2-hour reminder.
   - Confirmations go by e-mail, plus PWA push where the client has it.
