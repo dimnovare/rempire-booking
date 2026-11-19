@@ -49,6 +49,7 @@ moved to rempire.ee.
 | 32 | One place for each thing | Dim, 19.11: products, services and people each have **one list**; Altegio's and Isolta's screens read it, never a second copy. Products are the shop's catalogue; Isolta's «Товары/услуги» becomes a view over the shop's goods and the barbers' services; Isolta's contacts are the companies Renat invoices. The map is `docs/one-place.md`. |
 | 33 | Staff rights | Dim, 19.11: **all of Altegio's switches**, on top of the roles. A switch is built for every right whose function we have; the others are listed as not applicable. |
 | 34 | Staging data | Dim, 19.11: until Renat's export arrives, staging is filled with **generated visits on the real shifts** (real barbers, services, prices and hours from `tools/altegio-structure.json`; fake clients). Altegio's «Выгрузить в Excel» does not download: it e-mails a link to the account's address (Renat's), so the real client base and visits come through Renat, at the latest for the move. |
+| 35 | Owner who also cuts | Dim, 19.11: the «Барбер / Мой день | Салон» switch goes («I do not like the placement or logic… for Renat who is barber and admin»). He chose **variant A** of three drawn on the design canvas: **«Мой день» is a tab of one app, not a mode.** See `docs/apps.md`, «One app for Renat». |
 
 ### Round 1 answers (Dim, decisions page, 17.11.2026)
 

@@ -16,6 +16,30 @@ phone that evening.*
 | QR page for the shop | **Not built yet.** Asked on Renat's Q&A page (question 9), with the per-barber code as one of the answers |
 | Addresses | **Open**, decided at the move (below) |
 
+## One app for Renat (Dim, 19.11.2026: variant A; replaces the side switch below)
+
+Dim did not like where the «Мой день | Салон» switch sits or how it works for
+an owner who also cuts: a strip on every phone screen, and two apps with two
+bottom bars behind it. Three variants were drawn on the design canvas (boards
+`SideA`, `SideA2`, `SideADesk`, `SideB`, `SideC`); he chose A.
+
+- **«Мой день» is a tab, not a mode.** No switch anywhere.
+- **Phone bar, owner or front desk linked to a barber:** Мой день · Журнал ·
+  Клиенты · Запросы · Ещё. «Мой день» is his own day (the barber app's day
+  and week) inside the same frame.
+- **«Ещё» is grouped:** «Моё, как барбера» (Моё время, Продать товар, Мои
+  расчёты), «Салон» (Барберы, Услуги, График работы, Счета, Каталог товаров,
+  Записи), «Аккаунт» (Доступ и права, Язык, Выйти). «Доступ» and «Выйти» leave
+  the top bar.
+- **Wide screen:** the journal bar has «Мой день | Весь салон». «Мой день»
+  shows his column only, with a panel beside it: who is in the chair, who is
+  next, today's count and sum, and links to his time, his sums, his clients.
+- **An owner or front desk not linked to a barber** has no «Мой день»; the bar
+  stays Журнал · Клиенты · Запросы · Счета · Ещё. A barber's own app is opened
+  from «Барберы» → the barber, for support.
+- **A barber** keeps his bar (День · Неделя · Моё время · Продать · Ещё).
+- The dot for waiting requests sits on «Запросы».
+
 ## The staff app, as built (18.11)
 
 One app with two sides: «Мой день», the barber app at `/b`, and «Салон»,
