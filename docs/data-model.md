@@ -187,3 +187,23 @@ and `reverses_id` (a minus row); `invoices` has `kind`
 
 The import runs from Altegio's export files once Dim has the login (§11.4).
 Real client data goes straight to the database, never into the repo.
+
+**What Altegio's admin gives (looked at 19.11.2026, nothing pressed):**
+
+- **«Операции с Excel» → «Выгрузить в Excel»** on three pages: «Клиентская
+  база», «Записи» and «Категории услуг».
+  - The client list shows: name, phone, e-mail, sold, account balance,
+    visits, discount, last visit, first visit. A client's card also has: a
+    second phone, category, gender, importance class, card number, birthday,
+    note, «no online booking».
+  - «Записи» shows: staff, service, client, visit time, created by, visit
+    status, source; it filters by visit date and by created date.
+- **«График работы»** only prints to PDF. Six staff, so the hours are typed
+  in by hand.
+- **Services:** one category with 12 services; three have no staff and are
+  not offered. Where the duration reads «Индивидуально», each barber has his
+  own.
+- **The file's own columns are not known yet:** that needs one export of
+  each, which is a download of real client data, so it waits for Dim's OK.
+- **The way in:** an owner-only «Импорт» page in the admin takes the three
+  files as they are; the same page runs again on the cut-over day.

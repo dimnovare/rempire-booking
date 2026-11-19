@@ -23,7 +23,7 @@ export type Question = { id: string; title: string; lead: string; fields: Field[
 
 export const INTRO =
   "Ренат, мы делаем для REMPIRE свою систему записи вместо Altegio и свои счета барберам вместо Isolta. " +
-  "Здесь 10 коротких вопросов. Ответы сохраняются сами: можно закрыть страницу, вернуться и дописать.";
+  "Здесь 11 коротких вопросов. Ответы сохраняются сами: можно закрыть страницу, вернуться и дописать.";
 
 export const QUESTIONS: Question[] = [
   /* 18.11.2026, for the test run (docs/test-run.md): the two things the test
@@ -129,6 +129,20 @@ export const QUESTIONS: Question[] = [
     fields: [
       { id: "who", kind: "one", label: "Для кого система?", options: ["Только барбершоп REMPIRE", "REMPIRE: барберы и тату", "Любой сервис: тату, массаж и другие", "Пока не знаю"] },
       { id: "note", kind: "text", label: "Есть мысли, кому ещё она подойдёт?" },
+    ],
+  },
+  /* Dim, 19.11 (decisions round 8): «Финансы», «Отчёты» and «Лояльность» are built only if Renat uses them. */
+  {
+    id: "altegio_extra",
+    title: "Касса, отчёты и скидки",
+    lead:
+      "В Altegio есть разделы «Финансы», «Отчёты» и «Лояльность». В новую систему переносим только то, чем ты " +
+      "пользуешься. Скидки и карты в Altegio сейчас не настроены.",
+    fields: [
+      { id: "cash", kind: "one", label: "Оплату визитов в Altegio отмечаешь?", options: ["Да, каждый визит", "Иногда", "Нет, это не нужно"] },
+      { id: "reports", kind: "one", label: "Отчёты и аналитику смотришь?", options: ["Да, часто", "Редко", "Нет"] },
+      { id: "loyalty", kind: "one", label: "Скидки постоянным клиентам нужны?", options: ["Нет", "Да, скидка в процентах", "Да, по-другому"] },
+      { id: "note", kind: "text", label: "Что из этого тебе важно" },
     ],
   },
   /* Dim, 18.11: not built yet, asked here as something we can add (docs/apps.md). */

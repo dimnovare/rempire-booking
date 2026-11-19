@@ -14,11 +14,11 @@ import { QaForm } from "./qa-form";
 
 export const metadata: Metadata = {
   title: "REMPIRE · Вопросы по новой системе",
-  description: "7 коротких вопросов для новой системы записи REMPIRE. Ответы сохраняются сами.",
+  description: "Короткие вопросы для новой системы записи REMPIRE. Ответы сохраняются сами.",
   referrer: "no-referrer",
   openGraph: {
     title: "Вопросы по новой системе записи",
-    description: "7 коротких вопросов. Ответы сохраняются сами, можно вернуться и дописать.",
+    description: "Короткие вопросы. Ответы сохраняются сами, можно вернуться и дописать.",
     siteName: "REMPIRE",
     locale: "ru_RU",
     type: "website",
