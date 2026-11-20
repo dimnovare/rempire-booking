@@ -91,6 +91,19 @@ export function panelOf(spans: readonly Span[]): { from: string; to: string; bre
   return { from: spans[0][0], to: spans[spans.length - 1][1], breaks };
 }
 
+/**
+ * The breaks a day keeps when its start or end moves (the journal's «Изменить
+ * часы на сегодня»): the ones that lie wholly inside the new day. A break the
+ * new start or end falls in, or one outside the day, goes: the times chosen
+ * are the day. Pass the result to daySpans with the new times.
+ */
+export function keepBreaks(breaks: readonly Span[], from: string, to: string): Span[] {
+  if (!isTime(from) || !isTime(to, true)) return [];
+  const lo = minutesOf(from);
+  const hi = minutesOf(to);
+  return breaks.filter(([a, b]) => isTime(a) && isTime(b) && minutesOf(a) > lo && minutesOf(b) < hi && minutesOf(b) > minutesOf(a)).map(([a, b]): Span => [a, b]);
+}
+
 /** How many minutes of [a, b) lie inside the windows. */
 function covered([a, b]: Interval, windows: Interval[]): number {
   let n = 0;

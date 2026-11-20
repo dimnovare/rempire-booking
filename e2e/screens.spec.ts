@@ -41,7 +41,7 @@ for (const width of [320, 360]) {
     test("the sheets", async ({ page, barber }) => {
       await page.goto(`/b?d=${nextWorkday(barber.slug)}`);
       await hydrated(page);
-      await page.locator(".bx-v", { hasText: "Demo client" }).first().getByRole("button").click();
+      await page.locator(".bx-cal .cal-v", { hasText: "Demo client" }).first().click();
       await check(page, "visit");
       await sheet(page).getByRole("button", { name: B.client.card }).click();
       await expect(sheet(page).getByText(B.client.past)).toBeVisible();

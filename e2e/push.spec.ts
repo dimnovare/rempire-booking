@@ -103,14 +103,14 @@ test.describe("push in the service worker", () => {
     // a load through the worker keeps a copy
     await page.reload();
     await hydrated(page);
-    const first = (await page.locator(".bx-v .bx-v-main b").first().innerText()).trim();
+    const first = (await page.locator(".bx-cal .cal-v .bx-cv-txt b").first().innerText()).trim();
     await context.setOffline(true);
     // ten minutes later: the kept copy is old enough to say so (a weak
     // connection, as here, still reports navigator.onLine)
     await page.clock.install({ time: Date.now() + 10 * 60_000 });
     try {
       await page.reload();
-      await expect(page.locator(".bx-v .bx-v-main b").first()).toHaveText(first);
+      await expect(page.locator(".bx-cal .cal-v .bx-cv-txt b").first()).toHaveText(first);
       await expect(page.locator(".bx-state.is-off")).toHaveText(B.offline);
       // the logo and his photo from the kept copies
       for (const img of await page.locator("img:visible").all()) {
@@ -118,7 +118,7 @@ test.describe("push in the service worker", () => {
       }
       // a page never loaded: the day instead
       await page.goto("/b/week");
-      await expect(page.locator(".bx-v").first()).toBeVisible();
+      await expect(page.locator(".bx-cal .cal-v").first()).toBeVisible();
     } finally {
       await context.setOffline(false);
     }

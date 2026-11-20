@@ -1,7 +1,8 @@
 /**
  * /b: the barber's day (B2).
- * /b?d=2026-11-17   that day; the strip on top switches within its week
+ * /b?d=2026-11-17   that day; the week strip switches within its week
  *                   without a round trip (the whole week is loaded).
+ * The day is the journal's grid, his one column (day-view.tsx).
  *
  * The week is cut to what the login may see before it leaves the server
  * (barberDaysFor): its column, its history limit, phones and notes by its
@@ -57,6 +58,7 @@ async function Day({ searchParams }: { searchParams: PageProps<"/b">["searchPara
       may={may}
       // an owner or the front desk on his own column: «Мой день», a tab of the one app (docs/apps.md)
       own={user.role !== "staff" && staff.id === user.staffId}
+      me={{ id: staff.id, name: staff.name, photoUrl: staff.photoUrl }}
     />
   );
 }

@@ -11,9 +11,9 @@ test.describe("a client", () => {
     await page.goto(`/b?d=${day}`);
     await hydrated(page);
     // a demo client with a phone
-    const visit = page.locator(".bx-v", { hasText: "Demo client" }).first();
-    const client = (await visit.locator(".bx-v-main b").innerText()).trim();
-    await visit.getByRole("button").click();
+    const visit = page.locator(".bx-cal .cal-v", { hasText: "Demo client" }).first();
+    const client = (await visit.locator(".bx-cv-txt b").innerText()).trim();
+    await visit.click();
     await sheet(page).getByRole("button", { name: B.client.card }).click();
     const s = sheet(page);
     await expect(s.getByRole("heading", { name: client })).toBeVisible();
@@ -47,7 +47,7 @@ test.describe("a client", () => {
     const note = `E2E к записи ${barber.name}`;
     await page.goto(`/b?d=${day}`);
     await hydrated(page);
-    await page.locator(".bx-v button").nth(1).click();
+    await page.locator(".bx-cal .cal-v").nth(1).click();
     const s = sheet(page);
     const block = s.locator(".bx-noteblk", { hasText: B.visit.visitNote });
     await block.getByRole("button").click();
@@ -56,7 +56,7 @@ test.describe("a client", () => {
     await expect(toast(page)).toHaveText(B.client.noteSaved);
     await page.reload();
     await hydrated(page);
-    await page.locator(".bx-v button").nth(1).click();
+    await page.locator(".bx-cal .cal-v").nth(1).click();
     await expect(sheet(page).getByText(note)).toBeVisible();
   });
 
@@ -64,9 +64,9 @@ test.describe("a client", () => {
     const day = nextWorkday(barber.slug);
     await page.goto(`/b?d=${day}`);
     await hydrated(page);
-    const visit = page.locator(".bx-v", { hasText: "Demo client" }).first();
-    const client = (await visit.locator(".bx-v-main b").innerText()).trim();
-    await visit.getByRole("button").click();
+    const visit = page.locator(".bx-cal .cal-v", { hasText: "Demo client" }).first();
+    const client = (await visit.locator(".bx-cv-txt b").innerText()).trim();
+    await visit.click();
     await sheet(page).getByRole("button", { name: B.book.again }).click();
     const s = sheet(page);
     await expect(s.getByRole("heading", { name: B.book.new })).toBeVisible();
@@ -81,6 +81,6 @@ test.describe("a client", () => {
     await s.getByRole("button", { name: B.book.book, exact: true }).click();
     await expect(toast(page)).toContainText(B.book.booked("").trim());
     await expect(page).toHaveURL(new RegExp(`d=${free}`));
-    await expect(page.locator(".bx-v", { hasText: client })).toBeVisible();
+    await expect(page.locator(".bx-cal .cal-v", { hasText: client }).first()).toBeVisible();
   });
 });

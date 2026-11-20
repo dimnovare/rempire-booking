@@ -24,7 +24,7 @@ import { weekStart } from "@/lib/admin/grid";
 import type { MineToday } from "@/lib/admin/journal";
 import type { Business } from "@/lib/availability";
 import { requireAdmin } from "@/lib/auth/current";
-import { canGroup, seenStaff } from "@/lib/auth/rights";
+import { can, canGroup, seenStaff } from "@/lib/auth/rights";
 import type { StaffUser } from "@/lib/auth/sessions";
 import { MINE_COOKIE } from "@/lib/auth/side";
 import { barberDaysFor, loadBarberDays } from "@/lib/barber/day";
@@ -106,6 +106,8 @@ async function Loaded({ searchParams }: { searchParams: PageProps<"/admin">["sea
       step={business.settings.slot_step_min}
       goodsCents={goodsCents}
       may={may}
+      // a barber's day from the journal (journal-hours.tsx): the schedule's own rights
+      hours={{ edit: can(user, "staff.schedule"), page: canGroup(user, "staff") }}
       mine={mineId && mine && links && data.staff.some((s) => s.id === mineId) ? { staffId: mineId, today: mine, links, first: mineFirst } : null}
     />
   );

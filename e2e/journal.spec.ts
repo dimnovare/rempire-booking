@@ -150,7 +150,8 @@ test.describe("the journal", () => {
       // the controls, left to right
       const buttons = bar(page).locator("button:visible");
       const names = await buttons.evaluateAll((els) => els.map((el) => (el.getAttribute("aria-label") || el.textContent || "").trim()));
-      expect(names).toEqual([C.today, C.prev, C.next, C.sell, `${C.numbers}: € 0`, C.day, C.week, C.filter, C.scale, C.panel, A.visit.new]);
+      // (no «Запись» from 900px: a free time under the mouse books, as the board's)
+      expect(names).toEqual([C.today, C.prev, C.next, C.sell, `${C.numbers}: € 0`, C.day, C.week, C.filter, C.scale, C.panel]);
       // every one 32px high, 12px / 500, with a 1px line
       const looks = await buttons.evaluateAll((els) =>
         els.map((el) => {
@@ -169,7 +170,7 @@ test.describe("the journal", () => {
         const b = (await l.boundingBox())!;
         return [b.x, b.x + b.width];
       };
-      const [edge, first, prev, next, head, last] = [await xs(bar(page)), await xs(today), await xs(bar(page).getByRole("button", { name: C.prev, exact: true })), await xs(bar(page).getByRole("button", { name: C.next, exact: true })), await xs(bar(page).getByRole("heading", { level: 1 })), await xs(bar(page).getByRole("button", { name: A.visit.new }))];
+      const [edge, first, prev, next, head, last] = [await xs(bar(page)), await xs(today), await xs(bar(page).getByRole("button", { name: C.prev, exact: true })), await xs(bar(page).getByRole("button", { name: C.next, exact: true })), await xs(bar(page).getByRole("heading", { level: 1 })), await xs(bar(page).getByRole("button", { name: C.panel, exact: true }))];
       expect([first[0] - edge[0], prev[0] - first[1], next[0] - prev[1], head[0] - next[1], edge[1] - last[1]].map((n) => Math.round(n))).toEqual([12, 8, 8, 20, 12]);
       expect(await bar(page).evaluate((el) => `${getComputedStyle(el).padding} ${getComputedStyle(el).columnGap}`)).toBe("8px 12px 8px");
       // «День | Неделя»: the open view dark, the two joined
@@ -179,10 +180,9 @@ test.describe("the journal", () => {
       expect(await dayView.evaluate((el) => [getComputedStyle(el).backgroundColor, getComputedStyle(el).color, getComputedStyle(el).borderRadius])).toEqual([INK, WHITE, "8px 0px 0px 8px"]);
       expect(await weekView.evaluate((el) => [getComputedStyle(el).backgroundColor, getComputedStyle(el).borderRadius, getComputedStyle(el).borderLeftWidth])).toEqual([WHITE, "0px 8px 8px 0px", "0px"]);
       expect(Math.round((await weekView.boundingBox())!.x - ((await dayView.boundingBox())!.x + (await dayView.boundingBox())!.width))).toBe(0);
-      // «Запись» is the one yellow button, and the last
+      // nothing in the bar is yellow
       const yellow = await buttons.evaluateAll((els, colour) => els.filter((el) => getComputedStyle(el).backgroundColor === colour).map((el) => el.getAttribute("aria-label")), YELLOW);
-      expect(yellow).toEqual([A.visit.new]);
-      await expect(bar(page).getByRole("button", { name: A.visit.new })).toHaveText(C.add);
+      expect(yellow).toEqual([]);
 
       // the title: the day in the login's language, 20px / 500
       const title = bar(page).getByRole("heading", { level: 1 });
@@ -282,25 +282,92 @@ test.describe("the journal", () => {
       await expectNoSideScroll(page);
     });
 
-    test("a day nobody works says so, with a way to the barbers' hours; «Запись» still books", async ({ page }) => {
+    test("a day nobody works says so: «Настроить график работы», or barbers added for that day; his head's menu changes the day and makes it off again", async ({ page }) => {
       const day = dayWhere(45, (names) => names.length === 0);
+      const dayText = words(day, { day: "numeric", month: "long" });
       await open(page, day);
-      await expect(cal(page).getByRole("heading", { level: 2, name: C.noSchedule })).toBeVisible();
+      const empty = cal(page).locator(".jr-empty");
+      await expect(empty.getByRole("heading", { level: 2, name: C.noSchedule })).toBeVisible();
+      await expect(empty.locator("p")).toHaveText(C.noScheduleLine(dayText));
       await expect(cal(page).locator(".cal-grid")).toHaveCount(0);
-      // the bar is whole, and «Запись» opens the form with a barber to pick
       await expect(bar(page).getByRole("heading", { level: 1 })).toHaveText(titleOf(day));
-      await bar(page).getByRole("button", { name: A.visit.new }).click();
-      const form = page.getByRole("dialog", { name: A.visit.new });
-      await expect(form.getByLabel(A.visit.date, { exact: true })).toHaveValue(day);
-      await expect(form.getByRole("combobox", { name: A.newVisit.specialist, exact: true }).locator("option")).toHaveCount(DEMO.staff.length);
-      await page.keyboard.press("Escape");
-      await expect(form).toHaveCount(0);
+      // the yellow way to that day in «График работы», and the plain one under it
+      const link = empty.getByRole("link", { name: C.setHours });
+      await expect(link).toHaveAttribute("href", `/admin/schedule?d=${day}`);
+      expect(await link.evaluate((el) => `${getComputedStyle(el).backgroundColor} ${el.getBoundingClientRect().height}`)).toBe(`${YELLOW} 32`);
+      const add = empty.getByRole("button", { name: C.addStaff });
+      expect(await add.evaluate((el) => `${getComputedStyle(el).backgroundColor} ${el.getBoundingClientRect().height}`)).toBe(`${WHITE} 32`);
       await expectNoSideScroll(page);
       await shot(page, "empty");
-      const link = cal(page).getByRole("link", { name: C.setHours });
-      await expect(link).toHaveAttribute("href", "/admin/staff");
-      await link.click();
-      await page.waitForURL(/\/admin\/staff$/);
+
+      // «Добавить сотрудников в день»: every barber to tick, the hours, breaks
+      await add.click();
+      const dialog = page.getByRole("dialog", { name: C.addStaffTitle });
+      await expect(dialog).toBeVisible();
+      const boxes = dialog.getByRole("checkbox");
+      await expect(boxes).toHaveCount(DEMO.staff.length);
+      // nobody ticked: it says so and writes nothing
+      await dialog.getByRole("button", { name: C.addStaffGo, exact: true }).click();
+      await expect(dialog.getByRole("alert")).toHaveText(C.pickSomeone);
+      // «Выбрать всех», and again: nobody
+      await dialog.getByRole("button", { name: C.pickAll }).click();
+      for (const box of await boxes.all()) await expect(box).toBeChecked();
+      await dialog.getByRole("button", { name: C.pickAll }).click();
+      for (const box of await boxes.all()) await expect(box).not.toBeChecked();
+      // Slava, 11:00–17:00, a break 13:00–14:00
+      await dialog.getByRole("checkbox", { name: /Slava/ }).check();
+      await dialog.getByRole("combobox", { name: `${C.workTime}: ${C.timeFrom}`, exact: true }).selectOption("11:00");
+      await dialog.getByRole("combobox", { name: `${C.workTime}: ${C.timeTo}`, exact: true }).selectOption("17:00");
+      await dialog.getByRole("button", { name: A.schedule.addBreak }).click();
+      await expect(dialog.getByRole("combobox", { name: A.schedule.breakFrom, exact: true })).toHaveValue("13:00");
+      await expect(dialog.getByRole("combobox", { name: A.schedule.breakTo, exact: true })).toHaveValue("14:00");
+      await shot(page, "add-staff");
+      await dialog.getByRole("button", { name: C.addStaffGo, exact: true }).click();
+      await expect(calToast(page)).toHaveText(C.addedN(1));
+      await expect(dialog).toHaveCount(0);
+      // his column, those hours, the break as time he does not work
+      const col = column(page, "slava", day);
+      await expect(col).toBeVisible();
+      await expect(cal(page).locator(".cal-col")).toHaveCount(1);
+      expect(await shown(page)).toEqual([11 * 60, 17 * 60]);
+      await expect(col.locator(".cal-work")).toHaveCount(2);
+
+      // his head's menu: his name and hours that day
+      const head = cal(page).getByRole("button", { name: C.headMenu("Slava") });
+      await head.click();
+      const menu = cal(page).getByRole("menu", { name: C.headMenu("Slava") });
+      await expect(menu.locator(".jr-head-top b")).toHaveText("Slava");
+      await expect(menu.locator(".jr-head-top small")).toHaveText(C.headDay(dayText, "11:00–13:00, 14:00–17:00"));
+      await expect(menu.getByRole("menuitem")).toHaveText([C.changeHours(false), C.makeOff, C.openSchedule]);
+      await expect(menu.getByRole("menuitem", { name: C.openSchedule })).toHaveAttribute("href", `/admin/schedule?d=${day}`);
+      expect(await menu.evaluate((el) => `${el.getBoundingClientRect().width} ${getComputedStyle(el).backgroundColor}`)).toBe(`244 ${WHITE}`);
+      await shot(page, "head-menu");
+      // Escape closes it, the keyboard back on the head
+      await page.keyboard.press("Escape");
+      await expect(menu).toHaveCount(0);
+      await expect(head).toBeFocused();
+
+      // «Изменить часы на этот день»: 10:00–18:00, the break kept
+      await head.click();
+      await menu.getByRole("menuitem", { name: C.changeHours(false) }).click();
+      const hours = menu.getByRole("group", { name: C.changeHours(false) });
+      await expect(hours.getByRole("combobox", { name: `${C.workTime}: ${C.timeFrom}`, exact: true })).toHaveValue("11:00");
+      await expect(hours.getByRole("combobox", { name: `${C.workTime}: ${C.timeTo}`, exact: true })).toHaveValue("17:00");
+      await hours.getByRole("combobox", { name: `${C.workTime}: ${C.timeFrom}`, exact: true }).selectOption("10:00");
+      await hours.getByRole("combobox", { name: `${C.workTime}: ${C.timeTo}`, exact: true }).selectOption("18:00");
+      await hours.getByRole("button", { name: A.save, exact: true }).click();
+      await expect(calToast(page)).toHaveText(C.hoursSaved);
+      await expect(menu).toHaveCount(0);
+      await expect.poll(() => shown(page)).toEqual([10 * 60, 18 * 60]);
+      await expect(col.locator(".cal-work")).toHaveCount(2);
+
+      // «Сделать выходным»: nobody works that day again
+      await head.click();
+      await menu.getByRole("menuitem", { name: C.makeOff }).click();
+      await expect(calToast(page)).toHaveText(C.offSaved);
+      await expect(empty.getByRole("heading", { level: 2, name: C.noSchedule })).toBeVisible();
+      await expect(cal(page).locator(".cal-grid")).toHaveCount(0);
+      await expect(link).toHaveAttribute("href", `/admin/schedule?d=${day}`);
     });
 
     test("a visit's card: the strip says who made it, the body its state; a break is pale grey with its times", async ({ page }) => {
@@ -367,6 +434,150 @@ test.describe("the journal", () => {
       // (the line that said «Не пришёл» is gone before the picture)
       await expect(calToast(page)).toHaveCount(0);
       await shot(page, "day");
+    });
+
+    test("a visit's hover card: the client, his numbers, four chips that write at once, the services; the mouse may cross to it; Tab shows it", async ({ page }) => {
+      const day = nextWorkday("milena");
+      await open(page, day);
+      const col = column(page, "milena", day);
+      // her first demo visit: booked online, waiting
+      const visit = col.locator(".cal-v", { hasText: "Demo client" }).nth(0);
+      const card = page.locator(".jr-card");
+      await expect(card).toHaveCount(0);
+      const name = (await visit.locator("b").innerText()).trim();
+      const phone = (await visit.locator(".p").innerText()).trim();
+      const times = (await visit.locator(".t span").first().innerText()).trim().replace("—", "–");
+
+      await visit.hover();
+      await expect(card).toBeVisible();
+      await expect(card).toHaveAccessibleName(name);
+      // 376px, white, 12px corners, beside the visit
+      expect(await card.evaluate((el) => `${el.getBoundingClientRect().width} ${getComputedStyle(el).backgroundColor} ${getComputedStyle(el).borderRadius}`)).toBe(`376 ${WHITE} 12px`);
+      const [v, c] = [(await visit.boundingBox())!, (await card.boundingBox())!];
+      expect(c.x >= v.x + v.width || c.x + c.width <= v.x).toBe(true);
+      // who, his phone with a copy button, when and with whom
+      await expect(card.getByRole("heading", { level: 3 })).toHaveText(name);
+      await expect(card.locator(".jr-card-phone span")).toHaveText(phone);
+      await expect(card.getByRole("button", { name: C.copyPhone })).toBeVisible();
+      await expect(card.locator(".jr-card-when b")).toHaveText(times);
+      await expect(card.locator(".jr-card-when small")).toHaveText(`Milena · ${C.cardBy.online}`);
+      // his numbers, from his history
+      await expect(card.locator(".jr-card-nums dt")).toHaveText([C.cardVisits, C.cardNoShows, C.cardSpent]);
+      await expect(card.locator(".jr-card-nums dd").nth(0)).toHaveText(/^\d+$/);
+      await expect(card.locator(".jr-card-nums dd").nth(1)).toHaveText(/^\d+$/);
+      await expect(card.locator(".jr-card-nums dd").nth(2)).toHaveText(/\d/);
+      // four chips, his state lit; no «Готово»
+      const chips = card.getByRole("group", { name: C.cardStatus }).getByRole("button");
+      await expect(chips).toHaveText([C.cardChips.booked, C.cardChips.arrived, C.cardChips.no_show, C.cardChips.confirmed]);
+      await expect(chips.nth(0)).toHaveAttribute("aria-pressed", "true");
+      // the services, each with its length and price, and the sum
+      const lines = card.locator(".jr-card-svc li");
+      expect(await lines.count()).toBeGreaterThan(0);
+      for (const line of await lines.all()) await expect(line).toHaveText(/\d.*\d/);
+      await expect(card.locator(".jr-card-total")).toContainText(A.visit.total);
+      await expect(card.getByRole("button", { name: C.cardOpen })).toBeVisible();
+      await shot(page, "hover");
+
+      // the mouse crosses to the card, straight across: it stays; it leaves both: the card goes
+      const across = v.y + v.height / 2;
+      expect(across).toBeGreaterThan(c.y);
+      expect(across).toBeLessThan(c.y + c.height);
+      await page.mouse.move(c.x + c.width / 2, across, { steps: 12 });
+      await page.waitForTimeout(500);
+      await expect(card).toBeVisible();
+      const title = (await bar(page).getByRole("heading", { level: 1 }).boundingBox())!;
+      await page.mouse.move(title.x + 4, title.y + 4, { steps: 4 });
+      await expect(card).toHaveCount(0);
+
+      // a chip writes at once, and back
+      await visit.hover();
+      await chips.nth(3).click();
+      await expect(calToast(page)).toHaveText(C.cardChips.confirmed);
+      await expect(chips.nth(3)).toHaveAttribute("aria-pressed", "true");
+      await chips.nth(0).click();
+      await expect(calToast(page)).toHaveText(C.cardChips.booked);
+      await expect(chips.nth(0)).toHaveAttribute("aria-pressed", "true");
+      // «Открыть запись»: the visit's window
+      await card.getByRole("button", { name: C.cardOpen }).click();
+      await expect(page.getByRole("dialog", { name })).toBeVisible();
+      await expect(card).toHaveCount(0);
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+
+      // the keyboard: Tab onto the visit shows the card, Escape hides it
+      await page.mouse.move(title.x + 4, title.y + 4);
+      await visit.focus();
+      await page.keyboard.press("Shift+Tab");
+      await page.keyboard.press("Tab");
+      await expect(visit).toBeFocused();
+      await expect(card).toBeVisible();
+      await expect(card).toHaveAccessibleName(name);
+      await page.keyboard.press("Escape");
+      await expect(card).toHaveCount(0);
+    });
+
+    test("free time under the mouse: «12:00 Новый сеанс», on the scale's step; a click books at that time", async ({ page }) => {
+      const day = workdayFrom("slava", tallinnDate(50));
+      await open(page, day);
+      const col = column(page, "slava", day);
+      await expect(col.locator(".cal-v")).toHaveCount(0);
+      const slot = col.locator(".jr-slot:not(.is-mark)");
+      const [from, to] = await shown(page);
+      // the point of a minute, the grid scrolled to it first
+      const pointAt = async (minute: number) => {
+        await cal(page)
+          .locator(".cal-scroll")
+          .evaluate(
+            (el, [m, f, t]) => {
+              const r = el.querySelector(".cal-col")!.getBoundingClientRect();
+              const y = r.top + ((m - f) * r.height) / (t - f);
+              const s = el.getBoundingClientRect();
+              el.scrollTop += y - (s.top + s.height / 2);
+            },
+            [minute, from, to],
+          );
+        const box = (await col.boundingBox())!;
+        return { x: box.x + box.width / 2, y: box.y + ((minute - from) * box.height) / (to - from) + 0.5 };
+      };
+      const scale = async (stop: "1" | "1.5" | "3") => {
+        await bar(page).getByRole("button", { name: C.scale, exact: true }).click();
+        await bar(page).getByRole("menuitemradio", { name: C.scales[stop], exact: true }).click();
+        await page.keyboard.press("Escape");
+      };
+      const top = async () => Math.round((await slot.boundingBox())!.y - (await col.boundingBox())!.y);
+
+      // 15 minutes a line: 12:07 is 12:00, a 15px green bar
+      let p = await pointAt(12 * 60 + 7);
+      await page.mouse.move(p.x, p.y);
+      await expect(slot).toHaveText(`12:00 ${C.newSlot}`);
+      expect(await slot.evaluate((el) => `${el.getBoundingClientRect().height} ${getComputedStyle(el).backgroundColor} ${getComputedStyle(el).color}`)).toBe(`15 rgb(28, 181, 142) ${WHITE}`);
+      expect(await top()).toBe(12 * 60 - from);
+      await shot(page, "slot");
+      // 10 minutes: 12:13 is 12:10
+      await scale("1.5");
+      p = await pointAt(12 * 60 + 13);
+      await page.mouse.move(p.x, p.y);
+      await expect(slot).toHaveText(`12:10 ${C.newSlot}`);
+      expect(await slot.evaluate((el) => el.getBoundingClientRect().height)).toBe(15);
+      expect(await top()).toBe((12 * 60 + 10 - from) * 1.5);
+      // 5 minutes: 12:07 is 12:05, and a click books at 12:05
+      await scale("3");
+      p = await pointAt(12 * 60 + 7);
+      await page.mouse.move(p.x, p.y);
+      await expect(slot).toHaveText(`12:05 ${C.newSlot}`);
+      expect(await slot.evaluate((el) => el.getBoundingClientRect().height)).toBe(15);
+      await page.mouse.click(p.x, p.y);
+      const form = page.getByRole("dialog", { name: A.visit.new });
+      await expect(form.getByLabel(A.newVisit.starts, { exact: true })).toHaveValue("12:05");
+      await expect(form.getByRole("combobox", { name: A.newVisit.specialist, exact: true }).locator("option:checked")).toHaveText("Slava");
+      await page.keyboard.press("Escape");
+      await expect(form).toHaveCount(0);
+      // off the grid: no bar
+      const title = (await bar(page).getByRole("heading", { level: 1 }).boundingBox())!;
+      await page.mouse.move(title.x + 4, title.y + 4);
+      await expect(slot).toHaveCount(0);
+      await scale("1");
+      expect((await col.boundingBox())!.height).toBe(to - from);
     });
 
     test("today: a dark tag with the time in yellow on the left axis and a line across; the visit running now glows", async ({ page }) => {
@@ -801,7 +1012,7 @@ test.describe("the journal", () => {
       await page.setViewportSize({ width: 1024, height: 640 });
       const day = nextWorkday("milena");
       await open(page, day);
-      await expect(bar(page).getByRole("button", { name: A.visit.new })).toBeInViewport();
+      await expect(bar(page).getByRole("button", { name: C.panel, exact: true })).toBeInViewport();
       const boxes = await bar(page).locator("button:visible").evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height));
       expect(boxes).toEqual(boxes.map(() => 32));
       // the page itself does not scroll: the grid scrolls in its own box
@@ -956,7 +1167,8 @@ test.describe("the journal", () => {
       const day = dayWhere(45, (names) => names.length === 0);
       await open(page, day);
       await expect(cal(page).getByRole("heading", { level: 2, name: C.noSchedule })).toBeVisible();
-      await expect(cal(page).getByRole("link", { name: C.setHours })).toHaveAttribute("href", "/admin/staff");
+      await expect(cal(page).getByRole("link", { name: C.setHours })).toHaveAttribute("href", `/admin/schedule?d=${day}`);
+      await expect(cal(page).getByRole("button", { name: C.addStaff })).toBeVisible();
       // «Запись» is still there
       await expect(cal(page).locator(".cal-add")).toBeVisible();
       await expectNoSideScroll(page);
