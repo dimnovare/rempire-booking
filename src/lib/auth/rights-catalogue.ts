@@ -256,7 +256,8 @@ const ROWS = [
 
   // ---- 8. Настройки (10)
   ["settings.system", null, ADM3, 1, "Доступ к системным настройкам", "Access to system settings", "Ligipääs süsteemiseadetele"],
-  ["settings.location", null, ADM3, 0, "Доступ к настройкам локации", "Access to location settings", "Ligipääs asukoha seadetele"],
+  // «Бренд», «Контакты», «Галерея»: the salon's page on the booking site (settings/, src/lib/admin/location.ts)
+  ["settings.location", null, ADM3, 1, "Доступ к настройкам локации", "Access to location settings", "Ligipääs asukoha seadetele"],
   ["settings.users", null, ADM3, 1, "Управлять пользователями", "Manage users", "Hallata kasutajaid"],
   ["settings.users.remove", "settings.users", ADM3, 1, "Удалять пользователей", "Remove users", "Eemaldada kasutajaid"],
   ["settings.users.invite", "settings.users", ADM3, 1, "Приглашение пользователей к управлению локацией", "Invite users to manage a location", "Kutsuda kasutajaid asukohta haldama"],

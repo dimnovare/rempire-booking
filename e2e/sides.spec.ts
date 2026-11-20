@@ -191,11 +191,13 @@ test.describe("an owner who cuts too, on a phone", () => {
     // who is signed in: the picture or the initial, the name, the role in words
     await expect(more.locator(".mo-who b")).toHaveText("Owner and barber (demo)");
     await expect(more.locator(".mo-who span:not(.mo-ava)")).toHaveText(M.andBarber(PRESETS.OW.ru));
-    await expect(more.getByRole("heading", { level: 2 })).toHaveText([M.mineGroup, M.salonGroup, M.accountGroup]);
+    await expect(more.getByRole("heading", { level: 2 })).toHaveText([M.mineGroup, M.salonGroup, M.settingsGroup, M.accountGroup]);
     const group = (name: string) => more.getByRole("region", { name });
     await expect(group(M.mineGroup).locator(".mo-row b")).toHaveText([M.time, M.sell, M.money]);
     await expect(group(M.mineGroup).locator(".mo-row small").first()).toHaveText(M.timeHint);
     await expect(group(M.salonGroup).locator(".mo-row b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.analytics, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.invoices, A.sale.title]);
+    // «Настройки»: the salon's page on the booking site, the owner's
+    await expect(group(M.settingsGroup).locator(".mo-row b")).toHaveText([A.nav.brand, A.nav.contacts, A.nav.gallery]);
     await expect(group(M.accountGroup).locator(".mo-row b")).toHaveText([M.access, M.notify, M.language, M.logout]);
     await expect(group(M.accountGroup).locator(".mo-row", { hasText: M.language }).locator("small")).toHaveText("Русский");
     await expectNoSideScroll(page);
@@ -373,7 +375,7 @@ test.describe("an owner who does not cut, on a phone", () => {
     const more = page.locator(".adm-more:visible");
     await expect(more.locator(".mo-who b")).toHaveText("Owner (demo)");
     await expect(more.locator(".mo-who span:not(.mo-ava)")).toHaveText(PRESETS.OW.ru);
-    await expect(more.getByRole("heading", { level: 2 })).toHaveText([M.salonGroup, M.accountGroup]);
+    await expect(more.getByRole("heading", { level: 2 })).toHaveText([M.salonGroup, M.settingsGroup, M.accountGroup]);
     await expect(more.getByRole("region", { name: M.salonGroup }).locator(".mo-row b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.analytics, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.sale.title]);
     await expect(more.getByRole("region", { name: M.accountGroup }).locator(".mo-row b")).toHaveText([M.access, M.notify, M.language, M.logout]);
     await expect(more.locator('a[href^="/b/time"], a[href^="/b/sell"], a[href^="/b/money"]')).toHaveCount(0);

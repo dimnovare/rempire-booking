@@ -81,10 +81,11 @@ describe("the tab that is lit", () => {
 });
 
 describe("«Ещё» by the login's rights", () => {
-  it("an owner linked to a barber: three groups", () => {
+  it("an owner linked to a barber: four groups", () => {
     expect(moreOf(legacyHolder("owner", "u", RENAT))).toEqual({
       mine: ["time", "sell", "money"],
       salon: ["staff", "schedule", "services", "catalogue", "analytics", "records", "reviews", "visits", "messages", "changes", "invoices", "sale"],
+      settings: ["brand", "contacts", "gallery"],
       account: ["account", "notify", "language", "logout"],
     });
   });
@@ -93,6 +94,7 @@ describe("«Ещё» by the login's rights", () => {
     expect(moreOf(legacyHolder("owner", "u", null))).toEqual({
       mine: [],
       salon: ["staff", "schedule", "services", "catalogue", "analytics", "records", "reviews", "visits", "messages", "changes", "sale"],
+      settings: ["brand", "contacts", "gallery"],
       account: ["account", "notify", "language", "logout"],
     });
   });
@@ -116,7 +118,11 @@ describe("«Ещё» by the login's rights", () => {
     expect(moreOf(ownerWithout(["reports.messages"])).salon).toEqual(["staff", "schedule", "services", "catalogue", "analytics", "records", "reviews", "visits", "changes", "sale"]);
     // the catalogue and the account's rows ask for no right of their own; «Изменения данных» is the owner's, whatever his switches
     const bare = ownerWithout([groupKey("staff"), groupKey("services"), groupKey("clients"), groupKey("visit"), groupKey("reports")]);
-    expect(moreOf(bare)).toEqual({ mine: [], salon: ["catalogue", "changes"], account: ["account", "notify", "language", "logout"] });
+    expect(moreOf(bare)).toEqual({ mine: [], salon: ["catalogue", "changes"], settings: ["brand", "contacts", "gallery"], account: ["account", "notify", "language", "logout"] });
+    // «Настройки»: the salon's page with «Доступ к настройкам локации», its three rows or none
+    expect(moreOf(ownerWithout(["settings.location"])).settings).toEqual([]);
+    expect(offFor(ownerWithout(["settings.location"]))).toEqual(expect.arrayContaining(["brand", "contacts", "gallery"]));
+    expect(offFor(legacyHolder("owner", "u", null))).not.toContain("brand");
   });
 
   it("the front desk's own set decides, linked or not", () => {
@@ -135,6 +141,9 @@ describe("«Ещё» by the login's rights", () => {
     expect(rows.salon).not.toContain("changes");
     expect(off).toContain("changes");
     expect(moreOf(legacyHolder("admin", "u", null)).salon).not.toContain("invoices");
+    // the salon's page is the owner's until he gives it
+    expect(rows.settings).toEqual([]);
+    expect(off).toEqual(expect.arrayContaining(["brand", "contacts", "gallery"]));
   });
 });
 

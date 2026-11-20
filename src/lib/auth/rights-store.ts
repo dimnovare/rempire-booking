@@ -37,8 +37,12 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 /** The two salon-wide switches for barbers, as they stood when the rights came. Read here and nowhere else. */
 export type LegacySwitches = { barber_self_time?: unknown; barber_self_price?: unknown };
 
-/** What only the owner's login could do: the logins, the export, the salon's own settings. */
-const OWNER_ONLY: readonly string[] = ["clients.export", "settings.users", "settings.users.remove", "settings.users.invite", "settings.users.rights", "settings.system"];
+/**
+ * What only the owner's login could do: the logins, the export, the salon's
+ * own settings. «Настройки локации» (built 20.11.2026) is among them: until
+ * then the salon's page changed only by SQL, which the front desk never had.
+ */
+const OWNER_ONLY: readonly string[] = ["clients.export", "settings.users", "settings.users.remove", "settings.users.invite", "settings.users.rights", "settings.system", "settings.location"];
 
 /**
  * What a barber's login could do in the barber app: his own column with

@@ -38,6 +38,8 @@ export type CatalogStaff = {
 /** The salon's page (db/migrations/028_location_profile.sql). '' or {} is «not set»: that row is left out. */
 export type CatalogLocation = {
   name: string;
+  /** the salon's own logo (db/migrations/031_location_images.sql); '' keeps REMPIRE's mark */
+  logo: string;
   address: string;
   phone: string;
   /** the opening hours as the salon writes them */
@@ -67,6 +69,7 @@ export type Catalog = {
 
 type LocationRow = {
   name: string;
+  logo: string;
   address: string;
   phone: string;
   schedule: L10n | null;
@@ -84,6 +87,7 @@ type LocationRow = {
 
 const NO_LOCATION: LocationRow = {
   name: "",
+  logo: "",
   address: "",
   phone: "",
   schedule: {},
@@ -118,6 +122,7 @@ function locationOf(r: LocationRow, reviewCount: number): CatalogLocation {
   const lng = r.lng == null ? null : Number(r.lng);
   return {
     name: r.name,
+    logo: photoOk(r.logo) ? r.logo : "",
     address: r.address,
     phone: r.phone,
     schedule: l10n(r.schedule),
@@ -138,7 +143,7 @@ export async function loadCatalog(q: Querier, businessId: string): Promise<Catal
   const [biz, locs, services, staff, offers, ratings, salonReviews] = await Promise.all([
     q<{ name: string; timezone: string }>("select name, timezone from businesses where id = $1", [businessId]),
     q<LocationRow>(
-      `select name, address, phone, schedule, website, about, photos, lat, lng, instagram, facebook, whatsapp, telegram, viber
+      `select name, logo, address, phone, schedule, website, about, photos, lat, lng, instagram, facebook, whatsapp, telegram, viber
          from locations where business_id = $1 and active order by sort, name limit 1`,
       [businessId],
     ),

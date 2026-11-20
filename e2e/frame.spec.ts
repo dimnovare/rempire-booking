@@ -252,7 +252,7 @@ test.describe("the frame", () => {
       await expect(sb(page)).toHaveCSS("background-color", "rgb(8, 8, 12)");
       await expect(month(page)).toHaveCount(0);
       await expect(page.getByRole("group", { name: F.tiles })).toHaveCount(0);
-      await expect(menu(page).getByRole("button")).toHaveText([A.nav.reports, A.nav.team, A.nav.clients, A.nav.goods]);
+      await expect(menu(page).getByRole("button")).toHaveText([A.nav.reports, A.nav.team, A.nav.clients, A.nav.goods, A.nav.settings]);
       await expect(menu(page).getByRole("link")).toHaveText([A.nav.services, A.nav.requests, A.nav.invoices, A.nav.account]);
       // «Отчёты» has «Записи»; «Сотрудники» has «Список» (the barbers' page) and «График работы»
       await menu(page).getByRole("button", { name: A.nav.reports }).click();

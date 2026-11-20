@@ -26,6 +26,8 @@ export function offFor(user: Holder): string[] {
     // «Сообщения» with its own right; «Изменения данных» is the owner's alone (change-log.ts)
     ...(can(user, "reports.messages") ? [] : ["messages"]),
     ...(user.role === "owner" ? [] : ["changes"]),
+    // «Настройки → Локация»: its three pages with «Доступ к настройкам локации»; with none left the group is not drawn
+    ...(can(user, "settings.location") ? [] : ["brand", "contacts", "gallery"]),
     ...(can(user, "visit.sell") && can(user, "visit.sell.create") ? [] : ["sale"]),
   ];
 }
@@ -73,18 +75,21 @@ export function litTab(path: string, bar: readonly BarKey[]): BarKey | null {
 
 export type MineRow = "time" | "sell" | "money";
 export type SalonRow = "staff" | "schedule" | "services" | "catalogue" | "analytics" | "records" | "reviews" | "visits" | "messages" | "changes" | "invoices" | "sale";
+export type SettingsRow = "brand" | "contacts" | "gallery";
 export type AccountRow = "account" | "notify" | "language" | "logout";
-export type MoreRows = { mine: MineRow[]; salon: SalonRow[]; account: AccountRow[] };
+export type MoreRows = { mine: MineRow[]; salon: SalonRow[]; settings: SettingsRow[]; account: AccountRow[] };
 
 /** The salon's rows in the order of the sections (sections.tsx), «Продажа товара» last. */
 const SALON: readonly SalonRow[] = ["staff", "schedule", "services", "catalogue", "analytics", "records", "reviews", "visits", "messages", "changes", "invoices", "sale"];
 
 /**
- * «Ещё», in three groups:
+ * «Ещё», in four groups:
  *   - «Моё, как барбера», only for a login linked to a barber: his time,
  *     «Продать товар» (with the right to sell), his sums;
  *   - «Салон»: every section that has no tab of its own in this login's
  *     bar, each only with its right, and «Продажа товара»;
+ *   - «Настройки»: the salon's page on the booking site, «Бренд»,
+ *     «Контакты», «Галерея», with the right to change it;
  *   - «Аккаунт»: the logins and rights, this device's notifications, the
  *     language, the way out.
  */
@@ -93,5 +98,6 @@ export function moreOf(user: Holder): MoreRows {
   const bar = barOf(user);
   const mine: MineRow[] = appKind(user) === "own" ? ["time", ...(can(user, "visit.sell") ? (["sell"] as const) : []), "money"] : [];
   const salon = SALON.filter((k) => !off.includes(k) && !(bar as string[]).includes(k));
-  return { mine, salon, account: ["account", "notify", "language", "logout"] };
+  const settings = (["brand", "contacts", "gallery"] as const).filter((k) => !off.includes(k));
+  return { mine, salon, settings, account: ["account", "notify", "language", "logout"] };
 }

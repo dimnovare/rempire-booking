@@ -1,6 +1,6 @@
 /**
  * /admin/more «Ещё»: the last tab of a phone's bottom bar (docs/apps.md,
- * «One app for Renat»). On top, who is signed in; then three groups of
+ * «One app for Renat»). On top, who is signed in; then four groups of
  * rows, each row only with its right (src/lib/admin/app-nav.ts, moreOf):
  *
  *   - «Моё, как барбера», for a login linked to a barber: his time, a
@@ -8,6 +8,8 @@
  *     which open in this same frame with «Ещё» lit;
  *   - «Салон»: the sections that have no tab of their own, and «Продажа
  *     товара», which a wide screen has as a tile of its sidebar;
+ *   - «Настройки»: the salon's page on the booking site, «Бренд»,
+ *     «Контакты», «Галерея» (the sidebar's group of the same name);
  *   - «Аккаунт»: the logins and rights, this device's notifications, the
  *     language, the way out.
  *
@@ -15,7 +17,8 @@
  */
 import Link from "next/link";
 import { Suspense } from "react";
-import { moreOf, type MineRow, type SalonRow } from "@/lib/admin/app-nav";
+import { moreOf, type MineRow, type SalonRow, type SettingsRow } from "@/lib/admin/app-nav";
+import { FAV_HREF } from "@/lib/admin/favourites";
 import { requireAdmin } from "@/lib/auth/current";
 import { dbConfigured } from "@/lib/db";
 import { LANG_NAMES } from "../../copy";
@@ -104,6 +107,21 @@ async function Loaded() {
                     <b>{A.nav[k]}</b>
                   </Link>
                 )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {rows.settings.length > 0 && (
+        <section className="mo-group" aria-labelledby="mo-settings">
+          <h2 id="mo-settings">{M.settingsGroup}</h2>
+          <ul className="mo-list">
+            {rows.settings.map((k: SettingsRow) => (
+              <li key={k}>
+                <Link className="mo-row" href={FAV_HREF[k]} prefetch={false}>
+                  <b>{A.nav[k]}</b>
+                </Link>
               </li>
             ))}
           </ul>

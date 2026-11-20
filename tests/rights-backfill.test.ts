@@ -82,6 +82,7 @@ const WAS: { right: RightKey; scope?: Scope; what: string; was: (role: Role, sw:
   { right: "settings.users.remove", what: "toggleUser: requireOwner", was: owner },
   { right: "settings.users.invite", what: "addUser: requireOwner", was: owner },
   { right: "settings.users.rights", what: "the logins were the owner's alone", was: owner },
+  { right: "settings.location", what: "the salon's page: only by SQL before, then the owner's (OWNER_ONLY)", was: owner },
   { right: "settings.categories", what: "a new category word on a card or on many clients: requireAdmin", was: desk },
   // ---- the client base
   { right: "clients.list_contacts", what: "phones and e-mails in the list: requireAdmin (a barber has no list)", was: desk },

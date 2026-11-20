@@ -373,7 +373,7 @@ test.describe("clients", () => {
       // opened on this page, the sidebar is the menu (e2e/frame.spec.ts): every section and no «Ещё»;
       // «Клиенты» is a group, open on its page «Клиентская база»; «Отчёты», «Сотрудники» and «Товары» are the other groups, shut
       await expect(bar(page).getByRole("link")).toHaveText([A.nav.clientBase, A.nav.services, A.nav.requests, A.nav.invoices, A.nav.account]);
-      await expect(bar(page).getByRole("button")).toHaveText([A.nav.reports, A.nav.team, A.nav.clients, A.nav.goods]);
+      await expect(bar(page).getByRole("button")).toHaveText([A.nav.reports, A.nav.team, A.nav.clients, A.nav.goods, A.nav.settings]);
       await expect(bar(page).getByRole("link", { name: A.nav.clientBase })).toHaveAttribute("aria-current", "page");
       const cols = BASE.cols;
       // a tick column, the name, the seven columns a login may hide, and the cog's own cell

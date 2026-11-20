@@ -53,6 +53,7 @@ import * as reviewsActs from "@/app/admin/(app)/reviews/actions";
 import * as requests from "@/app/admin/(app)/requests/actions";
 import * as schedule from "@/app/admin/(app)/schedule/actions";
 import * as services from "@/app/admin/(app)/services/actions";
+import * as settingsActs from "@/app/admin/(app)/settings/actions";
 import * as staffActs from "@/app/admin/(app)/staff/actions";
 import * as bSell from "@/app/b/(app)/sell/actions";
 import * as bTime from "@/app/b/(app)/time/actions";
@@ -603,6 +604,29 @@ describe("Настройки", () => {
   });
 
   both("settings.categories", "desk", (c) => clients.bulkLabelAction({ ids: [c.anna] }, "Постоянные"), (r) => r.ok);
+
+  // «Бренд», «Контакты», «Галерея»: the owner's by default; a front desk login once it is given
+  both("settings.location", "owner", () => settingsActs.saveContactsAction({ address: "Fake street 2, Tallinn", schedule: { ru: "пн–пт 10–18" } }), (r) => r.ok);
+  it("settings.location: a front desk login without it is refused at every door of the salon's page", async () => {
+    const c = await fresh("desk");
+    const png = () => {
+      const f = new FormData();
+      f.set("image", new Blob([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4])], { type: "image/png" }), "x.png");
+      return f;
+    };
+    const no = { ok: false, field: "forbidden" };
+    expect(await settingsActs.saveBrandAction({ name: "Other", about: { ru: "", et: "", en: "" } })).toEqual(no);
+    expect(await settingsActs.saveContactsAction({ address: "Fake street 3" })).toEqual(no);
+    expect(await settingsActs.uploadLogoAction(png())).toEqual(no);
+    expect(await settingsActs.removeLogoAction()).toEqual(no);
+    expect(await settingsActs.addPhotoAction(png())).toEqual(no);
+    expect(await settingsActs.removePhotoAction("/x.svg")).toEqual(no);
+    expect(await settingsActs.orderPhotosAction([])).toEqual(no);
+    await grant(c.me, "settings.location", true);
+    expect(await settingsActs.addPhotoAction(png())).toMatchObject({ ok: true });
+    const [row] = await query<{ name: string }>("select name from locations where business_id = $1", [c.demo.business.id]);
+    expect(row.name).toBe("REMPIRE");
+  });
 
   it("settings.categories: without it a category that is in use is still given", async () => {
     const c = await fresh("desk");

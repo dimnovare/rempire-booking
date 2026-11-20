@@ -182,6 +182,9 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
   const byeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const staffById = useMemo(() => new Map(catalog.staff.map((s) => [s.id, s])), [catalog.staff]);
+  // «Название локации при онлайн-записи» and «Логотип» («Настройки → Бренд»); the business's name and REMPIRE's mark until they are set
+  const salonName = catalog.location.name.trim() || catalog.business.name;
+  const salonLogo = catalog.location.logo;
   const svcById = useMemo(() => new Map(catalog.services.map((s) => [s.id, s])), [catalog.services]);
   const can = useCallback((b: CatalogStaff, ids: string[]) => ids.every((id) => b.offers[id]), []);
   const priceOf = (b: CatalogStaff, ids: string[]) => ids.reduce((a, id) => a + (b.offers[id]?.[0] ?? 0), 0);
@@ -604,10 +607,10 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
       ) : (
         <span className="hd-gap" />
       )}
-      <LogoMark />
+      <LogoMark src={salonLogo} alt={salonName} />
       <button type="button" className="hd-co" onClick={openAbout}>
         <b>
-          {catalog.business.name}
+          {salonName}
           <ChevronIcon size={20} />
         </b>
         <span className="sub">{catalog.location.address}</span>
@@ -738,10 +741,10 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
       <div className="hero">
         {langBtn}
         <div className="hero-panel">
-          <LogoMark size={80} />
+          <LogoMark size={80} src={salonLogo} alt={salonName} />
           <h1 className="t1">
             <button type="button" className="hero-co" onClick={openAbout}>
-              {catalog.business.name}
+              {salonName}
               <ChevronIcon width={2.4} />
             </button>
           </h1>
@@ -849,7 +852,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
       );
     }
     if (!earliest) {
-      const name = barber && barber !== "any" ? staffById.get(barber)?.name ?? "" : catalog.business.name;
+      const name = barber && barber !== "any" ? staffById.get(barber)?.name ?? "" : salonName;
       return (
         <div className="empty">
           <p className="t2">{c.noneAhead(name, horizonDays)}</p>
@@ -1131,7 +1134,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
 
   const byeScreen = () => (
     <div className="bye">
-      <LogoMark size={80} />
+      <LogoMark size={80} src={salonLogo} alt={salonName} />
       <h1 className="t1">{c.byeTitle(form.name.trim().split(/\s+/)[0] ?? "")}</h1>
       {done && <p>{c.seeYou(dLong(localParts(done.start, tz).date), fmtTime(done.start))}</p>}
       <p className="day">{c.goodDay}</p>
@@ -1215,7 +1218,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
   const aboutScreen = () => {
     const L = catalog.location;
     const s = c.salon;
-    const name = catalog.business.name;
+    const name = salonName;
     const words = L.about[lang] || L.about.en || pick(L.about, lang);
     const hours = pick(L.schedule, lang);
     const contacts = contactRows(L);
@@ -1234,12 +1237,12 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
             <ChevronIcon dir="left" />
           </button>
           <span className="ab-bar-co" aria-hidden="true">
-            <LogoMark size={36} />
+            <LogoMark size={36} src={salonLogo} alt="" />
             <b>{name}</b>
           </span>
         </header>
         <div className="ab-panel" ref={panelRef}>
-          <LogoMark size={96} />
+          <LogoMark size={96} src={salonLogo} alt={salonName} />
           <h1 className="ab-name" id="ab-name" ref={nameRef}>
             {name}
           </h1>

@@ -3,8 +3,9 @@
  * change log of the tool we follow, docs/altegio-pages.md, «Изменения
  * данных»). A row is one row of `audit` (001_core.sql): when, what was
  * changed (the object, named as the page shows it: a visit by its time, a
- * client by his name, an invoice by its number), who changed it, what was
- * done, and what changed, field by field, before → after.
+ * client by his name, an invoice by its number, the salon's page by the
+ * location's name), who changed it, what was done, and what changed, field
+ * by field, before → after.
  *
  * The authors, as the code writes them (grep `insert into audit`):
  *   a login's id        that login, by its name (a login deleted since: «gone»);
@@ -198,6 +199,7 @@ export async function listChanges(
     sale_name: string | null;
     invoice_number: string | null;
     party_name: string | null;
+    location_name: string | null;
   }>(
     `select au.id::text as id, au.at, au.actor, au.entity, au.entity_id, au.action, au.before, au.after,
             u.name as author_name, u.email as author_email,
@@ -205,7 +207,8 @@ export async function listChanges(
             coalesce(sv.name->>${lang}::text, sv.name->>'ru', sv.name->>'et', sv.name->>'en') as service_name,
             ou.name as login_name, ou.email as login_email,
             rv.created_at as review_at, rv.author_name as review_name, ps.name as sale_name,
-            iv.number as invoice_number, coalesce(ir.legal_name, ii.legal_name) as party_name
+            iv.number as invoice_number, coalesce(ir.legal_name, ii.legal_name) as party_name,
+            lc.name as location_name
        from audit au
        left join users u on u.business_id = ${biz}::uuid and u.id::text = au.actor
        left join appointments ap on au.entity = 'appointment' and ap.id = au.entity_id
@@ -220,6 +223,7 @@ export async function listChanges(
        left join services sv on au.entity = 'service' and sv.id = au.entity_id
        left join users ou on au.entity = 'user' and ou.id = au.entity_id
        left join reviews rv on au.entity = 'review' and rv.id = au.entity_id
+       left join locations lc on au.entity = 'location' and lc.id = au.entity_id and lc.business_id = ${biz}::uuid
        left join staff st on st.id = (case
               when au.entity in ('staff', 'chair_rent') then au.entity_id
               when au.entity = 'appointment' then ap.staff_id
@@ -255,7 +259,9 @@ export async function listChanges(
                   ? r.sale_name
                   : r.entity === "invoice_receiver" || r.entity === "invoice_issuer"
                     ? r.party_name
-                    : r.staff_name;
+                    : r.entity === "location"
+                      ? r.location_name
+                      : r.staff_name;
       return {
         id: r.id,
         at: ms(r.at)!,

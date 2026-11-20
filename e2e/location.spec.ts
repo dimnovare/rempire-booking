@@ -1,0 +1,251 @@
+import path from "node:path";
+import { deflateSync } from "node:zlib";
+import type { Locator, Page } from "@playwright/test";
+import { OUT } from "./env";
+import { A, asOwner, expect, expectNoSideScroll, hydrated, test } from "./helpers";
+
+/**
+ * «Настройки → Локация» (settings/; Dim, 20.11.2026): the owner changes the
+ * salon's page on the booking site in the admin. On a phone and on a wide
+ * screen he opens «Бренд», «Контакты» and «Галерея», changes something on
+ * each, sees it saved, and sees it on /ru/about; then he puts it back. The
+ * database is shared with every other spec (app.spec.ts reads the same
+ * salon page), so each test leaves REMPIRE's details as it found them.
+ */
+const B = A.loc.brand;
+const C = A.loc.contacts;
+const G = A.loc.gallery;
+
+const shot = async (page: Page, name: string, wide: boolean) => {
+  const file = wide ? `pc-loc-${name}.png` : `${test.info().project.name}-loc-${name}.png`;
+  const body = await page.screenshot({ fullPage: true, path: path.join(OUT, "screens", file) });
+  await test.info().attach(file, { body, contentType: "image/png" });
+};
+
+const open = async (page: Page, url: string, title: string) => {
+  await page.goto(url);
+  await expect(page.locator("h1.adm-h1:visible", { hasText: title })).toBeVisible();
+  await hydrated(page);
+};
+
+/** The salon's page as a client opens it. */
+const salon = async (page: Page) => {
+  await page.goto("/ru/about");
+  await hydrated(page);
+  const s = page.locator("main.ab-app");
+  await expect(s.getByRole("heading", { level: 1 })).toBeVisible();
+  return s;
+};
+
+/** Auto-save: the change waits a moment, is sent, and the bar says so. */
+const saved = async (page: Page) => {
+  const st = page.locator(".loc-bar [role=status]:visible");
+  await expect(st).toHaveText(A.auto.saving);
+  await expect(st).toHaveText(A.saved);
+};
+
+/* A real picture the browser can read and shrink: a PNG made here, no file in the repo. */
+const CRC = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+function png(w: number, h: number, rgb: (x: number, y: number) => [number, number, number]): Buffer {
+  const crc = (buf: Buffer) => {
+    let c = 0xffffffff;
+    for (const b of buf) c = CRC[(c ^ b) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const sum = Buffer.alloc(4);
+    sum.writeUInt32BE(crc(body));
+    return Buffer.concat([len, body, sum]);
+  };
+  const head = Buffer.alloc(13);
+  head.writeUInt32BE(w, 0);
+  head.writeUInt32BE(h, 4);
+  head[8] = 8; // 8 bits a channel
+  head[9] = 2; // RGB
+  const raw = Buffer.alloc((w * 3 + 1) * h);
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const [r, g, b] = rgb(x, y);
+      raw.set([r, g, b], y * (w * 3 + 1) + 1 + x * 3);
+    }
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", head), chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
+}
+// a yellow ring on black: a logo-like square
+const LOGO = png(160, 160, (x, y) => (Math.abs(Math.hypot(x - 80, y - 80) - 52) < 14 ? [255, 203, 0] : [20, 20, 28]));
+// a warm gradient with a dark band: a photo-like picture
+const PHOTO = png(480, 360, (x, y) => (y > 230 && y < 270 ? [34, 34, 46] : [200 + Math.round((x / 480) * 55), 150 + Math.round((y / 360) * 60), 90]));
+
+const ours = /^\/api\/salon\/image\/[0-9a-f-]{36}$/;
+
+const checks = (wide: boolean) => {
+  test("«Бренд»: the words and the logo, then as they were", async ({ page }) => {
+    await open(page, "/admin/settings/brand", A.nav.brand);
+    await expect(page.getByLabel(B.name, { exact: true })).toHaveValue("REMPIRE");
+    const tabs = page.getByRole("tablist", { name: A.loc.langs });
+    await expect(tabs.getByRole("tab")).toHaveText(["RU", "ET", "EN"]);
+    await expect(tabs.getByRole("tab", { name: "RU" })).toHaveAttribute("aria-selected", "true");
+    const ru = page.getByRole("textbox", { name: `${B.about} (RU)` });
+    const was = await ru.inputValue();
+    expect(was).toMatch(/^Барберы из Эстонии/);
+    const mark = `Проверка e2e ${test.info().project.name}${wide ? " pc" : ""}.`;
+    try {
+      await ru.fill(`${was}\n\n${mark}`);
+      await saved(page);
+      // the other languages are a tab away, each with its own words
+      await tabs.getByRole("tab", { name: "EN" }).click();
+      await expect(page.getByRole("textbox", { name: `${B.about} (EN)` })).toHaveValue(/^Barbers from Estonia/);
+      await tabs.getByRole("tab", { name: "RU" }).click();
+
+      // the logo: a picture, shrunk, sent at once, shown in the disc
+      const tile = page.locator(".loc-logo-tile:visible");
+      await expect(tile).not.toHaveClass(/\bis-own\b/);
+      await page.locator(".loc-logo:visible input[type=file]").setInputFiles({ name: "logo.png", mimeType: "image/png", buffer: LOGO });
+      await expect(page.locator(".loc-logo:visible .adm-ok")).toHaveText(B.logoSaved);
+      await expect(tile.locator("img")).toHaveAttribute("src", ours);
+      // and the picture itself has come, not only its address
+      await expect.poll(() => tile.locator("img").evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth)).toBeGreaterThan(0);
+      await expect(page.getByRole("button", { name: B.logoRemove })).toBeVisible();
+      await expectNoSideScroll(page);
+      await shot(page, "brand", wide);
+      if (!wide) {
+        // a whole-page picture draws the phone's bars mid-page: the logo's card as the phone shows it
+        await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+        await page.waitForTimeout(300);
+        const file = `${test.info().project.name}-loc-logo.png`;
+        await test.info().attach(file, { body: await page.screenshot({ path: path.join(OUT, "screens", file) }), contentType: "image/png" });
+      }
+
+      const s = await salon(page);
+      await expect(s.getByText(mark)).toBeVisible();
+      await expect(s.locator(".ab-panel .mark-logo.is-own img")).toHaveAttribute("src", ours);
+    } finally {
+      await open(page, "/admin/settings/brand", A.nav.brand);
+      const back = page.getByRole("textbox", { name: `${B.about} (RU)` });
+      if ((await back.inputValue()) !== was) {
+        await back.fill(was);
+        await saved(page);
+      }
+      const remove = page.getByRole("button", { name: B.logoRemove });
+      if (await remove.count()) {
+        await remove.click();
+        await expect(page.locator(".loc-logo:visible .adm-ok")).toHaveText(B.logoRemoved);
+      }
+      await expect(page.locator(".loc-logo-tile:visible")).not.toHaveClass(/\bis-own\b/);
+    }
+    const s = await salon(page);
+    await expect(s.getByText(/^Барберы из Эстонии/)).toBeVisible();
+    await expect(s.getByText(/Проверка e2e/)).toHaveCount(0);
+    await expect(s.locator(".ab-panel .mark-logo")).not.toHaveClass(/\bis-own\b/);
+  });
+
+  test("«Контакты»: the hours and the pin from a map's link; a short link is refused; then as they were", async ({ page }) => {
+    await open(page, "/admin/settings/contacts", A.nav.contacts);
+    for (const h of [C.where, C.hours, C.phoneSite, C.socials, C.messengers]) {
+      await expect(page.getByRole("heading", { level: 2, name: h, exact: true })).toBeVisible();
+    }
+    const hours = page.getByRole("textbox", { name: `${C.hours} (RU)` });
+    const pin = page.getByLabel(C.pin, { exact: true });
+    const note = page.locator("#loc-pin-note:visible");
+    await expect(hours).toHaveValue("пн–сб 10:00–19:00");
+    await expect(pin).toHaveValue("59.430883, 24.761967");
+    await expect(note).toContainText(C.pinIs("59.430883, 24.761967"));
+    await expect(page.getByRole("textbox", { name: C.address, exact: true })).toHaveValue("Mardi 1, Tallinn");
+    try {
+      await hours.fill("пн–сб 10:00–20:00 (e2e)");
+      await saved(page);
+
+      // a short link names no place until it is opened: what to do instead, and nothing is sent
+      await pin.fill("https://maps.app.goo.gl/AbCdEf123");
+      await expect(note).toHaveText(C.pinShort);
+      await expect(page.locator(".loc-bar [role=status]:visible")).toHaveText(C.pinShort);
+
+      // a place's link from Google Maps: its own pin, shown before it is saved, with a look at it on the map
+      await pin.fill("https://www.google.com/maps/place/Mardi+1,+Tallinn/@59.43,24.76,17z/data=!3m1!4b1!4m6!3m5!8m2!3d59.4301!4d24.7602");
+      await expect(note).toContainText(C.pinIs("59.4301, 24.7602"));
+      await expect(note.getByRole("link", { name: C.pinOpen })).toHaveAttribute("href", /openstreetmap\.org\/\?mlat=59\.4301&mlon=24\.7602/);
+      await saved(page);
+      await expectNoSideScroll(page);
+      await shot(page, "contacts", wide);
+
+      const s = await salon(page);
+      await expect(s.getByText("пн–сб 10:00–20:00 (e2e)")).toBeVisible();
+      await expect(s.locator(".ab-map iframe")).toHaveAttribute("src", /&marker=59\.430100%2C24\.760200$/);
+    } finally {
+      await open(page, "/admin/settings/contacts", A.nav.contacts);
+      const h = page.getByRole("textbox", { name: `${C.hours} (RU)` });
+      const p = page.getByLabel(C.pin, { exact: true });
+      if ((await h.inputValue()) !== "пн–сб 10:00–19:00" || (await p.inputValue()) !== "59.430883, 24.761967") {
+        await h.fill("пн–сб 10:00–19:00");
+        await p.fill("59.430883, 24.761967");
+        await saved(page);
+      }
+    }
+    const s = await salon(page);
+    await expect(s.getByText("пн–сб 10:00–19:00")).toBeVisible();
+    await expect(s.locator(".ab-map iframe")).toHaveAttribute("src", /&marker=59\.430883%2C24\.761967$/);
+  });
+
+  test("«Галерея»: a photo added, moved first, seen on the salon's page, deleted", async ({ page }) => {
+    await open(page, "/admin/settings/gallery", A.nav.gallery);
+    const tiles = page.locator(".loc-photos:visible > li");
+    const first = (l: Locator) => l.first().locator("img");
+    await expect(tiles).toHaveCount(1);
+    await expect(first(tiles)).toHaveAttribute("src", "/brand/rempire-photo.svg");
+    await expect(page.getByText(G.count(1, 8))).toBeVisible();
+    try {
+      await page.locator(".loc-drop:visible input[type=file]").setInputFiles({ name: "salon.png", mimeType: "image/png", buffer: PHOTO });
+      await expect(page.locator(".loc:visible .adm-ok")).toHaveText(G.added);
+      await expect(tiles).toHaveCount(2);
+      await expect(tiles.nth(1).locator("img")).toHaveAttribute("src", ours);
+      await expect(page.getByText(G.count(2, 8))).toBeVisible();
+
+      // the new one first: «Фото 1: позже» moves the seeded one back
+      await expect(page.getByRole("button", { name: G.earlier(1) })).toBeDisabled();
+      await page.getByRole("button", { name: G.later(1) }).click();
+      await expect(page.locator(".loc:visible .adm-ok")).toHaveText(G.moved);
+      await expect(first(tiles)).toHaveAttribute("src", ours);
+      await expect(tiles.nth(1).locator("img")).toHaveAttribute("src", "/brand/rempire-photo.svg");
+      await expectNoSideScroll(page);
+      await shot(page, "gallery", wide);
+
+      const s = await salon(page);
+      await expect(s.locator(".ab-photos img")).toHaveCount(2);
+      await expect(s.locator(".ab-photos img").first()).toHaveAttribute("src", ours);
+    } finally {
+      // every uploaded one out again: the bin asks once, then it goes
+      await open(page, "/admin/settings/gallery", A.nav.gallery);
+      for (let left = await page.locator(`.loc-photos:visible img[src^="/api/salon/image/"]`).count(); left > 0; left--) {
+        const i = await page.locator(".loc-photos:visible > li").evaluateAll((li) => li.findIndex((el) => el.querySelector("img")?.getAttribute("src")?.startsWith("/api/salon/image/")));
+        await page.getByRole("button", { name: G.remove(i + 1) }).click();
+        await expect(page.getByRole("group", { name: G.ask })).toBeVisible();
+        await page.getByRole("button", { name: G.yes, exact: true }).click();
+        await expect(page.locator(".loc:visible .adm-ok")).toHaveText(G.removed);
+        await expect(page.locator(`.loc-photos:visible img[src^="/api/salon/image/"]`)).toHaveCount(left - 1);
+      }
+    }
+    await expect(page.locator(".loc-photos:visible > li")).toHaveCount(1);
+    const s = await salon(page);
+    await expect(s.locator(".ab-photos img")).toHaveCount(1);
+    await expect(s.locator(".ab-photos img")).toHaveAttribute("src", "/brand/rempire-photo.svg");
+  });
+};
+
+test.describe("the salon's page in the admin, on a phone", () => {
+  test.use(asOwner);
+  checks(false);
+});
+
+test.describe("the salon's page in the admin, on a wide screen", () => {
+  test.use({ ...asOwner, viewport: { width: 1440, height: 900 } });
+  test.beforeEach(({}, info) => {
+    test.skip(info.project.name !== "android", "one wide run is enough");
+  });
+  checks(true);
+});

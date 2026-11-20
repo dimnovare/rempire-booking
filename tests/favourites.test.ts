@@ -27,7 +27,8 @@ describe("the pages that can be starred", () => {
   it("are sections of the admin, each with its address and its word in the three languages", () => {
     const menu = MENU.flatMap((row) => (row.pages ? row.pages.map((p) => p.href) : [row.href]));
     for (const page of FAV_PAGES) {
-      expect(FAV_HREF[page]).toMatch(/^\/admin\/[a-z]+$/);
+      // one or two steps under /admin: «Настройки» keeps its pages under /admin/settings/
+      expect(FAV_HREF[page]).toMatch(/^\/admin(\/[a-z]+){1,2}$/);
       // every starred page is one the menu has, so it can always be reached without the star too
       expect(menu).toContain(FAV_HREF[page]);
       for (const A of [ru, et, en]) expect(A.nav[page]).toBeTruthy();

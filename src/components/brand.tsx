@@ -19,12 +19,16 @@ export function Logo() {
   return <img className="logo" src="/brand/rempire-logo-white.svg" alt="REMPIRE" width={118} height={30} />;
 }
 
-/** The client pages' mark, as in the booking widget Renat knows: the thin REMPIRE on a dark disc. */
-export function LogoMark({ size = 48 }: { size?: number }) {
+/**
+ * The client pages' mark, as in the booking widget Renat knows: the thin
+ * REMPIRE on a dark disc. `src` is the salon's own logo from «Настройки →
+ * Бренд» (src/lib/catalog.ts, location.logo): it fills the disc instead.
+ */
+export function LogoMark({ size = 48, src = "", alt = "REMPIRE" }: { size?: number; src?: string; alt?: string }) {
   return (
-    <span className="mark-logo" style={{ width: size, height: size }}>
+    <span className={src ? "mark-logo is-own" : "mark-logo"} style={{ width: size, height: size }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src="/brand/rempire-logo-white.svg" alt="REMPIRE" width={118} height={30} />
+      {src ? <img key={src} src={src} alt={alt} width={size} height={size} /> : <img key="mark" src="/brand/rempire-logo-white.svg" alt="REMPIRE" width={118} height={30} />}
     </span>
   );
 }

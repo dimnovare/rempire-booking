@@ -38,6 +38,8 @@ export const CHANGE_ENTITIES = [
   "invoice_issuer",
   "chair_rent",
   "business",
+  // the salon's page on the booking site («Настройки → Локация», location.ts)
+  "location",
 ] as const;
 export type ChangeEntity = (typeof CHANGE_ENTITIES)[number];
 

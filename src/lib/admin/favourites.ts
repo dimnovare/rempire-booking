@@ -25,6 +25,9 @@ export const FAV_HREF = {
   catalogue: "/admin/catalogue",
   requests: "/admin/requests",
   invoices: "/admin/invoices",
+  brand: "/admin/settings/brand",
+  contacts: "/admin/settings/contacts",
+  gallery: "/admin/settings/gallery",
   account: "/admin/account",
 } as const;
 
