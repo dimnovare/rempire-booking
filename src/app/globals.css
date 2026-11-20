@@ -236,7 +236,7 @@ textarea.input { height: auto; min-height: 84px; padding-block: 12px; resize: ve
 .bye .btn { margin-top: 32px; }
 .bye .sub { margin-top: 12px; }
 
-/* bottom sheets: the salon, a barber, the language, «cancel?» */
+/* bottom sheets: a barber, the language, «cancel?» */
 .sheet-wrap { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
 .sheet-scrim { position: absolute; inset: 0; width: 100%; height: 100%; background: rgba(6, 15, 7, .5); }
 .sheet-scrim:active:not(:disabled) { opacity: 1; }
@@ -248,12 +248,54 @@ textarea.input { height: auto; min-height: 84px; padding-block: 12px; resize: ve
 .sheet p { margin: 16px 0 0; font-size: 14px; line-height: 22px; }
 .sheet .btn { margin-top: 20px; }
 .sheet .btn + .btn { margin-top: 8px; }
-.kvs { margin-top: 16px; display: flex; flex-direction: column; gap: 12px; }
-.kvs div { display: flex; flex-direction: column; }
-.kvs a { align-self: flex-start; padding: 10px 0; margin: -10px 0; }
 .opts { margin-top: 8px; display: flex; flex-direction: column; }
 .opt { width: 100%; min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .opt[aria-pressed="true"] { font-weight: 500; }
+
+/* the salon's own page («REMPIRE ▾»), as the widget's «about»: a back
+   arrow on the grey band, the white panel under the mark, contacts, words,
+   photos, the map and the reviews; one scrolling page over the step under it */
+.app[hidden] { display: none; }
+.ab-app { background: var(--ground); }
+.ab-bar { position: sticky; top: 0; z-index: 10; flex: none; height: var(--hd); padding: var(--safe-t) 8px 0; display: flex; align-items: center; gap: 2px; background: transparent; }
+.ab-bar.solid { background: var(--surface); box-shadow: 0 1px 0 var(--line); }
+.ab-bar-co { min-width: 0; display: flex; align-items: center; gap: 10px; opacity: 0; transition: opacity .15s; }
+.ab-bar.named .ab-bar-co { opacity: 1; }
+.ab-bar-co b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ab-panel { flex: 1; position: relative; margin-top: 56px; background: var(--surface); border-radius: 24px 24px 0 0; padding: 60px var(--gut-r) calc(98px + var(--safe-b)) var(--gut-l); display: flex; flex-direction: column; }
+.ab-panel > .mark-logo { position: absolute; left: var(--gut-l); top: -48px; }
+.ab-name { margin: 0; font: 700 28px/32px var(--body); overflow-wrap: anywhere; }
+.ab-rating { align-self: flex-start; min-height: 44px; margin-top: 4px; display: flex; align-items: center; gap: 8px; color: var(--ink-2); }
+.ab-rows { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; }
+.ab-row { min-height: 48px; padding: 10px 0; display: flex; align-items: center; gap: 16px; text-decoration: none; overflow-wrap: anywhere; }
+a.ab-row { align-self: flex-start; }
+.ab-row svg { flex: none; }
+.ab-label { margin: 20px 0 0; font: 400 16px/24px var(--body); color: var(--ink-2); }
+.ab-h { margin: 24px 0 0; font: 700 22px/28px var(--body); }
+.ab-text { margin: 12px 0 0; font-size: 14px; line-height: 22px; white-space: pre-line; overflow-wrap: anywhere; }
+.ab-photos { margin: 12px calc(-1 * var(--gut-r)) 0 calc(-1 * var(--gut-l)); padding: 0 var(--gut-r) 4px var(--gut-l); display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: var(--gut-l); scrollbar-width: none; }
+.ab-photos::-webkit-scrollbar { display: none; }
+.ab-photos img { flex: none; width: 240px; max-width: 72%; height: 200px; border-radius: 16px; object-fit: cover; background: var(--fill); scroll-snap-align: start; }
+/* no min-height: through the ratio it would become a min-width, wider than a 360 px phone */
+.ab-map { position: relative; margin-top: 8px; aspect-ratio: 568 / 227; border-radius: 16px; overflow: hidden; background: var(--fill); }
+.ab-map iframe { display: block; width: 100%; height: 100%; border: 0; pointer-events: none; }
+/* the pill top left: the frame's zoom buttons sit top right, its credits along the bottom */
+.ab-map a { position: absolute; inset: 0; display: flex; align-items: flex-start; justify-content: flex-start; padding: 8px; text-decoration: none; }
+.ab-map a span { padding: 4px 12px; border-radius: 100px; background: var(--surface); box-shadow: 0 1px 4px rgba(6, 15, 7, .2); font-size: 12px; line-height: 20px; font-weight: 500; }
+.ab-reviews { scroll-margin-top: calc(var(--hd) + 8px); }
+.ab-reviews > .sub { margin: 2px 0 0; }
+.ab-reviews .wait { padding: 16px 0; min-height: 0; }
+.ab-reviews .alert { margin-top: 16px; }
+.rvs { list-style: none; margin: 20px 0 0; padding: 0; display: flex; flex-direction: column; gap: 20px; }
+.rv { display: grid; grid-template-columns: 48px minmax(0, 1fr); column-gap: 16px; align-items: center; }
+.rv-ava { width: 48px; height: 48px; border-radius: 50%; background: rgba(38, 38, 38, .1); display: grid; place-items: center; font-size: 16px; font-weight: 600; }
+.rv-head { min-width: 0; display: flex; flex-direction: column; }
+.rv-head b { font-weight: 500; overflow-wrap: anywhere; }
+.rv-meta { margin-top: 2px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; font-size: 12px; line-height: 16px; color: var(--ink-2); }
+.rv-stars { display: flex; gap: 1px; }
+.rv-body { grid-column: 1 / -1; margin: 8px 0 0; font-size: 14px; line-height: 20px; white-space: pre-line; overflow-wrap: anywhere; }
+.ab-more { margin-top: 24px; border: 1px solid var(--edge); }
+.ab-more:disabled { opacity: .5; }
 
 /* Renat's questions (/ru/q/<token>): one column at every width */
 .app.qa-app { padding: 0 var(--gut-r) 40px var(--gut-l); }

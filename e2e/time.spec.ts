@@ -36,7 +36,7 @@ test.describe("his time", () => {
 
   test("a break applies at once, shows on his day, and goes away again", async ({ page, browser, barber }, info) => {
     const owner = await phoneOf(browser, info, "owner");
-    await setSwitch(owner, A.req.time, A.req.now);
+    await setSwitch(owner, "time", "now");
     const day = nextWorkday(barber.slug);
     await openTime(page);
     await page.getByRole("button", { name: T.add.block, exact: true }).click();
@@ -60,7 +60,7 @@ test.describe("his time", () => {
 
   test("with «С моего ОК» a vacation waits; Renat approves it with an answer", async ({ page, browser, barber }, info) => {
     const owner = await phoneOf(browser, info, "owner");
-    await setSwitch(owner, A.req.time, A.req.ask);
+    await setSwitch(owner, "time", "ask");
     try {
       // his fourth working day from tomorrow: no demo visit and no other test's visit is inside it
       const day = nextWorkday(barber.slug, 4);
@@ -101,51 +101,64 @@ test.describe("his time", () => {
       // taking time back always applies at once
       await removeAhead(page, T.add.vacation, /.*/);
     } finally {
-      await setSwitch(owner, A.req.time, A.req.now);
+      await setSwitch(owner, "time", "now");
       await owner.context().close();
     }
   });
 
   test("a new price waits for Renat; he declines it and the price stays", async ({ page, browser, barber }, info) => {
     const owner = await phoneOf(browser, info, "owner");
-    await setSwitch(owner, A.req.price, A.req.ask);
-    await openTime(page);
-    const first = page.locator(".bx-rows button.bx-row").first();
-    const name = (await first.locator(".plain").innerText()).trim();
-    const before = (await first.locator(".price").innerText()).trim();
-    await first.click();
-    const s = sheet(page);
-    const price = s.getByLabel(T.price);
-    await price.fill(String(Number((await price.inputValue()).replace(",", ".")) + 1));
-    await s.getByRole("button", { name: T.send }).click();
-    await expect(toast(page)).toHaveText(T.sent);
-    const row = page.locator(".bx-rows button.bx-row", { hasText: name });
-    await expect(row).toContainText(/ждёт ответа: /);
+    await setSwitch(owner, "price", "ask");
+    try {
+      await openTime(page);
+      const first = page.locator(".bx-rows button.bx-row").first();
+      const name = (await first.locator(".plain").innerText()).trim();
+      const before = (await first.locator(".price").innerText()).trim();
+      await first.click();
+      const s = sheet(page);
+      const price = s.getByLabel(T.price);
+      await price.fill(String(Number((await price.inputValue()).replace(",", ".")) + 1));
+      await s.getByRole("button", { name: T.send }).click();
+      await expect(toast(page)).toHaveText(T.sent);
+      const row = page.locator(".bx-rows button.bx-row", { hasText: name });
+      await expect(row).toContainText(/ждёт ответа: /);
 
-    await owner.goto("/admin/requests");
-    await hydrated(owner);
-    const req = owner.locator(".adm-req li", { hasText: barber.name }).filter({ hasText: name }).filter({ has: owner.getByRole("button", { name: A.req.decline }) });
-    await req.getByRole("button", { name: A.req.decline }).click();
-    await expect(owner.locator(".adm-toast")).toHaveText(A.req.declined);
+      await owner.goto("/admin/requests");
+      await hydrated(owner);
+      const req = owner.locator(".adm-req li", { hasText: barber.name }).filter({ hasText: name }).filter({ has: owner.getByRole("button", { name: A.req.decline }) });
+      await req.getByRole("button", { name: A.req.decline }).click();
+      await expect(owner.locator(".adm-toast")).toHaveText(A.req.declined);
 
-    await openTime(page);
-    await expect(row.locator(".price")).toHaveText(before);
-    await expect(row).not.toContainText(/ждёт ответа: /);
-    await expect(page.locator(".bx-rows li", { hasText: name }).getByText(T.status.declined)).toBeVisible();
-    await owner.context().close();
+      await openTime(page);
+      await expect(row.locator(".price")).toHaveText(before);
+      await expect(row).not.toContainText(/ждёт ответа: /);
+      await expect(page.locator(".bx-rows li", { hasText: name }).getByText(T.status.declined)).toBeVisible();
+    } finally {
+      // a barber starts with his prices at once (Renat, 18.11)
+      await setSwitch(owner, "price", "now");
+      await owner.context().close();
+    }
   });
 
-  test("a request he regrets: «Отозвать»", async ({ page }) => {
-    await openTime(page);
-    const first = page.locator(".bx-rows button.bx-row").first();
-    await first.click();
-    const s = sheet(page);
-    await s.getByRole("button", { name: "+5" }).click();
-    await s.getByRole("button", { name: T.send }).click();
-    await expect(toast(page)).toHaveText(T.sent);
-    await page.getByRole("button", { name: T.withdraw }).first().click();
-    await expect(toast(page)).toHaveText(T.withdrawn);
-    await expect(page.getByText(T.status.withdrawn).first()).toBeVisible();
+  test("a request he regrets: «Отозвать»", async ({ page, browser }, info) => {
+    // a price change is a request only with «С моего ОК»; a barber starts with «now» (Renat, 18.11)
+    const owner = await phoneOf(browser, info, "owner");
+    await setSwitch(owner, "price", "ask");
+    try {
+      await openTime(page);
+      const first = page.locator(".bx-rows button.bx-row").first();
+      await first.click();
+      const s = sheet(page);
+      await s.getByRole("button", { name: "+5" }).click();
+      await s.getByRole("button", { name: T.send }).click();
+      await expect(toast(page)).toHaveText(T.sent);
+      await page.getByRole("button", { name: T.withdraw }).first().click();
+      await expect(toast(page)).toHaveText(T.withdrawn);
+      await expect(page.getByText(T.status.withdrawn).first()).toBeVisible();
+    } finally {
+      await setSwitch(owner, "price", "now");
+      await owner.context().close();
+    }
   });
 
   test("his hours: saving the same week says nothing changed", async ({ page }) => {
@@ -160,7 +173,7 @@ test.describe("his time", () => {
 
   test("special time in percent: «%» next to the number, «+50 %» ahead and on his day, money for a visit", async ({ page, browser, barber }, info) => {
     const owner = await phoneOf(browser, info, "owner");
-    await setSwitch(owner, A.req.time, A.req.now);
+    await setSwitch(owner, "time", "now");
     await owner.context().close();
     // early morning well ahead: no demo visit and no other test is there
     const day = nextWorkday(barber.slug, 9);

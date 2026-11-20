@@ -616,3 +616,25 @@ export function invoiceLetter(
   const html = layout({ lang: L, title: subject, preheader: `${period} · ${eurComma(inv.grossCents)}`, origin: o.origin, body, footer: [esc(inv.sellerName), esc(k.footer)] });
   return { subject, text, html, attachments: [{ filename: o.pdf.filename, content: o.pdf.content, contentType: "application/pdf" }] };
 }
+
+// ---- a letter's subject alone (the report «Сообщения») ---------------------
+
+/**
+ * The subject a letter of this outbox kind has, in its language, from the
+ * same words the letters use: what the report «Сообщения» shows for an
+ * e-mail. A visit's letters need its start (`startsAt`, on the salon's
+ * clock `tz`), an invoice its number. Null: a kind we write no letter for,
+ * or what its subject needs is missing. The login code's letter is never
+ * named here: its subject carries the code.
+ */
+export function letterSubject(kind: string, locale: Locale, o: { startsAt?: string | null; tz?: string; number?: string | null; credit?: boolean } = {}): string | null {
+  const L: Locale = locale === "et" || locale === "en" ? locale : "ru";
+  if (kind === "birthday") return BIRTHDAY[L].subject;
+  if (kind === "no_show") return NO_SHOW[L].subject;
+  if (kind === "invoice") return o.number ? (INVOICE[L] ?? INVOICE.et).subject(o.number, o.credit === true) : null;
+  const copy = kind === "confirmation" ? CONFIRM[L] : kind === "moved" ? MOVED[L] : kind === "cancelled" ? CANCELLED[L] : kind === "reminder_email" ? REMINDER[L] : null;
+  if (!copy || !o.startsAt || Number.isNaN(Date.parse(o.startsAt))) return null;
+  const s = localParts(Date.parse(o.startsAt), o.tz || "Europe/Tallinn");
+  const [, mm, dd] = s.date.split("-").map(Number);
+  return copy.subject(`${pad2(dd)}.${pad2(mm)}`, s.time);
+}

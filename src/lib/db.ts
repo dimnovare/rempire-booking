@@ -146,12 +146,14 @@ async function makePglite(): Promise<Raw> {
       await seedDemoSpecial(db);
       await seedDemoSales(db);
       await seedOwnerQa(db, [...OWNER_QA, DEMO_QA]);
-      // a local run: logins at example.test, by e-mail code, and fake visits
-      // for today and each barber's next working day (tools/seed-demo.mjs)
+      // a local run: logins at example.test, by e-mail code, fake visits
+      // for today and each barber's next working day, and made-up reviews
+      // of the salon for its page (tools/seed-demo.mjs)
       const local = await import("../../tools/seed-demo.mjs");
       if (process.env.DEMO_LOGINS === "yes") {
         await local.seedDemoLogins(db);
         await local.seedDemoVisits(db);
+        await local.seedDemoReviews(db);
       }
       // staging's busy calendar (SEED_BUSY=yes): never tests, never e2e
       if (local.busyEnabled()) await local.seedDemoBusy(db);

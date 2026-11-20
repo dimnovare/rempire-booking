@@ -10,6 +10,9 @@
  * (barber_self_time, barber_self_price) made of his own changes. The test
  * asks the door the same question for an owner, the front desk and a
  * barber under every value of each switch, and wants the same answer.
+ *
+ * One change since: Renat, 18.11.2026, a barber changes his prices and
+ * times himself too, so with the price switch not set they apply at once.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { can, seenClients, seenStaff, type Holder, type RightKey, type Scope } from "@/lib/auth/rights";
@@ -31,9 +34,9 @@ const owner = (r: Role) => r === "owner";
 /** requireAdmin(): Renat and the front desk. */
 const desk = (r: Role) => r !== "staff";
 const anyone = () => true;
-/** The switches' own defaults (src/lib/settings.ts as it was): time at once, prices ask. */
+/** The switches' defaults: time at once (src/lib/settings.ts as it was); prices at once since Renat's answer (18.11), were «ask». */
 const timeNow = (s: Sw) => s.time !== "ask";
-const priceNow = (s: Sw) => s.price === "now";
+const priceNow = (s: Sw) => s.price !== "ask";
 
 /** What the code allowed before the rights: the right that now stands for it, and the old rule. */
 const WAS: { right: RightKey; scope?: Scope; what: string; was: (role: Role, sw: Sw) => boolean }[] = [
@@ -111,6 +114,9 @@ const WAS: { right: RightKey; scope?: Scope; what: string; was: (role: Role, sw:
   { right: "reports.dashboard", what: "the KPI dashboard: new, the admin's side (legacyRights gives it every built right but the owner's own)", was: desk },
   { right: "reports.visits", what: "the visits ahead and behind and the bookings' feed: new, the admin's side as «Записи» is", was: desk },
   { right: "reports.visits.phones", what: "phones in it: as in «Записи»", was: desk },
+  // ---- «Сообщения» (built 20.11, new): the same rule as «Отзывы»; the list's «Администратор» has neither
+  { right: "reports.messages", what: "the log of every message sent: new, the admin's side as «Записи» is", was: desk },
+  { right: "reports.messages.phones", what: "the phones and e-mails in it whole: as in «Записи»", was: desk },
 ];
 
 const SWITCHES: Switch[] = [undefined, "now", "ask"];
@@ -184,7 +190,8 @@ describe("the one-time backfill", () => {
     expect(user!.rights.values).toEqual(want.values);
     expect((await stored(id)).rights_preset).toBe("SP");
     expect(can(user, "journal.schedule")).toBe(true);
-    expect(can(user, "services.staff")).toBe(false);
+    // Renat, 18.11: his prices and times at once too
+    expect(can(user, "services.staff")).toBe(true);
   });
 
   it("reads the salon's two switches as they stand, for every barber at once", async () => {

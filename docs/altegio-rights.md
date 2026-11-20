@@ -487,6 +487,7 @@ Paths are under `src/`. «→» names the function.
 ### What is ours and not the list's
 
 - **The day this shipped nothing changed.** Each login's first set is its old role written down (`legacyRights` in `src/lib/auth/rights-store.ts`): an owner «Владелец» as it is; the front desk everything but the logins, the export, the reminder switch; a barber what his app let him do in his own column. The salon's two switches for barbers (`barber_self_time`, `barber_self_price`) became two rights of each barber's login («Изменять график работы…» and «Изменять услуги сотрудников…») and are read by that backfill alone.
+- **Renat's answer, 18.11.2026** («Что барбер меняет сам»: his schedule, vacation and days off, his prices and times). `030_barbers_change_own.sql` switched «Изменять график работы…» and «Изменять услуги сотрудников…» (with the «Услуги» group) on for every «Специалист» login and removed the two old switches, so a barber's login added later starts with both on. The «Специалист» preset button itself stays as the list has it: pressing it on a barber turns the two off.
 - **The role is the side of the app:** «Владелец» → owner, «Специалист» → the barber app (the login must be a barber), the other six → the salon's side. `users.role` follows the preset on save.
 - **«Клиент пришел» is two of our statuses,** «пришёл» and «готово».
 - **A period** has two values where it works here: no limit, or «today» (nothing dated before today).

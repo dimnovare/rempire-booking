@@ -64,8 +64,8 @@ of commit 9b2d675. Figures are the salon's own totals, never a client's.
 |---|---|---|---|
 | «Визиты»: today's upcoming visits and the booking feed (the reports' landing) | automatic | built 20.11, `/admin/dashboard` | ✅ (round 10) |
 | «Основные показатели»: sales, attendance, fill rate, with charts | data every month | built 20.11, `/admin/analytics`; sales are visit prices, as no payments are recorded | ✅ (round 10) |
-| «Сообщения» | data | per client, on the card | ➕ (decision 29) |
-| «Изменения данных» (change log) | 1 097 entries in two months | the audit table, no page | ➕ (decision 29) |
+| «Сообщения» | data | built 20.11, `/admin/messages`: every SMS, letter and notification, with its status, channel and carrier; contacts masked without «Показывать номера телефонов в сообщениях» | ✅ (decision 29) |
+| «Изменения данных» (change log) | 1 097 entries in two months | built 20.11, `/admin/changes` (owner only): the audit table, before → after field by field | ✅ (decision 29) |
 | Client, staff, service, fill-rate, finance, P&L and till reports | data (automatic) | — | ❓ Renat (his question «Касса, отчёты и скидки») |
 | Events, promotions, calls, stock reports | empty | — | — |
 

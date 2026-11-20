@@ -195,7 +195,7 @@ test.describe("an owner who cuts too, on a phone", () => {
     const group = (name: string) => more.getByRole("region", { name });
     await expect(group(M.mineGroup).locator(".mo-row b")).toHaveText([M.time, M.sell, M.money]);
     await expect(group(M.mineGroup).locator(".mo-row small").first()).toHaveText(M.timeHint);
-    await expect(group(M.salonGroup).locator(".mo-row b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.analytics, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.invoices, A.sale.title]);
+    await expect(group(M.salonGroup).locator(".mo-row b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.analytics, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.invoices, A.sale.title]);
     await expect(group(M.accountGroup).locator(".mo-row b")).toHaveText([M.access, M.notify, M.language, M.logout]);
     await expect(group(M.accountGroup).locator(".mo-row", { hasText: M.language }).locator("small")).toHaveText("Русский");
     await expectNoSideScroll(page);
@@ -266,7 +266,7 @@ test.describe("an owner who cuts too, on a phone", () => {
       await hydrated(page);
       return (await dot().count()) ? Number(/(\d+)$/.exec((await dot().getAttribute("aria-label")) ?? "")?.[1] ?? 0) : 0;
     };
-    await setSwitch(owner, A.req.time, A.req.ask);
+    await setSwitch(owner, "time", "ask");
     try {
       await page.goto("/b");
       const before = await waiting();
@@ -310,7 +310,7 @@ test.describe("an owner who cuts too, on a phone", () => {
       await expect(toast(phone)).toHaveText(B.time.removed);
       expect(await waiting()).toBe(before);
     } finally {
-      await setSwitch(owner, A.req.time, A.req.now);
+      await setSwitch(owner, "time", "now");
       await owner.context().close();
       await phone.context().close();
     }
@@ -374,7 +374,7 @@ test.describe("an owner who does not cut, on a phone", () => {
     await expect(more.locator(".mo-who b")).toHaveText("Owner (demo)");
     await expect(more.locator(".mo-who span:not(.mo-ava)")).toHaveText(PRESETS.OW.ru);
     await expect(more.getByRole("heading", { level: 2 })).toHaveText([M.salonGroup, M.accountGroup]);
-    await expect(more.getByRole("region", { name: M.salonGroup }).locator(".mo-row b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.analytics, A.nav.records, A.nav.reviews, A.nav.visits, A.sale.title]);
+    await expect(more.getByRole("region", { name: M.salonGroup }).locator(".mo-row b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.analytics, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.sale.title]);
     await expect(more.getByRole("region", { name: M.accountGroup }).locator(".mo-row b")).toHaveText([M.access, M.notify, M.language, M.logout]);
     await expect(more.locator('a[href^="/b/time"], a[href^="/b/sell"], a[href^="/b/money"]')).toHaveCount(0);
     await expectNoSideScroll(page);

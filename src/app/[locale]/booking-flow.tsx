@@ -16,13 +16,36 @@
  * Free times come from /api/slots, special time included; «Book» posts to
  * /api/bookings with an Idempotency-Key. Screens: docs/client-flow.md and
  * the canvas https://claude.ai/artifact/5F78oNUN8bRrPQzoBcFLyr.
+ *
+ * The salon's name («REMPIRE ▾») opens the salon's own page over any step,
+ * as the widget opens its «about» page: contacts, its words, photos, the
+ * map and the reviews about the salon, «Записаться» at the bottom. Its
+ * address is /{locale}/about (pushed, so the phone's back closes it, and
+ * that address opens it by itself too); the step under it stays as it was.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { InstallOffer } from "./install-offer";
 import { RemindMe } from "./remind-me";
-import { CheckIcon, ChevronIcon, CrossIcon, DayIcon, InfoIcon, LogoMark, PencilIcon, PeopleIcon, StarIcon } from "@/components/brand";
-import type { Catalog, CatalogStaff } from "@/lib/catalog";
+import {
+  AtIcon,
+  ChatIcon,
+  CheckIcon,
+  ChevronIcon,
+  ClockIcon,
+  CrossIcon,
+  DayIcon,
+  GlobeIcon,
+  InfoIcon,
+  LogoMark,
+  PencilIcon,
+  PeopleIcon,
+  PhoneIcon,
+  PinIcon,
+  StarIcon,
+} from "@/components/brand";
+import type { Catalog, CatalogLocation, CatalogStaff } from "@/lib/catalog";
 import { COPY, duration, eur, euroRange, INTL, LOCALES, pick, type Locale } from "@/lib/i18n";
+import type { SalonReview } from "@/lib/reviews";
 import { localParts } from "@/lib/tz";
 
 type Props = {
@@ -41,6 +64,8 @@ type Props = {
   initialBarber: string | null;
   /** the visit being moved (/{locale}/visit/{token}/move); its barber and services stay */
   moving: Moving | null;
+  /** /{locale}/about: the salon's page is open from the start, the first step under it */
+  about?: boolean;
 };
 
 export type Moving = { token: string; staffId: string; services: string[]; start: number; url: string };
@@ -54,7 +79,9 @@ type Slot = { t: number; staffId: string; extra: number };
 /** The visit this device booked, as remembered here and checked against the server (/api/visit/<token>). */
 type NextVisit = { url: string; start: number; end: number; staffId: string; services: string[] };
 type Done = { start: number; end: number; staffId: string; totalCents: number; extraCents: number; manageUrl: string | null };
-type Sheet = { kind: "co" } | { kind: "lang" } | { kind: "barber"; id: string } | null;
+type Sheet = { kind: "lang" } | { kind: "barber"; id: string } | null;
+/** The salon's reviews as far as they are shown: the first six, then six more each time. */
+type SalonReviews = { rows: SalonReview[]; more: boolean };
 
 const STORE = "rempire-booking:client";
 // the last barber + services booked on this device: that barber is picked when the page opens
@@ -71,7 +98,46 @@ const dateOf = (d: string) => {
 const ymd = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const newKey = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}-${Math.random()}`);
 
-export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, reminderMin, demo, pushKey, initialBarber, moving }: Props) {
+/* ---------- the salon's page ---------- */
+const ABOUT_PATH = /^\/(ru|et|en)\/about\/?$/;
+/** How many reviews each «Ещё отзывы» adds, as the widget: six. */
+const REVIEWS_STEP = 6;
+const http = (s: string) => /^https?:\/\//i.test(s);
+const digits = (s: string) => s.replace(/\D/g, "");
+const handle = (s: string) => encodeURIComponent(s.replace(/^@/, ""));
+/** «K.» → «K», «Anna Näidis» → «AN»: the grey circle of a review. */
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    // each word's first letter or digit: a dot or a quote is no initial
+    .map((w) => [...w].find((ch) => ch.toLowerCase() !== ch.toUpperCase() || (ch >= "0" && ch <= "9")))
+    .filter((ch): ch is string => !!ch)
+    .slice(0, 2)
+    .map((ch) => ch.toLocaleUpperCase())
+    .join("") || "?";
+/** The place in a maps app: the pin when there is one, else the address. */
+const mapsHref = (l: CatalogLocation) =>
+  `https://www.google.com/maps/search/?api=1&query=${l.pin ? `${l.pin.lat},${l.pin.lng}` : encodeURIComponent(l.address)}`;
+/** OpenStreetMap's own embed around the pin (no key, no account): a few streets either way. */
+const mapFrame = ({ lat, lng }: { lat: number; lng: number }) => {
+  const f = (n: number) => n.toFixed(6);
+  const box = [lng - 0.0053, lat - 0.00135, lng + 0.0053, lat + 0.00135].map(f).join("%2C");
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${box}&layer=mapnik&marker=${f(lat)}%2C${f(lng)}`;
+};
+/** The rows under «Контакты»: what is set, each a link. Socials and messengers by name, never their marks. */
+function contactRows(l: CatalogLocation): { key: string; href: string; text: string; icon: React.ReactNode; out?: boolean }[] {
+  const rows: { key: string; href: string; text: string; icon: React.ReactNode; out?: boolean }[] = [];
+  if (digits(l.phone)) rows.push({ key: "phone", href: `tel:${l.phone.replace(/[^\d+]/g, "")}`, text: l.phone, icon: <PhoneIcon /> });
+  if (l.website) rows.push({ key: "web", href: http(l.website) ? l.website : `https://${l.website}`, text: l.website.replace(/^https?:\/\//i, "").replace(/\/$/, ""), icon: <GlobeIcon />, out: true });
+  if (l.instagram) rows.push({ key: "instagram", href: http(l.instagram) ? l.instagram : `https://www.instagram.com/${handle(l.instagram)}`, text: "Instagram", icon: <AtIcon />, out: true });
+  if (l.facebook) rows.push({ key: "facebook", href: http(l.facebook) ? l.facebook : `https://www.facebook.com/${handle(l.facebook)}`, text: "Facebook", icon: <AtIcon />, out: true });
+  if (digits(l.whatsapp)) rows.push({ key: "whatsapp", href: `https://wa.me/${digits(l.whatsapp)}`, text: "WhatsApp", icon: <ChatIcon />, out: true });
+  if (l.telegram) rows.push({ key: "telegram", href: http(l.telegram) ? l.telegram : `https://t.me/${handle(l.telegram)}`, text: "Telegram", icon: <ChatIcon />, out: true });
+  if (digits(l.viber)) rows.push({ key: "viber", href: `viber://chat?number=%2B${digits(l.viber)}`, text: "Viber", icon: <ChatIcon /> });
+  return rows;
+}
+
+export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, reminderMin, demo, pushKey, initialBarber, moving, about: aboutFirst = false }: Props) {
   const [lang, setLang] = useState<Locale>(locale);
   const c = COPY[lang];
   const asked = useMemo(() => catalog.staff.find((s) => s.slug === initialBarber)?.id ?? null, [catalog.staff, initialBarber]);
@@ -99,6 +165,19 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
   const [monthOpen, setMonthOpen] = useState(true); // the whole month, or the chosen day's week alone
   const [closed, setClosed] = useState<Record<string, boolean>>({}); // «Morning» and the like, folded
   const [sheet, setSheet] = useState<Sheet>(null);
+  // the salon's page, over whatever step is open
+  const [about, setAbout] = useState(aboutFirst);
+  const [bar, setBar] = useState<0 | 1 | 2>(0); // its top bar: clear, white, white with the salon's name
+  const [reviews, setReviews] = useState<SalonReviews | null>(null);
+  const [reviewsBusy, setReviewsBusy] = useState(false);
+  const [reviewsError, setReviewsError] = useState(false);
+  const aboutPushed = useRef(false); // the page has its own history entry: back closes it
+  const aboutFrom = useRef<{ y: number; el: HTMLElement | null }>({ y: 0, el: null }); // where the step was, and what opened the page
+  const reviewsAsked = useRef(false);
+  const barRef = useRef<HTMLElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const nameRef = useRef<HTMLHeadingElement | null>(null);
+  const reviewsRef = useRef<HTMLElement | null>(null);
   const key = useRef("");
   const byeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -174,6 +253,96 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
       window.removeEventListener("keydown", onKey);
     };
   }, [sheet]);
+
+  /* ---------- the salon's page ---------- */
+  const openAbout = () => {
+    aboutFrom.current = { y: window.scrollY, el: document.activeElement instanceof HTMLElement ? document.activeElement : null };
+    setSheet(null);
+    setAbout(true);
+    if (!ABOUT_PATH.test(window.location.pathname)) {
+      window.history.pushState(null, "", `/${lang}/about`);
+      aboutPushed.current = true;
+    }
+  };
+
+  // back: the entry it pushed goes, and the step is as it was; opened by its
+  // own address, the booking start is under it
+  const closeAbout = useCallback(() => {
+    if (aboutPushed.current) {
+      window.history.back(); // popstate below closes it
+      return;
+    }
+    window.history.replaceState(null, "", `/${lang}${window.location.search}`);
+    setAbout(false);
+  }, [lang]);
+
+  // the phone's back and forward: the address says whether the page is open
+  useEffect(() => {
+    const onPop = () => {
+      const open = ABOUT_PATH.test(window.location.pathname);
+      aboutPushed.current = open;
+      setAbout(open);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  // open: from the top; closed: the step where it was, and the button that opened it
+  const aboutSeen = useRef(aboutFirst);
+  useLayoutEffect(() => {
+    if (about === aboutSeen.current) return;
+    aboutSeen.current = about;
+    if (about) {
+      window.scrollTo(0, 0);
+      return;
+    }
+    window.scrollTo(0, aboutFrom.current.y);
+    aboutFrom.current.el?.focus({ preventScroll: true });
+    aboutFrom.current.el = null;
+  }, [about]);
+
+  // Escape closes it; the top bar turns white under the panel, and names the salon once its name is gone under it
+  useEffect(() => {
+    if (!about) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && closeAbout();
+    const onScroll = () => {
+      const h = barRef.current?.offsetHeight ?? 64;
+      const name = nameRef.current?.getBoundingClientRect().bottom ?? Infinity;
+      const panel = panelRef.current?.getBoundingClientRect().top ?? Infinity;
+      setBar(name <= h ? 2 : panel <= h ? 1 : 0);
+    };
+    onScroll();
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      setBar(0);
+    };
+  }, [about, closeAbout]);
+
+  // the salon's reviews: the first six when the page opens, six more on «Ещё отзывы»
+  const loadReviews = useCallback(async (before?: string) => {
+    setReviewsBusy(true);
+    setReviewsError(false);
+    try {
+      const r = await fetch(`/api/salon/reviews?limit=${REVIEWS_STEP}${before ? `&before=${before}` : ""}`, { cache: "no-store" });
+      if (!r.ok) throw new Error(String(r.status));
+      const j = (await r.json()) as SalonReviews;
+      setReviews((was) => (before && was ? { rows: [...was.rows, ...j.rows.filter((x) => !was.rows.some((y) => y.id === x.id))], more: j.more } : j));
+    } catch {
+      setReviewsError(true);
+    } finally {
+      setReviewsBusy(false);
+    }
+  }, []);
+  useEffect(() => {
+    if (!about || reviewsAsked.current || catalog.location.reviewCount === 0) return;
+    reviewsAsked.current = true;
+    void loadReviews();
+  }, [about, catalog.location.reviewCount, loadReviews]);
 
   // free times for the current choice, the whole horizon at once
   const availKey = barber && services.length ? `${barber}|${services.join(",")}` : "";
@@ -436,7 +605,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
         <span className="hd-gap" />
       )}
       <LogoMark />
-      <button type="button" className="hd-co" onClick={() => setSheet({ kind: "co" })}>
+      <button type="button" className="hd-co" onClick={openAbout}>
         <b>
           {catalog.business.name}
           <ChevronIcon size={20} />
@@ -571,7 +740,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
         <div className="hero-panel">
           <LogoMark size={80} />
           <h1 className="t1">
-            <button type="button" className="hero-co" onClick={() => setSheet({ kind: "co" })}>
+            <button type="button" className="hero-co" onClick={openAbout}>
               {catalog.business.name}
               <ChevronIcon width={2.4} />
             </button>
@@ -977,37 +1146,15 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
     if (!sheet) return null;
     const b = sheet.kind === "barber" ? staffById.get(sheet.id) ?? null : null;
     const close = () => setSheet(null);
-    const tel = catalog.location.phone.replace(/\s/g, "");
     return (
       <div className="sheet-wrap">
         <button type="button" className="sheet-scrim" aria-label={c.close} tabIndex={-1} onClick={close} />
-        <div className="sheet" role="dialog" aria-modal="true" aria-label={sheet.kind === "co" ? catalog.business.name : sheet.kind === "lang" ? c.lang : b?.name}>
+        <div className="sheet" role="dialog" aria-modal="true" aria-label={sheet.kind === "lang" ? c.lang : b?.name}>
           <button type="button" className="sheet-x" aria-label={c.close} autoFocus onClick={close}>
             <span>
               <CrossIcon size={16} />
             </span>
           </button>
-          {sheet.kind === "co" && (
-            <>
-              <h2 className="t2">{catalog.business.name}</h2>
-              <div className="kvs">
-                {catalog.location.address && (
-                  <div>
-                    <span className="tiny">{c.addressK}</span>
-                    <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(catalog.location.address)}`} target="_blank" rel="noreferrer">
-                      {catalog.location.address}
-                    </a>
-                  </div>
-                )}
-                {tel && (
-                  <div>
-                    <span className="tiny">{c.phone}</span>
-                    <a href={`tel:${tel}`}>{catalog.location.phone}</a>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
           {sheet.kind === "lang" && (
             <>
               <h2 className="t2">{c.lang}</h2>
@@ -1049,13 +1196,197 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
     );
   };
 
+  /* ---------- the salon's page ---------- */
+  // «Записаться»: the booking start (a visit being moved goes back to its times)
+  const bookFromAbout = () => {
+    aboutFrom.current = { y: 0, el: null };
+    if (!moving) {
+      if (screen === "done" || screen === "bye") home();
+      else setScreen("barber");
+    }
+    closeAbout();
+  };
+
+  const fmtDay = (ms: number) => {
+    const s = new Intl.DateTimeFormat(INTL[lang], { day: "numeric", month: "long", year: "numeric", timeZone: tz }).format(ms);
+    return lang === "ru" ? s.replace(/\s*г\.$/, "") : s; // «18 мая 2026», as the widget
+  };
+
+  const aboutScreen = () => {
+    const L = catalog.location;
+    const s = c.salon;
+    const name = catalog.business.name;
+    const words = L.about[lang] || L.about.en || pick(L.about, lang);
+    const hours = pick(L.schedule, lang);
+    const contacts = contactRows(L);
+    const place = (
+      <a className="ab-row" href={mapsHref(L)} target="_blank" rel="noreferrer">
+        <PinIcon />
+        <span>{L.address}</span>
+      </a>
+    );
+    const last = reviews?.rows[reviews.rows.length - 1]?.id;
+    return (
+      <main className="app ab-app" aria-labelledby="ab-name">
+        {demo && <p className="demo">{c.demo}</p>}
+        <header ref={barRef} className={`ab-bar${bar ? " solid" : ""}${bar === 2 ? " named" : ""}`}>
+          <button type="button" className="rbtn" aria-label={c.back} onClick={closeAbout}>
+            <ChevronIcon dir="left" />
+          </button>
+          <span className="ab-bar-co" aria-hidden="true">
+            <LogoMark size={36} />
+            <b>{name}</b>
+          </span>
+        </header>
+        <div className="ab-panel" ref={panelRef}>
+          <LogoMark size={96} />
+          <h1 className="ab-name" id="ab-name" ref={nameRef}>
+            {name}
+          </h1>
+          {L.reviewCount > 0 && (
+            <button
+              type="button"
+              className="ab-rating"
+              aria-label={`${c.nReviews(L.reviewCount)}. ${s.toReviews}`}
+              onClick={() => reviewsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            >
+              <StarIcon size={20} />
+              <span>{c.nReviews(L.reviewCount)}</span>
+            </button>
+          )}
+          {(L.address || hours) && (
+            <ul className="ab-rows">
+              {L.address && <li>{place}</li>}
+              {hours && (
+                <li className="ab-row">
+                  <ClockIcon />
+                  <span>{hours}</span>
+                </li>
+              )}
+            </ul>
+          )}
+          {contacts.length > 0 && (
+            <section aria-labelledby="ab-contacts">
+              <h2 className="ab-label" id="ab-contacts">
+                {s.contacts}
+              </h2>
+              <ul className="ab-rows">
+                {contacts.map((r) => (
+                  <li key={r.key}>
+                    <a className="ab-row" href={r.href} {...(r.out ? { target: "_blank", rel: "noreferrer" } : {})}>
+                      {r.icon}
+                      <span>{r.text}</span>
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {words && (
+            <section aria-labelledby="ab-about">
+              <h2 className="ab-h" id="ab-about">
+                {s.about}
+              </h2>
+              <p className="ab-text">{words}</p>
+            </section>
+          )}
+          {L.photos.length > 0 && (
+            <section aria-labelledby="ab-photos">
+              <h2 className="ab-label" id="ab-photos">
+                {s.photos}
+              </h2>
+              <div className="ab-photos">
+                {L.photos.map((u, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={`${i}-${u}`} src={u} alt={L.photos.length > 1 ? `${name} ${i + 1}` : name} width={240} height={200} loading="lazy" decoding="async" />
+                ))}
+              </div>
+            </section>
+          )}
+          {L.pin && (
+            <section aria-labelledby="ab-where">
+              <h2 className="ab-h" id="ab-where">
+                {s.where}
+              </h2>
+              {L.address && <div className="ab-rows">{place}</div>}
+              <div className="ab-map">
+                <iframe src={mapFrame(L.pin)} title={s.map} loading="lazy" tabIndex={-1} aria-hidden="true" referrerPolicy="no-referrer" />
+                {/* the whole map is one tap into the phone's maps app; the frame itself takes no touch, so the page scrolls over it */}
+                <a href={mapsHref(L)} target="_blank" rel="noreferrer" aria-label={`${s.openMap}: ${L.address || name}`}>
+                  <span>{s.openMap}</span>
+                </a>
+              </div>
+            </section>
+          )}
+          {L.reviewCount > 0 && (
+            <section className="ab-reviews" ref={reviewsRef} aria-labelledby="ab-reviews">
+              <h2 className="ab-h" id="ab-reviews">
+                {s.reviews}
+              </h2>
+              <p className="sub">{c.nReviews(L.reviewCount)}</p>
+              {reviews && reviews.rows.length > 0 && (
+                <ul className="rvs">
+                  {reviews.rows.map((r) => (
+                    <li key={r.id} className="rv">
+                      <span className="rv-ava" aria-hidden="true">
+                        {initials(r.name)}
+                      </span>
+                      <span className="rv-head">
+                        <b>{r.name}</b>
+                        <span className="rv-meta">
+                          <span className="rv-stars" role="img" aria-label={c.rated(String(r.rating))}>
+                            {[1, 2, 3, 4, 5].map((n) => (
+                              <StarIcon key={n} size={14} on={n <= r.rating} />
+                            ))}
+                          </span>
+                          <time dateTime={new Date(r.at).toISOString()}>{fmtDay(r.at)}</time>
+                        </span>
+                      </span>
+                      {r.body && <p className="rv-body">{r.body}</p>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {!reviews && !reviewsError && (
+                <p className="wait" role="status">
+                  {c.loading}
+                </p>
+              )}
+              {reviewsError && (
+                <p className="alert" role="alert">
+                  {s.noMore}
+                </p>
+              )}
+              {(reviews?.more || reviewsError) && (
+                <button type="button" className="btn ab-more" disabled={reviewsBusy} onClick={() => void loadReviews(reviews ? last : undefined)}>
+                  {s.more}
+                </button>
+              )}
+            </section>
+          )}
+        </div>
+      </main>
+    );
+  };
+
   const ground = screen === "details" || screen === "done";
   const timePicked = !!slot && !!ready && localParts(slot.t, tz).date === (shownDay ?? "");
-  const hasCta = screen === "barber" || (screen === "time" && timePicked);
-  const hasBasket = screen === "services" && services.length > 0;
+  const hasCta = !about && (screen === "barber" || (screen === "time" && timePicked));
+  const hasBasket = !about && screen === "services" && services.length > 0;
   return (
     <>
-      <main className={`app${ground ? " ground" : ""}${hasCta ? " has-cta" : ""}${hasBasket ? " has-basket" : ""}`} aria-live="polite">
+      {about && aboutScreen()}
+      {about && (
+        <div className="cta">
+          <div className="cta-in">
+            <button key="go-about" type="button" className="btn btn-primary" onClick={bookFromAbout}>
+              {c.book}
+            </button>
+          </div>
+        </div>
+      )}
+      {/* the step under the salon's page stays as it was, out of sight */}
+      <main hidden={about} className={`app${ground ? " ground" : ""}${hasCta ? " has-cta" : ""}${hasBasket ? " has-basket" : ""}`} aria-live="polite">
         {demo && screen !== "bye" && <p className="demo">{c.demo}</p>}
         {screen === "barber" && barberScreen()}
         {screen === "services" && (
@@ -1084,9 +1415,9 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
         )}
         {screen === "bye" && byeScreen()}
       </main>
-      {screen === "barber" && cta(c.cont, () => setScreen("services"), !barber)}
+      {!about && screen === "barber" && cta(c.cont, () => setScreen("services"), !barber)}
       {hasBasket && basket()}
-      {screen === "time" && timePicked && (moving ? cta(moveBusy ? c.movingBusy : c.moveHere, moveVisit, moveBusy) : cta(c.cont, () => setScreen("details")))}
+      {!about && screen === "time" && timePicked && (moving ? cta(moveBusy ? c.movingBusy : c.moveHere, moveVisit, moveBusy) : cta(c.cont, () => setScreen("details")))}
       {sheetView()}
     </>
   );

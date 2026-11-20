@@ -77,9 +77,11 @@ const lockedPart = (code: RoleCode) => presetRights(code).on.filter((k) => k.sta
  *   owner  everything: the «Владелец» preset as it is;
  *   admin  everything but the owner's own (OWNER_ONLY), under «Администратор»;
  *   staff  the barber app as it was (BARBER), his own column and clients,
- *          no limit on past days; his time applies at once if the salon's
- *          switch said «now» (journal.schedule), his prices likewise
- *          (services.staff). Under «Специалист».
+ *          no limit on past days; his time applies at once
+ *          (journal.schedule), his prices and times likewise
+ *          (services.staff), unless the salon's old switch said «ask»
+ *          (Renat, 18.11.2026: a barber changes all four himself). Under
+ *          «Специалист».
  * The rights we have no function for follow the preset, so the screen
  * reads as that role does in the list.
  */
@@ -89,9 +91,11 @@ export function legacyRights(role: Role, switches: LegacySwitches | null | undef
     const built = RIGHTS.filter((r) => r.built && !OWNER_ONLY.includes(r.key)).map((r) => r.key as string);
     return normalizeRights({ preset: "AD", on: [...lockedPart("AD"), groupKey("staff"), groupKey("services"), ...built], values: presetRights("AD").values });
   }
-  // a barber: «now» unless the switch said «ask»; time started as «now», prices as «ask» (src/lib/settings.ts)
+  // a barber: «now» unless the switch said «ask». Time started as «now», prices as «ask», until Renat's
+  // answer (18.11.2026): a barber changes his schedule, days off, prices and times himself, so both «now»;
+  // 030_barbers_change_own.sql removed the switches
   const timeNow = switches?.barber_self_time !== "ask";
-  const priceNow = switches?.barber_self_price === "now";
+  const priceNow = switches?.barber_self_price !== "ask";
   const mine = staffId ? [staffId] : [];
   return normalizeRights({
     preset: "SP",

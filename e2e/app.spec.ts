@@ -1,6 +1,7 @@
 import path from "node:path";
 import type { Page } from "@playwright/test";
 import { COPY } from "../src/lib/i18n";
+import { DEMO_REVIEWS } from "../tools/demo-structure.mjs";
 import { OUT } from "./env";
 import { A, asBarber, asOwner, B, expect, expectNoSideScroll, hydrated, test } from "./helpers";
 
@@ -195,18 +196,11 @@ test.describe("moving a visit", () => {
 });
 
 test.describe("the booking path", () => {
-  test("a link with ?b= opens with that barber picked; the language and the salon open as sheets", async ({ page }) => {
+  test("a link with ?b= opens with that barber picked; the language opens as a sheet", async ({ page }) => {
     await page.goto("/ru?b=milena");
     await hydrated(page);
     await expect(page.getByRole("radio", { name: /Milena/ })).toHaveAttribute("aria-checked", "true");
     await expect(cont(page)).toBeEnabled();
-
-    // the salon
-    await page.getByRole("button", { name: "REMPIRE" }).click();
-    const sheet = page.getByRole("dialog");
-    await expect(sheet).toContainText("Mardi 1");
-    await sheet.getByRole("button", { name: c.close }).click();
-    await expect(page.getByRole("dialog")).toHaveCount(0);
 
     // the language: the page turns Estonian, the barber stays picked
     await page.getByRole("button", { name: new RegExp(`^${c.lang}`) }).click();
@@ -231,6 +225,155 @@ test.describe("the booking path", () => {
     await cont(page).click();
     await expect(page.getByRole("checkbox").first()).toHaveAttribute("aria-checked", "true");
     await expect(page.locator(".basket")).toContainText("€");
+  });
+});
+
+/**
+ * The salon's own page (docs/client-flow.md, «The salon's page»): «REMPIRE ▾»
+ * opens it at /ru/about over the step the client is on, as the widget opens
+ * its «about» page. The demo has REMPIRE's public details and made-up
+ * reviews of the salon (tools/seed-demo.mjs, DEMO_REVIEWS: one hidden).
+ */
+test.describe("the salon's page", () => {
+  const shown = DEMO_REVIEWS.filter((r) => !r.hidden);
+  const salon = (page: Page) => page.locator("main.ab-app");
+  /**
+   * For the picture only: the map scrolled into view and its frame loaded
+   * (or 8 s gone by, on a machine that cannot reach OpenStreetMap), then
+   * back to the top. Nothing is asserted about the map's own content.
+   */
+  const mapShown = async (page: Page) => {
+    const frame = salon(page).locator(".ab-map iframe");
+    const loaded = frame.evaluate((el) => new Promise<void>((done) => (el.addEventListener("load", () => done()), setTimeout(done, 8000))));
+    await frame.scrollIntoViewIfNeeded();
+    await loaded;
+    await page.waitForTimeout(1500); // its tiles come after the frame
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await expect(salon(page).locator(".ab-bar")).not.toHaveClass(/\bsolid\b/);
+    await page.waitForTimeout(300); // the bar's name has faded out
+  };
+
+  test("«REMPIRE ▾» opens it: contacts, words, photo, map, reviews six at a time; back returns to the step, the phone's back too", async ({ page }) => {
+    await page.goto("/ru?b=milena");
+    await hydrated(page);
+    await page.getByRole("button", { name: "REMPIRE" }).click();
+    await expect(page).toHaveURL(/\/ru\/about$/);
+    const s = salon(page);
+    await expect(s.getByRole("heading", { level: 1, name: "REMPIRE" })).toBeVisible();
+    // the step under it is out of sight, its button too; «Записаться» instead
+    await expect(page.getByRole("radio", { name: /Milena/ })).toHaveCount(0);
+    await expect(cont(page)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: c.book, exact: true })).toBeVisible();
+
+    // where, when, how to reach it
+    for (const h of [c.salon.contacts, c.salon.about, c.salon.photos, c.salon.where, c.salon.reviews]) {
+      await expect(s.getByRole("heading", { level: 2, name: h, exact: true })).toBeVisible();
+    }
+    await expect(s.getByText("пн–сб 10:00–19:00")).toBeVisible();
+    await expect(s.getByRole("link", { name: "+372 5623 7237" })).toHaveAttribute("href", "tel:+37256237237");
+    await expect(s.getByRole("link", { name: "www.rempire.ee" })).toHaveAttribute("href", "https://www.rempire.ee");
+    await expect(s.getByText(/^Барберы из Эстонии/)).toBeVisible();
+    await expect(s.locator(".ab-photos img")).toHaveCount(1);
+    await expect(s.locator(".ab-map iframe")).toHaveAttribute("src", /^https:\/\/www\.openstreetmap\.org\/export\/embed\.html\?bbox=.*&marker=59\.430883%2C24\.761967$/);
+    await expect(s.getByRole("link", { name: new RegExp(`^${c.salon.openMap}`) })).toHaveAttribute("href", /google\.com\/maps\/search\/\?api=1&query=59\.430883,24\.761967$/);
+
+    // «★ 8 отзывов» leads down to them: six, the newest first, the hidden one never
+    await s.getByRole("button", { name: new RegExp(`^${c.nReviews(shown.length)}`) }).click();
+    await expect(s.getByRole("heading", { level: 2, name: c.salon.reviews })).toBeInViewport();
+    const rows = s.locator(".rv");
+    await expect(rows).toHaveCount(6);
+    await expect(rows.first()).toContainText(shown[0].name);
+    await expect(rows.first()).toContainText("2 октября 2025");
+    await expect(rows.first()).toContainText(shown[0].body);
+    await expect(rows.first().getByRole("img", { name: c.rated("5") })).toBeVisible();
+    await expect(s.getByText("Hidden Example")).toHaveCount(0);
+    await expectNoSideScroll(page);
+    // scrolled down (the smooth scroll over), the top bar is white and names the salon
+    await page.waitForFunction(() => new Promise<boolean>((done) => ((y) => setTimeout(() => done(window.scrollY === y), 250))(window.scrollY)));
+    await expect(s.locator(".ab-bar")).toHaveClass(/\bnamed\b/);
+    await expect(s.locator(".ab-bar")).toContainText("REMPIRE");
+    const bar = await page.screenshot({ path: path.join(OUT, "screens", `${test.info().project.name}-app-salon-bar.png`) });
+    await test.info().attach("app-salon-bar", { body: bar, contentType: "image/png" });
+    await mapShown(page);
+    await expect(s.locator(".ab-bar")).not.toHaveClass(/\bsolid\b/);
+    await shot(page, "salon");
+
+    // «Ещё отзывы»: the rest, and the button is gone. Scrolled up from under
+    // «Записаться» first, as a thumb does: the page's end leaves room for it
+    const more = s.getByRole("button", { name: c.salon.more });
+    await more.evaluate((el) => el.scrollIntoView({ block: "center" }));
+    await more.click();
+    await expect(rows).toHaveCount(shown.length);
+    await expect(rows.last()).toContainText(shown[shown.length - 1].name);
+    await expect(s.getByRole("button", { name: c.salon.more })).toHaveCount(0);
+    await expectNoSideScroll(page);
+
+    // back: the step as it was, the barber still picked
+    await s.getByRole("button", { name: c.back }).click();
+    await expect(page).toHaveURL(/\/ru\?b=milena$/);
+    await expect(salon(page)).toHaveCount(0);
+    await expect(page.getByRole("radio", { name: /Milena/ })).toHaveAttribute("aria-checked", "true");
+    await expect(cont(page)).toBeEnabled();
+
+    // the phone's back closes it too, and forward opens it again
+    await page.getByRole("button", { name: "REMPIRE" }).click();
+    await expect(salon(page)).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(/\/ru\?b=milena$/);
+    await expect(salon(page)).toHaveCount(0);
+    await expect(page.getByRole("radio", { name: /Milena/ })).toHaveAttribute("aria-checked", "true");
+    await page.goForward();
+    await expect(salon(page)).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(salon(page)).toHaveCount(0);
+    await expect(page).toHaveURL(/\/ru\?b=milena$/);
+  });
+
+  test("from a later step: the header's salon opens it, «Записаться» goes to the start with the choice kept", async ({ page }) => {
+    await page.goto("/ru?b=milena");
+    await hydrated(page);
+    await cont(page).click();
+    await page.getByRole("checkbox").first().click();
+    await page.locator(".hd-co").click();
+    await expect(page).toHaveURL(/\/ru\/about$/);
+    await expect(salon(page).getByRole("heading", { level: 1, name: "REMPIRE" })).toBeVisible();
+    await expect(page.locator(".basket")).toHaveCount(0);
+    await page.getByRole("button", { name: c.book, exact: true }).click();
+    await expect(page).toHaveURL(/\/ru\?b=milena$/);
+    await expect(salon(page)).toHaveCount(0);
+    await expect(page.getByRole("radio", { name: /Milena/ })).toHaveAttribute("aria-checked", "true");
+  });
+
+  test("its own address opens it; back goes to the booking start; in Estonian, and on a wide screen", async ({ page }, info) => {
+    await page.goto("/et/about");
+    await hydrated(page);
+    const s = salon(page);
+    const e = COPY.et;
+    await expect(s.getByRole("heading", { level: 2, name: e.salon.about })).toBeVisible();
+    await expect(s.getByText("E–L 10:00–19:00")).toBeVisible();
+    await expect(s.getByText(/^Barberid Eestist/)).toBeVisible();
+    await expect(s.locator(".rv")).toHaveCount(6);
+    await expect(s.locator(".rv").first()).toContainText("2. oktoober 2025");
+    await expectNoSideScroll(page);
+    await s.getByRole("button", { name: e.back }).click();
+    await expect(page).toHaveURL(/\/et$/);
+    await expect(page.getByRole("radio", { name: e.anyBarber })).toBeVisible();
+
+    // a wide screen: the same 600 px column, centred
+    if (info.project.name !== "android") return;
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/ru/about");
+    await hydrated(page);
+    await expect(salon(page).locator(".rv")).toHaveCount(6);
+    const box = await salon(page).boundingBox();
+    expect(box && Math.round(box.width)).toBe(600);
+    expect(box && Math.round(box.x)).toBe(340);
+    await expectNoSideScroll(page);
+    // the whole page in one window: a full-page picture beyond the window leaves its end unpainted
+    await page.setViewportSize({ width: 1280, height: await page.evaluate(() => document.documentElement.scrollHeight) });
+    await mapShown(page);
+    const body = await page.screenshot({ path: path.join(OUT, "screens", "pc-app-salon.png") });
+    await test.info().attach("pc-app-salon", { body, contentType: "image/png" });
   });
 });
 

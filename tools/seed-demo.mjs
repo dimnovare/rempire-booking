@@ -21,10 +21,10 @@
  */
 import { createHash } from "node:crypto";
 import { pathToFileURL } from "node:url";
-import { addDays, DAY_MS, DEMO, demoWorkday, T, toMin, toTime, weekdayOf } from "./demo-structure.mjs";
+import { addDays, DAY_MS, DEMO, DEMO_REVIEWS, demoWorkday, T, toMin, toTime, weekdayOf } from "./demo-structure.mjs";
 import { sslFor } from "./migrate.mjs";
 
-export { addDays, datedDays, DEMO, demoHours, demoWorkday, weekdayOf, weeklyTemplate } from "./demo-structure.mjs";
+export { addDays, datedDays, DEMO, DEMO_REVIEWS, demoHours, demoWorkday, weekdayOf, weeklyTemplate } from "./demo-structure.mjs";
 
 const ROLE = T("Барбер", "Barber", "Barber");
 
@@ -79,9 +79,18 @@ export async function seedDemo(db) {
   const renew = biz.structure !== DEMO.version;
   const loc = await one(
     `insert into locations (id, business_id, slug, name, address, timezone) values ($6, $1, $2, $3, $4, $5)
-     on conflict (business_id, slug) do update set slug = excluded.slug returning id`,
+     on conflict (business_id, slug) do update set slug = excluded.slug returning id, (xmax = 0) as inserted`,
     [biz.id, DEMO.location.slug, DEMO.location.name, DEMO.location.address, b.timezone, demoId("location", DEMO.location.slug)],
   );
+  // the salon's page, for a new location only: one there already has its own
+  // (migration 028 filled REMPIRE's; anything edited since stays)
+  if (loc.inserted) {
+    const p = DEMO.location.profile;
+    await db.query(
+      "update locations set phone = $2, website = $3, schedule = $4::jsonb, about = $5::jsonb, photos = $6::jsonb, lat = $7, lng = $8 where id = $1",
+      [loc.id, p.phone, p.website, JSON.stringify(p.schedule), JSON.stringify(p.about), JSON.stringify(p.photos), p.lat, p.lng],
+    );
+  }
   const svc = {};
   for (const [i, s] of DEMO.services.entries()) {
     const row = await one(
@@ -462,6 +471,28 @@ export async function seedDemoVisits(db, now = Date.now()) {
         added++;
       }
     }
+  }
+  return added;
+}
+
+/**
+ * The made-up reviews of the salon (DEMO_REVIEWS, tools/demo-structure.mjs)
+ * for a LOCAL run only (DEMO_LOGINS=yes, src/lib/db.ts), so its page
+ * («REMPIRE ▾») has some to show. Never staging (its reviews are the
+ * imported ones) and never tests. Safe to run again.
+ * @param {{query: (sql: string, params?: unknown[]) => Promise<{rows: any[]}>}} db
+ */
+export async function seedDemoReviews(db) {
+  const [biz] = (await db.query("select id from businesses where slug = $1", [DEMO.business.slug])).rows;
+  if (!biz) return 0;
+  let added = 0;
+  for (const [i, r] of DEMO_REVIEWS.entries()) {
+    const res = await db.query(
+      `insert into reviews (id, business_id, rating, body, author_name, created_at, hidden) values ($1, $2, $3, $4, $5, $6::date + time '12:00', $7)
+       on conflict (id) do nothing returning id`,
+      [demoId("review", String(i)), biz.id, r.rating, r.body, r.name, r.at, r.hidden === true],
+    );
+    added += res.rows.length;
   }
   return added;
 }

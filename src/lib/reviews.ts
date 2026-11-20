@@ -4,7 +4,10 @@
  *
  *   staffRatings   each barber's average and count, over the reviews that
  *                  are not hidden: the booking page's stars (catalog.ts).
- *   listReviews    the admin's «Отзывы», as the tool we follow has its
+ *   salonReviewCount, salonReviews  the reviews about the salon itself
+ *                  (no barber) on show: the count and the list on the
+ *                  salon's page («REMPIRE ▾», /api/salon/reviews).
+ *   listReviews   the admin's «Отзывы», as the tool we follow has its
  *                  reviews report: date, client, barber, stars, text.
  *   setReviewHidden  takes one off the booking page or puts it back.
  *   importReviews  the Altegio export, read by scripts/import-reviews.ts:
@@ -41,6 +44,57 @@ export async function staffRatings(q: Querier, businessId: string): Promise<Map<
     [businessId],
   );
   return new Map(rows.map((r) => [r.staff_id, { rating: Number(r.rating), count: Number(r.n) }]));
+}
+
+/* ---------- the salon's own page ---------- */
+
+/**
+ * One review about the salon itself (no barber), as its page on the booking
+ * site shows it: the name as the review was signed, the stars, the text and
+ * when. Public: no client card, no phone.
+ */
+export type SalonReview = { id: string; at: number; rating: number; body: string; name: string };
+
+/** How many reviews about the salon itself are on show: «★ 7 отзывов» on its page (catalog.ts). */
+export async function salonReviewCount(q: Querier, businessId: string): Promise<number> {
+  const [row] = await q<{ n: number }>("select count(*)::int as n from reviews where business_id = $1 and staff_id is null and not hidden", [businessId]);
+  return Number(row?.n ?? 0);
+}
+
+const SALON_PAGE = 6;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The reviews about the salon on show, newest first, `limit` at a time (6,
+ * as the widget shows them; 1 to 50). `before` is the id of the last one
+ * given: the page goes on after it («Ещё отзывы»). `more` says whether
+ * there are any after these. An id that is not one gives nothing.
+ */
+export async function salonReviews(
+  q: Querier,
+  businessId: string,
+  opts: { limit?: number; before?: string | null } = {},
+): Promise<{ rows: SalonReview[]; more: boolean }> {
+  const limit = Math.min(Math.max(Math.trunc(Number(opts.limit) || SALON_PAGE), 1), 50);
+  const params: unknown[] = [businessId, limit + 1];
+  let after = "";
+  if (opts.before != null) {
+    if (!UUID.test(opts.before)) return { rows: [], more: false };
+    params.push(opts.before);
+    // the order's own key, read from the review itself: two at the same moment keep their order
+    after = " and (created_at, id) < (select b.created_at, b.id from reviews b where b.id = $3 and b.business_id = $1)";
+  }
+  const rows = await q<{ id: string; created_at: Date | string; rating: number; body: string; author_name: string }>(
+    `select id, created_at, rating, body, author_name from reviews
+      where business_id = $1 and staff_id is null and not hidden${after}
+      order by created_at desc, id desc
+      limit $2`,
+    params,
+  );
+  return {
+    rows: rows.slice(0, limit).map((r) => ({ id: r.id, at: new Date(r.created_at).getTime(), rating: Number(r.rating), body: r.body, name: r.author_name })),
+    more: rows.length > limit,
+  };
 }
 
 /* ---------- the admin's list ---------- */

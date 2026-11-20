@@ -72,13 +72,16 @@ test.describe("Renat on /b", () => {
     await expect(page.locator(".bx-v").first()).toBeVisible();
     await page.goto("/b/more");
     await expect(page.getByRole("link", { name: B.more.toAdmin })).toBeVisible();
-    // Renat's own kinds: five, about the salon
-    await expect(page.getByRole("region", { name: B.push.title }).getByRole("switch", { name: B.push.kinds.own_request })).toBeChecked();
+    // Renat's own kinds: five, about the salon; on from the start as he answered (18.11): online bookings, a client's move or cancel
+    const kinds = page.getByRole("region", { name: B.push.title });
+    await expect(kinds.getByRole("switch", { name: B.push.kinds.own_online })).toBeChecked();
+    await expect(kinds.getByRole("switch", { name: B.push.kinds.own_client })).toBeChecked();
+    await expect(kinds.getByRole("switch", { name: B.push.kinds.own_request })).not.toBeChecked();
   });
 
   test("his change as a barber applies at once, even with «С моего ОК»", async ({ page, browser, barber }, info) => {
     const owner2 = await phoneOf(browser, info, "owner");
-    await setSwitch(owner2, A.req.time, A.req.ask);
+    await setSwitch(owner2, "time", "ask");
     try {
       await page.goto("/b/pick");
       await hydrated(page);
@@ -101,7 +104,7 @@ test.describe("Renat on /b", () => {
       await page.getByRole("button", { name: B.time.removeYes }).click();
       await expect(toast(page)).toHaveText(B.time.removed);
     } finally {
-      await setSwitch(owner2, A.req.time, A.req.now);
+      await setSwitch(owner2, "time", "now");
       await owner2.context().close();
     }
   });

@@ -28,6 +28,9 @@ export const SECTIONS = [
   // «Основные показатели» (analytics/) and «Визиты» (dashboard/), two more pages of «Отчёты»
   { href: "/admin/analytics", key: "analytics", icon: "rep", bar: false },
   { href: "/admin/dashboard", key: "visits", icon: "rep", bar: false },
+  // «Сообщения» (messages/) and «Изменения данных» (changes/, the owner's): the last two pages of «Отчёты»
+  { href: "/admin/messages", key: "messages", icon: "rep", bar: false },
+  { href: "/admin/changes", key: "changes", icon: "rep", bar: false },
   { href: "/admin/requests", key: "requests", icon: "req", bar: true },
   { href: "/admin/invoices", key: "invoices", icon: "inv", bar: true },
 ] as const;
@@ -52,7 +55,7 @@ export const ACCOUNT = { href: "/admin/account", key: "account", icon: "key" } a
  * (frame.tsx): a page by its own key, a row by `off` or its key; a group
  * with no page left is not drawn.
  */
-export type MenuPage = { href: string; key: "analytics" | "records" | "reviews" | "visits" | "staffList" | "schedule" | "clientBase" | "catalogue" };
+export type MenuPage = { href: string; key: "analytics" | "records" | "reviews" | "visits" | "messages" | "changes" | "staffList" | "schedule" | "clientBase" | "catalogue" };
 export type MenuRow = { key: "reports" | "team" | "clients" | "services" | "goods" | "requests" | "invoices" | "account"; icon: string; href?: string; pages?: readonly MenuPage[]; off?: string };
 export const MENU: readonly MenuRow[] = [
   {
@@ -64,6 +67,8 @@ export const MENU: readonly MenuRow[] = [
       { href: "/admin/records", key: "records" },
       { href: "/admin/reviews", key: "reviews" },
       { href: "/admin/dashboard", key: "visits" },
+      { href: "/admin/messages", key: "messages" },
+      { href: "/admin/changes", key: "changes" },
     ],
   },
   // «Список» is the barbers' own page (staff/), «График работы» the month grid of shifts (schedule/)

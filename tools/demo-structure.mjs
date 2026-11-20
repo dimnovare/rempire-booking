@@ -84,7 +84,27 @@ export const DEMO = {
   /** Which structure this is; a new one is written over the old once (seedDemo). */
   version: "altegio-2026-11-19",
   business: { slug: "rempire", name: "REMPIRE", timezone: "Europe/Tallinn", default_locale: "ru" },
-  location: { slug: "mardi-1", name: "REMPIRE", address: "Mardi 1, Tallinn" },
+  location: {
+    slug: "mardi-1",
+    name: "REMPIRE",
+    address: "Mardi 1, Tallinn",
+    // the salon's page («REMPIRE ▾»): REMPIRE's own public details, as its
+    // booking widget shows them; db/migrations/028_location_profile.sql
+    // writes the same into a database that has REMPIRE already
+    profile: {
+      phone: "+372 5623 7237",
+      website: "www.rempire.ee",
+      schedule: T("пн–сб 10:00–19:00", "E–L 10:00–19:00", "Mon–Sat 10:00–19:00"),
+      about: T(
+        "Барберы из Эстонии, работаем в столице, Таллине. Приходите к нам в REMPIRE, и вместе мы придадим вашей индивидуальности чёткости!",
+        "Barberid Eestist, tegutseme pealinnas Tallinnas. Tule meile külla REMPIRE salongi ja koos lisame sinu isikupärale teravust!",
+        "Barbers from Estonia, operating in the capital city Tallinn. Come and visit us at REMPIRE and together we will add some crisp to your individuality!",
+      ),
+      photos: ["/brand/rempire-photo.svg"],
+      lat: 59.430883,
+      lng: 24.761967,
+    },
+  },
   // d: the usual time among the barbers; cents: the base price, maxCents the top of «30–35 €»
   services: ALTEGIO.services.map((s) => {
     const slug = slugOf(s.key);
@@ -128,3 +148,23 @@ export function demoWorkday(slug, from) {
   for (let i = 0, day = from; i < 90; i++, day = addDays(day, 1)) if (demoHours(slug, day).length) return day;
   throw new Error(`tools/demo-structure.mjs: ${slug} has no working day from ${from}`);
 }
+
+/**
+ * Made-up reviews of the salon itself for a local run and e2e (seedDemoReviews
+ * in tools/seed-demo.mjs), so its page («REMPIRE ▾») has some to show: fake
+ * names and words, one hidden (never on the page). All dated more than a
+ * year back, so the admin's «Отзывы», which opens on the last twelve
+ * months, starts empty as e2e/reports.spec.ts expects; none is about a
+ * barber, so no barber's stars change. Newest first.
+ */
+export const DEMO_REVIEWS = [
+  { at: "2025-10-02", rating: 5, name: "Kalle Näidis", body: "Väga hea lõikus, tulen kindlasti tagasi." },
+  { at: "2025-09-01", rating: 1, name: "Hidden Example", body: "Taken off the page by the salon.", hidden: true },
+  { at: "2025-08-14", rating: 5, name: "Анна Пример", body: "" },
+  { at: "2025-06-21", rating: 5, name: "Demo Client", body: "Great fade, friendly team." },
+  { at: "2025-04-03", rating: 4, name: "Иван Пример", body: "Хорошо, но пришлось немного подождать." },
+  { at: "2025-02-11", rating: 5, name: "Mari Näidis", body: "" },
+  { at: "2024-12-08", rating: 5, name: "Test User", body: "" },
+  { at: "2024-10-19", rating: 5, name: "Ольга Демо", body: "Лучший барбершоп в Таллине!" },
+  { at: "2024-09-01", rating: 5, name: "Jaan Test", body: "" },
+];

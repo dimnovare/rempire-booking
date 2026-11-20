@@ -355,8 +355,8 @@ test.describe("the frame", () => {
       await found.click();
       await drawer.getByRole("button", { name: S.more }).click();
       await expect(drawer.locator(".dw-total b")).toHaveText("49,80 €");
-      // the barber's 17 % of the price without VAT
-      await expect(drawer.locator(".dw-total small")).toHaveText(S.share("17 %", "6,83 €"));
+      // the barber's 17 % of the regular price with VAT (Renat, 18.11)
+      await expect(drawer.locator(".dw-total small")).toHaveText(S.share("17 %", "8,47 €"));
 
       // the client: found by his name, or left empty
       await drawer.getByPlaceholder(A.visit.searchHint).fill("Demo client 2");
@@ -385,7 +385,7 @@ test.describe("the frame", () => {
       await expect(sold).toBeVisible();
       await expect(sold).toContainText(buyer);
       await expect(sold).toContainText(A.inv.mode.client);
-      await expect(sold).toContainText("6,83 €");
+      await expect(sold).toContainText("8,47 €");
       await expect(sold.locator(".adm-tag", { hasText: A.inv.sync.test })).toBeVisible();
       await expect(sold.locator(".end")).toHaveText("49,80 €");
       // and in the barber's own app, on «Продать», among today's
@@ -541,7 +541,7 @@ test.describe("the frame", () => {
       await page.goto("/admin/more");
       await hydrated(page);
       const rows = page.locator(".adm-more .adm-item:visible");
-      await expect(rows).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.analytics, A.nav.records, A.nav.reviews, A.nav.visits, A.sale.title]);
+      await expect(rows).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.analytics, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.sale.title]);
       await expectNoSideScroll(page);
       expect(await smallTargets(page)).toEqual([]);
       await phoneShot(page, "more");

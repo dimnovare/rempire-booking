@@ -94,11 +94,12 @@ export async function setRight(owner: Page, email: string, right: RightKey, on: 
  * these were Renat's two switches on /admin/requests; now each barber's own
  * login has a right for each (src/lib/barber/requests.ts), so this sets the
  * right of this phone's barber on his rights page.
- * `which`: A.req.time or A.req.price; `to`: A.req.now or A.req.ask.
+ * `which`: his time or his prices; `to`: at once or with Renat's OK.
+ * Since Renat's answer (18.11.2026) a barber starts with both «now».
  */
-export async function setSwitch(owner: Page, which: string, to: string): Promise<void> {
+export async function setSwitch(owner: Page, which: "time" | "price", to: "now" | "ask"): Promise<void> {
   const barber = barberOf(base.info());
-  await setRight(owner, barber.email, which === A.req.price ? "services.staff" : "journal.schedule", to === A.req.now);
+  await setRight(owner, barber.email, which === "price" ? "services.staff" : "journal.schedule", to === "now");
 }
 
 /** Log this file's tests in as this phone's barber. */

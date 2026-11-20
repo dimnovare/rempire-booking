@@ -2041,9 +2041,6 @@ th.n .iv-sort { flex-direction: row-reverse; }
    is wider than its page. */
 .adm-user-acts { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .adm-norights { display: flex; flex-direction: column; gap: 8px; padding: 24px 0; }
-.adm-moved { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-.adm-moved li { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
-.adm-moved li span { color: var(--mute); overflow-wrap: anywhere; }
 
 .rt { width: 100%; max-width: 860px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 .rt-head { display: flex; flex-direction: column; gap: 4px; }
@@ -2396,6 +2393,66 @@ button.sc-cell:not(.is-on):hover { background: #f0f3f8; }
   .rv-table .rv-act { width: 104px; text-align: right; }
   .rv-table tbody tr.is-hidden td { background: #f7f9fc; }
   .rv-table tbody tr.is-hidden td:not(.rv-act) > * { opacity: .55; }
+}
+
+/* ---------- «Сообщения» (messages/; decision 29): every message the app sends, a page of «Отчёты» ----------
+   The messages report of the tool we follow (docs/altegio-pages.md, «Сообщения») in the controls of «Записи»:
+   the page reuses the rc- filters, «Найдено N», the sheet and the pager, and adds its own (msg-): what it said
+   wraps, the status in a colour of its own (green went, red did not, grey still waiting or dropped) with its
+   time under it, the channel with the service that carried it. A phone: a card per message, its type and date
+   on the first line. */
+.msg-st { font-weight: 500; }
+.msg-st.is-sent, .msg-st.is-opened { color: #19803b; }
+.msg-st.is-failed { color: var(--warn); }
+.msg-st:is(.is-queued, .is-sending, .is-cancelled, .is-skipped) { color: var(--mute); }
+.msg-said { overflow-wrap: anywhere; }
+.msg-said > small { color: var(--mute); }
+.msg-rows > li { padding: 12px 2px; display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-width: 0; }
+.msg-line { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 8px; }
+.msg-line > small, .msg-who small, .msg-meta small { color: var(--mute); }
+.msg-who, .msg-meta { margin: 0; overflow-wrap: anywhere; }
+.msg-who a { color: inherit; text-decoration: underline; text-decoration-color: #c6cbd3; text-underline-offset: 3px; }
+@media (min-width: 900px) {
+  .msg-table { min-width: 980px; }
+  .msg-table td[data-col="date"] { width: 104px; white-space: nowrap; }
+  .msg-table td[data-col="contact"] { width: 200px; }
+  .msg-table td[data-col="contact"] > a { display: block; color: inherit; font-weight: 500; text-decoration: underline; text-decoration-color: #c6cbd3; text-underline-offset: 3px; }
+  .msg-table td[data-col="contact"] > small { overflow-wrap: anywhere; }
+  .msg-table .msg-said { min-width: 260px; }
+  .msg-table td[data-col="kind"] { width: 180px; }
+  .msg-table td[data-col="status"] { width: 130px; white-space: nowrap; }
+  .msg-table td[data-col="channel"] { width: 120px; }
+}
+
+/* ---------- «Изменения данных» (changes/; decision 29): the change log, the owner's page of «Отчёты» ----------
+   The change log of the tool we follow (docs/altegio-pages.md, «Изменения данных») in the controls of
+   «Записи»: the rc- filters, «Найдено N», the sheet and the pager; its own (chg-): «Показать» at the row's end
+   unfolds a pale row under it with what changed, a field a line: its name on the left, the old value struck
+   through → the new one in bold. A phone: a card per change, its details under the button. */
+.chg-fields { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.chg-field { display: grid; grid-template-columns: minmax(96px, 30%) minmax(0, 1fr); gap: 8px; }
+.chg-field dt { color: var(--mute); overflow-wrap: anywhere; }
+.chg-field dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.chg-field s { color: var(--mute); }
+.chg-field b { font-weight: 600; }
+.chg-was { color: var(--mute); }
+.chg-none { margin: 0; color: var(--mute); }
+.chg-rows > li { padding: 12px 2px; display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-width: 0; }
+.chg-line { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 8px; }
+.chg-line > small, .chg-what small, .chg-by { color: var(--mute); }
+.chg-what { margin: 0; overflow-wrap: anywhere; }
+.chg-item > .adm-btn { align-self: flex-start; width: auto; margin-top: 4px; }
+.chg-item > div:last-child { margin-top: 6px; padding: 10px 12px; border-radius: 8px; background: #f7f9fc; }
+@media (min-width: 900px) {
+  .chg-table { min-width: 860px; }
+  .chg-table td[data-col="date"] { width: 140px; white-space: nowrap; }
+  .chg-table td[data-col="object"] { min-width: 220px; overflow-wrap: anywhere; }
+  .chg-table td[data-col="author"] { width: 200px; }
+  .chg-table td[data-col="action"] { width: 200px; }
+  .chg-table .chg-act { width: 112px; text-align: right; }
+  .chg-table tbody tr.is-open td { background: #fffbe6; border-bottom-color: transparent; }
+  .rc-table tbody tr.chg-more td { height: auto; padding: 4px 16px 14px; background: #fffbe6; }
+  .chg-more .chg-fields { max-width: 760px; }
 }
 
 /* ---------- «Основные показатели» (analytics/) and «Визиты» (dashboard/; Dim, 20.11.2026): two pages of «Отчёты» ----------

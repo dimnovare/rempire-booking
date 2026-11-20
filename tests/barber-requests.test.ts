@@ -93,10 +93,11 @@ describe("at once, or ask: the login's rights", () => {
     return [w.time, w.price];
   };
 
-  it("start as Dim set the switches until Renat answered: time at once, prices ask", () => {
-    expect(modes({})).toEqual(["now", "ask"]);
-    // a switch that was neither «now» nor «ask» was the default
-    expect(modes({ barber_self_time: "ask", barber_self_price: "maybe" })).toEqual(["ask", "ask"]);
+  it("start as Renat answered (18.11): time and prices at once, unless an old switch said «ask»", () => {
+    expect(modes({})).toEqual(["now", "now"]);
+    // a switch that was neither «now» nor «ask» is the default
+    expect(modes({ barber_self_time: "ask", barber_self_price: "maybe" })).toEqual(["ask", "now"]);
+    expect(modes({ barber_self_price: "ask" })).toEqual(["now", "ask"]);
     expect(modes({ barber_self_time: "now", barber_self_price: "now" })).toEqual(["now", "now"]);
   });
 

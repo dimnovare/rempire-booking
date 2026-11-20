@@ -199,6 +199,19 @@ const en = {
   movingBusy: "Moving…",
   movedTitle: "Your visit is moved",
   moveGone: "This visit can no longer be moved.",
+  // the salon's own page: «REMPIRE ▾» opens it, as in the widget (docs/client-flow.md)
+  salon: {
+    contacts: "Contacts",
+    about: "About the salon",
+    photos: "Photos",
+    where: "Location",
+    reviews: "Reviews",
+    more: "More reviews",
+    toReviews: "To the reviews",
+    map: "Map",
+    openMap: "Open in maps",
+    noMore: "Could not load the reviews. Try again.",
+  },
 };
 
 export type Copy = typeof en;
@@ -359,6 +372,18 @@ const ru: Copy = {
   movingBusy: "Переносим…",
   movedTitle: "Визит перенесён",
   moveGone: "Этот визит уже нельзя перенести.",
+  salon: {
+    contacts: "Контакты",
+    about: "О компании",
+    photos: "Фото",
+    where: "Как нас найти",
+    reviews: "Отзывы",
+    more: "Ещё отзывы",
+    toReviews: "К отзывам",
+    map: "Карта",
+    openMap: "Открыть на карте",
+    noMore: "Не удалось загрузить отзывы. Попробуйте ещё раз.",
+  },
 };
 
 const et: Copy = {
@@ -517,6 +542,18 @@ const et: Copy = {
   movingBusy: "Muudame…",
   movedTitle: "Aeg on muudetud",
   moveGone: "Seda aega ei saa enam muuta.",
+  salon: {
+    contacts: "Kontaktid",
+    about: "Salongist",
+    photos: "Fotod",
+    where: "Asukoht",
+    reviews: "Arvustused",
+    more: "Veel arvustusi",
+    toReviews: "Arvustuste juurde",
+    map: "Kaart",
+    openMap: "Ava kaardil",
+    noMore: "Arvustusi ei õnnestunud laadida. Proovi uuesti.",
+  },
 };
 
 export const COPY: Record<Locale, Copy> = { ru, et, en };

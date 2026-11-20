@@ -31,6 +31,7 @@ and wording sense, in our own code and icons. Never Altegio's logo, name or
 | Any other «book now», the installed app | `/{locale}` | Step 1; the barber of the last booking on this device is picked |
 | The link in a confirmation, an SMS or a reminder | `/{locale}/visit/{token}` | The visit page |
 | «Перенести» on the visit page | `/{locale}/visit/{token}/move` | Step 3 alone, for that visit |
+| A shared or reloaded salon page | `/{locale}/about` | The salon's page, step 1 under it |
 
 `{locale}` is `ru`, `et` or `en`. The language button is top right on every
 step: Altegio has a client-account icon there, and we have no client
@@ -40,8 +41,8 @@ accounts.
 
 Each step ends on one «Продолжить» at the bottom, as in Altegio.
 
-1. **Barber.** The salon's mark, name and address (the name opens a sheet
-   with the address and the phone). «Любой свободный барбер», then each
+1. **Barber.** The salon's mark, name and address (the name opens the
+   salon's page, below). «Любой свободный барбер», then each
    barber with photo, role, stars and review count, and a radio. An «i»
    opens the barber's own words when `staff.bio` has any. «Продолжить»
    waits until one is picked.
@@ -69,6 +70,47 @@ Each step ends on one «Продолжить» at the bottom, as in Altegio.
 6. **«Скоро увидимся».** After «Добавить в календарь» (Renat, 19.11): a
    goodbye by name, and after a few seconds the start again by itself, so
    nobody wonders what else to press. The start then shows «Ваш визит».
+
+## The salon's page («REMPIRE ▾»)
+
+*20.11.2026, built.* Dim: the small sheet with the address did not match
+the widget, where the same tap opens a whole «about» page. Ours now opens
+one too, in the widget's order (screenshots of it at 375 px, 20.11):
+
+1. A back arrow on the grey band; scrolled down, a white bar with the
+   back arrow, the small mark and the name.
+2. The mark over the white panel's edge; the name.
+3. «★ 7 отзывов»: the reviews about the salon itself; a tap scrolls down
+   to them. Not there when there are none.
+4. The address (opens the maps app) and the hours line.
+5. «Контакты»: the phone (a `tel:` link) and the site; Instagram,
+   Facebook, WhatsApp, Telegram and Viber by name when set (none is today).
+6. «О компании» and the salon's own words.
+7. «Фото»: a strip of photos (today the logo on black).
+8. «Как нас найти»: the address again and a map with the pin. The map is
+   OpenStreetMap's own embed (no key), loaded only when scrolled to; the
+   whole map is one tap into the phone's maps app (Google Maps at the pin).
+   No pin, no map.
+9. «Отзывы», «7 отзывов», then the reviews, the newest first: initials in
+   a grey circle, the name as signed, the stars, the date, the text; six,
+   then «Ещё отзывы» for six more.
+10. «Записаться» at the bottom: the booking start (a visit being moved goes
+    back to its times).
+
+- **Opening and closing:** it opens over whatever step is on, and the
+  address becomes `/{locale}/about` (a pushed entry). The back arrow, the
+  phone's back and Escape close it, and the step is as it was, scrolled
+  where it was. Opened by its own address, the booking start is under it.
+- **Data:** `locations` (migration 028): `schedule` and `about` per
+  language, `website`, `photos`, `lat`/`lng`, the socials and messengers.
+  REMPIRE's public values are filled in by the migration and by the demo
+  seed. The reviews are `reviews` with no barber and not hidden
+  (`src/lib/reviews.ts`, `salonReviews`; `/api/salon/reviews`): the name
+  as signed, no client and no phone.
+- **Not there yet:** the widget's «Оцените и напишите отзыв» card with
+  five empty stars. We have no review form; it comes with ours.
+- **No admin for it yet:** the details change by SQL until the salon
+  settings get a «Контакты» page.
 
 ## Moving and cancelling (the visit's own link)
 
@@ -101,6 +143,7 @@ settings, 19.11). Ours does the same from `/{locale}/visit/{token}`:
 | A «Service» category chip above the list | No chip | REMPIRE has one category; a chip that does nothing is noise |
 | The reminder: 16 choices, from 1 hour to 7 days | The salon's time, or none | That is what the SMS queue does today |
 | Privacy policy and user agreement links at the tick | The tick alone | No policy page yet (open) |
+| The salon's page: an Apple map you can pan; a review form | An OpenStreetMap picture, one tap to the maps app; no form | No map keys; no review form of ours yet |
 | Change or cancel until the salon's cutoff | At any time before the visit | Renat, 19.11: no «позвоните в салон». `cancel_cutoff_min` is 0 |
 
 ## Kept from before

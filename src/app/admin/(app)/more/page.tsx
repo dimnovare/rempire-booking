@@ -35,6 +35,8 @@ const SALON: Record<Exclude<SalonRow, "sale">, string> = {
   records: "/admin/records",
   reviews: "/admin/reviews",
   visits: "/admin/dashboard",
+  messages: "/admin/messages",
+  changes: "/admin/changes",
   invoices: "/admin/invoices",
 };
 

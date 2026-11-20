@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" role="img" aria-label="REMPIRE">
+  <!-- The salon's gallery photo on the booking site (db/migrations/028_location_profile.sql): the thin REMPIRE of rempire-logo-white.svg, the same strokes, centred on the dark of the logo disc. -->
+  <defs>
+    <clipPath id="rempire-caps"><rect x="0" y="34" width="436" height="66"/></clipPath>
+  </defs>
+  <rect width="400" height="400" fill="#1f1f1f"/>
+  <g transform="translate(22.04 157.57) scale(0.8163)" fill="none" stroke="#fff" stroke-width="2.6" stroke-linejoin="miter" stroke-miterlimit="6">
+    <circle cx="175.3" cy="18.6" r="11.1" stroke-width="2.9"/>
+    <g clip-path="url(#rempire-caps)">
+      <g id="rempire-r">
+        <path d="M27.7 101V35.3H49.9A14.85 14.85 0 0 1 49.9 65H27.7"/>
+        <path d="M44.3 65L65.2 101"/>
+      </g>
+      <path id="rempire-e" d="M123.8 35.3H86.3V98.7H124.8M86.3 65H121.6"/>
+      <path d="M144.6 101V35.3L175.3 87L206 35.3V101"/>
+      <path d="M231.4 101V35.3H251.6A15.15 15.15 0 0 1 251.6 65.6H231.4"/>
+      <path d="M288.2 33V101"/>
+      <use href="#rempire-r" x="286"/>
+      <use href="#rempire-e" x="286"/>
+    </g>
+  </g>
+</svg>

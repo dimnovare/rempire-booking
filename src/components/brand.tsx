@@ -60,9 +60,46 @@ export const InfoIcon = () => (
     <path d="M5 5.4v5M5 1.6v.2" />
   </svg>
 );
-export const StarIcon = ({ on = true }: { on?: boolean }) => (
-  <svg viewBox="0 0 16 16" width="16" height="16" fill={on ? "var(--star)" : "var(--edge)"} aria-hidden="true">
+export const StarIcon = ({ on = true, size = 16 }: { on?: boolean; size?: number }) => (
+  <svg viewBox="0 0 16 16" width={size} height={size} fill={on ? "var(--star)" : "var(--edge)"} aria-hidden="true">
     <path d="M8 1.6l1.98 4.01 4.42.64-3.2 3.12.76 4.41L8 11.7l-3.96 2.08.76-4.41-3.2-3.12 4.42-.64z" />
+  </svg>
+);
+/* the salon's page: where, when, how to reach it (thin lines, as the widget's) */
+export const PinIcon = () => (
+  <svg viewBox="0 0 24 24" width="24" height="24" {...stroke} strokeWidth="1.6" aria-hidden="true">
+    <path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z" />
+    <circle cx="12" cy="10" r="2.4" />
+  </svg>
+);
+export const ClockIcon = () => (
+  <svg viewBox="0 0 24 24" width="24" height="24" {...stroke} strokeWidth="1.6" aria-hidden="true">
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M12 7.5V12l3 2" />
+  </svg>
+);
+export const PhoneIcon = () => (
+  <svg viewBox="0 0 24 24" width="24" height="24" {...stroke} strokeWidth="1.6" aria-hidden="true">
+    <path d="M8.2 3.8l1.9 4.1-2.2 1.6a11.6 11.6 0 0 0 6.6 6.6l1.6-2.2 4.1 1.9-.6 3a2 2 0 0 1-2.1 1.6C10.4 19.8 4.2 13.6 3.6 6.5a2 2 0 0 1 1.6-2.1z" />
+  </svg>
+);
+export const GlobeIcon = () => (
+  <svg viewBox="0 0 24 24" width="24" height="24" {...stroke} strokeWidth="1.6" aria-hidden="true">
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M3.5 12h17M12 3.5c2.4 2.4 3.6 5.2 3.6 8.5s-1.2 6.1-3.6 8.5c-2.4-2.4-3.6-5.2-3.6-8.5S9.6 5.9 12 3.5z" />
+  </svg>
+);
+/** a messenger: WhatsApp, Telegram, Viber (never their marks) */
+export const ChatIcon = () => (
+  <svg viewBox="0 0 24 24" width="24" height="24" {...stroke} strokeWidth="1.6" aria-hidden="true">
+    <path d="M20 11.5a7.5 7.5 0 0 1-11 6.6L4.5 19.5l1.4-4.3A7.5 7.5 0 1 1 20 11.5z" />
+  </svg>
+);
+/** a social profile: Instagram, Facebook (never their marks) */
+export const AtIcon = () => (
+  <svg viewBox="0 0 24 24" width="24" height="24" {...stroke} strokeWidth="1.6" aria-hidden="true">
+    <circle cx="12" cy="12" r="3.6" />
+    <path d="M15.6 12v1.4a2.6 2.6 0 0 0 5.2 0V12a8.8 8.8 0 1 0-3.4 7" />
   </svg>
 );
 

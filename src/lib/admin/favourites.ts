@@ -16,6 +16,8 @@ export const FAV_HREF = {
   records: "/admin/records",
   reviews: "/admin/reviews",
   visits: "/admin/dashboard",
+  messages: "/admin/messages",
+  changes: "/admin/changes",
   staff: "/admin/staff",
   schedule: "/admin/schedule",
   clients: "/admin/clients",

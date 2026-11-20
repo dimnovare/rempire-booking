@@ -6,9 +6,12 @@ import { A, asOwner, expect, expectNoSideScroll, hydrated, test } from "./helper
 /**
  * The reports Dim asked for in round 10 (20.11): «Основные показатели»
  * (sales, attendance, fill rate), «Визиты» (today's visits and the booking
- * feed) and «Отзывы». The owner opens each on a phone and on a wide screen;
- * the page has its title and its cards, and nothing scrolls sideways. The
- * demo has no reviews, so «Отзывы» says there are none.
+ * feed) and «Отзывы»; then «Сообщения» (every message the app sent) and
+ * «Изменения данных» (the change log, the owner's), decision 29. The owner
+ * opens each on a phone and on a wide screen; the page has its title and its
+ * cards, and nothing scrolls sideways. The demo has no reviews, so «Отзывы»
+ * says there are none; the two logs hold whatever the other specs did, so
+ * they show their count, and a change unfolds when there is one.
  */
 const D = A.dash;
 
@@ -51,6 +54,32 @@ const checks = (wide: boolean) => {
     await expect(page.getByText(A.reviews.none)).toBeVisible();
     await expectNoSideScroll(page);
     await shot(page, "reviews", wide);
+  });
+
+  test("«Сообщения»: the log of what was sent", async ({ page }) => {
+    await open(page, "/admin/messages", A.messages.title);
+    const found = page.locator(".rc-found:visible");
+    await expect(found).toBeVisible();
+    const n = Number(await found.locator("b").textContent());
+    if (n > 0) await expect(page.locator(wide ? ".msg-table tbody tr:visible" : ".msg-rows li:visible").first()).toBeVisible();
+    else await expect(page.getByText(A.messages.none)).toBeVisible();
+    await expectNoSideScroll(page);
+    await shot(page, "messages", wide);
+  });
+
+  test("«Изменения данных»: the change log, a row unfolds", async ({ page }) => {
+    await open(page, "/admin/changes", A.changes.title);
+    const found = page.locator(".rc-found:visible");
+    await expect(found).toBeVisible();
+    const n = Number(await found.locator("b").textContent());
+    if (n > 0) {
+      const fold = page.locator("button[aria-controls^='chg-']:visible").first();
+      await fold.click();
+      await expect(fold).toHaveAttribute("aria-expanded", "true");
+      await expect(page.locator(`#${await fold.getAttribute("aria-controls")}`)).toBeVisible();
+    } else await expect(page.getByText(A.changes.none)).toBeVisible();
+    await expectNoSideScroll(page);
+    await shot(page, "changes", wide);
   });
 };
 

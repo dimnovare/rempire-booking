@@ -37,6 +37,7 @@ vi.mock("next/server", () => ({ connection: async () => {}, after: () => {} }));
 import * as account from "@/app/admin/(app)/account/actions";
 import * as cal from "@/app/admin/(app)/actions";
 import * as analytics from "@/app/admin/(app)/analytics/actions";
+import * as changesActs from "@/app/admin/(app)/changes/actions";
 import * as clients from "@/app/admin/(app)/clients/actions";
 import { cardFieldsOf } from "@/app/admin/(app)/clients/card-fields";
 import * as dash from "@/app/admin/(app)/dashboard/actions";
@@ -45,6 +46,7 @@ import { GET as fileRoute } from "@/app/admin/(app)/clients/[id]/files/[fileId]/
 import { POST as uploadRoute } from "@/app/admin/(app)/clients/[id]/files/route";
 import * as frame from "@/app/admin/(app)/frame-actions";
 import * as invoices from "@/app/admin/(app)/invoices/actions";
+import * as messagesActs from "@/app/admin/(app)/messages/actions";
 import * as records from "@/app/admin/(app)/records/actions";
 import { POST as recordsExportRoute } from "@/app/admin/(app)/records/export/route";
 import * as reviewsActs from "@/app/admin/(app)/reviews/actions";
@@ -838,6 +840,32 @@ describe("Отчёты: «Основные показатели» and «Визи
   both("reports.visits", "desk", () => dash.feedAction({ filter: "all" }), (r, c) => r.entries.some((e) => e.id === c.visit));
   both("reports.visits", "desk", (c) => dash.openVisitAction(c.visit), (r) => r !== null);
   both("reports.visits.phones", "desk", async () => (await dash.listVisitsAction({})).rows[0]?.clientPhone, (phone) => phone === PHONE);
+});
+
+describe("Отчёты: «Сообщения» and «Изменения данных»", () => {
+  const EVER = { from: "2020-01-01", to: "2099-12-31" };
+  /** One reminder by SMS about Anna's visit, fake. */
+  const sms = (c: Ctx) =>
+    query("insert into notifications (business_id, appointment_id, channel, kind, recipient, payload) values ($1, $2, 'sms', 'reminder', $3, '{}'::jsonb)", [c.demo.business.id, c.visit, PHONE]);
+
+  both("reports.messages", "desk", async (c) => {
+    await sms(c);
+    return messagesActs.listMessagesAction(EVER);
+  }, (r) => r.rows.some((m) => m.kind === "reminder"));
+  both("reports.messages.phones", "desk", async (c) => {
+    await sms(c);
+    return (await messagesActs.listMessagesAction({ ...EVER, kind: "reminder" })).rows[0]?.contact;
+  }, (contact) => contact === PHONE);
+
+  it("«Изменения данных»: the owner's alone; the front desk gets nothing with every right it has", async () => {
+    const desk = await fresh("desk");
+    expect(await query<{ n: number }>("select count(*)::int as n from audit").then((r) => r[0].n)).toBeGreaterThan(0);
+    expect(await changesActs.listChangesAction(EVER)).toMatchObject({ total: 0, rows: [] });
+    await grant(desk.me, "clients.list_contacts", true);
+    expect((await changesActs.listChangesAction(EVER)).total).toBe(0);
+    await fresh("owner");
+    expect((await changesActs.listChangesAction(EVER)).total).toBeGreaterThan(0);
+  });
 });
 
 describe("Отчёты: «Записи»", () => {
