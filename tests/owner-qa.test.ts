@@ -32,7 +32,8 @@ describe("the questions", () => {
     expect(cleanValue("switch.ok", "Да")).toBe("Да");
     expect(cleanValue("switch.ok", "Добавил")).toBeNull();
     // closed questions are off the page; their answers stay in the table
-    for (const gone of ["access.altegio", "costs.isolta", "universal.who", "altegio_extra.cash", "switch.isolta"]) expect(FIELDS.has(gone)).toBe(false);
+    for (const gone of ["access.altegio", "costs.isolta", "universal.who", "altegio_extra.cash"]) expect(FIELDS.has(gone)).toBe(false);
+    expect(cleanValue("switch.isolta", "в июне")).toBe("в июне");
     // answered by Renat on 18.11, now in «Уже решено»
     for (const gone of ["emails.who", "commission.vat", "self.may", "telegram.how", "qr.want"]) expect(FIELDS.has(gone)).toBe(false);
     expect(cleanValue("emails.who", "Сначала я сам")).toBeNull();

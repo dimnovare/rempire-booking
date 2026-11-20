@@ -110,7 +110,7 @@ page).
 | Company, logo, bank account, numbering | filled | «Настройки» | ✅ |
 | Users | one login | our logins and rights | ✅ |
 | Dashboard | the month figures are read | built; layout brought to the re-scan's measures (20.11) | ✅ |
-| Plan | Pro, €94.80 + VAT a year | — | read 20.11 in «Заказ»: period 20.11.2025–20.11.2026, renews by itself; cancel a month ahead, so the next year (to 20.11.2027) was already past the cancel date |
+| Plan | Pro, €94.80 + VAT a year | — | renews by itself, cancel a month ahead; Isolta shows no renewal date (its licence API returns a rolling last-12-months window; account created 29.06.2020, nothing overdue) | ❓ Renat: date of Isolta's last invoice to him |
 
 ## Open points
 
