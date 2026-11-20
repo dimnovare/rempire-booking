@@ -169,6 +169,8 @@ export function recordWhere(business: Business, f: RecordFilter, who?: Holder, n
   if (f.cancelled === "no") where += " and a.status <> 'cancelled'";
   if (f.status === "waiting") where += " and a.status in ('pending', 'booked') and a.confirmed_at is null";
   else if (f.status === "confirmed") where += " and a.status = 'booked' and a.confirmed_at is not null";
+  // «Пришёл» is also a visit marked «done» before «Готово» left the app (Dim, decision round 11)
+  else if (f.status === "arrived") where += " and a.status in ('arrived', 'done')";
   else if (f.status) where += ` and a.status = ${p(f.status)}`;
   if (f.q) {
     const at = `'%' || ${p(likeText(f.q))} || '%'`;

@@ -49,11 +49,10 @@ test.describe("a client", () => {
     await hydrated(page);
     await page.locator(".bx-v button").nth(1).click();
     const s = sheet(page);
-    const block = s.locator(".bx-noteblk", { hasText: B.visit.visitNote });
-    await block.getByRole("button").click();
-    await s.getByRole("textbox", { name: B.visit.visitNote }).fill(note);
-    await s.getByRole("button", { name: B.save, exact: true }).click();
-    await expect(toast(page)).toHaveText(B.client.noteSaved);
+    await s.locator(".vs-note.is-visit .vs-link").click();
+    await s.getByRole("textbox", { name: B.vs.staffNote }).fill(note);
+    await s.getByRole("button", { name: B.vs.save, exact: true }).click();
+    await expect(toast(page)).toHaveText(B.vs.noteSaved);
     await page.reload();
     await hydrated(page);
     await page.locator(".bx-v button").nth(1).click();

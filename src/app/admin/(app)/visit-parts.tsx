@@ -13,17 +13,10 @@ import { eur } from "../copy";
 import { Ava, NextIcon, TickIcon } from "../icons";
 import { useA } from "../lang";
 import { euro } from "./journal-bar";
+import { CHIPS, type Chip } from "./visit-kit";
 
-export const fmt = (intl: string, tz: string, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(intl, { timeZone: tz, ...o });
-export const timeOf = (tz: string, ms: number) => fmt("ru-RU", tz, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(ms);
-/** The local day of a moment, YYYY-MM-DD. */
-export const dayOf = (tz: string, ms: number) => new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(ms);
-export const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-/** «HH:MM» as minutes of the day; NaN for anything else. */
-export const minutesOf = (hm: string) => (/^\d{2}:\d{2}$/.test(hm) ? Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3)) : NaN);
-export const MIN = 60_000;
-/** The client has come: «arrived» (in the chair) or «done». */
-export const CAME = new Set(["arrived", "done"]);
+// the formats and the chips, shared with the phone's visit sheet (visit-kit.ts)
+export { CAME, cap, CHIP, CHIPS, chipOf, dayOf, fmt, MIN, minutesOf, timeOf, type Chip } from "./visit-kit";
 
 /** What this login may do in the calendar, for the sheets and the window. */
 const May = createContext<CalMay>({ create: true, newClient: true, pickClient: true, edit: true, editCame: true, moveWindow: true, services: true, note: true, move: true, cancel: true, cancelCame: true, schedule: true, stats: true, sell: true, call: true, from: null });
@@ -102,11 +95,6 @@ export function BarNote({ problem, warn }: { problem: string | null; warn: strin
 
 /* ---------- the window from 900px: the visit's and the new one's ---------- */
 
-/** The four chips: «Ожидание», «Клиент пришёл», «Не пришёл», «Подтвердил». */
-export const CHIPS = ["booked", "arrived", "no_show", "confirmed"] as const;
-export type Chip = (typeof CHIPS)[number];
-/** The status and flag a chip writes. «Подтвердил» is a waiting visit with its flag (021_visit_confirmed.sql). */
-export const CHIP: Record<Chip, [string, boolean]> = { booked: ["booked", false], confirmed: ["booked", true], arrived: ["arrived", false], no_show: ["no_show", false] };
 /** The panels a tile on the left slides over the column. */
 export type Tile = "fields" | "notify" | "log";
 const TILE_ICON: Record<Tile, string> = {
