@@ -1,81 +1,44 @@
 /**
- * /admin/invoices «Счета»: every invoice in one table and «Новый счёт», the
- * way Renat works in Isolta (Dim, 19.11.2026: «new invoice → pick who gets
- * it, and that's all»; the look is Isolta's too, docs/reference-looks.md).
+ * /admin/invoices «Счета», the list: every invoice in one table, the way
+ * the invoicing tool Renat used shows them (the design board «Счета,
+ * список»; docs/reference-looks.md). The section's entry from the salon's
+ * menu, as before: his routine is «Счета» → «Новый счёт» → the receiver.
  *
- * «Новый счёт» asks only for the receiver and opens the draft for him: the
- * one he has, the month being invoiced with its rent and sales, or an empty
- * free invoice (src/lib/billing/invoices.ts, openDraft). The month's sums
- * per barber are the next tab, «Месяц».
+ * `?status=overdue` and `?from=…&to=…` open it already filtered: the desk's
+ * three figures link here that way. Nothing typed into the search is ever
+ * in the address.
  */
-import Link from "next/link";
 import { Suspense } from "react";
 import { requireAdmin } from "@/lib/auth/current";
-import { listInvoices } from "@/lib/billing/invoices";
-import { listIssuers, listReceivers } from "@/lib/billing/parties";
+import { sectionRows } from "@/lib/billing/export";
+import { EMPTY_QUERY, listQueryOf } from "@/lib/billing/list";
+import { listIssuers } from "@/lib/billing/parties";
 import { dbConfigured, query } from "@/lib/db";
-import { todayIn } from "@/lib/tz";
 import { Title, Wait } from "../../lang";
 import { getA } from "../../lang-server";
-import { Titled } from "../star";
-import { dmy, InvTabs, monthDate } from "./common";
-import { InvoiceList, NewInvoice, type ListRow } from "./list-view";
+import { InvoiceList } from "./list-view";
 
-export default function InvoicesPage() {
+export default function InvoicesPage({ searchParams }: PageProps<"/admin/invoices">) {
   return (
-    <main className="adm-page adm-wide adm-inv">
+    <main className="iv-page">
       <Suspense fallback={<Wait />}>
-        <Loaded />
+        <Loaded searchParams={searchParams} />
       </Suspense>
     </main>
   );
 }
 
-async function Loaded() {
+async function Loaded({ searchParams }: { searchParams: PageProps<"/admin/invoices">["searchParams"] }) {
   const A = await getA();
   if (!dbConfigured()) return <p className="adm-wait">{A.noDb}</p>;
   const { business } = await requireAdmin();
-  const [invoices, receivers, issuers] = await Promise.all([listInvoices(query, business.id), listReceivers(query, business.id), listIssuers(query, business.id)]);
-  const today = todayIn(business.timezone);
-  const rows: ListRow[] = invoices
-    .filter((i) => i.status !== "discarded")
-    .map((i) => ({
-      id: i.id,
-      // an issued invoice past its day reads «просрочен», as in Isolta
-      status: i.status === "issued" && i.kind === "invoice" && i.dueOn && i.dueOn < today ? "overdue" : i.status,
-      credit: i.kind === "credit",
-      receiver: i.buyer?.name ?? i.receiverName,
-      // what it bills: the month, or for a free one nothing more than its date
-      sub: [i.staffName, i.free ? "" : A.inv.month(monthDate(i.periodFrom.slice(0, 7)))].filter(Boolean).join(", "),
-      number: i.number ?? "",
-      date: dmy(i.issuedOn),
-      due: i.kind === "invoice" ? dmy(i.dueOn) : "",
-      netCents: i.netCents,
-      grossCents: i.grossCents,
-    }));
-
+  const sp = await searchParams;
+  const [{ rows, today }, issuers] = await Promise.all([sectionRows(query, business, A.inv.month), listIssuers(query, business.id)]);
+  const asked = listQueryOf({ status: sp.status, from: sp.from, to: sp.to });
   return (
     <>
       <Title text={A.inv.title} />
-      <div className="adm-page-head inv-top">
-        <Titled page="invoices">
-          <h1 className="adm-h1">{A.inv.title}</h1>
-        </Titled>
-        {issuers.length > 0 && (
-          <NewInvoice
-            receivers={receivers
-              .filter((r) => r.active)
-              .map((r) => ({ id: r.id, name: r.legalName, sub: [r.staffName, r.address || r.email].filter(Boolean).join(", "), person: r.kind === "person" }))}
-          />
-        )}
-      </div>
-      <InvTabs A={A} here="list" />
-      {!issuers.length && (
-        <p className="adm-note">
-          <Link href="/admin/invoices/company">{A.inv.noIssuer}</Link>
-        </p>
-      )}
-      <InvoiceList rows={rows} />
+      <InvoiceList key={`${asked.status}:${asked.from}:${asked.to}`} rows={rows} today={today} canNew={issuers.length > 0} initial={{ ...EMPTY_QUERY, status: asked.status, from: asked.from, to: asked.to }} />
     </>
   );
 }

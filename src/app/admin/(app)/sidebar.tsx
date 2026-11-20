@@ -16,6 +16,9 @@
  * The mode is kept per browser tab (sessionStorage). A tab that opens on
  * the calendar starts in «till», one that opens on any other page in
  * «menu». A phone has none of this: its bar is in nav.tsx.
+ *
+ * Inside «Счета» neither is shown: the section has its own sidebar
+ * (invoices/side.tsx), with «В салон» as the way back here.
  */
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -31,6 +34,8 @@ import { useA } from "../lang";
 import { logout } from "./account/actions";
 import { useFrame } from "./frame";
 import { monthLoadAction } from "./frame-actions";
+import { inInvoices } from "./invoices/common";
+import { InvoiceSide } from "./invoices/side";
 import { MENU, SectionIcon, sectionOpen } from "./sections";
 import { StarShape } from "./star";
 import type { Who } from "./who";
@@ -67,7 +72,14 @@ export type SidebarProps = {
   report: boolean;
 };
 
-export function Sidebar({ user, demo, today, load, report }: SidebarProps) {
+export function Sidebar(props: SidebarProps) {
+  const path = usePathname();
+  // «Счета» wears its own frame: its sidebar in place of the salon's
+  if (inInvoices(path)) return <InvoiceSide path={path} demo={props.demo} />;
+  return <SalonSidebar {...props} />;
+}
+
+function SalonSidebar({ user, demo, today, load, report }: SidebarProps) {
   const A = useA();
   const F = A.frame;
   const path = usePathname();

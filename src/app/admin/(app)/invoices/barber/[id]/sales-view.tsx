@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useA } from "../../../../lang";
 import { reverseSaleAction } from "../../actions";
-import { AskButton } from "../../ask";
+import { Confirm, Field } from "../../ui";
 
 type Row = { id: string; name: string; qty: number; mode: string; total: string; commission: string; at: string; status: string; sync: string; reversal: boolean; reversed: boolean; note: string };
 
@@ -11,6 +11,7 @@ type Row = { id: string; name: string; qty: number; mode: string; total: string;
 export function SalesList({ rows }: { rows: Row[] }) {
   const A = useA();
   const [note, setNote] = useState("");
+  const [asking, setAsking] = useState<string | null>(null);
   return (
     <ul className="adm-list adm-inv-sales">
       {rows.map((r) => (
@@ -32,24 +33,29 @@ export function SalesList({ rows }: { rows: Row[] }) {
           </span>
           <span className="end">{r.total}</span>
           {r.status === "done" && !r.reversal && !r.reversed && (
-            <AskButton
-              label={A.inv.reverse}
-              ask={A.inv.reverseAsk}
-              className="adm-btn adm-btn-ghost adm-btn-sm"
-              onYes={async () => {
-                const x = await reverseSaleAction(r.id, note);
-                setNote("");
-                if (!x.ok) return x.code === "already" ? A.inv.alreadyReversed : A.error;
-              }}
-            >
-              <label className="adm-field">
-                <span>{A.inv.reverseNote}</span>
-                <input maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} />
-              </label>
-            </AskButton>
+            <button type="button" className="iv-btn is-sm" onClick={() => setAsking(r.id)}>
+              {A.inv.reverse}
+            </button>
           )}
         </li>
       ))}
+      {asking && (
+        <Confirm
+          title={A.inv.reverse}
+          ask={A.inv.reverseAsk}
+          yes={A.inv.reverse}
+          onClose={() => setAsking(null)}
+          onYes={async () => {
+            const x = await reverseSaleAction(asking, note);
+            setNote("");
+            if (!x.ok) return x.code === "already" ? A.inv.alreadyReversed : A.error;
+          }}
+        >
+          <Field label={A.inv.reverseNote}>
+            <input maxLength={200} value={note} onChange={(e) => setNote(e.target.value)} />
+          </Field>
+        </Confirm>
+      )}
     </ul>
   );
 }

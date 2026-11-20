@@ -168,29 +168,99 @@ gets it → send.
        pulling a visit's foot to make it longer; the panel's chat. A tap
        on the grid still snaps to the booking step (15 minutes), whatever
        the scale.
-2. **Invoices: built 19.11.2026** (`src/app/admin/(app)/invoices/`, the
-   «Счета» block of `admin.css`).
-   - **The section wears Isolta's colours:** in «Счета» the frame turns
-     indigo (`#312e6b`), the main button is indigo, the ground lilac-grey
-     (`#f3f3f7`), sheets white with 8 px corners. Only tokens change
-     (`:root:has(.adm-inv)`); the rest of the admin keeps Altegio's. The
-     font stays Inter: Figtree has no Cyrillic.
-   - **«Счета» (the list):** a search, a status filter, one table: status
-     as an outlined pill (draft orange, overdue red, issued indigo, paid
-     green), receiver, number, date, due date, without and with VAT.
-   - **«Новый счёт»:** one field to find the receiver; his name opens the
-     draft (`openDraft`): the one he has, else the month being invoiced
-     with its rent and sales already in, else an empty **free invoice**
-     dated today (migration 015), as many a month as Renat likes.
-   - **One invoice:** the title with «Выставить и отправить» and «Удалить
-     черновик»; one sheet with from and to, the number and dates in a
-     ruled table on the right, the lines as a table, the note, the totals.
-   - **The month's sums per barber** moved to the tab «Месяц»
-     (`/admin/invoices/month`); «Получатели» is Isolta's «Контакты»,
-     «Компания» its settings.
-   - **Not built:** a PDF preview before sending (the PDF exists once an
-     invoice is issued); Isolta's reference number for payments; its
-     products list, reports and attachments.
+2. **Invoices: built 19.11.2026, in Isolta's own frame since 20.11.2026**
+   (the owner: «Счета» wears the invoicing tool's frame, with a way back;
+   `src/app/admin/(app)/invoices/`, `src/lib/billing/`, the «Счета» block
+   of `admin.css`; the design boards «Счета, список» and «Счёт, черновик»;
+   the measures in `docs/isolta-pages.md`).
+   - **The frame:** inside `/admin/invoices` the salon's sidebar gives way
+     to the section's own (`invoices/side.tsx`, shown by `sidebar.tsx`):
+     260 px of indigo (`#312e6b`), our mark and «REMPIRE», six 48 px rows
+     with 8 px corners (the open one `#252442`): «Рабочий стол», «Счета»,
+     «Получатели», «Товары и услуги», «Отчёты», «Настройки»; at the foot
+     «В салон», back to the journal. The ground is `#f3f3f7`; each page
+     has a white 88 px bar with the title (28 px / 700, `#252442`) and its
+     buttons, and its content in white cards with 8 px corners inside a
+     centred 1344 px box. Buttons are 40 px, the main one indigo, the rest
+     outlined; fields 56 px with the label cut into the line. The tokens
+     hang on the section's sidebar (`:root:has(.iv-side)`), so the rest of
+     the admin keeps Altegio's. A phone keeps the app's two bars and gets
+     the six pages as a row of chips under the title. The font stays
+     Inter: Figtree has no Cyrillic.
+   - **«Рабочий стол»** (`/admin/invoices/desk`): three figures (this
+     month, last month, overdue: how many and how much; each opens the
+     list filtered the same way), four tiles, and the latest events
+     (issued, sent, paid, credited) read from the audit log and the
+     outbox. The salon's menu still opens the section on the list: Renat's
+     routine starts there.
+   - **«Счета», the list** (`/admin/invoices`): «+ Новый счёт», «Сводка по
+     выбранным счетам» (counts and sums of the rows the filters leave:
+     issued, credit invoices, turnover, unpaid, overdue, drafts; without
+     and with VAT) and «Инструменты» → «Экспорт счетов в таблицу» (the
+     same rows as .xlsx; each export is in the audit log without its
+     rows). A search, the status (all, drafts, issued and not due,
+     overdue, paid, credited), the period with two dates and ‹ › to step
+     by it. One table: the status as an outlined pill (draft `#c2660a`,
+     issued `#312e6b`, overdue `#c20a38`, paid `#0f8a71`, credited and a
+     credit invoice grey), receiver, number, date, due date, without and
+     with VAT; every column sorts, a row opens the invoice; 10, 25, 50 or
+     100 rows a page.
+   - **«Новый счёт»** (`/admin/invoices/new`): the sheet with nobody on it
+     yet and one field over «Получатели»; a name opens the draft
+     (`openDraft`): the one he has, else the month being invoiced with its
+     rent and sales already in, else an empty **free invoice** dated today
+     (migration 015), as many a month as Renat likes.
+   - **A draft, the editor:** the bar with «Посмотреть и отправить счёт»,
+     «Заметка к счёту» and «Инструменты» (delete the draft, a copy); the
+     second bar with «‹ Список счетов», previous and next; the sheet: the
+     sender with our mark, the receiver as a card with × (a free draft
+     moves to the other receiver; a month's draft stays its barber's, and
+     the other receiver's own draft opens), the ruled table (number, date,
+     payment terms, due date, the period), the lines, «+ Добавить строку
+     счёта» and the totals.
+     - **A line is picked from the two lists or typed**
+       (`docs/one-place.md`; `src/lib/billing/picker.ts`): its name is a
+       search over the shop's products and the salon's services, and takes
+       any text. Picking fills the name and the price; the VAT rate is set
+       on the server by the invoice's own rule (`vatFor`): a product's own
+       rate, else the issuer's, none for a receiver without VAT.
+     - **«Посмотреть и отправить счёт»:** the draft's PDF from the same
+       builder, with «mustand / draft» where the number will be and a
+       «ЧЕРНОВИК / MUSTAND» stamp. Looking takes no number and writes
+       nothing. «Выставить и отправить» there is the moment the number is
+       given; «Назад к черновику» goes back. A browser with a PDF viewer
+       shows it inside the window; a phone opens it by the link.
+   - **An issued invoice:** «Платежи» (paid in full on a day; no part
+     payments), «Создать кредит-счёт» (asked first), «Инструменты» (a copy
+     as a new draft, save the PDF, print, send once more); under the bar
+     the status in its own colours with «Показать действия по счёту»:
+     issued, sent to which address, paid, credited. The sheet is the same,
+     read only.
+   - **«Получатели»:** the list as Isolta's contacts (a search, name,
+     address, postcode, town, how many invoices) and one receiver's page:
+     his card with «Редактировать», his barber's chair rent, and the tabs
+     «Журнал действий» and «Счета». No groups.
+   - **«Товары и услуги»:** two read-only views, the shop's products by a
+     search and the salon's services with their prices. Not a third list.
+   - **«Отчёты»:** the month's sums per barber (it was the tab «Месяц»),
+     and the receivers for a period (invoices, credit invoices, sold,
+     credited, total, the last invoice), without or with VAT.
+   - **«Настройки»** (it was the tab «Компания»): the company, the bank
+     account, the number series, the VAT rate and the foot text, the money
+     switches, as Isolta's cards.
+   - **Ours, not theirs:** a draft has no number, so its title is «Новый
+     счёт» and the table says «при отправке»; the lines have no drag
+     handle (they are not reordered) and their discount is a sum, not a
+     per cent (it is the barber's 17 %); «№ товара» is the sold product's
+     barcode, on a sale's line only; the note is one text, printed under
+     the totals, so «Заметка к счёту» and the field after the lines are
+     the same thing.
+   - **Not built:** reminders and part payments; attachments; saved
+     products and contact groups (decided against, 19.11.2026); Isolta's
+     reference number for payments, our and your reference, the six
+     detail rows and the description before the lines (none is stored);
+     another currency; a logo or an e-mail text of one's own in
+     «Настройки»; a receiver's note.
 3. **«Клиенты»: built 19.11.2026** (`src/app/admin/(app)/clients/`,
    `src/lib/admin/clients.ts`, the «Клиенты» block of `admin.css`; Dim's
    choice in decisions round 8).

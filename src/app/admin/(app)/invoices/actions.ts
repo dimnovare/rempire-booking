@@ -14,22 +14,28 @@ import { query } from "@/lib/db";
 import { runOutbox } from "@/lib/outbox";
 import {
   addDraftLine,
+  copyInvoice,
   creditInvoice,
   discardDraft,
   dropDraftLine,
+  invoiceById,
   issueInvoice,
   makeDrafts,
   openDraft,
+  paidMoment,
   resendInvoice,
   setDraftNote,
+  setDraftReceiver,
   setPaid,
   updateDraftLine,
   type LineInput,
 } from "@/lib/billing/invoices";
 import { saveIssuer, saveReceiver, setLastNumber, setRent, type IssuerInput, type ReceiverInput } from "@/lib/billing/parties";
+import { findLineItems, pickedVat, type FoundItems, type LinePick } from "@/lib/billing/picker";
 import { saveMoneySettings } from "@/lib/billing/settings";
 import { retrySale, reverseSale } from "@/lib/sales";
 import { localParts, todayIn } from "@/lib/tz";
+import { adminLang } from "../../lang-server";
 
 const str = (v: unknown, max = 400) => String(v ?? "").slice(0, max);
 const int = (v: unknown) => (Number.isFinite(Number(v)) ? Math.trunc(Number(v)) : NaN);
@@ -145,9 +151,20 @@ export async function newInvoiceAction(receiverId: string): Promise<{ ok: true; 
 
 const line = (f: LineInput): LineInput => ({ text: str(f?.text, 300), qty: int(f?.qty), unitCents: int(f?.unitCents), discountCents: int(f?.discountCents ?? 0) });
 
-export async function updateLineAction(lineId: string, f: LineInput): Promise<{ ok: boolean; field?: string }> {
+/**
+ * What a line's name can be picked from: the shop's products and the
+ * salon's services, by a few letters (src/lib/billing/picker.ts). Read-only.
+ */
+export async function findLineItemsAction(text: string): Promise<FoundItems> {
+  const { business } = await requireAdmin();
+  return findLineItems(query, business.id, str(text, 80), await adminLang());
+}
+
+/** `pick`: the item the name was picked from, if it was; its VAT rate is then read on the server. */
+export async function updateLineAction(lineId: string, f: LineInput, pick?: LinePick | null): Promise<{ ok: boolean; field?: string }> {
   const { user, business } = await requireAdmin();
-  const r = await updateDraftLine(business, str(lineId, 64), line(f), user.id);
+  const picked = pick ? await pickedVat(query, business.id, pick) : null;
+  const r = await updateDraftLine(business, str(lineId, 64), line(f), user.id, picked ?? undefined);
   if (r.ok) refresh();
   return r.ok ? { ok: true } : { ok: false, field: r.code };
 }
@@ -159,11 +176,39 @@ export async function dropLineAction(lineId: string): Promise<boolean> {
   return r.ok;
 }
 
-export async function addLineAction(invoiceId: string, f: LineInput): Promise<{ ok: boolean; field?: string }> {
+export async function addLineAction(invoiceId: string, f: LineInput, pick?: LinePick | null): Promise<{ ok: boolean; field?: string }> {
   const { user, business } = await requireAdmin();
-  const r = await addDraftLine(business, str(invoiceId, 64), line(f), user.id);
+  const picked = pick ? await pickedVat(query, business.id, pick) : null;
+  const r = await addDraftLine(business, str(invoiceId, 64), line(f), user.id, picked ?? undefined);
   if (r.ok) refresh();
   return r.ok ? { ok: true } : { ok: false, field: r.code };
+}
+
+/**
+ * Another receiver from a draft's card. A free draft moves to him. A
+ * month's draft stays with its barber: then `open` is the other receiver's
+ * own draft to go to, as «Новый счёт» would open it.
+ */
+export async function changeReceiverAction(invoiceId: string, receiverId: string): Promise<{ ok: true; open: string | null } | { ok: false; code: string }> {
+  const { user, business } = await requireAdmin();
+  const r = await setDraftReceiver(business, str(invoiceId, 64), str(receiverId, 64), user.id);
+  if (r.ok) {
+    refresh();
+    return { ok: true, open: null };
+  }
+  if (r.code !== "not_free") return r;
+  const other = await openDraft(business, str(receiverId, 64), user.id);
+  if (!other.ok) return other;
+  refresh();
+  return { ok: true, open: other.id };
+}
+
+/** «Сделать копию счёта»: a new free draft with the same lines. */
+export async function copyAction(invoiceId: string): Promise<{ ok: true; id: string } | { ok: false; code: string }> {
+  const { user, business } = await requireAdmin();
+  const r = await copyInvoice(business, str(invoiceId, 64), user.id);
+  if (r.ok) refresh();
+  return r;
 }
 
 export async function setNoteAction(invoiceId: string, note: string): Promise<boolean> {
@@ -190,11 +235,23 @@ export async function issueAction(invoiceId: string): Promise<{ ok: true; number
   return r;
 }
 
-export async function setPaidAction(invoiceId: string, paid: boolean): Promise<boolean> {
+/**
+ * «Платежи»: the invoice paid in full on a day (today if none is given), or
+ * the mark taken off. The day is between the invoice's own date and today.
+ */
+export async function setPaidAction(invoiceId: string, paid: boolean, paidOn?: string | null): Promise<{ ok: boolean; code?: "date" }> {
   const { user, business } = await requireAdmin();
-  const ok = await setPaid(business, str(invoiceId, 64), paid === true, user.id);
+  const id = str(invoiceId, 64);
+  let at = Date.now();
+  if (paid === true && paidOn) {
+    const inv = await invoiceById(query, business.id, id);
+    const moment = paidMoment(str(paidOn, 10), inv?.issuedOn ?? null, business.timezone);
+    if (moment == null) return { ok: false, code: "date" };
+    at = moment;
+  }
+  const ok = await setPaid(business, id, paid === true, user.id, at);
   if (ok) refresh();
-  return ok;
+  return { ok };
 }
 
 export async function creditAction(invoiceId: string): Promise<{ ok: true; id: string; number: string } | { ok: false; code: string }> {

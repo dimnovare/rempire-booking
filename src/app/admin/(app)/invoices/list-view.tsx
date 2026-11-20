@@ -1,225 +1,264 @@
 "use client";
 
 /**
- * «Счета»: the table of every invoice with a search and a status filter,
- * and «Новый счёт», which asks for the receiver and nothing else. Both as
- * in Isolta, which Renat used until now (docs/reference-looks.md).
+ * «Счета», the list, to its design board: the bar with «+ Новый счёт»,
+ * «Сводка по выбранным счетам» and «Инструменты»; the toolbar (search,
+ * status, period and dates); the count; one table whose every column sorts
+ * and whose rows open the invoice; the foot with the rows a page.
+ *
+ * The rows come whole with the page; filtering, sorting and paging are
+ * src/lib/billing/list.ts, here in the browser. «Сводка» sums the rows that
+ * the filters leave, and the export asks the server for the same question.
+ * A receiver's own page shows the same list of his invoices (`embedded`).
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { filterRows, nextSort, pageOf, PAGE_SIZES, sortRows, STATUS_FILTERS, summaryOf, type ListQuery, type ListRow, type SortKey, type StatusFilter, type Sum } from "@/lib/billing/list";
 import { euroText } from "@/lib/money";
-import { PlusIcon } from "../../icons";
+import { NextIcon, PlusIcon, PrevIcon } from "../../icons";
 import { useA } from "../../lang";
-import { Sheet } from "../sheet";
-import { newInvoiceAction } from "./actions";
-import { StatusTag } from "./common";
+import { useFrame } from "../frame";
+import { dmy, INV_ROOT, SortArrow, StatusTag, ToolIcon } from "./common";
+import { Dialog, downloadPost, Field, IvTop, MenuButton, Period, type PeriodValue } from "./ui";
 
-export type ListRow = {
-  id: string;
-  /** draft, issued, overdue, paid, credited */
-  status: string;
-  credit: boolean;
-  receiver: string;
-  sub: string;
-  number: string;
-  date: string;
-  due: string;
-  netCents: number;
-  grossCents: number;
-};
+const COLS: { key: SortKey; num?: boolean }[] = [{ key: "status" }, { key: "receiver" }, { key: "number", num: true }, { key: "date" }, { key: "due" }, { key: "net", num: true }, { key: "gross", num: true }];
 
-const STATUSES = ["draft", "issued", "overdue", "paid", "credited"] as const;
-const has = (text: string, q: string) => text.toLocaleLowerCase().includes(q);
-
-export function InvoiceList({ rows }: { rows: ListRow[] }) {
+export function InvoiceList({ rows, today, initial, canNew = true, embedded = false }: { rows: ListRow[]; today: string; initial: ListQuery; canNew?: boolean; embedded?: boolean }) {
   const A = useA();
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState("");
-  const shown = useMemo(() => {
-    const needle = q.trim().toLocaleLowerCase();
-    return rows.filter((r) => (!status || r.status === status) && (!needle || has(r.receiver, needle) || has(r.number, needle) || has(r.sub, needle)));
-  }, [rows, q, status]);
-  const C = A.inv.lcols;
-  const statusName = (s: string) => (s === "overdue" ? A.inv.overdue : (A.inv.status[s] ?? s));
+  const router = useRouter();
+  const frame = useFrame();
+  const [q, setQ] = useState(initial.q);
+  const [status, setStatus] = useState<StatusFilter>(initial.status);
+  const [period, setPeriod] = useState<PeriodValue>({ gran: "month", from: initial.from, to: initial.to });
+  const [sort, setSort] = useState(initial.sort);
+  const [page, setPage] = useState(1);
+  const [size, setSize] = useState<number>(PAGE_SIZES[0]);
+  const [summing, setSumming] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  if (!rows.length) return <p className="adm-meta">{A.inv.none}</p>;
-  return (
+  const asked = useMemo(() => ({ q, status, from: period.from, to: period.to, sort }), [q, status, period.from, period.to, sort]);
+  const found = useMemo(() => sortRows(filterRows(rows, asked, today), asked.sort, today), [rows, asked, today]);
+  const pg = pageOf(found, page, size);
+  const C = A.inv.lcols;
+  const first = <T,>(set: (v: T) => void) => (v: T) => {
+    set(v);
+    setPage(1);
+  };
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      frame.say(A.inv.exported(await downloadPost(`${INV_ROOT}/export`, asked, "rempire-invoices.xlsx")));
+    } catch {
+      frame.say(A.error, true);
+    }
+    setBusy(false);
+  };
+
+  const body = (
     <>
-      <div className="inv-filters">
-        <label className="inv-search">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
-            <circle cx="11" cy="11" r="6.5" />
-            <path d="M16 16l4.5 4.5" />
-          </svg>
-          <input type="search" placeholder={A.inv.search} aria-label={A.inv.search} value={q} onChange={(e) => setQ(e.target.value)} />
-        </label>
-        <select aria-label={C.status} value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">{A.inv.allStatuses}</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {statusName(s)}
-            </option>
-          ))}
-        </select>
+      <div className="iv-tools">
+        <Field label={A.inv.search} className="f-search">
+          <input type="search" autoComplete="off" maxLength={120} aria-label={A.inv.search} value={q} onChange={(e) => first(setQ)(e.target.value)} />
+        </Field>
+        <Field label={A.inv.statusLabel} className="f-sel">
+          <select value={status} onChange={(e) => first(setStatus)(e.target.value as StatusFilter)}>
+            {STATUS_FILTERS.map((s) => (
+              <option key={s} value={s}>
+                {A.inv.filters[s]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Period value={period} today={today} onChange={first(setPeriod)} />
       </div>
-      <p className="adm-meta" role="status">
-        {A.inv.count(shown.length, rows.length)}
+
+      <p className="iv-count" role="status">
+        {A.inv.countLine(pg.from, pg.to, found.length)}
       </p>
-      {shown.length === 0 ? (
-        <p className="adm-meta">{A.inv.nothingFound}</p>
+
+      {rows.length === 0 ? (
+        <p className="iv-empty">{A.inv.none}</p>
+      ) : found.length === 0 ? (
+        <p className="iv-empty">{A.inv.nothingFound}</p>
       ) : (
         <>
-          {/* a table on a wide screen, as Isolta's; a list on a phone */}
-          <div className="inv-card only-wide">
-            <table className="inv-table">
+          <div className="iv-tablewrap only-wide">
+            <table className="iv-table inv-table">
               <thead>
                 <tr>
-                  <th>{C.status}</th>
-                  <th>{C.receiver}</th>
-                  <th className="n">{C.number}</th>
-                  <th className="n">{C.date}</th>
-                  <th className="n">{C.due}</th>
-                  <th className="n">{C.net}</th>
-                  <th className="n">{C.gross}</th>
+                  {COLS.map((c) => (
+                    <th key={c.key} scope="col" className={c.num ? "n" : undefined} style={c.key === "status" ? { width: 120 } : undefined} aria-sort={sort.key === c.key ? (sort.dir === "asc" ? "ascending" : "descending") : undefined}>
+                      <button type="button" className="iv-sort" onClick={() => first(setSort)(nextSort(sort, c.key))}>
+                        {C[c.key]}
+                        <SortArrow />
+                      </button>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {shown.map((r) => (
-                  <tr key={r.id}>
+                {pg.rows.map((r) => (
+                  <tr key={r.id} className="is-link" onClick={() => router.push(`${INV_ROOT}/${r.id}`)}>
                     <td>
                       <StatusTag A={A} status={r.status} />
                     </td>
-                    <td>
-                      <Link href={`/admin/invoices/${r.id}`} prefetch={false}>
+                    <td className="b">
+                      <Link href={`${INV_ROOT}/${r.id}`} prefetch={false} onClick={(e) => e.stopPropagation()}>
                         {r.receiver}
                       </Link>
-                      {(r.sub || r.credit) && <small>{[r.credit ? A.inv.credit : "", r.sub].filter(Boolean).join(", ")}</small>}
                     </td>
                     <td className="n">{r.number}</td>
-                    <td className="n">{r.date}</td>
-                    <td className="n">{r.due}</td>
+                    <td>{dmy(r.date)}</td>
+                    <td>{dmy(r.due)}</td>
                     <td className="n">{euroText(r.netCents)}</td>
                     <td className="n">{euroText(r.grossCents)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            <Pager pg={pg} total={found.length} size={size} setSize={first(setSize)} setPage={setPage} />
           </div>
-          <ul className="adm-list only-narrow">
-            {shown.map((r) => (
-              <li key={r.id}>
-                <Link className="adm-item" href={`/admin/invoices/${r.id}`} prefetch={false}>
-                  <span className="txt">
-                    <b>{r.receiver}</b>
-                    <small>{[r.number, r.date, r.sub].filter(Boolean).join(", ")}</small>
-                    <span className="tags">
-                      <StatusTag A={A} status={r.status} />
-                      {r.credit && <span className="adm-tag">{A.inv.credit}</span>}
+          <div className="only-narrow">
+            <ul className="iv-list">
+              {pg.rows.map((r) => (
+                <li key={r.id}>
+                  <Link href={`${INV_ROOT}/${r.id}`} prefetch={false}>
+                    <span className="txt">
+                      <b>{r.receiver}</b>
+                      <small>{[r.number, dmy(r.date), r.sub].filter(Boolean).join(", ")}</small>
+                      <span className="tags">
+                        <StatusTag A={A} status={r.status} />
+                      </span>
                     </span>
-                  </span>
-                  <span className="end price">{euroText(r.grossCents)}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+                    <span className="end">{euroText(r.grossCents)}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+            <Pager pg={pg} total={found.length} size={size} setSize={first(setSize)} setPage={setPage} />
+          </div>
         </>
       )}
+      {summing && <Summary rows={found} onClose={() => setSumming(false)} />}
+    </>
+  );
+
+  if (embedded) return body;
+  return (
+    <>
+      <IvTop title={A.inv.title} star>
+        <button type="button" className="iv-btn is-main" disabled={!canNew} onClick={() => router.push(`${INV_ROOT}/new`)}>
+          <PlusIcon />
+          {A.inv.newInvoice}
+        </button>
+        <button type="button" className="iv-btn is-long" onClick={() => setSumming(true)}>
+          {A.inv.summary}
+        </button>
+        <MenuButton label={A.inv.tools}>
+          {(close) => (
+            <button
+              type="button"
+              role="menuitem"
+              disabled={busy}
+              onClick={() => {
+                close();
+                void save();
+              }}
+            >
+              <ToolIcon name="sheet" />
+              <span>
+                {A.inv.exportXlsx}
+                <small>{A.inv.exportHint}</small>
+              </span>
+            </button>
+          )}
+        </MenuButton>
+      </IvTop>
+      <div className="iv-body">
+        {!canNew && (
+          <p className="iv-warn">
+            <Link className="iv-link" href={`${INV_ROOT}/settings`}>
+              {A.inv.noIssuer}
+            </Link>
+          </p>
+        )}
+        {body}
+      </div>
     </>
   );
 }
 
-export type PickReceiver = { id: string; name: string; sub: string; person: boolean };
-
-/** «Новый счёт»: one field to find the receiver, his name opens the draft. */
-export function NewInvoice({ receivers }: { receivers: PickReceiver[] }) {
+export function Pager({ pg, total, size, setSize, setPage }: { pg: { page: number; pages: number; from: number; to: number }; total: number; size: number; setSize: (n: number) => void; setPage: (n: number) => void }) {
   const A = useA();
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState("");
-  const [busy, setBusy] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const needle = q.trim().toLocaleLowerCase();
-  const shown = needle ? receivers.filter((r) => has(r.name, needle) || has(r.sub, needle)) : receivers;
-
-  const pick = async (id: string) => {
-    setBusy(id);
-    setErr(null);
-    try {
-      const r = await newInvoiceAction(id);
-      if (r.ok) return router.push(`/admin/invoices/${r.id}`);
-      setErr(A.inv.fail[r.code] ?? A.error);
-    } catch {
-      setErr(A.error);
-    }
-    setBusy(null);
-  };
-
   return (
-    <>
-      <button
-        type="button"
-        className="adm-btn adm-btn-lime adm-btn-sm"
-        onClick={() => {
-          setQ("");
-          setErr(null);
-          setOpen(true);
-        }}
-      >
-        <PlusIcon />
-        {A.inv.newInvoice}
-      </button>
-      {open && (
-        <Sheet title={A.inv.pickReceiver} onClose={() => !busy && setOpen(false)}>
-          {receivers.length === 0 ? (
-            <p className="adm-meta">{A.inv.noReceivers}</p>
-          ) : (
-            <>
-              <label className="inv-search">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
-                  <circle cx="11" cy="11" r="6.5" />
-                  <path d="M16 16l4.5 4.5" />
-                </svg>
-                {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
-                <input type="search" autoFocus placeholder={A.inv.searchReceiver} aria-label={A.inv.searchReceiver} value={q} onChange={(e) => setQ(e.target.value)} />
-              </label>
-              {err && (
-                <p className="adm-err" role="alert">
-                  {err}
-                </p>
-              )}
-              {shown.length === 0 ? (
-                <p className="adm-meta">{A.inv.nothingFound}</p>
-              ) : (
-                <ul className="inv-pick">
-                  {shown.map((r) => (
-                    <li key={r.id}>
-                      <button type="button" disabled={busy !== null} onClick={() => void pick(r.id)}>
-                        <span className="inv-pick-ico" aria-hidden="true">
-                          {r.person ? (
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                              <circle cx="12" cy="8" r="4" />
-                              <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
-                            </svg>
-                          ) : (
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M4 21V8l7-4v17M11 21h9V11l-9-3M7 10v.5M7 14v.5M7 18v.5M15 14v.5M15 18v.5" />
-                            </svg>
-                          )}
-                        </span>
-                        <span className="n">
-                          <b>{r.name}</b>
-                          {r.sub && <small>{r.sub}</small>}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </>
-          )}
-        </Sheet>
-      )}
-    </>
+    <div className="iv-tfoot">
+      <label>
+        {A.inv.perPage}
+        <select value={size} onChange={(e) => setSize(Number(e.target.value))}>
+          {PAGE_SIZES.map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
+        </select>
+      </label>
+      <span>{A.inv.pageOf(pg.from, pg.to, total)}</span>
+      <span>
+        <button type="button" className="iv-ibtn" aria-label={A.inv.pagePrev} disabled={pg.page <= 1} onClick={() => setPage(pg.page - 1)}>
+          <PrevIcon />
+        </button>
+        <button type="button" className="iv-ibtn" aria-label={A.inv.pageNext} disabled={pg.page >= pg.pages} onClick={() => setPage(pg.page + 1)}>
+          <NextIcon />
+        </button>
+      </span>
+    </div>
+  );
+}
+
+/** «Сводка по выбранным счетам»: counts and sums of the rows the filters leave. */
+function Summary({ rows, onClose }: { rows: ListRow[]; onClose: () => void }) {
+  const A = useA();
+  const S = A.inv.sum;
+  const s = summaryOf(rows);
+  const line = (key: string, label: string, v: Sum, strong = false, count = true) => (
+    <tr key={key} data-row={key} className={strong ? "is-total" : undefined}>
+      <td>{label}</td>
+      <td>{count ? v.count : ""}</td>
+      <td>{euroText(v.netCents)}</td>
+      <td>{euroText(v.grossCents)}</td>
+    </tr>
+  );
+  return (
+    <Dialog
+      title={A.inv.summary}
+      onClose={onClose}
+      foot={
+        <button type="button" className="iv-btn" onClick={onClose}>
+          {A.close}
+        </button>
+      }
+    >
+      <p className="iv-mute">{S.hint}</p>
+      <table className="iv-sum">
+        <thead>
+          <tr>
+            <th />
+            <th scope="col">{S.count}</th>
+            <th scope="col">{A.inv.lcols.net}</th>
+            <th scope="col">{A.inv.lcols.gross}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {line("issued", S.issued, s.issued)}
+          {line("credits", S.credits, s.credits)}
+          {line("turnover", S.turnover, s.turnover, true, false)}
+          {line("unpaid", S.unpaid, s.unpaid)}
+          {line("overdue", S.overdue, s.overdue)}
+          {line("drafts", S.drafts, s.drafts)}
+        </tbody>
+      </table>
+    </Dialog>
   );
 }

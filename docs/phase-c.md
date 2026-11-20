@@ -109,27 +109,61 @@ Everything below runs on staging with demo barbers, demo companies
     the basis or the share never rewrites old sales.
   - «Себе» = the shop's purchase price (without VAT) × 1.24, no
     commission. A product with no purchase price can't be taken «себе».
-- **«Счета» in the admin** (the fifth tab; since 19.11.2026 in Isolta's
-  look and order, `docs/reference-looks.md`):
-  - **Счета** (the tab it opens on): every invoice in one table, with a
-    search and a status filter. «Новый счёт» asks for the receiver and
-    opens his draft: the one he has, the month being invoiced, or an empty
-    free invoice (`invoices.free`, 015).
-  - **Месяц** (`/admin/invoices/month`): per barber: sold, 17 %, self,
-    rent, billed, paid, open.
-    «Собрать черновики», the month's invoices, and two CSVs for the
+- **«Счета» in the admin** (the fifth tab; since 20.11.2026 in Isolta's
+  own frame, with its own sidebar and pages: `docs/reference-looks.md`).
+  Where each thing is now:
+
+  | Page | Address | It was |
+  |---|---|---|
+  | «Рабочий стол» | `/admin/invoices/desk` | new |
+  | «Счета», the list | `/admin/invoices` | the same address; the section still opens here |
+  | «Новый счёт» | `/admin/invoices/new` | a window over the list |
+  | One invoice | `/admin/invoices/<id>` | the same address |
+  | Its PDF | `/admin/invoices/<id>/pdf` (`?dl=1` to save) | the same address |
+  | A draft's preview | `/admin/invoices/<id>/preview` | new |
+  | The list as .xlsx | `POST /admin/invoices/export` | new |
+  | «Получатели» | `/admin/invoices/receivers`, `/admin/invoices/receivers/<id>` | one page with a side pane |
+  | «Товары и услуги» | `/admin/invoices/items` | new |
+  | «Отчёты»: the month per barber | `/admin/invoices/reports` | the tab «Месяц», `/admin/invoices/month` (it leads here, with its `?m=`) |
+  | «Отчёты»: by receiver | `/admin/invoices/reports/receivers` | new |
+  | A barber's month | `/admin/invoices/barber/<staffId>` | the same address; now under «Отчёты» |
+  | The accountant's CSV | `/admin/invoices/csv` | the same address |
+  | «Настройки» | `/admin/invoices/settings` | the tab «Компания», `/admin/invoices/company` (it leads here) |
+
+  - **Счета** (the page it opens on): every invoice in one table, with a
+    search, a status filter, a period, a sort on every column, «Сводка по
+    выбранным счетам» and the export (`src/lib/billing/list.ts`,
+    `export.ts`). «Новый счёт» asks for the receiver and opens his draft:
+    the one he has, the month being invoiced, or an empty free invoice
+    (`invoices.free`, 015).
+  - **Отчёты → месяц:** per barber: sold, 17 %, self, rent, billed, paid,
+    open. «Собрать черновики», the month's invoices, and two CSVs for the
     accountant (invoices, lines). It opens on the month before.
   - **Счёт:**
-    - A draft's lines save as you type.
-    - «Выставить» takes the next number from `invoice_counters`, freezes
-      the PDF data and e-mails the PDF through the outbox.
-    - Then «Оплачен», «Отправить ещё раз», or «Кредитовать». A credit
-      invoice is a full credit, issued at once, with its own number.
+    - A draft's lines save as you type. A line's name is picked from the
+      shop's products or the salon's services, or typed
+      (`src/lib/billing/picker.ts`); it stays a typed line (`other`), and
+      a picked product brings the VAT rate it is sold at.
+    - «Посмотреть и отправить счёт» shows the draft's PDF first
+      (`draftPdf` in `src/lib/billing/send.ts`): no number, the draft
+      stamp, nothing written.
+    - «Выставить и отправить», in that window, takes the next number from
+      `invoice_counters`, freezes the PDF data and e-mails the PDF through
+      the outbox.
+    - Then «Платежи» (paid in full, on a day), «Отправить ещё раз», a copy
+      as a new free draft (`copyInvoice`), or «Создать кредит-счёт». A
+      credit invoice is a full credit, issued at once, with its own
+      number.
+    - Its events (issued, sent to which address, paid, credited) are read
+      back from the audit log and the outbox
+      (`src/lib/billing/events.ts`); no table was added.
   - **Получатели:** person, FIE or OÜ, VAT on or off, the barber it
-    belongs to.
+    belongs to. Each has a page with a journal and its invoices.
     - Chair rent with a valid-from month. A rent can't start in a month
       that is already invoiced.
-  - **Компания:** REMPIRE's company (the owner only), the number format,
+    - A free draft can be moved to another receiver (`setDraftReceiver`);
+      a month's draft never.
+  - **Настройки:** REMPIRE's company (the owner only), the number format,
     «Последний номер» (it only goes up), the 17 %, its basis and the
     billing day.
 - **«Мои расчёты»** (`/b/money`, from «Ещё»): his month, his invoices with

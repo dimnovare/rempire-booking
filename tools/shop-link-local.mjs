@@ -599,7 +599,7 @@ async function main() {
       const pg = await office.newPage();
       await loginByCode(pg, "/admin/login", OWNER);
       const m = tallinnMonth();
-      await pg.goto(`${BOOKING}/admin/invoices?m=${m}`, { timeout: 120_000 });
+      await pg.goto(`${BOOKING}/admin/invoices/reports?m=${m}`, { timeout: 120_000 });
       await hydrated(pg);
       await pg.getByRole("button", { name: RU.makeDrafts }).click();
       await sleep(3000);

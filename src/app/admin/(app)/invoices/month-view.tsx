@@ -23,15 +23,15 @@ export function MakeDrafts({ month, hint }: { month: string; hint: string }) {
   };
   return (
     <div className="adm-inv-drafts">
-      <button type="button" className="adm-btn adm-btn-line adm-btn-sm" disabled={busy} onClick={() => void go()}>
+      <button type="button" className="iv-btn" disabled={busy} onClick={() => void go()}>
         {A.inv.makeDrafts}
       </button>
       {msg ? (
-        <p className={msg.ok ? "adm-ok" : "adm-err"} role="status">
+        <p className={msg.ok ? "iv-ok" : "iv-err"} role="status">
           {msg.text}
         </p>
       ) : (
-        <p className="adm-meta">{hint}</p>
+        <p className="iv-mute">{hint}</p>
       )}
     </div>
   );
@@ -57,8 +57,8 @@ export function FailedSales({ rows }: { rows: Failed[] }) {
   if (!left.length) return null;
   return (
     <div className="adm-card">
-      <h2 className="adm-card-h">{A.inv.failed}</h2>
-      <p className="adm-meta">{A.inv.failedHint}</p>
+      <h2 className="iv-h6">{A.inv.failed}</h2>
+      <p className="iv-mute">{A.inv.failedHint}</p>
       <ul className="adm-list">
         {left.map((r) => (
           <li key={r.id} className="adm-inv-failed">
@@ -71,7 +71,7 @@ export function FailedSales({ rows }: { rows: Failed[] }) {
                 {r.error ? ` · ${r.error}` : ""}
               </small>
             </span>
-            <button type="button" className="adm-btn adm-btn-line adm-btn-sm" disabled={busy === r.id} onClick={() => void retry(r.id)}>
+            <button type="button" className="iv-btn is-sm" disabled={busy === r.id} onClick={() => void retry(r.id)}>
               {A.inv.retry}
             </button>
           </li>

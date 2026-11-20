@@ -30,7 +30,7 @@
 import { getBusinessById, type Business } from "../availability";
 import { query, withTx, type Querier } from "../db";
 import { lineAmounts } from "../money";
-import { addDays, localParts, startOfDay, todayIn } from "../tz";
+import { addDays, localParts, startOfDay, todayIn, zonedToUtc } from "../tz";
 import { TEST_NUMBER_PREFIX, testRun } from "../test-run";
 import { counterYear, formatNumber, issuerById, listReceivers, receiverById, rentOn, type Issuer, type Receiver } from "./parties";
 
@@ -56,6 +56,8 @@ export type InvoiceLine = {
   saleId: string | null;
   rentMonth: string | null;
   dropped: boolean;
+  /** the sold product's barcode, for a line that bills a sale; null for a typed line */
+  itemNo: string | null;
 };
 
 export type Invoice = {
@@ -210,6 +212,7 @@ type LineRow = {
   sale_id: string | null;
   rent_month: string | null;
   dropped: boolean;
+  item_no: string | null;
 };
 
 const lineOf = (r: LineRow): InvoiceLine => ({
@@ -227,6 +230,7 @@ const lineOf = (r: LineRow): InvoiceLine => ({
   saleId: r.sale_id,
   rentMonth: r.rent_month,
   dropped: r.dropped,
+  itemNo: r.item_no,
 });
 
 export async function invoiceById(q: Querier, businessId: string, id: string): Promise<Invoice | null> {
@@ -237,9 +241,10 @@ export async function invoiceById(q: Querier, businessId: string, id: string): P
 
 export async function invoiceLines(q: Querier, invoiceId: string, withDropped = false): Promise<InvoiceLine[]> {
   const rows = await q<LineRow>(
-    `select id, position, kind, text, qty, unit_cents, discount_cents, vat_bp, gross_cents, net_cents, vat_cents, sale_id,
-            to_char(rent_month, 'YYYY-MM-DD') as rent_month, dropped
-       from invoice_lines where invoice_id = $1 ${withDropped ? "" : "and not dropped"} order by position`,
+    `select l.id, l.position, l.kind, l.text, l.qty, l.unit_cents, l.discount_cents, l.vat_bp, l.gross_cents, l.net_cents, l.vat_cents, l.sale_id,
+            to_char(l.rent_month, 'YYYY-MM-DD') as rent_month, l.dropped, p.barcode as item_no
+       from invoice_lines l left join product_sales p on p.id = l.sale_id
+      where l.invoice_id = $1 ${withDropped ? "" : "and not l.dropped"} order by l.position`,
     [invoiceId],
   );
   return rows.map(lineOf);
@@ -456,8 +461,8 @@ export async function planInvoiceDrafts(q: Querier, now = Date.now()): Promise<n
 export type LineInput = { text: string; qty: number; unitCents: number; discountCents: number };
 
 async function lockDraft(tx: Querier, businessId: string, invoiceId: string) {
-  const [inv] = await tx<{ id: string; status: InvoiceStatus; issuer_id: string; receiver_id: string }>(
-    "select id, status, issuer_id, receiver_id from invoices where id = $1 and business_id = $2 for update",
+  const [inv] = await tx<{ id: string; status: InvoiceStatus; issuer_id: string; receiver_id: string; free: boolean }>(
+    "select id, status, issuer_id, receiver_id, free from invoices where id = $1 and business_id = $2 for update",
     [invoiceId, businessId],
   );
   return inv && inv.status === "draft" ? inv : null;
@@ -473,14 +478,22 @@ function cleanLine(l: LineInput): LineInput | null {
   return { text, qty, unitCents: unit, discountCents: disc };
 }
 
-export async function updateDraftLine(business: Business, lineId: string, input: LineInput, actor: string): Promise<{ ok: true } | Fail<"invalid" | "not_draft">> {
+export async function updateDraftLine(business: Business, lineId: string, input: LineInput, actor: string, picked?: LinePicked): Promise<{ ok: true } | Fail<"invalid" | "not_draft">> {
   const l = cleanLine(input);
   if (!l || !/^[0-9a-f-]{36}$/i.test(lineId)) return { ok: false, code: "invalid" };
   return withTx(async (tx) => {
-    const [line] = await tx<{ invoice_id: string; vat_bp: number }>("select invoice_id, vat_bp from invoice_lines where id = $1 and not dropped", [lineId]);
-    if (!line || !(await lockDraft(tx, business.id, line.invoice_id))) return { ok: false as const, code: "not_draft" as const };
-    const a = lineAmounts({ ...l, vatBp: line.vat_bp });
-    await tx(`update invoice_lines set text = $2, qty = $3, unit_cents = $4, discount_cents = $5, gross_cents = $6, net_cents = $7, vat_cents = $8 where id = $1`, [
+    const [line] = await tx<{ invoice_id: string; vat_bp: number; sale_id: string | null; rent_month: string | null }>("select invoice_id, vat_bp, sale_id, rent_month from invoice_lines where id = $1 and not dropped", [lineId]);
+    const inv = line ? await lockDraft(tx, business.id, line.invoice_id) : null;
+    if (!line || !inv) return { ok: false as const, code: "not_draft" as const };
+    let vatBp = line.vat_bp;
+    // a typed line whose name was picked from a list takes that item's rate; a sale's or the rent's own line keeps its own
+    if (picked && !line.sale_id && !line.rent_month) {
+      const issuer = await issuerById(tx, business.id, inv.issuer_id);
+      const receiver = await receiverById(tx, business.id, inv.receiver_id);
+      if (issuer && receiver) vatBp = vatFor(issuer, receiver, picked.saleVatBp);
+    }
+    const a = lineAmounts({ ...l, vatBp });
+    await tx(`update invoice_lines set text = $2, qty = $3, unit_cents = $4, discount_cents = $5, gross_cents = $6, net_cents = $7, vat_cents = $8, vat_bp = $9 where id = $1`, [
       lineId,
       l.text,
       l.qty,
@@ -489,6 +502,7 @@ export async function updateDraftLine(business: Business, lineId: string, input:
       a.gross,
       a.net,
       a.vat,
+      vatBp,
     ]);
     await retotal(tx, line.invoice_id);
     await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'invoice', $2, 'line_edit', $3::jsonb)`, [actor, line.invoice_id, JSON.stringify({ lineId, qty: l.qty, unitCents: l.unitCents })]);
@@ -509,8 +523,19 @@ export async function dropDraftLine(business: Business, lineId: string, actor: s
   });
 }
 
-/** Renat's own line on a draft («Другое»), at the invoice's VAT. */
-export async function addDraftLine(business: Business, invoiceId: string, input: LineInput, actor: string): Promise<{ ok: true } | Fail<"invalid" | "not_draft">> {
+/**
+ * What a line's name was picked from (docs/one-place.md): one of the shop's
+ * products, with the rate it is sold at, or one of the salon's services
+ * (no rate of its own). A typed line has none.
+ */
+export type LinePicked = { saleVatBp?: number };
+
+/**
+ * Renat's own line on a draft («Другое»), at the invoice's VAT: the
+ * issuer's rate, or the picked product's own (vatFor decides, as for a
+ * sale's line); none when the receiver's invoices carry no VAT.
+ */
+export async function addDraftLine(business: Business, invoiceId: string, input: LineInput, actor: string, picked?: LinePicked): Promise<{ ok: true } | Fail<"invalid" | "not_draft">> {
   const l = cleanLine(input);
   if (!l) return { ok: false, code: "invalid" };
   return withTx(async (tx) => {
@@ -520,7 +545,7 @@ export async function addDraftLine(business: Business, invoiceId: string, input:
     const receiver = await receiverById(tx, business.id, inv.receiver_id);
     if (!issuer || !receiver) return { ok: false as const, code: "not_draft" as const };
     const [{ n }] = await tx<{ n: number }>("select coalesce(max(position), -1)::int + 1 as n from invoice_lines where invoice_id = $1", [invoiceId]);
-    await insertLines(tx, invoiceId, [{ kind: "other", ...l, vatBp: vatFor(issuer, receiver) }], n);
+    await insertLines(tx, invoiceId, [{ kind: "other", ...l, vatBp: vatFor(issuer, receiver, picked?.saleVatBp) }], n);
     await retotal(tx, invoiceId);
     await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'invoice', $2, 'line_add', $3::jsonb)`, [actor, invoiceId, JSON.stringify({ qty: l.qty, unitCents: l.unitCents })]);
     return { ok: true as const };
@@ -536,6 +561,73 @@ export async function setDraftNote(business: Business, invoiceId: string, note: 
   });
 }
 
+export type ReceiverChange = { ok: true } | Fail<"not_draft" | "not_free" | "no_receiver" | "no_issuer">;
+
+/**
+ * Another receiver for a free draft (the × on his card). Only a free one:
+ * a month's draft is its barber's rent and sales, and stays his. The typed
+ * lines stay; their VAT follows the new receiver (none for one whose
+ * invoices carry no VAT, else each line's own rate or the issuer's).
+ */
+export async function setDraftReceiver(business: Business, invoiceId: string, receiverId: string, actor: string): Promise<ReceiverChange> {
+  if (!/^[0-9a-f-]{36}$/i.test(invoiceId) || !/^[0-9a-f-]{36}$/i.test(receiverId)) return { ok: false, code: "no_receiver" };
+  return withTx(async (tx) => {
+    const inv = await lockDraft(tx, business.id, invoiceId);
+    if (!inv) return { ok: false as const, code: "not_draft" as const };
+    if (!inv.free) return { ok: false as const, code: "not_free" as const };
+    if (inv.receiver_id === receiverId) return { ok: true as const };
+    const receiver = await receiverById(tx, business.id, receiverId);
+    if (!receiver || !receiver.active) return { ok: false as const, code: "no_receiver" as const };
+    const issuer = receiver.issuerId ? await issuerById(tx, business.id, receiver.issuerId) : await defaultIssuer(tx, business.id);
+    if (!issuer || !issuer.active) return { ok: false as const, code: "no_issuer" as const };
+    await tx("update invoices set receiver_id = $2, issuer_id = $3, staff_id = $4, locale = $5, updated_at = now() where id = $1", [invoiceId, receiver.id, issuer.id, receiver.staffId, receiver.locale]);
+    for (const l of await invoiceLines(tx, invoiceId)) {
+      const vatBp = vatFor(issuer, receiver, l.vatBp || undefined);
+      if (vatBp === l.vatBp) continue;
+      const a = lineAmounts({ ...l, vatBp });
+      await tx("update invoice_lines set vat_bp = $2, gross_cents = $3, net_cents = $4, vat_cents = $5 where id = $1", [l.id, vatBp, a.gross, a.net, a.vat]);
+    }
+    await retotal(tx, invoiceId);
+    await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'invoice', $2, 'receiver', $3::jsonb)`, [actor, invoiceId, JSON.stringify({ receiver: receiver.id })]);
+    return { ok: true as const };
+  });
+}
+
+export type CopyResult = { ok: true; id: string } | Fail<"not_found" | "no_receiver" | "no_issuer">;
+
+/**
+ * «Сделать копию счёта»: a new free draft dated today for the same
+ * receiver, with the same lines as typed ones. A sale or a month's rent is
+ * billed once, so the copy's lines point at neither; their VAT is counted
+ * anew by today's rules, and the number comes only when the copy is issued.
+ */
+export async function copyInvoice(business: Business, invoiceId: string, actor: string, now = Date.now()): Promise<CopyResult> {
+  if (!/^[0-9a-f-]{36}$/i.test(invoiceId)) return { ok: false, code: "not_found" };
+  return withTx(async (tx) => {
+    const src = await invoiceById(tx, business.id, invoiceId);
+    if (!src || src.status === "discarded" || src.kind !== "invoice") return { ok: false as const, code: "not_found" as const };
+    const receiver = await receiverById(tx, business.id, src.receiverId);
+    if (!receiver || !receiver.active) return { ok: false as const, code: "no_receiver" as const };
+    const issuer = receiver.issuerId ? await issuerById(tx, business.id, receiver.issuerId) : await defaultIssuer(tx, business.id);
+    if (!issuer || !issuer.active) return { ok: false as const, code: "no_issuer" as const };
+    const today = todayIn(business.timezone, now);
+    const [inv] = await tx<{ id: string }>(
+      `insert into invoices (business_id, issuer_id, receiver_id, staff_id, period_from, period_to, locale, note, created_by, free)
+       values ($1, $2, $3, $4, $5::date, $5::date, $6, $7, $8, true) returning id`,
+      [business.id, issuer.id, receiver.id, receiver.staffId, today, receiver.locale, src.note, /^[0-9a-f-]{36}$/i.test(actor) ? actor : null],
+    );
+    const lines = await invoiceLines(tx, invoiceId);
+    await insertLines(
+      tx,
+      inv.id,
+      lines.map((l) => ({ kind: "other" as const, text: l.text, qty: l.qty, unitCents: l.unitCents, discountCents: l.discountCents, vatBp: vatFor(issuer, receiver, l.vatBp || undefined) })),
+    );
+    await retotal(tx, inv.id);
+    await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'invoice', $2, 'draft', $3::jsonb)`, [actor, inv.id, JSON.stringify({ free: true, day: today, copyOf: invoiceId, lines: lines.length })]);
+    return { ok: true as const, id: inv.id };
+  });
+}
+
 export async function discardDraft(business: Business, invoiceId: string, actor: string): Promise<boolean> {
   return withTx(async (tx) => {
     if (!(await lockDraft(tx, business.id, invoiceId))) return false;
@@ -547,7 +639,7 @@ export async function discardDraft(business: Business, invoiceId: string, actor:
 
 /* ---------- issuing ---------- */
 
-const partyOfIssuer = (i: Issuer): Party => ({
+export const partyOfIssuer = (i: Issuer): Party => ({
   name: i.legalName,
   regCode: i.regCode,
   vatNumber: i.vatNumber,
@@ -558,7 +650,7 @@ const partyOfIssuer = (i: Issuer): Party => ({
   bankName: i.bankName,
   note: i.note,
 });
-const partyOfReceiver = (r: Receiver): Party => ({ name: r.legalName, regCode: r.regCode, vatNumber: r.vatNumber, address: r.address, email: r.email });
+export const partyOfReceiver = (r: Receiver): Party => ({ name: r.legalName, regCode: r.regCode, vatNumber: r.vatNumber, address: r.address, email: r.email });
 
 /**
  * The next number in the issuer's series: one row lock, so no gaps and no twins.
@@ -610,6 +702,18 @@ export async function issueInvoice(business: Business, invoiceId: string, actor:
     await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'invoice', $2, 'issue', $3::jsonb)`, [actor, invoiceId, JSON.stringify({ number, gross: t.gross })]);
     return { ok: true as const, number };
   });
+}
+
+/**
+ * «Платежи»: the moment a payment dated `day` (YYYY-MM-DD) is kept at. Today
+ * is this moment; an earlier day is its noon on the salon's clock. Null for
+ * what is not a day, a day after today, or one before the invoice's own date.
+ */
+export function paidMoment(day: string, issuedOn: string | null, tz: string, now = Date.now()): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(`${day}T12:00:00Z`))) return null;
+  const today = todayIn(tz, now);
+  if (day > today || (issuedOn && day < issuedOn)) return null;
+  return day === today ? now : zonedToUtc(day, "12:00", tz);
 }
 
 /** «Оплачен» (or back, if tapped by mistake). The invoice itself does not change. */

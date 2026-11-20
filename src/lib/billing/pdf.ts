@@ -46,6 +46,12 @@ export type InvoicePdfData = {
   note: string;
   /** staging (src/lib/test-run.ts): the «ТЕСТ / NÄIDIS» stamp on every page; a TEST- number gets it too */
   test?: boolean;
+  /**
+   * A draft looked at before it is sent («Посмотреть и отправить счёт»): it
+   * has no number yet, so none is printed, and every page carries the
+   * «ЧЕРНОВИК / MUSTAND» stamp. Never sent to anyone.
+   */
+  draft?: boolean;
 };
 
 export function invoicePdfFilename(number: string): string {
@@ -84,6 +90,7 @@ const W = {
   reference: { et: "Selgitus", en: "Reference", ru: "Пояснение платежа" },
   amount: { et: "Summa", en: "Amount", ru: "Сумма" },
   page: { et: "lk", en: "page", ru: "стр." },
+  draftNo: { et: "mustand", en: "draft", ru: "черновик" },
 } satisfies Record<string, Tri>;
 
 const lab = (w: Tri, lang: PdfLang, r?: string) => {
@@ -210,9 +217,28 @@ function testStamp(page: PDFPage, font: PDFFont) {
   });
 }
 
+/** Higher on the page than the test stamp, so a draft on staging shows both, and the preview shows this one first. */
+function draftStamp(page: PDFPage, font: PDFFont) {
+  const text = "ЧЕРНОВИК / MUSTAND";
+  const size = 54;
+  const a = (35 * Math.PI) / 180;
+  const w = font.widthOfTextAtSize(text, size);
+  const cy = A4_H * 0.72;
+  page.drawText(text, {
+    x: A4_W / 2 - (w / 2) * Math.cos(a) + (size / 3) * Math.sin(a),
+    y: cy - (w / 2) * Math.sin(a) - (size / 3) * Math.cos(a),
+    size,
+    font,
+    color: rgb(0x31 / 255, 0x2e / 255, 0x6b / 255),
+    opacity: 0.2,
+    rotate: degrees(35),
+  });
+}
+
 export async function renderInvoicePdf(data: InvoicePdfData): Promise<Uint8Array> {
   const L = data.lang;
-  const number = clean(data.number, 40);
+  // a draft has no number: «mustand / draft» stands where it will be
+  const number = data.draft ? lab(W.draftNo, L) : clean(data.number, 40);
   if (!number) throw new Error("bad_invoice_number");
   const files = fontFiles();
   const doc = await PDFDocument.create();
@@ -363,7 +389,8 @@ export async function renderInvoicePdf(data: InvoicePdfData): Promise<Uint8Array
         [lab(W.beneficiary, L), clean(s.name, 120), F.body],
         ["IBAN", clean(s.iban, 42) || "—", F.mono],
         ...(s.bankName ? ([[lab(W.bank, L), clean(s.bankName, 60), F.body]] as [string, string, PDFFont][]) : []),
-        [lab(W.reference, L), `${lab(W.number, "et").split(" / ")[0]} ${number}`, F.mono],
+        // the payer writes the invoice's number: a draft has none yet
+        ...(data.draft ? [] : ([[lab(W.reference, L), `${lab(W.number, "et").split(" / ")[0]} ${number}`, F.mono]] as [string, string, PDFFont][])),
         [lab(W.amount, L), euro(data.grossCents), F.body],
         [lab(W.due, L), humanDate(data.dueDate), F.body],
       ]
@@ -409,6 +436,7 @@ export async function renderInvoicePdf(data: InvoicePdfData): Promise<Uint8Array
   }
   footer();
   if (data.test || number.startsWith(TEST_NUMBER_PREFIX)) for (const p of pages) testStamp(p, F.display);
+  if (data.draft) for (const p of pages) draftStamp(p, F.display);
   if (pages.length > 1) pages.forEach((p, i) => right(p, `${lab(W.page, L)} ${i + 1} / ${pages.length}`, A4_W - M, 20, F.body, 7.5, MUTED));
   return doc.save();
 }

@@ -488,16 +488,23 @@ test.describe("the frame", () => {
       await expect(page.getByRole("heading", { level: 1, name: A.services.title })).toBeVisible();
     });
 
-    test("in «Счета» the sidebar wears the section's indigo, in both modes", async ({ page }) => {
+    test("in «Счета» the section's own sidebar stands in place of the salon's, with «В салон» back", async ({ page }) => {
       await page.goto("/admin/invoices");
       await hydrated(page);
-      await expect(menu(page)).toBeVisible();
+      // (e2e/invoices.spec.ts looks at the section's frame itself; here, that the salon's is away and comes back)
       await expect(sb(page)).toHaveCSS("background-color", "rgb(49, 46, 107)");
-      // the current section is the darker pill, not yellow
-      await expect(menu(page).getByRole("link", { name: A.nav.invoices })).toHaveCSS("background-color", "rgb(37, 36, 66)");
-      await expect(sb(page).getByRole("link", { name: F.journal })).toHaveCSS("background-color", "rgb(37, 36, 66)");
+      await expect(menu(page)).toHaveCount(0);
+      await expect(month(page)).toHaveCount(0);
+      // the open page is the darker pill, not yellow
+      const pages = sb(page).getByRole("navigation", { name: A.inv.title });
+      await expect(pages.getByRole("link", { name: A.inv.menu.list, exact: true })).toHaveCSS("background-color", "rgb(37, 36, 66)");
       await expectNoSideScroll(page);
       await shot(page, "invoices");
+      await sb(page).getByRole("link", { name: A.inv.toSalon }).click();
+      await page.waitForURL(/\/admin$/);
+      await expect(month(page)).toBeVisible();
+      await expect(sb(page)).toHaveCSS("background-color", "rgb(34, 34, 46)");
+      await expect(sb(page).getByRole("button", { name: F.all })).toBeVisible();
     });
 
     test("a small laptop: the sidebar and its foot fit 1024 × 640, the middle scrolls", async ({ page }) => {
