@@ -704,7 +704,7 @@ button.cal-head:hover b { color: var(--accent); }
 .adm-time b { font: 600 24px/1 var(--display); font-variant-numeric: tabular-nums; }
 .adm-time span { color: var(--mute); }
 .adm-phone { display: inline-flex; align-items: center; align-self: flex-start; min-height: 44px; color: var(--accent) !important; text-decoration: none; font-size: 18px; font-variant-numeric: tabular-nums; }
-.adm-status { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; background: var(--raise); }
+.adm-status { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; background: var(--raise); }
 .adm-status button { min-height: 56px; display: flex; align-items: center; justify-content: center; padding: 0 4px; font: 600 12px/1.1 var(--display); color: var(--mute); text-align: center; border-left: 1px solid var(--line-2) !important; }
 .adm-status button:first-child { border-left: 0 !important; }
 .adm-status button[aria-pressed="true"] { background: var(--lime); color: var(--on-lime); }
@@ -1782,6 +1782,145 @@ th.n .iv-sort { flex-direction: row-reverse; }
   .dw-svcs b, .dw-products b, .dw-product b, .dw-hits b, .dw-chosen b { font-size: 13px; font-weight: 500; }
   .dw-svcs .end, .dw-products .end { font-size: 13px; }
 }
+/* ---------- the visit window from 900px (visit-window.tsx) ----------
+   The design board «Окно визита» (docs/reference-looks.md, «The visit window: built»): a drawer from the right
+   over the dimmed page with a round «›» on its seam; 1200px on #f7f9fc, 16px in; three columns 8px apart with
+   8px corners and 12px inside: 228px grey, 584px white, 340px white; a white 64px foot. Inter 12/16, the text
+   #2b3134, the quiet text #71757f, the lines #e0e3eb, the chips #eaeef4 and the chosen one dark, the violet
+   tag on its pale violet, the main action yellow. Under 1200px the centre gives way down to 360px; a narrower
+   window puts the client under the services and scrolls as one. Only drawn from 900px: a phone has the sheet. */
+.vw-wrap { position: fixed; inset: 0; z-index: 55; display: flex; justify-content: flex-end; background: rgba(34, 34, 46, .45); }
+.vw { position: relative; width: 1200px; max-width: calc(100vw - 40px); height: 100%; display: flex; flex-direction: column; background: #f7f9fc; color: #2b3134; font: 400 12px/16px var(--body); box-shadow: -8px 0 32px rgba(34, 34, 46, .18); outline: none; }
+.vw :is(h2, h3, p, ul, dl, dd) { margin: 0; }
+.vw b { font-weight: 500; }
+.vw small { font-size: 12px; color: #71757f; }
+.vw-seam { position: absolute; z-index: 2; top: 24px; left: -16px; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: #fff; color: #2b3134; box-shadow: 0 2px 8px rgba(34, 34, 46, .2); }
+.vw-seam:hover { background: #eaeef4; }
+.vw-body { flex: 1; min-height: 0; display: flex; gap: 8px; padding: 16px 16px 8px; }
+.vw-col { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 12px; padding: 12px; border-radius: 8px; background: #fff; }
+.vw-left { flex: 0 0 228px; position: relative; padding: 0; overflow: hidden; background: #eef1f6; }
+.vw-main { height: 100%; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 12px; padding: 12px; }
+.vw-mid { flex: 0 1 584px; min-width: 360px; }
+.vw-right { flex: 0 0 340px; }
+.vw-dim { color: #71757f; }
+.vw .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
+
+/* the barber, the client: a 32px picture, the name, a line under it */
+.vw-who { display: flex; align-items: center; gap: 8px; }
+.vw-who .adm-ava { flex: none; width: 32px; height: 32px; border-radius: 6px; font-size: 12px; }
+.vw-ini { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: #eaeef4; color: #71757f; font: 600 11px/1 var(--body); }
+.vw-ibtn { flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; color: #71757f; }
+.vw-ibtn:hover, .vw-ibtn[aria-expanded="true"] { color: var(--warn); }
+.vw-when { display: flex; align-items: flex-start; gap: 8px; }
+.vw-when .ic { flex: none; color: #71757f; }
+.vw-when b { font-size: 14px; line-height: 20px; }
+.vw-ask { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 8px; background: #fff; border: 1px solid #f3c1bd; }
+.vw-move { display: flex; flex-direction: column; gap: 8px; }
+.vw .vw-pinned { margin-top: 4px; }
+
+/* buttons: 32px, a 1px line; the main one yellow; a text one without a frame */
+.vw-btn { flex: none; height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 1px solid #e0e3eb; border-radius: 8px; background: #fff; color: #2b3134; font: 500 12px/16px var(--body); white-space: nowrap; text-decoration: none; }
+.vw-btn:hover { border-color: #c6cbd3; }
+.vw-btn-main, .vw-btn-main:hover { padding: 0 16px; border-color: #ffcb00; background: #ffcb00; }
+.vw-btn-warn, .vw-btn-warn:hover { border-color: var(--warn); background: var(--warn); color: #fff; }
+.vw-wide { width: 100%; }
+.vw-txt { flex: none; height: 28px; display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; border-radius: 8px; color: #71757f; font: 500 12px/16px var(--body); text-decoration: none; white-space: nowrap; }
+.vw-txt:hover { color: #2b3134; background: #f7f9fc; }
+.vw-add { align-self: flex-start; padding: 0; color: #2b3134; }
+.vw-add:hover { background: none; text-decoration: underline; }
+.vw-row { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* the fields: 32px, the board's lines; the textarea does not stretch */
+.vw-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; color: #71757f; }
+:where(.adm) .vw :is(input, select, textarea) { min-height: 32px; height: 32px; padding: 0 10px; border-color: #e0e3eb; background: #fff; color: #2b3134; font-size: 12px; line-height: 16px; }
+:where(.adm) .vw textarea { height: auto; padding: 8px; resize: none; }
+:where(.adm) .vw textarea[readonly] { background: #f7f9fc; }
+.vw :is(input, select, textarea):focus-visible { outline: none; }
+
+/* the tiles: 64px, the icon over the words; two in a row on the left, three on the right */
+.vw-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.vw-cards3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.vw-tile { width: 100%; height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 4px; border: 1px solid #e0e3eb; border-radius: 8px; background: #fff; color: #2b3134; font: 500 11px/14px var(--body); text-align: center; text-decoration: none; }
+.vw-tile:hover, .vw-tile[aria-expanded="true"] { border-color: #c6cbd3; background: #f7f9fc; }
+.vw-menu-wrap { position: relative; }
+.vw-menu { position: absolute; z-index: 3; top: calc(100% + 4px); right: 0; min-width: 180px; display: flex; flex-direction: column; padding: 4px; border: 1px solid #e0e3eb; border-radius: 8px; background: #fff; box-shadow: 0 8px 24px rgba(34, 34, 46, .14); }
+.vw-menu a { padding: 8px 10px; border-radius: 6px; text-decoration: none; font-weight: 500; }
+.vw-menu a:hover { background: #eaeef4; }
+
+/* a tile's panel slides over the left column; «Скрыть» gives the column back */
+.vw-slide { position: absolute; inset: 0; z-index: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 12px; background: #eef1f6; animation: vw-in .16s ease-out; }
+.vw-slide-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.vw-slide-head h3, .vw-h { font: 500 14px/20px var(--body); }
+@keyframes vw-in { from { transform: translateX(-12px); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .vw-slide { animation: none; } }
+.vw-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.vw-list li { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 8px; background: #fff; overflow-wrap: anywhere; }
+.vw-right .vw-list li { padding: 8px 10px; background: #f7f9fc; }
+.vw-pair { display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+
+/* the centre: the chips, the lines, «К оплате», the two tabs, the cards */
+.vw-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.vw-chip { height: 32px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: 8px; background: #eaeef4; color: #2b3134; font: 500 12px/16px var(--body); white-space: nowrap; }
+.vw-chip:hover { background: #dfe4ec; }
+.vw-chip[aria-pressed="true"] { background: #2b3134; color: #fff; }
+:where(.adm) .vw-chip[aria-pressed="true"]:disabled { opacity: 1; }
+.vw-gone { display: flex; }
+.vw-lines { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.vw-lines > li { border: 1px solid #e0e3eb; border-radius: 8px; }
+.vw-lines > li > :is(button, div) { width: 100%; min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 12px; font: 500 13px/18px var(--body); }
+.vw-lines .n { min-width: 0; overflow-wrap: anywhere; text-align: left; }
+.vw-lines .p { flex: none; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vw-lines .p svg { color: #71757f; transition: transform .15s ease-out; }
+.vw-lines li.is-open .p svg { transform: rotate(180deg); }
+.vw-lines li.is-sp { border-style: dashed; }
+.vw-line-more { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 12px 10px; }
+.vw-pay { display: flex; align-items: baseline; gap: 12px; }
+.vw-pay b { font: 600 16px/24px var(--body); font-variant-numeric: tabular-nums; }
+.vw-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 8px; background: #eaeef4; }
+.vw-tabs button { height: 28px; border-radius: 6px; font: 500 12px/16px var(--body); text-align: center; }
+.vw-tabs button[aria-pressed="true"] { background: #fff; }
+.vw-search { display: block; }
+.vw-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.vw-card { min-height: 112px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px; border: 1px solid #e0e3eb; border-radius: 8px; background: #fff; color: #2b3134; text-align: left; }
+.vw-card:hover { border-color: #c6cbd3; }
+.vw-card[aria-pressed="true"] { border-color: #2b3134; box-shadow: inset 0 0 0 1px #2b3134; }
+:where(.adm) .vw-card:disabled { opacity: 1; cursor: default; }
+.vw-card .n { min-height: 32px; font-weight: 500; overflow-wrap: anywhere; }
+.vw-tag { align-self: flex-start; display: inline-block; padding: 0 6px; border-radius: 4px; background: #eeebfe; color: #583cf1; font: 500 11px/16px var(--body); white-space: nowrap; }
+.vw-right > .vw-tag { line-height: 18px; }
+:where(.adm) .vw .vw-pick { align-self: flex-start; width: auto; min-width: 160px; max-width: min(100%, 260px); font-weight: 500; }
+.vw-goods { list-style: none; padding: 0; border: 1px solid #e0e3eb; border-radius: 8px; overflow: hidden; }
+.vw-goods li + li { border-top: 1px solid #e0e3eb; }
+.vw-goods button { width: 100%; min-height: 44px; display: flex; align-items: center; gap: 10px; padding: 6px 12px; }
+.vw-goods button:hover { background: #f7f9fc; }
+.vw-goods .end { flex: none; font-weight: 500; font-variant-numeric: tabular-nums; }
+.vw-sell { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid #2b3134; border-radius: 8px; }
+
+/* the right: «Написать:», his numbers, the visit's own data */
+.vw-write { display: flex; align-items: center; gap: 8px; }
+.vw-round { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; }
+.vw-round.wa { background: #e6f6ee; color: #219c2b; }
+.vw-round.tg { background: #e5f1ff; color: #0a60c2; }
+.vw-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
+.vw-grid dt { color: #71757f; }
+.vw-grid dd { font-weight: 500; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.vw-note { display: flex; flex-direction: column; gap: 8px; }
+
+/* the foot: «Запись» on the left, the question and the buttons on the right, the yellow one last */
+.vw-foot { flex: 0 0 64px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px; background: #fff; border-top: 1px solid #e0e3eb; }
+.vw-foot h2 { flex: none; font: 500 16px/24px var(--body); }
+.vw-acts { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.vw-acts .adm-err { min-width: 0; font-size: 12px; line-height: 16px; text-align: right; }
+
+/* a window narrower than three columns with 360px in the middle: the client goes under the services, the body scrolls */
+@media (max-width: 1015px) {
+  .vw-body { display: grid; grid-template-columns: 228px minmax(0, 1fr); align-items: start; overflow-y: auto; overscroll-behavior: contain; }
+  .vw-col { overflow: visible; }
+  .vw-left { grid-row: span 2; position: sticky; top: 0; overflow: hidden; max-height: calc(100dvh - 64px - 24px); }
+  .vw-left .vw-main { height: auto; max-height: calc(100dvh - 64px - 24px); }
+  .vw-mid { min-width: 0; }
+}
+
 /* the frame's own line («Продажа записана»): over a drawer too */
 .adm-frame-toast { z-index: 70; }
 
@@ -1925,8 +2064,6 @@ th.n .iv-sort { flex-direction: row-reverse; }
 @media (min-width: 900px) {
   .adm-page.adm-wide.adm-rc { padding: 16px 24px 24px; }
   .rc { gap: 12px; color: #2b3134; font: 400 13px/18px var(--body); }
-  /* the visit sheet is the admin's panel on the right: the table gives it room */
-  .rc.has-panel { padding-right: calc(var(--panel-w) - 24px); }
   .rc .rc-top { align-items: flex-start; }
   .rc .adm-h1 { font: 500 20px/24px var(--body); }
   .rc .adm-titled { min-height: 28px; }

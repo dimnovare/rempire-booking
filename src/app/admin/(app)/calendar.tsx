@@ -23,6 +23,10 @@
  * (3½ columns fit, swipe for the rest; a week all on one screen) and takes
  * only the visits' colours.
  *
+ * A tapped visit opens in its window (visit-window.tsx): from 900px the
+ * three columns of the product we follow, over the dimmed journal; a phone
+ * keeps its bottom sheet.
+ *
  * One markup for both: every place on the grid is given in minutes (--t,
  * --m) and the styles turn them into pixels (--ppm), so nothing here needs
  * to know how wide the screen is.
@@ -33,8 +37,8 @@
  */
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
-import type { CalBlock, CalendarData, CalMay, CalService, CalVisit } from "@/lib/admin/calendar";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import type { CalBlock, CalendarData, CalMay, CalVisit } from "@/lib/admin/calendar";
 import { daySpan, hhmm, minutesInDay, momentAt, snap, weekStart } from "@/lib/admin/grid";
 import { dayNumbers, dayStaff, isVisitState, visitLook, type MineToday } from "@/lib/admin/journal";
 import type { AdminOutcome } from "@/lib/admin/visits";
@@ -43,24 +47,20 @@ import { addDays } from "@/lib/tz";
 import { eur } from "../copy";
 import { useA } from "../lang";
 import { Ava, CaretIcon, NextIcon, PlusIcon, PrevIcon, StatusMark, TickIcon } from "../icons";
-import { addBlock, cancelVisit, createVisit, deleteBlock, findClients, setVisitStatus, updateVisit } from "./actions";
+import { addBlock, createVisit, deleteBlock, findClients, updateVisit } from "./actions";
 import { isZoom, JournalBar, type Zoom } from "./journal-bar";
 import { JournalMine, type MineLinks } from "./journal-mine";
 import { JournalSide } from "./journal-side";
 import { Sheet } from "./sheet";
 import { MINE_KEY, rememberMine, useTabState, useWide } from "./tab-state";
+import { BarNote, cap, fmt, MayProvider, ServicePicker, StaffPicker, sumOf, timeOf, useMay } from "./visit-parts";
+import { VisitPanel } from "./visit-window";
 
 // a phone's pixels a minute (admin.css, --ppm): an hour is 72px in a day, 48px in a week. Here only to
 // know which visits are too short there for two lines; from 900px it is 1px a minute times the scale.
 const PHONE_PX = { day: 1.2, week: 0.8 };
-const fmt = (intl: string, tz: string, o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(intl, { timeZone: tz, ...o });
-const timeOf = (tz: string, ms: number) => fmt("ru-RU", tz, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(ms);
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const noon = (date: string) => Date.parse(`${date}T12:00:00Z`);
 const MIN = 60_000;
-/** What this login may do in the calendar, for the sheets below. */
-const May = createContext<CalMay>({ create: true, newClient: true, pickClient: true, edit: true, editCame: true, moveWindow: true, services: true, note: true, move: true, cancel: true, cancelCame: true, schedule: true, stats: true, sell: true, call: true, from: null });
-const CAME = new Set(["arrived", "done"]);
 /** A place on the grid: `t` minutes from its top, `m` minutes long. */
 const at = (t: number, m?: number): React.CSSProperties => {
   const place: Record<string, number> = m == null ? { "--t": t } : { "--t": t, "--m": m };
@@ -96,24 +96,9 @@ export type CalendarProps = {
 /** The calendar, with what the login may do in it handed down to its sheets. */
 export function Calendar(props: CalendarProps) {
   return (
-    <May.Provider value={props.may}>
+    <MayProvider value={props.may}>
       <Journal {...props} />
-    </May.Provider>
-  );
-}
-
-/**
- * The visit sheet on its own, for a page that is not the calendar: the
- * pencil of «Записи» (records/) opens the very same sheet. `data` holds the
- * one visit with the barbers and services its form picks from
- * (src/lib/admin/calendar.ts, loadVisitData). There is no grid to tap a new
- * time on here, so «Перенести» is not offered: «Изменить» moves it.
- */
-export function VisitWindow({ v, data, may, onClose, onDone }: { v: CalVisit; data: CalendarData; may: CalMay; onClose: () => void; onDone: (text: string) => void }) {
-  return (
-    <May.Provider value={may}>
-      <VisitSheet v={v} data={data} onClose={onClose} onDone={onDone} />
-    </May.Provider>
+    </MayProvider>
   );
 }
 
@@ -332,7 +317,9 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
   const staffById = (id: string) => data.staff.find((s) => s.id === id);
   const visitOpen = sheet?.kind === "visit" ? data.visits.find((v) => v.id === sheet.id) : undefined;
   const blockOpen = sheet?.kind === "block" ? data.blocks.find((b) => b.id === sheet.id) : undefined;
-  const panel = !!(sheet || ask);
+  // a sheet is the panel on the right from 900px, and the page gives it room; the visit window
+  // (visit-window.tsx) lies over the dimmed page instead, the right panel and all
+  const panel = !!((sheet && sheet.kind !== "visit") || ask);
 
   const dayFmt = (d: string, o: Intl.DateTimeFormatOptions) => fmt(A.intl, tz, { ...o, timeZone: "UTC" }).format(noon(d));
   const dayText = dayFmt(date, { day: "numeric", month: "long" });
@@ -617,7 +604,7 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
                               {timeOf(tz, v.start)}—{timeOf(tz, v.end)}
                             </span>
                             {v.source === "online" && <i className="dot" title={A.visit.source.online} />}
-                            <StatusMark status={v.status} />
+                            <StatusMark status={v.status} confirmed={v.confirmed} />
                           </span>
                           <b>{v.clientName}</b>
                           {/* the phone is on the card from 900px only, for the logins that already see it in the visit */}
@@ -657,7 +644,7 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
         />
       )}
       {visitOpen && (
-        <VisitSheet
+        <VisitPanel
           key={visitOpen.id}
           v={visitOpen}
           data={data}
@@ -723,83 +710,9 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
 
 /* ---------- sheets ---------- */
 
-const offered = (services: CalService[], staffId: string) => services.filter((s) => s.active && s.offers[staffId]);
-
-function StaffPicker({ data, value, onChange }: { data: CalendarData; value: string; onChange: (id: string) => void }) {
-  const A = useA();
-  return (
-    <div className="adm-field">
-      <span>{A.visit.barber}</span>
-      <div className="adm-who" role="group" aria-label={A.visit.barber}>
-        {data.staff
-          .filter((s) => s.active)
-          .map((s) => (
-            <button key={s.id} type="button" aria-pressed={s.id === value} onClick={() => onChange(s.id)}>
-              <Ava src={s.photoUrl} name={s.name} />
-              <span>{s.name}</span>
-            </button>
-          ))}
-      </div>
-    </div>
-  );
-}
-
-function ServicePicker({ services, staffId, picked, onChange }: { services: CalService[]; staffId: string; picked: string[]; onChange: (ids: string[]) => void }) {
-  const A = useA();
-  return (
-    <div className="adm-svcs" role="group" aria-label={A.visit.services}>
-      {offered(services, staffId).map((s) => {
-        const on = picked.includes(s.id);
-        const [price, minutes] = s.offers[staffId];
-        return (
-          <button key={s.id} type="button" aria-pressed={on} onClick={() => onChange(on ? picked.filter((x) => x !== s.id) : [...picked, s.id])}>
-            <span className="bx">
-              <TickIcon />
-            </span>
-            <span className="n">{A.pick(s.name)}</span>
-            <small>
-              {A.mins(minutes)} · {eur(price)}
-            </small>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function sumOf(services: CalService[], staffId: string, ids: string[]) {
-  let m = 0;
-  let c = 0;
-  for (const id of ids) {
-    const o = services.find((s) => s.id === id)?.offers[staffId];
-    if (o) {
-      c += o[0];
-      m += o[1];
-    }
-  }
-  return { minutes: m, cents: c };
-}
-
-/** A problem under the fields, or the «anyway» question, right above the main button. */
-function BarNote({ problem, warn }: { problem: string | null; warn: string | null }) {
-  if (warn)
-    return (
-      <p className="adm-err" role="alert">
-        {warn}
-      </p>
-    );
-  if (problem)
-    return (
-      <p className="adm-err" role="alert">
-        {problem}
-      </p>
-    );
-  return null;
-}
-
 function NewSheet({ data, staffId, date, min, onClose, onDone }: { data: CalendarData; staffId: string; date: string; min: number; onClose: () => void; onDone: (t: string) => void }) {
   const A = useA();
-  const may = useContext(May);
+  const may = useMay();
   const tz = data.tz;
   const [tab, setTab] = useState<"visit" | "block">(may.create ? "visit" : "block");
   const [sid, setSid] = useState(staffId);
@@ -1073,238 +986,9 @@ function NewSheet({ data, staffId, date, min, onClose, onDone }: { data: Calenda
   );
 }
 
-function VisitSheet({ v, data, onClose, onMove, onDone }: { v: CalVisit; data: CalendarData; onClose: () => void; onMove?: () => void; onDone: (t: string) => void }) {
-  const A = useA();
-  const may = useContext(May);
-  // a cancelled visit (the calendar has none; «Записи» opens one) is only shown: nothing about it can change
-  const gone = v.status === "cancelled";
-  // a visit the client has come to has rights of its own
-  const came = CAME.has(v.status);
-  const canEdit = !gone && may.edit && (!came || may.editCame);
-  const canForm = canEdit && (may.moveWindow || may.services || may.note);
-  // «Перенести» needs the grid to tap the new time on
-  const canMove = !gone && !!onMove && may.move && (!came || may.editCame);
-  const canCancel = !gone && (came ? may.cancelCame : may.cancel);
-  const tz = data.tz;
-  const [mode, setMode] = useState<"view" | "edit" | "cancel">("view");
-  const [busy, setBusy] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  const [warn, setWarn] = useState<string | null>(null);
-  const staff = data.staff.find((s) => s.id === v.staffId);
-  const date = fmt(A.intl, tz, { weekday: "short", day: "numeric", month: "long" }).format(v.start);
-
-  // edit
-  const [sid, setSid] = useState(v.staffId);
-  const [day, setDay] = useState(() => new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(v.start));
-  const [time, setTime] = useState(timeOf(tz, v.start));
-  const [picked, setPicked] = useState(v.services.map((s) => s.serviceId));
-  const [note, setNote] = useState(v.staffNote);
-
-  const status = async (s: string) => {
-    setBusy(true);
-    try {
-      if (await setVisitStatus(v.id, s)) onDone(A.visit.status[s]);
-      else setProblem(A.error);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const save = async (force: boolean) => {
-    setBusy(true);
-    setProblem(null);
-    try {
-      const m = Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
-      // only what this login may change is sent
-      const r = await updateVisit(v.id, { ...(may.moveWindow ? { staffId: sid, start: momentAt(day, m, tz) } : {}), ...(may.services ? { serviceIds: picked } : {}), ...(may.note ? { staffNote: note } : {}), force });
-      if (r.ok) return onDone(A.saved);
-      if (r.code === "outside_hours" || r.code === "time_off") setWarn(r.code === "time_off" ? A.visit.overBlock : A.visit.outsideHours);
-      else setProblem(r.code === "overlap" ? A.visit.overlap : r.code === "not_offered" ? A.visit.notOffered : r.code === "invalid" ? A.visit.invalid(r.field) : r.code === "forbidden" ? A.rights.refused : A.error);
-    } catch {
-      setProblem(A.error);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const cancel = async () => {
-    setBusy(true);
-    try {
-      await cancelVisit(v.id);
-      onDone(A.cal.cancelled);
-    } catch {
-      setProblem(A.error);
-      setBusy(false);
-    }
-  };
-
-  if (mode === "edit") {
-    return (
-      <Sheet
-        title={v.clientName}
-        onClose={onClose}
-        bar={
-          <>
-            <BarNote problem={problem} warn={warn} />
-            {warn ? (
-              <div className="adm-bar-row">
-                <button type="button" className="adm-btn adm-btn-ghost adm-btn-auto" onClick={() => setWarn(null)}>
-                  {A.cancel}
-                </button>
-                <button type="button" className="adm-btn adm-btn-lime adm-btn-auto" disabled={busy} onClick={() => void save(true)}>
-                  {A.visit.anywayMove}
-                </button>
-              </div>
-            ) : (
-              <div className="adm-bar-row">
-                <button type="button" className="adm-btn adm-btn-ghost" onClick={() => setMode("view")}>
-                  {A.back}
-                </button>
-                <button type="button" className="adm-btn adm-btn-lime adm-btn-auto" disabled={busy || !picked.length} onClick={() => void save(false)}>
-                  {A.visit.saveChanges}
-                </button>
-              </div>
-            )}
-          </>
-        }
-      >
-        {may.moveWindow && (
-          <>
-            <StaffPicker data={data} value={sid} onChange={setSid} />
-            <div className="adm-row">
-              <label className="adm-field">
-                <span>{A.visit.date}</span>
-                <input type="date" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} />
-              </label>
-              <label className="adm-field">
-                <span>{A.visit.time}</span>
-                <input type="time" value={time} step={300} onChange={(e) => setTime(e.target.value)} />
-              </label>
-            </div>
-          </>
-        )}
-        {may.services && (
-          <div className="adm-field">
-            <span>{A.visit.services}</span>
-            <ServicePicker services={data.services} staffId={sid} picked={picked} onChange={setPicked} />
-          </div>
-        )}
-        {may.note && (
-          <label className="adm-field">
-            <span>{A.visit.note}</span>
-            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} />
-          </label>
-        )}
-      </Sheet>
-    );
-  }
-
-  return (
-    <Sheet
-      title={v.clientName}
-      onClose={onClose}
-      bar={
-        mode === "cancel" || (!canMove && !canForm) ? undefined : (
-          <div className="adm-bar-row">
-            {canMove && (
-              <button type="button" className="adm-btn adm-btn-line adm-btn-auto" onClick={onMove}>
-                {A.visit.move}
-              </button>
-            )}
-            {canForm && (
-              <button type="button" className="adm-btn adm-btn-ghost adm-btn-auto" onClick={() => setMode("edit")}>
-                {A.visit.edit}
-              </button>
-            )}
-          </div>
-        )
-      }
-    >
-      <p className="adm-time">
-        <b>
-          {timeOf(tz, v.start)}–{timeOf(tz, v.end)}
-        </b>
-        <span>
-          {cap(date)} · {staff?.name}
-        </span>
-      </p>
-      {v.clientPhone &&
-        (may.call ? (
-          <a className="adm-phone" href={`tel:${v.clientPhone}`}>
-            {v.clientPhone} · {A.visit.call}
-          </a>
-        ) : (
-          // a masked number: shown, never a link to call
-          <span className="adm-phone">{v.clientPhone}</span>
-        ))}
-      {v.clientNote && <p className="adm-note">{v.clientNote}</p>}
-      {gone ? (
-        <p className="adm-gone">
-          <span className="adm-tag warn">{A.visit.status.cancelled}</span>
-        </p>
-      ) : (
-        <div className="adm-status" role="group" aria-label={A.visit.status.booked}>
-          {(["arrived", "done", "no_show"] as const).map((s) => (
-            <button key={s} type="button" aria-pressed={v.status === s} disabled={busy || !canEdit} onClick={() => void status(v.status === s ? "booked" : s)}>
-              {A.visit.status[s]}
-            </button>
-          ))}
-        </div>
-      )}
-      <ul className="adm-lines">
-        {v.services.map((s, i) => (
-          <li key={i}>
-            <span>{A.pick(s.name)}</span>
-            <span>{eur(s.priceCents)}</span>
-          </li>
-        ))}
-        {v.extraCents > 0 && (
-          <li className="is-sp">
-            <span>{A.visit.special}</span>
-            <span>+{eur(v.extraCents)}</span>
-          </li>
-        )}
-        <li className="tot">
-          <span>{A.visit.total}</span>
-          <span>{eur(v.totalCents)}</span>
-        </li>
-      </ul>
-      {v.comment && <p className="adm-note">«{v.comment}»</p>}
-      {v.staffNote && <p className="adm-note">{v.staffNote}</p>}
-      <p className="adm-meta">
-        {A.visit.source[v.source] ?? v.source}
-        {v.anyStaff ? ` · ${A.visit.anyStaff}` : ""}
-        {v.reminder ? ` · ${A.visit.sms}` : ""}
-      </p>
-      {problem && (
-        <p className="adm-err" role="alert">
-          {problem}
-        </p>
-      )}
-      {mode === "cancel" ? (
-        <div className="adm-warn" role="alert">
-          <p>{A.visit.cancelSure}</p>
-          <button type="button" className="adm-btn adm-btn-warnfill" disabled={busy} onClick={() => void cancel()}>
-            {A.visit.cancelYes}
-          </button>
-          <button type="button" className="adm-btn adm-btn-ghost" onClick={() => setMode("view")}>
-            {A.visit.keep}
-          </button>
-        </div>
-      ) : (
-        canCancel && (
-          <button type="button" className="adm-txt warn" style={{ alignSelf: "flex-start" }} onClick={() => setMode("cancel")}>
-            {A.visit.cancelVisit}
-          </button>
-        )
-      )}
-    </Sheet>
-  );
-}
-
 function BlockSheet({ b, tz, staffName, onClose, onDone }: { b: CalBlock; tz: string; staffName: string; onClose: () => void; onDone: (t: string) => void }) {
   const A = useA();
-  const may = useContext(May);
+  const may = useMay();
   const [busy, setBusy] = useState(false);
   const f = fmt(A.intl, tz, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   return (

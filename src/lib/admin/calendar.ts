@@ -43,6 +43,8 @@ export type CalVisit = {
   end: number;
   blockedUntil: number;
   status: string;
+  /** «Клиент подтвердил»: a waiting visit the client said he will come to (021_visit_confirmed.sql) */
+  confirmed: boolean;
   source: string;
   anyStaff: boolean;
   clientId: string;
@@ -119,6 +121,7 @@ export async function loadCalendar(q: Querier, business: Business, from: string,
       ends_at: Date;
       blocked_until: Date;
       status: string;
+      confirmed: boolean;
       source: string;
       any_staff: boolean;
       client_id: string;
@@ -131,7 +134,7 @@ export async function loadCalendar(q: Querier, business: Business, from: string,
       total_cents: number;
       extra_cents: number;
     }>(
-      `select a.id, a.staff_id, a.starts_at, a.ends_at, a.blocked_until, a.status, a.source, a.any_staff,
+      `select a.id, a.staff_id, a.starts_at, a.ends_at, a.blocked_until, a.status, a.confirmed_at is not null as confirmed, a.source, a.any_staff,
               a.client_id, c.name as client_name, c.phone_e164, c.staff_note as client_note,
               a.client_comment, a.staff_note, a.reminder_min, a.total_cents, a.extra_cents
          from appointments a join clients c on c.id = a.client_id
@@ -205,6 +208,7 @@ export async function loadCalendar(q: Querier, business: Business, from: string,
       end: ms(v.ends_at),
       blockedUntil: ms(v.blocked_until),
       status: v.status,
+      confirmed: v.status === "booked" && v.confirmed === true,
       source: v.source,
       anyStaff: v.any_staff,
       clientId: v.client_id,
@@ -241,6 +245,7 @@ export async function loadVisitData(q: Querier, business: Business, id: string):
     ends_at: Date;
     blocked_until: Date;
     status: string;
+    confirmed: boolean;
     source: string;
     any_staff: boolean;
     client_id: string;
@@ -254,7 +259,7 @@ export async function loadVisitData(q: Querier, business: Business, id: string):
     extra_cents: number;
     day: string;
   }>(
-    `select a.id, a.staff_id, a.starts_at, a.ends_at, a.blocked_until, a.status, a.source, a.any_staff,
+    `select a.id, a.staff_id, a.starts_at, a.ends_at, a.blocked_until, a.status, a.confirmed_at is not null as confirmed, a.source, a.any_staff,
             a.client_id, c.name as client_name, c.phone_e164, c.staff_note as client_note,
             a.client_comment, a.staff_note, a.reminder_min, a.total_cents, a.extra_cents,
             to_char(a.starts_at at time zone $3::text, 'YYYY-MM-DD') as day
@@ -306,6 +311,7 @@ export async function loadVisitData(q: Querier, business: Business, id: string):
         end: ms(v.ends_at),
         blockedUntil: ms(v.blocked_until),
         status: v.status,
+        confirmed: v.status === "booked" && v.confirmed === true,
         source: v.source,
         anyStaff: v.any_staff,
         clientId: v.client_id,

@@ -198,6 +198,46 @@ describe("admin: move, edit, cancel, status", () => {
     const [row] = await query<{ status: string }>("select status from appointments where id = $1", [r.id]);
     expect(row.status).toBe("done");
   });
+
+  it("«Подтвердил»: a flag on a waiting visit; any other status clears it, a status sent without it keeps it", async () => {
+    const r = await adminCreateVisit(demo.business, visit(), ACTOR);
+    if (!r.ok) throw new Error("not booked");
+    const row = async () => (await query<{ status: string; confirmed_at: Date | null }>("select status, confirmed_at from appointments where id = $1", [r.id]))[0];
+    const flag = async () => (await loadCalendar(query, demo.business, TUE, 1)).visits.find((v) => v.id === r.id)!.confirmed;
+    expect((await row()).confirmed_at).toBeNull();
+    expect(await flag()).toBe(false);
+    // the client said he comes
+    expect(await adminSetStatus(demo.business, r.id, "booked", ACTOR, {}, true)).toBe(true);
+    const first = (await row()).confirmed_at;
+    expect(first).not.toBeNull();
+    expect(await flag()).toBe(true);
+    // said again: the moment stays the first one; a status sent without the flag keeps it, and so does a move
+    expect(await adminSetStatus(demo.business, r.id, "booked", ACTOR, {}, true)).toBe(true);
+    expect(await adminSetStatus(demo.business, r.id, "booked", ACTOR)).toBe(true);
+    expect((await adminUpdateVisit(demo.business, r.id, { start: at(TUE, "13:00") }, ACTOR)).ok).toBe(true);
+    expect((await row()).confirmed_at?.getTime()).toBe(first!.getTime());
+    // he came: the flag goes with the status, even if it is sent along
+    expect(await adminSetStatus(demo.business, r.id, "arrived", ACTOR, {}, true)).toBe(true);
+    expect(await row()).toMatchObject({ status: "arrived", confirmed_at: null });
+    // waiting again: not confirmed until he says it again
+    expect(await adminSetStatus(demo.business, r.id, "booked", ACTOR)).toBe(true);
+    expect(await row()).toMatchObject({ status: "booked", confirmed_at: null });
+    expect(await flag()).toBe(false);
+    // «Ожидание» takes the flag away
+    expect(await adminSetStatus(demo.business, r.id, "booked", ACTOR, {}, true)).toBe(true);
+    expect(await adminSetStatus(demo.business, r.id, "booked", ACTOR, {}, false)).toBe(true);
+    expect((await row()).confirmed_at).toBeNull();
+    // each change is in the audit, the flag beside the status; a press that changed nothing is not
+    const log = await query<{ before: unknown; after: unknown }>("select before, after from audit where entity = 'appointment' and entity_id = $1 and action = 'status' order by at, id", [r.id]);
+    expect(log.map((l) => l.after)).toEqual([
+      { status: "booked", confirmed: true },
+      { status: "arrived", confirmed: false },
+      { status: "booked", confirmed: false },
+      { status: "booked", confirmed: true },
+      { status: "booked", confirmed: false },
+    ]);
+    expect(log[0].before).toEqual({ status: "booked", confirmed: false });
+  });
 });
 
 describe("admin: special time in percent", () => {

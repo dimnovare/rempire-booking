@@ -1,6 +1,6 @@
 /**
  * Renat's changes to the calendar: add, move, edit, cancel a visit; mark it
- * arrived, done or no-show; block time.
+ * arrived, done or no-show, or confirmed by the client; block time.
  *
  * Rules (the admin is the salon's own decision, so fewer than online):
  *   - two visits never share a chair: refused, always (the database's
@@ -488,21 +488,40 @@ export async function adminCancelVisit(
 export const VISIT_STATUSES = ["booked", "arrived", "done", "no_show"] as const;
 export type VisitStatus = (typeof VISIT_STATUSES)[number];
 
-export async function adminSetStatus(business: Business, id: string, status: string, actor: string, scope: Scope = {}): Promise<boolean> {
+/**
+ * A visit's status, and with it «Клиент подтвердил» (021_visit_confirmed.sql):
+ * a flag on a visit that waits, not a status of its own, so nothing that
+ * reads status = 'booked' changes.
+ *
+ *   confirmed true   «Подтвердил»: booked, confirmed (the first moment is kept);
+ *   confirmed false  «Ожидание»: booked, not confirmed;
+ *   left out         the flag stays as it is (the barber app, the phone sheet's
+ *                    three marks);
+ * and any status other than booked clears it. The rights are the status's
+ * own: «Изменять записи», or for a visit the client has come to «…со
+ * статусом визита «Клиент пришел»».
+ */
+export async function adminSetStatus(business: Business, id: string, status: string, actor: string, scope: Scope = {}, confirmed?: boolean): Promise<boolean> {
   if (!isUuid(id) || !(VISIT_STATUSES as readonly string[]).includes(status)) return false;
   return withTx(async (tx) => {
-    const [cur] = await tx<{ status: string; staff_id: string }>("select status, staff_id from appointments where id = $1 and business_id = $2 for update", [id, business.id]);
+    const [cur] = await tx<{ status: string; staff_id: string; starts_at: Date; confirmed: boolean }>(
+      "select status, staff_id, starts_at, confirmed_at is not null as confirmed from appointments where id = $1 and business_id = $2 for update",
+      [id, business.id],
+    );
     if (!cur || cur.status === "cancelled") return false;
     if (scope.onlyStaffId && cur.staff_id !== scope.onlyStaffId) return false;
-    if (cur.status === status) return true;
+    const next = status === "booked" ? (confirmed ?? (cur.status === "booked" ? cur.confirmed : false)) : false;
+    if (cur.status === status && cur.confirmed === next) return true;
     const who = scope.who;
     if (who) {
-      const [v] = await tx<{ starts_at: Date }>("select starts_at from appointments where id = $1", [id]);
       if (!can(who, "journal.staff", { staffId: cur.staff_id })) return false;
-      if (!can(who, CAME.has(cur.status) ? "visit.edit.arrived" : "visit.edit", days(business, v.starts_at))) return false;
+      if (!can(who, CAME.has(cur.status) ? "visit.edit.arrived" : "visit.edit", days(business, cur.starts_at))) return false;
     }
-    await tx("update appointments set status = $2, updated_at = now() where id = $1", [id, status]);
-    await audit(tx, actor, id, "status", { status: cur.status }, { status });
+    await tx(
+      `update appointments set status = $2, confirmed_at = case when $3::boolean then coalesce(confirmed_at, now()) end, updated_at = now() where id = $1`,
+      [id, status, next],
+    );
+    await audit(tx, actor, id, "status", { status: cur.status, confirmed: cur.confirmed }, { status, confirmed: next });
     return true;
   });
 }

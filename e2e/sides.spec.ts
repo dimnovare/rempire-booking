@@ -563,14 +563,19 @@ test.describe("a wide screen", () => {
       const ahead = live[0];
       if (ahead && ahead.status === "booked" && ahead.start > now) {
         const card = () => cols(page).locator(".cal-v", { hasText: ahead.name }).first();
-        await card().click();
-        await page.getByRole("dialog", { name: ahead.name }).getByRole("button", { name: A.visit.status.arrived, exact: true }).click();
-        await expect(page.getByRole("dialog", { name: ahead.name })).toHaveCount(0);
+        // a chip of the visit window writes at once; the window stays open until Escape
+        const chip = async (c: "arrived" | "booked") => {
+          await card().click();
+          const button = page.getByRole("dialog", { name: ahead.name }).getByRole("group", { name: A.win.status }).getByRole("button", { name: A.win.chips[c], exact: true });
+          await button.click();
+          await expect(button).toHaveAttribute("aria-pressed", "true");
+          await page.keyboard.press("Escape");
+          await expect(page.getByRole("dialog", { name: ahead.name })).toHaveCount(0);
+        };
+        await chip("arrived");
         await expect(row("chair")).toHaveText(A.app.until(ahead.name, ahead.end));
         await wideShot(page, "myday");
-        await card().click();
-        await page.getByRole("dialog", { name: ahead.name }).getByRole("button", { name: A.visit.status.arrived, exact: true }).click();
-        await expect(page.getByRole("dialog", { name: ahead.name })).toHaveCount(0);
+        await chip("booked");
         await expect(row("chair")).toHaveText(chair ? A.app.until(chair.name, chair.end) : A.app.nobody);
       } else await wideShot(page, "myday");
 

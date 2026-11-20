@@ -23,8 +23,8 @@ import { findProductsAction, saleFormAction, sellAction, type FrameProduct, type
 /** After the last keystroke, before the shop or the client list is asked. */
 const DELAY = 300;
 
-/** «s_» + 16 base64url characters, as the server's own refs. */
-function newRef(): string {
+/** «s_» + 16 base64url characters, as the server's own refs. (The visit window's «Товары» makes its refs so too.) */
+export function newRef(): string {
   const b = crypto.getRandomValues(new Uint8Array(12));
   return `s_${btoa(String.fromCharCode(...b)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")}`;
 }

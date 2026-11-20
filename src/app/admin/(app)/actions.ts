@@ -11,6 +11,7 @@
  */
 import { refresh } from "next/cache";
 import { searchClients, type ClientHit } from "@/lib/admin/calendar";
+import { visitExtras, type VisitExtras } from "@/lib/admin/visit-window";
 import {
   adminCancelVisit,
   adminCreateVisit,
@@ -96,11 +97,26 @@ export async function cancelVisit(id: string): Promise<string> {
   return r;
 }
 
-export async function setVisitStatus(id: string, status: string): Promise<boolean> {
+/**
+ * A visit's status. `confirmed` is «Клиент подтвердил» on a visit that
+ * waits (true: «Подтвердил», false: «Ожидание»); left out, it stays as it
+ * is. Any other status clears it (src/lib/admin/visits.ts).
+ */
+export async function setVisitStatus(id: string, status: string, confirmed?: boolean): Promise<boolean> {
   const { user, business } = await requireAdmin();
-  const ok = await adminSetStatus(business, String(id), String(status), user.id, { who: user });
+  const ok = await adminSetStatus(business, String(id), String(status), user.id, { who: user }, confirmed === undefined ? undefined : confirmed === true);
   if (ok) refresh();
   return ok;
+}
+
+/**
+ * What the visit window shows beside the visit (src/lib/admin/visit-window.ts):
+ * the client's numbers, his previous visit, who made this one, its history
+ * and its messages. Null: not a visit this login may open.
+ */
+export async function visitWindowAction(id: string): Promise<VisitExtras | null> {
+  const { user, business } = await requireAdmin();
+  return visitExtras(query, business, user, String(id ?? ""));
 }
 
 export async function findClients(text: string): Promise<ClientHit[]> {

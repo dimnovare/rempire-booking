@@ -178,6 +178,18 @@ describe("the list", () => {
     expect(await ids({ status: "no_show" })).toEqual([v.anna]);
   });
 
+  it("«Клиент подтвердил»: a waiting visit the client confirmed, and it is no longer «waiting»", async () => {
+    expect(await ids({ status: "confirmed" })).toEqual([]);
+    expect(await adminSetStatus(demo.business, v.online, "booked", owner.id, {}, true)).toBe(true);
+    expect(await ids({ status: "confirmed" })).toEqual([v.online]);
+    expect(sorted(await ids({ status: "waiting" }))).toEqual(sorted([v.anna, v.old, v.imported]));
+    // he came: neither confirmed nor waiting
+    expect(await adminSetStatus(demo.business, v.online, "arrived", owner.id)).toBe(true);
+    expect(await ids({ status: "confirmed" })).toEqual([]);
+    expect(sorted(await ids({ status: "arrived" }))).toEqual(sorted([v.boris, v.online]));
+    expect(cleanRecords({ status: "confirmed" }).status).toBe("confirmed");
+  });
+
   it("the client, by a part of his name or by his phone's digits", async () => {
     expect(sorted(await ids({ q: "анна" }))).toEqual(sorted([v.anna, v.old]));
     expect(sorted(await ids({ q: "5555 0102" }))).toEqual(sorted([v.boris, v.gone]));

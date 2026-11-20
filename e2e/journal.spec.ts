@@ -87,18 +87,21 @@ async function tapTime(page: Page, col: Locator, minute: number) {
   await col.click({ position: { x: Math.min(40, box.width / 2), y: ((minute - from) * box.height) / (to - from) + 3 } });
 }
 
-/** Mark a visit from its sheet; leaves it alone if it is marked so already. */
-async function mark(page: Page, card: Locator, status: "arrived" | "done" | "no_show") {
+/**
+ * Mark a visit with a chip of its window; leaves it alone if it is marked so
+ * already. The chip writes at once and the window stays open: Escape closes it.
+ */
+async function mark(page: Page, card: Locator, chip: "arrived" | "no_show" | "confirmed" | "booked") {
   await card.click();
   const dialog = page.getByRole("dialog");
-  const button = dialog.getByRole("button", { name: A.visit.status[status], exact: true });
+  const button = dialog.getByRole("group", { name: A.win.status }).getByRole("button", { name: A.win.chips[chip], exact: true });
   await expect(button).toBeVisible();
-  if ((await button.getAttribute("aria-pressed")) === "true") {
-    await page.keyboard.press("Escape");
-  } else {
+  if ((await button.getAttribute("aria-pressed")) !== "true") {
     await button.click();
-    await expect(calToast(page)).toHaveText(A.visit.status[status]);
+    await expect(page.locator(".adm-frame-toast")).toHaveText(A.win.chips[chip]);
+    await expect(button).toHaveAttribute("aria-pressed", "true");
   }
+  await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
 }
 
@@ -303,14 +306,14 @@ test.describe("the journal", () => {
       // her five demo visits: online, the salon's, online, the salon's (no phone), online
       const cards = col.locator(".cal-v", { hasText: "Demo client" });
       await expect(cards).toHaveCount(5);
-      await mark(page, cards.nth(3), "done");
+      await mark(page, cards.nth(3), "arrived");
       await mark(page, cards.nth(2), "no_show");
 
       // booked online, waiting: violet on violet
       expect(await paint(cards.nth(0))).toEqual(LOOK.online);
       // made by the salon, waiting: green on teal
       expect(await paint(cards.nth(1))).toEqual(LOOK.staff);
-      // done: orange, the strip still the salon's green
+      // the client came: orange, the strip still the salon's green
       expect(await paint(cards.nth(3))).toEqual({ strip: STAFF, ...LOOK.came });
       // did not come: red, the strip still the client's violet
       expect(await paint(cards.nth(2))).toEqual({ strip: ONLINE, ...LOOK.noshow });
@@ -428,11 +431,11 @@ test.describe("the journal", () => {
       // made at the front desk, waiting: green on teal
       expect(await paint(card)).toEqual(LOOK.staff);
 
-      // it opens: the client, the time, the three marks
+      // it opens: the window from the right, the time, the four marks
       await card.click();
       const sheet = page.getByRole("dialog", { name: who });
-      await expect(sheet.locator(".adm-time b")).toHaveText(/^12:00–\d\d:\d\d$/);
-      await expect(sheet.getByRole("button", { name: A.visit.status.arrived, exact: true })).toBeVisible();
+      await expect(sheet.getByRole("region", { name: A.win.cols.visit }).locator(".vw-when small")).toHaveText(/^12:00–\d\d:\d\d · /);
+      await expect(sheet.getByRole("group", { name: A.win.status }).getByRole("button")).toHaveText([A.win.chips.booked, A.win.chips.arrived, A.win.chips.no_show, A.win.chips.confirmed]);
       await page.keyboard.press("Escape");
       await expect(sheet).toHaveCount(0);
 
@@ -600,7 +603,7 @@ test.describe("the journal", () => {
       const col = column(page, "milena", day);
       const cards = col.locator(".cal-v", { hasText: "Demo client" });
       await expect(cards).toHaveCount(5);
-      await mark(page, cards.nth(3), "done");
+      await mark(page, cards.nth(3), "arrived");
       await mark(page, cards.nth(2), "no_show");
       const [online, staff, noshow, came] = [cards.nth(0), cards.nth(1), cards.nth(2), cards.nth(3)];
 
@@ -758,11 +761,16 @@ test.describe("the journal", () => {
       await search.fill("");
       await expect(panel.getByRole("status")).toHaveText(C.panelEmpty);
 
-      // an open visit lies over the panel, and closing it brings the panel back
+      // an open visit lies over the panel, under its dimmed side, and closing it gives the panel back
       await column(page, "milena", day).locator(".cal-v", { hasText: "Demo client" }).first().click();
       await expect(page.getByRole("dialog")).toBeVisible();
-      await expect(panel).toBeHidden();
+      const covered = await panel.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return !el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+      });
+      expect(covered).toBe(true);
       await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog")).toHaveCount(0);
       await expect(panel).toBeVisible();
 
       // kept for the tab: another day

@@ -167,7 +167,8 @@ export function recordWhere(business: Business, f: RecordFilter, who?: Holder, n
   else if (f.by) where += ` and a.source <> 'online' and exists (select 1 from audit au where au.entity = 'appointment' and au.entity_id = a.id and au.action = 'create' and au.actor = ${p(f.by)})`;
   if (f.cancelled === "yes") where += " and a.status = 'cancelled'";
   if (f.cancelled === "no") where += " and a.status <> 'cancelled'";
-  if (f.status === "waiting") where += " and a.status in ('pending', 'booked')";
+  if (f.status === "waiting") where += " and a.status in ('pending', 'booked') and a.confirmed_at is null";
+  else if (f.status === "confirmed") where += " and a.status = 'booked' and a.confirmed_at is not null";
   else if (f.status) where += ` and a.status = ${p(f.status)}`;
   if (f.q) {
     const at = `'%' || ${p(likeText(f.q))} || '%'`;
@@ -203,7 +204,8 @@ type Row = {
   services: L10n[] | string;
 };
 
-function makerOf(r: Row): RecordMaker {
+/** Who made a visit, from its source and the login its «create» audit row names (the visit window says it too). */
+export function makerOf(r: Pick<Row, "source" | "made_name" | "made_email">): RecordMaker {
   if (r.source === "online") return { kind: "client", name: "" };
   if (r.made_name || r.made_email) return { kind: "user", name: r.made_name || (r.made_email ?? "").split("@")[0] };
   return { kind: r.source === "import" ? "import" : "salon", name: "" };

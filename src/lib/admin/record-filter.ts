@@ -11,7 +11,8 @@
  *   barber    one of them;
  *   by        who made it: the client himself online, or a login;
  *   cancelled both, only cancelled, only not cancelled;
- *   status    waiting (our «ждёт» and «записан»), arrived, done, no-show;
+ *   status    waiting (our «ждёт» and «записан», not confirmed), confirmed by
+ *             the client, arrived, done, no-show;
  *   q         the client, by a part of his name or by his phone's digits;
  *   services  a visit with any one of them;
  *   source    online, the salon's own, or the import.
@@ -32,8 +33,13 @@ export const RECORD_SERVICES_MAX = 50;
 
 export const RECORD_CANCELLED = ["all", "yes", "no"] as const;
 export type RecordCancelled = (typeof RECORD_CANCELLED)[number];
-/** «waiting» is two of our statuses, «ждёт» and «записан»; a cancelled visit has its own choice. */
-export const RECORD_STATUSES = ["waiting", "arrived", "done", "no_show"] as const;
+/**
+ * «waiting» is two of our statuses, «ждёт» and «записан», while the client has
+ * not confirmed; «confirmed» is «записан» with his confirmation (021): the
+ * tool we follow has «Ожидание» and «Клиент подтвердил» apart. A cancelled
+ * visit has its own choice.
+ */
+export const RECORD_STATUSES = ["waiting", "confirmed", "arrived", "done", "no_show"] as const;
 export type RecordStatus = (typeof RECORD_STATUSES)[number];
 export const RECORD_SOURCES = ["online", "admin", "import"] as const;
 export type RecordSource = (typeof RECORD_SOURCES)[number];

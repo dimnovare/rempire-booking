@@ -9,7 +9,7 @@ import { A, asOwner, demoId, expect, expectNoSideScroll, hydrated, smallTargets,
 /**
  * «Записи» (/admin/records): every visit in one table, the first page of
  * «Отчёты». On a wide screen: the filters, the table, the pencil that opens
- * the calendar's own visit sheet, «Отменить выбранные» and the export to
+ * the journal's own visit window, «Отменить выбранные» and the export to
  * Excel. On a phone: a row per visit and the filters in a sheet.
  *
  * The visits that are changed here are this file's own: four online
@@ -161,25 +161,31 @@ test.describe("records", () => {
       await expect(rows(page)).toHaveCount(4);
       await shot(page, "pc-records-filters");
 
-      /* ---- the pencil: the calendar's own visit sheet; «Пришёл» there is the row's status here ---- */
+      /* ---- the pencil: the journal's own visit window; «Клиент пришёл» there is the row's status here ---- */
       const one = rows(page).nth(3);
       const id = await one.getAttribute("data-id");
       await one.getByRole("button", { name: new RegExp(`^${R.open(CLIENT, "")}`) }).click();
       const sheet = visitSheet(page, CLIENT);
       await expect(sheet).toBeVisible();
-      await expect(sheet.locator(".adm-time span")).toContainText("Milena");
-      await expect(sheet.getByRole("link", { name: new RegExp(`\\${PHONE}`) })).toBeVisible();
-      await expect(sheet.locator(".adm-meta")).toContainText(A.visit.source.online);
+      const W = A.win;
+      await expect(sheet.getByRole("region", { name: W.cols.visit }).locator(".vw-who b")).toHaveText("Milena");
+      const client = sheet.getByRole("region", { name: W.cols.client });
+      await expect(client.locator(".vw-who small")).toHaveText(PHONE);
+      await expect(client.getByRole("link", { name: W.whatsapp })).toHaveAttribute("href", `https://wa.me/${PHONE.slice(1)}`);
+      await expect(client.locator(".vw-grid").last()).toContainText(R.sources.online);
       // no grid to tap a new time on: «Изменить» is offered, «Перенести» is not
-      await expect(sheet.getByRole("button", { name: A.visit.edit, exact: true })).toBeVisible();
+      await expect(sheet.getByRole("region", { name: W.cols.visit }).getByRole("button", { name: W.edit, exact: true })).toBeVisible();
       await expect(sheet.getByRole("button", { name: A.visit.move, exact: true })).toHaveCount(0);
-      // the table gives the panel room: nothing of it is under the sheet
-      const [tableBox, sheetBox] = await Promise.all([root(page).locator(".rc-sheet").boundingBox(), sheet.boundingBox()]);
-      expect(tableBox!.x + tableBox!.width).toBeLessThanOrEqual(sheetBox!.x + 1);
-      await sheet.getByRole("button", { name: A.visit.status.arrived, exact: true }).click();
-      await expect(toast(page).filter({ hasText: A.visit.status.arrived })).toBeVisible();
-      await expect(sheet).toHaveCount(0);
+      // the window lies over the dimmed page, and the page does not scroll sideways
+      await expectNoSideScroll(page);
+      const chip = sheet.getByRole("group", { name: W.status }).getByRole("button", { name: W.chips.arrived, exact: true });
+      await chip.click();
+      await expect(page.locator(".adm-frame-toast")).toHaveText(W.chips.arrived);
+      await expect(chip).toHaveAttribute("aria-pressed", "true");
+      // the window stays open, the table is asked again behind it
       await expect(root(page).locator(`.rc-table tbody tr[data-id="${id}"] td[data-col="status"]`)).toHaveText(A.visit.status.arrived);
+      await page.keyboard.press("Escape");
+      await expect(sheet).toHaveCount(0);
 
       /* ---- a filter by status ---- */
       await filters(page).getByLabel(R.status, { exact: true }).selectOption({ label: R.statuses.arrived });
@@ -227,12 +233,13 @@ test.describe("records", () => {
         expect(await row.locator('td[data-col="status"]').evaluate((el) => `${getComputedStyle(el).backgroundColor} ${getComputedStyle(el).color}`)).toBe("rgb(253, 238, 238) rgb(180, 35, 24)");
       }
       await expect(cancelBtn).toBeDisabled();
-      // a cancelled visit's sheet only shows it: nothing to press
+      // a cancelled visit's window only shows it: nothing to press
       await root(page).locator(`.rc-table tbody tr[data-id="${two[0]}"]`).getByRole("button").click();
-      await expect(visitSheet(page, CLIENT).locator(".adm-gone")).toHaveText(A.visit.status.cancelled);
-      await expect(visitSheet(page, CLIENT).locator(".adm-status")).toHaveCount(0);
+      await expect(visitSheet(page, CLIENT).locator(".vw-gone")).toHaveText(A.visit.status.cancelled);
+      await expect(visitSheet(page, CLIENT).getByRole("group", { name: A.win.status })).toHaveCount(0);
       await expect(visitSheet(page, CLIENT).getByRole("button", { name: A.visit.cancelVisit })).toHaveCount(0);
-      await visitSheet(page, CLIENT).getByRole("button", { name: A.close }).click();
+      await expect(visitSheet(page, CLIENT).getByRole("button", { name: A.visit.saveChanges })).toHaveCount(0);
+      await visitSheet(page, CLIENT).getByRole("button", { name: A.win.close }).click();
       // cancelled, not cancelled, or both
       await filters(page).getByLabel(R.cancelled, { exact: true }).selectOption({ label: R.cancelledOf.yes });
       await ask(page);

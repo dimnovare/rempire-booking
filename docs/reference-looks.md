@@ -168,6 +168,54 @@ gets it → send.
        pulling a visit's foot to make it longer; the panel's chat. A tap
        on the grid still snaps to the booking step (15 minutes), whatever
        the scale.
+   - **The visit window: built 20.11.2026** (`visit-window.tsx` and
+     `visit-parts.tsx` in `src/app/admin/(app)/`; what it reads beside the
+     visit in `src/lib/admin/visit-window.ts`; the «visit window» block of
+     `admin.css`; the design board «Окно визита»). The journal and the
+     pencil of «Записи» open the same window. From 900 px; a phone keeps
+     its bottom sheet and only gains the «Подтвердил» mark.
+     - **Frame:** a drawer from the right over the dimmed page, a round
+       «›» on its seam; Escape, the seam and the dark side close it
+       without asking. 1200 px on `#f7f9fc`, 16 px in; three columns 8 px
+       apart with 8 px corners: 228 px grey (`#eef1f6`), 584 px and 340 px
+       white; a white 64 px foot with «Запись» on the left and the yellow
+       «Сохранить изменения» on the right, live only once something
+       changed. Below 1200 px the centre gives way down to 360 px; below
+       that the client goes under the services. Never a sideways scroll.
+     - **Left:** the barber, the bin (cancel, after «Да, отменить»), the
+       day and «18:15–18:45 · 30 мин», «✎ Изменить» (barber, date and
+       time in place), «Закреплённые поля» → «Комментарий к записи» (the
+       staff note), and three tiles that slide a panel over the column:
+       «Расширенные поля» (the client's comment and the staff note),
+       «Уведомления о визите» (the reminder and this visit's messages from
+       the outbox), «История изменений» (the audit log, the newest first,
+       with who and when).
+     - **Centre:** four chips that write at once: «Ожидание», «Клиент
+       пришёл» (also lit for a done visit), «Не пришёл», «Подтвердил».
+       «Подтвердил» is a flag on a waiting visit, not a status
+       (`appointments.confirmed_at`, migration 021): any other status clears
+       it, a move or a change of services keeps it; the journal's card shows
+       it as a bare tick, and «Записи» filters on «Клиент подтвердил». Then
+       the visit's services with their prices, the special-time extra,
+       «К оплате», «Услуги» / «Товары» (the shop's products, sold to this
+       client with the front desk's own sale), the search, the service
+       cards three in a row with the violet «Последний визит», and «Все
+       услуги» → «Услуга ▾».
+     - **Right:** the initials, name and phone, «✎ Изменить» → his card,
+       «Написать:» WhatsApp and Telegram (only with the right to call and
+       a whole number), «Профиль клиента», «История визитов», «Ещё»
+       (messages, notifications), «Не посещал N дней» (from 14 days),
+       «Примечание о клиенте», «Дополнительно» (his last comments and «+
+       Добавить примечание о клиенте»), «Статистика» («Последний визит»,
+       «Всего визитов», «Не пришёл», «Продано») and «Данные записи».
+     - **Rights:** what the login may not do is not drawn, and every
+       action asks again; the window's own data comes only for a visit in a
+       column the login sees and within its history limit, the client's
+       part only with «Доступ к данным клиентов» and a client it is shown.
+     - **Not built:** «Оплатить», «Платёжная политика», «Баланс» and
+       «Оплачено» (payments wait for Renat's answer on finance);
+       «Повторение записи» and «Списание расходников» (no such function
+       here); «Записывает другого посетителя» (a visit has one client).
 2. **Invoices: built 19.11.2026, in Isolta's own frame since 20.11.2026**
    (the owner: «Счета» wears the invoicing tool's frame, with a way back;
    `src/app/admin/(app)/invoices/`, `src/lib/billing/`, the «Счета» block

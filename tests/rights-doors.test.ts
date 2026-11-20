@@ -402,6 +402,104 @@ describe("Окно записи", () => {
     await setValue(c.me, "visit.sell.create", "all");
     expect((await dated(at(addDays(c.today, -1), "12:00"))).ok).toBe(true);
   });
+
+  both("visit.edit", "desk", (c) => cal.setVisitStatus(c.visit, "booked", true), (r) => r === true);
+});
+
+/* ------------------------------------------------------------------ 4b. the visit window's own data (visitWindowAction) */
+
+describe("Окно визита: what the window shows beside the visit", () => {
+  const extras = (c: Ctx, id = c.visit) => cal.visitWindowAction(id);
+  /** A visit of Anna's `daysAgo` days ago with Valentin, that she came to. */
+  const before = async (c: Ctx, daysAgo: number, serviceId: string) => {
+    const r = await adminCreateVisit(c.demo.business, { staffId: c.val, start: at(addDays(c.today, -daysAgo), "10:00"), serviceIds: [serviceId], clientId: c.anna, idempotencyKey: key(), force: true }, c.owner);
+    if (!r.ok) throw new Error(r.code);
+    if (!(await adminSetStatus(c.demo.business, r.id, "done", c.owner))) throw new Error("status");
+    return r;
+  };
+
+  it("is the visit's: who made it, from where, what happened to it; nothing for a visit that is not there", async () => {
+    const c = await fresh("desk");
+    expect(await cal.setVisitStatus(c.visit, "booked", true)).toBe(true);
+    const x = (await extras(c))!;
+    expect(x.source).toBe("admin");
+    expect(x.by).toEqual({ kind: "user", name: "Owner" });
+    // the newest first, with who did it
+    expect(x.log.map((r) => r.action)).toEqual(["status", "create"]);
+    expect(x.log[0]).toMatchObject({ status: "booked", confirmed: true, by: { kind: "user", name: "Desk" } });
+    expect(x.messages.every((m) => typeof m.kind === "string")).toBe(true);
+    expect(await extras(c, "not-a-visit")).toBeNull();
+    expect(await extras(c, "00000000-0000-4000-8000-000000000000")).toBeNull();
+  });
+
+  it("journal.staff: nothing for a visit in a column the login does not see", async () => {
+    for (const sees of [true, false]) {
+      const c = await fresh("desk");
+      await setValue(c.me, "journal.staff", sees ? "all" : [c.jev]);
+      expect((await extras(c)) !== null).toBe(sees);
+    }
+  });
+
+  it("journal.history: nothing for a visit of a day before the login's limit", async () => {
+    for (const free of [true, false]) {
+      const c = await fresh("desk");
+      const old = await before(c, 3, c.demo.services.clip);
+      await setValue(c.me, "journal.history", free ? null : 0);
+      expect((await extras(c, old.id)) !== null, "three days ago").toBe(free);
+      expect(await extras(c), "tomorrow").not.toBeNull();
+    }
+  });
+
+  it("visit.client_data and clients.show: the client's part only for a login that sees his data and is shown him", async () => {
+    for (const [data, shown] of [
+      [true, true],
+      [false, true],
+      [true, false],
+    ]) {
+      const c = await fresh("desk");
+      await grant(c.me, "visit.client_data", data);
+      // Anna came to Valentin only
+      if (!shown) await setValue(c.me, "clients.show", [c.jev]);
+      const x = await extras(c);
+      expect(x, "the visit's own part").not.toBeNull();
+      expect(x!.client !== null, `data ${data}, shown ${shown}`).toBe(data && shown);
+    }
+    cover("visit.client_data");
+  });
+
+  it("clients.history: his numbers and his last visit's services come with it; his comments with or without", async () => {
+    for (const has of [true, false]) {
+      const c = await fresh("desk");
+      const svc = await otherService(c);
+      const prev = await before(c, 20, svc);
+      await addComment(c.demo.business, c.anna, "любит кофе", { id: c.owner, name: "Owner" });
+      await grant(c.me, "clients.history", has);
+      const client = (await extras(c))!.client!;
+      expect(client.comments.map((m) => m.text)).toEqual(["любит кофе"]);
+      expect(client.commentAdd).toBe(true);
+      expect(client.card).toEqual({ history: has, notify: true });
+      if (!has) {
+        expect(client).toMatchObject({ stats: null, lastServiceIds: [], awayDays: null });
+        continue;
+      }
+      // the visit ahead is counted, not yet sold; the one she came to is
+      expect(client.stats).toEqual({ lastVisit: prev.start, visits: 2, noShows: 0, soldCents: prev.totalCents });
+      expect(client.lastServiceIds).toEqual([svc]);
+      // tomorrow is 21 days after it
+      expect(client.awayDays).toBe(21);
+      // a visit five days ago: «Не посещал» is not said under two weeks
+      await before(c, 5, c.demo.services.clip);
+      expect((await extras(c))!.client).toMatchObject({ awayDays: null, lastServiceIds: [c.demo.services.clip] });
+    }
+  });
+
+  it("clients.comments_add: «Добавить примечание» is offered only with it", async () => {
+    for (const has of [true, false]) {
+      const c = await fresh("desk");
+      await grant(c.me, "clients.comments_add", has);
+      expect((await extras(c))!.client!.commentAdd).toBe(has);
+    }
+  });
 });
 
 /* ------------------------------------------------------------------ 5. Сотрудники, 6. Услуги */

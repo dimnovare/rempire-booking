@@ -19,9 +19,10 @@
  * kept here: what is typed is a client's name or phone, and those stay out
  * of the address.
  *
- * The pencil opens the calendar's own visit sheet (calendar.tsx,
- * VisitWindow) with the visit as the server cut it for this login. A
- * cancelled visit has an «i» in the pencil's place: its sheet only shows
+ * The pencil opens the journal's own visit window (visit-window.tsx,
+ * VisitWindow) with the visit as the server cut it for this login: from
+ * 900px the drawer over the page, on a phone the bottom sheet. A
+ * cancelled visit has an «i» in the pencil's place: its window only shows
  * it. «Отменить выбранные» asks first, then cancels each ticked visit
  * through the calendar's own cancel and says how many went and how many
  * did not and why.
@@ -32,7 +33,7 @@ import type { RecordList, RecordRow, RecordsMay, VisitForSheet } from "@/lib/adm
 import { cap } from "../../copy.shared";
 import { Ava, CaretIcon, FunnelIcon, InfoIcon, NextIcon, PencilIcon, PrevIcon, TickIcon, XIcon } from "../../icons";
 import { useA } from "../../lang";
-import { VisitWindow } from "../calendar";
+import { VisitWindow } from "../visit-window";
 import { Pager } from "../clients/base-actions";
 import { useFrame } from "../frame";
 import { Pop } from "../pop";
@@ -215,7 +216,7 @@ export function RecordsView({ initial, first, tz, may, staff, services, makers }
   const clientField = <input type="search" enterKeyHint="search" autoComplete="off" maxLength={60} aria-label={R.client} placeholder={R.clientPh} value={draft.q} onChange={(e) => set({ q: e.target.value })} />;
 
   return (
-    <div className={`rc${win ? " has-panel" : ""}`}>
+    <div className="rc">
       <div className="adm-page-head rc-top">
         <div className="cb-titles">
           <Titled page="records">
@@ -540,6 +541,7 @@ export function RecordsView({ initial, first, tz, may, staff, services, makers }
             frame.say(text);
             again();
           }}
+          onChanged={again}
         />
       )}
       {cancelling && <CancelDialog ids={cancelling} onClose={() => setCancelling(null)} onDone={again} />}
