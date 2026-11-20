@@ -110,7 +110,7 @@ page).
 | Company, logo, bank account, numbering | filled | «Настройки» | ✅ |
 | Users | one login | our logins and rights | ✅ |
 | Dashboard | the month figures are read | built; layout brought to the re-scan's measures (20.11) | ✅ |
-| Plan | Pro, €94.80 + VAT a year | — | ❓ Renat: renewal date (cancel a month ahead) |
+| Plan | Pro, €94.80 + VAT a year | — | read 20.11 in «Заказ»: period 20.11.2025–20.11.2026, renews by itself; cancel a month ahead, so the next year (to 20.11.2027) was already past the cancel date |
 
 ## Open points
 
