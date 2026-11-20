@@ -259,6 +259,36 @@ export function pushText(kind: string, payload: Record<string, unknown>, locale:
   return null;
 }
 
+/* ---------- to a client's own phone (src/lib/client-push.ts) ---------- */
+
+/**
+ * The client messages added 20.11.2026 as a notification, in the client's
+ * language: the birthday greeting and the invitation after a missed visit
+ * (src/lib/outbox.ts). Both open the booking page, never a visit link; the
+ * salon's name is the title, and neither carries the client's name.
+ */
+export type ClientPushKind = "birthday" | "no_show";
+
+const CW = {
+  ru: { birthday: "С днём рождения! Желаем отличного года, ждём вас в гости.", noShow: (d: string, t: string) => `Мы ждали вас ${d} в ${t}. Запишитесь на новое время.` },
+  et: { birthday: "Palju õnne sünnipäevaks! Soovime toredat aastat, ootame sind külla.", noShow: (d: string, t: string) => `Ootasime sind ${d} kell ${t}. Broneeri uus aeg.` },
+  en: { birthday: "Happy birthday! Wishing you a great year, see you soon.", noShow: (d: string, t: string) => `We missed you on ${d} at ${t}. Book a new time.` },
+} satisfies Record<Locale, unknown>;
+
+export function clientPushText(
+  kind: ClientPushKind,
+  p: { business?: string; startsAt?: string; tz?: string; date?: string; visitId?: string | null },
+  locale: Locale,
+): PushText | null {
+  const w = CW[locale] ?? CW.ru;
+  const title = p.business || "REMPIRE";
+  const url = `/${locale}`;
+  if (kind === "birthday") return p.date ? { title, body: w.birthday, url, tag: `birthday-${p.date}` } : null;
+  if (!p.startsAt) return null;
+  const at = localParts(Date.parse(p.startsAt), p.tz || "Europe/Tallinn");
+  return { title, body: w.noShow(`${at.date.slice(8, 10)}.${at.date.slice(5, 7)}`, at.time), url, tag: `no-show-${p.visitId ?? "x"}` };
+}
+
 function eur(cents: number) {
   const e = cents / 100;
   return `${Number.isInteger(e) ? e : e.toFixed(2)} €`;

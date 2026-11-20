@@ -13,7 +13,7 @@ import { A, asOwner, expect, expectNoSideScroll, hydrated, test, toast } from ".
  * with the section's six pages and «В салон», the list, «Новый счёт» → the
  * receiver, a draft whose lines are picked from the services and the shop's
  * products or typed, the preview of its PDF, «Выставить и отправить», the
- * banner with its events, «Платежи», a credit invoice and the export.
+ * banner with its events («Платежи» hidden), a credit invoice and the export.
  *
  * Each phone bills another demo barber, so the runs do not meet; the wide
  * run makes its own receiver («Habe ja Käärid OÜ», no barber, made-up
@@ -209,6 +209,30 @@ test.describe("invoices", () => {
     await page.waitForURL(/\/admin\/invoices$/);
   });
 
+  test("«Рабочий стол» on a phone: the section's bar and chips stay, the blocks one under another", async ({ page }) => {
+    await page.goto("/admin/invoices/desk");
+    await hydrated(page);
+    // the app's bars, and the section's own bar: on a phone its chips are the only way to the section's pages
+    await expect(page.getByRole("navigation", { name: A.sections })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: I.title }).getByRole("link", { name: I.menu.desk })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("heading", { level: 1, name: I.menu.desk })).toHaveCount(1);
+    await expect(page.locator(".iv-tile:visible")).toHaveCount(5);
+    // one column: the figures, the tiles, the month's card, the unpaid ones, the events, each as wide as the column
+    const col = await page.locator(".iv-desk:visible").evaluate((el) => {
+      const w = (s: string) => Math.round(el.querySelector(s)!.getBoundingClientRect().width);
+      const top = (s: string) => el.querySelector(s)!.getBoundingClientRect().top;
+      return {
+        same: new Set([w(".iv-desk-main"), w(".iv-plan"), w(".iv-desk-card.is-unpaid"), w(".iv-desk-card.is-events")]).size,
+        order: top(".iv-desk-main") < top(".iv-plan") && top(".iv-plan") < top(".is-unpaid") && top(".is-unpaid") < top(".is-events"),
+        stats: new Set([...el.querySelectorAll(".iv-stat")].map((s) => Math.round(s.getBoundingClientRect().left))).size,
+        tilesPerRow: [...el.querySelectorAll(".iv-tile")].filter((t, _, a) => t.getBoundingClientRect().top === a[0].getBoundingClientRect().top).length,
+      };
+    });
+    expect(col).toEqual({ same: 1, order: true, stats: 1, tilesPerRow: 2 });
+    await expectNoSideScroll(page);
+    await shot(page, "desk");
+  });
+
   test.describe("on a wide screen", () => {
     test.use({ viewport: { width: 1440, height: 900 } });
     test.describe.configure({ mode: "serial" });
@@ -246,14 +270,103 @@ test.describe("invoices", () => {
       await expect(page.locator(".iv-chips:visible")).toHaveCount(0);
       await expectNoSideScroll(page);
 
-      // «Рабочий стол»: three figures, four tiles, the latest events
+      // «Рабочий стол», as the tool's own dashboard (docs/isolta-pages.md, part D): no bar, the title for screen readers only
       await sideNav(page).getByRole("link", { name: I.menu.desk }).click();
       await page.waitForURL(/\/admin\/invoices\/desk$/);
+      await hydrated(page);
       await expect(sideNav(page).getByRole("link", { name: I.menu.desk })).toHaveAttribute("aria-current", "page");
+      const desk = page.locator(".iv-desk:visible");
+      await expect(desk).toBeVisible();
+      await expect(page.locator(".iv-top:visible")).toHaveCount(0);
+      await expect(page.getByRole("heading", { level: 1, name: I.menu.desk })).toHaveCount(1);
       await expect(page.locator(".iv-stat:visible > b")).toHaveText([I.desk.thisMonth, I.desk.lastMonth, I.desk.overdue]);
-      await expect(page.locator(".iv-tile:visible")).toHaveText([I.newInvoice, I.desk.showInvoices, I.desk.newReceiver, I.desk.showReceivers]);
+      await expect(page.locator(".iv-tile:visible")).toHaveText([I.newInvoice, I.desk.showInvoices, I.desk.report, I.desk.newReceiver, I.desk.showReceivers]);
+      await expect(page.locator(".iv-tile:visible").nth(2)).toHaveAttribute("href", "/admin/invoices/reports");
+      const plan = page.locator(".iv-plan:visible");
+      await expect(plan.getByRole("heading", { level: 2 })).toHaveText(/^Счета барберам за \S+ \d{4}$/);
+      await expect(plan.getByRole("link", { name: I.desk.openMonth })).toHaveAttribute("href", /^\/admin\/invoices\/reports\?m=\d{4}-\d{2}$/);
+      const unpaid = page.getByRole("region", { name: I.desk.unpaid });
+      await expect(unpaid.locator("thead th")).toHaveText([I.lcols.receiver, I.lcols.due, I.desk.total]);
+      await expect(unpaid.getByRole("link", { name: I.desk.all, exact: true })).toHaveAttribute("href", /^\/admin\/invoices\?status=(overdue|issued)$/);
+      await expect(unpaid.locator(".iv-due-foot")).toContainText(/^Итого: /);
       await expect(page.getByRole("region", { name: I.desk.events })).toBeVisible();
+      // the measures, at 1440: the sidebar is 220, so the column is 1220 − 2 × 32 = 1156 (the tool's is 1041 at 1365)
+      const m = await desk.evaluate((el) => {
+        const q = (s: string) => el.querySelector(s)!;
+        const all = (s: string) => [...el.querySelectorAll(s)];
+        const box = (e: Element) => e.getBoundingClientRect();
+        const cs = (e: Element) => getComputedStyle(e);
+        const font = (e: Element) => [cs(e).fontWeight, cs(e).fontSize, cs(e).lineHeight];
+        const d = box(el);
+        // the top of the stack's content, under its 24px
+        const t0 = d.top + parseFloat(cs(el).paddingTop);
+        const head = q(".iv-desk-head");
+        const logo = q(".iv-desk-logo");
+        const stats = all(".iv-stat").map(box);
+        const tiles = all(".iv-tile").map((t) => ({ b: box(t), ico: box(t.querySelector(".ico")!), txt: box(t.querySelector(".txt")!) }));
+        const main = box(q(".iv-desk-main"));
+        const plan = q(".iv-plan");
+        const btn = box(plan.querySelector(".iv-btn")!);
+        const [left, right] = all(".iv-desk-row3 > section").map(box);
+        const th = all(".iv-due th").map((t) => Math.round(box(t).width));
+        // a due day and a sum are never cut in their 100px
+        const whole = all(".iv-due tbody td:not(:first-child):not(.is-empty)").every((td) => td.scrollWidth <= td.clientWidth);
+        return {
+          ground: cs(document.body).backgroundColor,
+          pad: [cs(el).paddingTop, cs(el).paddingLeft, cs(el).rowGap],
+          column: Math.round(d.width - 64),
+          head: { top: Math.round(box(head).top - t0), h: Math.round(box(head).height), logo: [box(logo).width, box(logo).height, cs(logo).borderRadius, cs(logo).backgroundColor], name: font(q(".iv-desk-head b")), mail: font(q(".iv-desk-head > div > span")) },
+          statTop: Math.round(stats[0].top - t0),
+          stats: stats.map((s) => [Math.round(s.width), Math.round(s.height)]),
+          statGap: Math.round(stats[1].left - stats[0].right),
+          caption: [cs(q(".iv-stat > b")).textAlign, cs(q(".iv-stat > b")).fontSize, cs(q(".iv-stat > b")).letterSpacing],
+          statShadow: cs(q(".iv-stat")).boxShadow,
+          tiles: tiles.map((t) => [Math.round(t.b.width), Math.round(t.b.height)]),
+          tileRows: [...new Set(tiles.map((t) => Math.round(t.b.top - t0)))],
+          tileGap: [Math.round(tiles[1].b.left - tiles[0].b.right), Math.round(tiles[3].b.top - tiles[0].b.bottom)],
+          chip: [tiles[0].ico.width, tiles[0].ico.height, Math.round(tiles[0].ico.top - tiles[0].b.top)],
+          label: [Math.round(tiles[0].txt.height), Math.round(tiles[0].txt.top - tiles[0].b.top)],
+          plan: { w: box(plan).width, h: Math.round(box(plan).height), main: Math.round(main.height), gap: Math.round(box(plan).left - main.right), band: box(plan.querySelector(".iv-plan-head")!).height, btn: [btn.height, cs(plan.querySelector(".iv-btn")!).backgroundColor, Math.round(box(plan).bottom - btn.bottom)] },
+          row3: { w: [Math.round(left.width), Math.round(right.width)], gap: Math.round(right.left - left.right), same: left.height === right.height, tall: left.height >= 298, top: Math.round(left.top - main.bottom) },
+          th,
+          whole,
+        };
+      });
+      expect(m).toEqual({
+        ground: "rgb(243, 243, 247)",
+        pad: ["24px", "32px", "24px"],
+        column: 1156,
+        head: { top: 0, h: 56, logo: [56, 56, "10%", "rgb(229, 248, 255)"], name: ["700", "20px", "20px"], mail: ["400", "16px", "14px"] },
+        // row 2 under the 56px head and 24px; 1156 − 24 − 336 = 796 for the figures and the tiles, three each, 16px apart
+        statTop: 80,
+        stats: [
+          [255, 104],
+          [255, 104],
+          [255, 104],
+        ],
+        statGap: 16,
+        caption: ["center", "12px", "1px"],
+        statShadow: "rgba(18, 63, 99, 0.08) 0px 4px 16px -1px, rgba(18, 63, 99, 0.24) 0px 0px 1px 0px",
+        // three a row under 1536px: two rows, 24px apart
+        tiles: Array(5).fill([255, 126]),
+        tileRows: [80 + 104 + 24, 80 + 104 + 24 + 126 + 24],
+        tileGap: [16, 24],
+        chip: [32, 32, 26],
+        label: [40, 61],
+        plan: { w: 336, h: 104 + 24 + 126 + 24 + 126, main: 404, gap: 24, band: 88, btn: [40, "rgb(49, 46, 107)", 24] },
+        // 5/12 and 7/12 of the column, as the tool's grid makes them: (1156 + 24) × 5/12 − 24
+        row3: { w: [468, 664], gap: 24, same: true, tall: true, top: 24 },
+        th: [m.th[0], 100, 100],
+        whole: true,
+      });
+      await expect(plan.locator(".iv-plan-body")).toContainText(/^\d+ барбер\S* получа\S+ счёт каждый месяц\. /);
+      // a figure lifts under the pointer, as the tool's do
+      await page.locator(".iv-stat.is-month:visible").hover();
+      await expect(page.locator(".iv-stat.is-month:visible")).toHaveCSS("box-shadow", "rgba(18, 63, 99, 0.24) 0px 4px 16px -1px, rgba(18, 63, 99, 0.32) 0px 0px 1px 0px");
       await expectNoSideScroll(page);
+      // (the pointer away, so the picture shows the cards at rest)
+      await page.mouse.move(0, 0);
+      await expect(page.locator(".iv-stat.is-month:visible")).toHaveCSS("background-color", "rgb(255, 255, 255)");
       await wideShot(page, "desk");
       // a figure opens the list filtered the same way
       await page.locator(".iv-stat.is-late:visible").click();
@@ -410,8 +523,8 @@ test.describe("invoices", () => {
       await expect(page.locator(".inv-sheet:visible input")).toHaveCount(0);
       await expect(page.getByRole("button", { name: I.addLine })).toHaveCount(0);
       await expect(lines(page)).toHaveCount(3);
-      await expect(page.locator(".iv-top:visible .iv-acts").getByRole("button")).toHaveText([I.payments, I.createCredit, I.tools]);
-      await expect(page.getByRole("button", { name: I.payments })).toHaveCSS("color", "rgb(15, 138, 113)");
+      // «Платежи» is hidden until Renat asks (PAYMENTS_SHOWN)
+      await expect(page.locator(".iv-top:visible .iv-acts").getByRole("button")).toHaveText([I.createCredit, I.tools]);
       await expect(page.getByRole("button", { name: I.createCredit })).toHaveCSS("color", "rgb(10, 96, 194)");
 
       // the banner and «Показать действия по счёту»: issued, then sent to his address
@@ -427,21 +540,8 @@ test.describe("invoices", () => {
       await expectNoSideScroll(page);
       await wideShot(page, "sent");
 
-      /* ---- «Платежи»: paid in full, on a day ---- */
-      await page.getByRole("button", { name: I.payments }).click();
-      const pay = page.getByRole("dialog", { name: I.payments });
-      await expect(pay.getByLabel(I.paidSum)).toHaveValue(euroText(10990));
-      await expect(pay.getByLabel(I.paidDate)).toHaveValue(/^\d{4}-\d{2}-\d{2}$/);
-      await pay.getByRole("button", { name: I.addPayment }).click();
-      await expect(pay).toHaveCount(0);
-      await expect(banner(page).locator(".st-paid")).toHaveText(cap(I.status.paid));
-      await expect(banner(page)).toHaveCSS("background-color", "rgb(232, 252, 248)");
-      await openEvents(page);
-      await expect(events).toContainText(I.event.paid(number));
-      // the window now says when, and offers to take the mark off
-      await page.getByRole("button", { name: I.payments }).click();
-      await expect(pay.getByRole("button", { name: I.unpaid })).toBeVisible();
-      await pay.getByRole("button", { name: A.close, exact: true }).last().click();
+      /* ---- «Платежи»: hidden until Renat asks (Dim, decisions round 10; PAYMENTS_SHOWN in common.tsx) ---- */
+      await expect(page.getByRole("button", { name: I.payments })).toHaveCount(0);
 
       /* ---- «Инструменты»: a copy, the PDF, print ---- */
       await tools(page).click();
@@ -467,8 +567,8 @@ test.describe("invoices", () => {
       await hydrated(page);
       await expect(banner(page).locator(".st-credited")).toHaveText(cap(I.status.credited));
       await openEvents(page);
-      await expect(events).toContainText(I.event.paid(number));
-      await expect(events.locator("li").filter({ hasText: number })).toHaveCount(4);
+      await expect(events).toContainText(I.event.credited(number, ""));
+      await expect(events.locator("li").filter({ hasText: number })).toHaveCount(3);
 
       /* ---- «Сделать копию счёта»: a new draft with the same lines and no number; thrown away again ---- */
       await tools(page).click();

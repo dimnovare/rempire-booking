@@ -84,7 +84,7 @@ describe("«Ещё» by the login's rights", () => {
   it("an owner linked to a barber: three groups", () => {
     expect(moreOf(legacyHolder("owner", "u", RENAT))).toEqual({
       mine: ["time", "sell", "money"],
-      salon: ["staff", "schedule", "services", "catalogue", "records", "invoices", "sale"],
+      salon: ["staff", "schedule", "services", "catalogue", "analytics", "records", "reviews", "visits", "invoices", "sale"],
       account: ["account", "notify", "language", "logout"],
     });
   });
@@ -92,16 +92,19 @@ describe("«Ещё» by the login's rights", () => {
   it("an owner not linked to a barber: no «Моё», and «Счета» is a tab, not a row", () => {
     expect(moreOf(legacyHolder("owner", "u", null))).toEqual({
       mine: [],
-      salon: ["staff", "schedule", "services", "catalogue", "records", "sale"],
+      salon: ["staff", "schedule", "services", "catalogue", "analytics", "records", "reviews", "visits", "sale"],
       account: ["account", "notify", "language", "logout"],
     });
   });
 
   it("a row is listed only with its right, as the page itself asks", () => {
     // «Сотрудники» off: neither «Барберы» nor «График работы»
-    expect(moreOf(ownerWithout([groupKey("staff")])).salon).toEqual(["services", "catalogue", "records", "sale"]);
-    expect(moreOf(ownerWithout([groupKey("services")])).salon).toEqual(["staff", "schedule", "catalogue", "records", "sale"]);
-    expect(moreOf(ownerWithout(["reports.bookings"])).salon).toEqual(["staff", "schedule", "services", "catalogue", "sale"]);
+    expect(moreOf(ownerWithout([groupKey("staff")])).salon).toEqual(["services", "catalogue", "analytics", "records", "reviews", "visits", "sale"]);
+    expect(moreOf(ownerWithout([groupKey("services")])).salon).toEqual(["staff", "schedule", "catalogue", "analytics", "records", "reviews", "visits", "sale"]);
+    expect(moreOf(ownerWithout(["reports.bookings"])).salon).toEqual(["staff", "schedule", "services", "catalogue", "analytics", "reviews", "visits", "sale"]);
+    expect(moreOf(ownerWithout(["reports.reviews"])).salon).toEqual(["staff", "schedule", "services", "catalogue", "analytics", "records", "visits", "sale"]);
+    expect(moreOf(ownerWithout(["reports.dashboard"])).salon).toEqual(["staff", "schedule", "services", "catalogue", "records", "reviews", "visits", "sale"]);
+    expect(moreOf(ownerWithout(["reports.visits"])).salon).toEqual(["staff", "schedule", "services", "catalogue", "analytics", "records", "reviews", "sale"]);
     // «Продажа товара» needs both the sale and making one; «Продать товар» of «Моё» the sale
     expect(moreOf(ownerWithout(["visit.sell.create"], RENAT)).salon).not.toContain("sale");
     expect(moreOf(ownerWithout(["visit.sell.create"], RENAT)).mine).toEqual(["time", "sell", "money"]);

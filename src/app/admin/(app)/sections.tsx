@@ -23,6 +23,11 @@ export const SECTIONS = [
   { href: "/admin/catalogue", key: "catalogue", icon: "box", bar: false },
   // every visit in one table (records/), the first page of «Отчёты»
   { href: "/admin/records", key: "records", icon: "rep", bar: false },
+  // the clients' reviews (reviews/), a page of «Отчёты» as in the tool we follow
+  { href: "/admin/reviews", key: "reviews", icon: "rep", bar: false },
+  // «Основные показатели» (analytics/) and «Визиты» (dashboard/), two more pages of «Отчёты»
+  { href: "/admin/analytics", key: "analytics", icon: "rep", bar: false },
+  { href: "/admin/dashboard", key: "visits", icon: "rep", bar: false },
   { href: "/admin/requests", key: "requests", icon: "req", bar: true },
   { href: "/admin/invoices", key: "invoices", icon: "inv", bar: true },
 ] as const;
@@ -47,10 +52,20 @@ export const ACCOUNT = { href: "/admin/account", key: "account", icon: "key" } a
  * (frame.tsx): a page by its own key, a row by `off` or its key; a group
  * with no page left is not drawn.
  */
-export type MenuPage = { href: string; key: "records" | "staffList" | "schedule" | "clientBase" | "catalogue" };
+export type MenuPage = { href: string; key: "analytics" | "records" | "reviews" | "visits" | "staffList" | "schedule" | "clientBase" | "catalogue" };
 export type MenuRow = { key: "reports" | "team" | "clients" | "services" | "goods" | "requests" | "invoices" | "account"; icon: string; href?: string; pages?: readonly MenuPage[]; off?: string };
 export const MENU: readonly MenuRow[] = [
-  { key: "reports", icon: "rep", pages: [{ href: "/admin/records", key: "records" }] },
+  {
+    key: "reports",
+    icon: "rep",
+    // the tool's order: «Основные показатели», «Записи», …; «Визиты» is where its «Отчёты» itself opens
+    pages: [
+      { href: "/admin/analytics", key: "analytics" },
+      { href: "/admin/records", key: "records" },
+      { href: "/admin/reviews", key: "reviews" },
+      { href: "/admin/dashboard", key: "visits" },
+    ],
+  },
   // «Список» is the barbers' own page (staff/), «График работы» the month grid of shifts (schedule/)
   {
     key: "team",

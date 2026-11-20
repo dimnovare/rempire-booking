@@ -541,7 +541,7 @@ test.describe("the frame", () => {
       await page.goto("/admin/more");
       await hydrated(page);
       const rows = page.locator(".adm-more .adm-item:visible");
-      await expect(rows).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.sale.title]);
+      await expect(rows).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.analytics, A.nav.records, A.nav.reviews, A.nav.visits, A.sale.title]);
       await expectNoSideScroll(page);
       expect(await smallTargets(page)).toEqual([]);
       await phoneShot(page, "more");

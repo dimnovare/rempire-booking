@@ -104,6 +104,13 @@ const WAS: { right: RightKey; scope?: Scope; what: string; was: (role: Role, sw:
   { right: "reports.bookings", what: "the list of every visit: the admin's side, as the calendar was (requireAdmin)", was: desk },
   { right: "reports.bookings.export", what: "its file: «Администратор» has it in the list, unlike the client base's", was: desk },
   { right: "reports.bookings.phones", what: "phones in it: the admin's calendar showed them", was: desk },
+  // ---- «Отзывы» (built 20.11, new): the front desk starts with every built right but the owner's own (legacyRights), a barber's login without
+  { right: "reports.reviews", what: "the reviews list: new, the admin's side as «Записи» is", was: desk },
+  { right: "reports.reviews.delete", what: "hide or show a review: new, the admin's side", was: desk },
+  // ---- «Основные показатели» and «Визиты» (built 20.11, new): the same rule; the list's «Администратор» has «Визиты» but not «Основные показатели»
+  { right: "reports.dashboard", what: "the KPI dashboard: new, the admin's side (legacyRights gives it every built right but the owner's own)", was: desk },
+  { right: "reports.visits", what: "the visits ahead and behind and the bookings' feed: new, the admin's side as «Записи» is", was: desk },
+  { right: "reports.visits.phones", what: "phones in it: as in «Записи»", was: desk },
 ];
 
 const SWITCHES: Switch[] = [undefined, "now", "ask"];

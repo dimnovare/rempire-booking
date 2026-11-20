@@ -4,7 +4,10 @@
  * decides what is free. The booking transaction runs the same check.
  *
  * Rules:
- *   - a start is on the step grid counted from local midnight;
+ *   - a start is on the step grid counted from the start of the barber's
+ *     day, or right where a visit, time off, a break or a price ends
+ *     (Altegio's «Оптимальный» grid, «От начала рабочего дня сотрудника»;
+ *     Dim, 20.11.2026: copy Altegio's. See freeStartsPriced);
  *   - the visit [start, start + duration) fits inside one priced window:
  *     a working window (a break is the gap between two) or one of the
  *     barber's special-time windows, never across the edge of the two;
@@ -20,7 +23,7 @@
  * «Anyone» is the union over barbers; a start goes to the cheapest barber,
  * then the one with fewer visits that day, then the one listed first.
  */
-import { localParts, startOfDay, timeToMinutes, zonedToUtc, isoWeekday } from "./tz";
+import { localParts, timeToMinutes, zonedToUtc, isoWeekday } from "./tz";
 
 /** [from, to) in epoch milliseconds. */
 export type Interval = [number, number];
@@ -169,12 +172,26 @@ const overlaps = (a: Interval, b: Interval) => a[0] < b[1] && b[0] < a[1];
 /** A free start and its special-time extra in money, for this barber's price for the chosen services. */
 export type PricedStart = { start: number; extraCents: number };
 
-/** Every free start of one barber on one day, ascending, with its special-time extra. */
+/**
+ * Every free start of one barber on one day, ascending, with its special-time extra.
+ *
+ * Altegio's «Оптимальный» grid, as REMPIRE has it set (docs/altegio-pages.md,
+ * «Онлайн-запись»; the rule: alteg.io/en/support/knowledge-base/16898106582429):
+ *   - the step grid, counted from the start of the barber's day: his first
+ *     working window, or his first special window on a day he has no hours;
+ *   - plus one start where something before it ends, so no gap is left
+ *     there: a visit with its tidy-up, time off, a break (the next window's
+ *     start) or a change of price (a special window's start or end). The
+ *     grid starts around it stay as they are.
+ * A start is never before `notBefore`, so with no notice the grid begins at
+ * now rounded up to the grid, and an end-of-visit start only when it is
+ * still ahead.
+ */
 export function freeStartsPriced(day: StaffDay, opts: { tz: string; stepMin: number; notBefore: number }): PricedStart[] {
   const { stepMin, notBefore } = opts;
   const windows = pricedWindows(day.windows, day.special);
-  if (day.durationMin <= 0 || !windows.length) return [];
-  const midnight = startOfDay(day.date, opts.tz);
+  if (day.durationMin <= 0 || stepMin <= 0 || !windows.length) return [];
+  const origin = mergeIntervals(day.windows)[0]?.[0] ?? windows[0].from;
   const step = stepMin * MIN;
   const dur = day.durationMin * MIN;
   const chair = (day.durationMin + day.bufferMin) * MIN;
@@ -182,15 +199,13 @@ export function freeStartsPriced(day: StaffDay, opts: { tz: string; stepMin: num
   const out: PricedStart[] = [];
   for (const w of windows) {
     const extraCents = extraFor(w, day.priceCents);
-    let t = midnight + Math.ceil((Math.max(w.from, notBefore) - midnight) / step) * step;
-    for (; t + dur <= w.to; t += step) {
+    const starts = new Set<number>([w.from]);
+    for (let t = origin + Math.ceil((w.from - origin) / step) * step; t < w.to; t += step) starts.add(t);
+    for (const [, end] of busy) if (end > w.from && end < w.to) starts.add(end);
+    for (const t of [...starts].sort((a, b) => a - b)) {
+      if (t < notBefore || t + dur > w.to) continue;
       const span: Interval = [t, t + chair];
-      const hit = busy.find((b) => overlaps(span, b));
-      if (hit) {
-        // jump past this visit, back onto the grid
-        t = midnight + Math.ceil((hit[1] - midnight) / step) * step - step;
-        continue;
-      }
+      if (busy.some((b) => overlaps(span, b))) continue;
       out.push({ start: t, extraCents });
     }
   }

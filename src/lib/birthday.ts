@@ -43,6 +43,23 @@ export function parseBirthday(raw: unknown, today: string): { ok: true; value: B
   return { ok: true, value: { day, month, year } };
 }
 
+/**
+ * Whose birthday is it on this local day (YYYY-MM-DD)? The day and month to
+ * look for, and `feb29`: in a year without 29 February, the clients born on
+ * it are greeted on the 28th (src/lib/outbox.ts, the birthday greeting).
+ */
+export function birthdayMatch(date: string): { month: number; day: number; feb29: boolean } {
+  const [y, month, day] = date.split("-").map(Number);
+  return { month, day, feb29: month === 2 && day === 28 && !leap(y) };
+}
+
+/** Is this the birthday's day in that local day (YYYY-MM-DD)? */
+export function isBirthdayOn(b: Pick<Birthday, "day" | "month"> | null | undefined, date: string): boolean {
+  if (!b) return false;
+  const m = birthdayMatch(date);
+  return (b.month === m.month && b.day === m.day) || (m.feb29 && b.month === 2 && b.day === 29);
+}
+
 /** «14.03.1990», or «14.03» when the year is not known; "" for none. */
 export function birthdayText(b: Birthday | null | undefined): string {
   return b ? `${two(b.day)}.${two(b.month)}${b.year ? `.${b.year}` : ""}` : "";

@@ -97,6 +97,7 @@ async function Loaded({ params }: { params: PageProps<"/admin/invoices/[id]">["p
     creditOf: inv.creditOf ? { id: inv.creditOf, number: inv.creditOfNumber ?? "" } : null,
     creditedBy: creditNote ? { id: creditNote.id, number: creditNote.number ?? "" } : null,
     staffId: inv.staffId,
+    imported: inv.imported,
     prev: at > 0 ? order[at - 1].id : null,
     next: at >= 0 && at < order.length - 1 ? order[at + 1].id : null,
   };

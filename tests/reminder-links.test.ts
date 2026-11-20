@@ -43,7 +43,7 @@ const input = (o: Partial<BookingInput> & { time?: string } = {}): BookingInput 
 const open = (token: string) => shortLink(new Request(`http://localhost/v/${token}`), { params: Promise.resolve({ token }) } as never);
 
 describe("SMS reminder: short change link (Dim, 17.11.2026)", () => {
-  it("Russian: a working /v/ link and still 2 SMS parts", async () => {
+  it("in English for a Russian visit (decision 30): a working /v/ link, one SMS part with the address", async () => {
     const r = await book(query, demo.business, input(), { now: NOW });
     if (!r.ok) throw new Error(r.code);
     // the reminder is due 2 hours before 12:00
@@ -52,8 +52,8 @@ describe("SMS reminder: short change link (Dim, 17.11.2026)", () => {
     const text = sentSms[0].text;
     const token = LINK_RE.exec(text)?.[1] ?? "";
     expect(token).toHaveLength(16);
-    expect(text).toContain("Перенести/отменить: https://broneeri.rempire.ee/v/");
-    expect(smsSegments(text).segments).toBe(2);
+    expect(text).toMatch(/^REMPIRE: reminder of your visit on 17\.11 at 12:00 with Renat\. Mardi 1, Tallinn\. Change or cancel: https:\/\/broneeri\.rempire\.ee\/v\//);
+    expect(smsSegments(text)).toMatchObject({ encoding: "gsm7", segments: 1 });
     expect((await findVisit(query, demo.business.id, token))?.id).toBe(r.visit.id);
     const [link] = await query<{ purpose: string }>("select purpose from visit_links where appointment_id = $1", [r.visit.id]);
     expect(link.purpose).toBe("sms");
@@ -63,12 +63,12 @@ describe("SMS reminder: short change link (Dim, 17.11.2026)", () => {
     expect(res.headers.get("location")).toBe(`/ru/visit/${token}`);
   });
 
-  it("Estonian stays GSM-7, so the address fits beside the link", async () => {
+  it("an Estonian visit gets the same English text; the link opens the Estonian page", async () => {
     const r = await book(query, demo.business, input({ locale: "et" }), { now: NOW });
     if (!r.ok) throw new Error(r.code);
     await runOutbox(query, at(TUE, "10:01"), LIVE);
     const text = sentSms[0].text;
-    expect(text).toMatch(/Mardi 1, Tallinn\. Muuda\/tühista: https:\/\/broneeri\.rempire\.ee\/v\//);
+    expect(text).toMatch(/Mardi 1, Tallinn\. Change or cancel: https:\/\/broneeri\.rempire\.ee\/v\//);
     expect(smsSegments(text)).toMatchObject({ encoding: "gsm7", segments: 1 });
     const token = LINK_RE.exec(text)?.[1] ?? "";
     expect((await open(token)).headers.get("location")).toBe(`/et/visit/${token}`);

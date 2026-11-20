@@ -243,9 +243,32 @@ const CANCELLED: Record<Locale, ChangeCopy & { call: (phone: string) => string; 
   },
 };
 
+// ---- the reminder before a visit (Altegio's type 1: 12 hours before) ------
+
+const REMINDER: Record<Locale, ChangeCopy> = {
+  ru: {
+    subject: (d, t) => `Напоминание о записи в REMPIRE: ${d}, ${t}`,
+    eyebrow: "Напоминание",
+    heading: "Скоро увидимся",
+    lead: "Напоминаем о вашей записи.",
+  },
+  et: {
+    subject: (d, t) => `Meeldetuletus: REMPIRE ${d} kell ${t}`,
+    eyebrow: "Meeldetuletus",
+    heading: "Peagi näeme",
+    lead: "Tuletame meelde sinu broneeringut.",
+  },
+  en: {
+    subject: (d, t) => `Reminder: your REMPIRE visit on ${d} at ${t}`,
+    eyebrow: "Reminder",
+    heading: "See you soon",
+    lead: "A reminder of your booking.",
+  },
+};
+
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
-export type VisitLetterKind = "confirmation" | "moved" | "cancelled";
+export type VisitLetterKind = "confirmation" | "moved" | "cancelled" | "reminder";
 
 type VisitLetterOptions = {
   business: Pick<Business, "name" | "timezone" | "settings">;
@@ -268,9 +291,10 @@ export function confirmationLetter(v: VisitView, o: VisitLetterOptions): Letter 
 }
 
 /**
- * The letter about one visit: its confirmation, or that the salon moved or
- * cancelled it. All three show the visit as it is now; none carries the
- * client's name (see below).
+ * The letter about one visit: its confirmation, its reminder, or that the
+ * salon moved or cancelled it. All show the visit as it is now; none
+ * carries the client's name (see below). The reminder carries no .ics: the
+ * confirmation brought it.
  */
 export function visitLetter(kind: VisitLetterKind, v: VisitView, o: VisitLetterOptions): Letter & { attachments: Attachment[] } {
   const L = o.locale;
@@ -307,7 +331,7 @@ export function visitLetter(kind: VisitLetterKind, v: VisitView, o: VisitLetterO
     wasLine = MOVED[L].was(o.from.staffName && o.from.staffName !== v.staffName ? `${fromWhen} · ${o.from.staffName}` : fromWhen);
   }
 
-  const copy = kind === "moved" ? MOVED[L] : kind === "cancelled" ? CANCELLED[L] : null;
+  const copy = kind === "moved" ? MOVED[L] : kind === "cancelled" ? CANCELLED[L] : kind === "reminder" ? REMINDER[L] : null;
   const subject = copy ? copy.subject(short, s.time) : k.subject(short, s.time);
   const title = copy ? copy.heading : c.booked;
   const rules = kind === "cancelled" ? [phone ? CANCELLED[L].call(phone) : ""].filter(Boolean) : [cut > 0 ? k.cutoff(span) : "", phone ? k.call(phone) : ""].filter(Boolean);
@@ -363,10 +387,156 @@ export function visitLetter(kind: VisitLetterKind, v: VisitView, o: VisitLetterO
     footer: [esc([o.business.name, v.location.address].filter(Boolean).join(" · ")), esc(kind === "cancelled" ? CANCELLED[L].why : k.why)],
   });
 
+  if (kind === "reminder") return { subject, text, html, attachments: [] };
   // a cancelled visit's file says METHOD:CANCEL, so a calendar app can drop it
   const calendar = visitIcsFor(v, { businessName: o.business.name, origin: o.origin, token: o.token, locale: L, now: o.now });
   const method = v.status === "cancelled" ? "CANCEL" : "PUBLISH";
   return { subject, text, html, attachments: [{ filename: "rempire.ics", content: calendar, contentType: `text/calendar; charset=utf-8; method=${method}` }] };
+}
+
+// ---- «Приглашение недошедших»: the visit was marked «Не пришёл» (type 72) ----
+
+type NoShowCopy = {
+  subject: string;
+  eyebrow: string;
+  heading: string;
+  lead: (when: string) => string;
+  book: string;
+  call: (phone: string) => string;
+  why: string;
+};
+
+const NO_SHOW: Record<Locale, NoShowCopy> = {
+  ru: {
+    subject: "Мы вас ждали в REMPIRE",
+    eyebrow: "Приглашение",
+    heading: "Мы вас ждали",
+    lead: (w) => `Вы не пришли на запись ${w}. Ничего страшного: выберите новое время, будем рады вас видеть.`,
+    book: "Записаться снова",
+    call: (p) => `Удобнее по телефону — ${p}.`,
+    why: "Письмо пришло, потому что у вас была запись в REMPIRE.",
+  },
+  et: {
+    subject: "Ootasime sind REMPIRE'is",
+    eyebrow: "Kutse",
+    heading: "Ootasime sind",
+    lead: (w) => `Sa ei jõudnud oma ajale ${w}. Pole hullu: vali uus aeg, ootame sind.`,
+    book: "Broneeri uus aeg",
+    call: (p) => `Telefoni teel: ${p}.`,
+    why: "Said selle kirja, sest sul oli aeg REMPIRE'is.",
+  },
+  en: {
+    subject: "We missed you at REMPIRE",
+    eyebrow: "Invitation",
+    heading: "We missed you",
+    lead: (w) => `You did not make it to your visit on ${w}. No problem: pick a new time, we would be glad to see you.`,
+    book: "Book a new time",
+    call: (p) => `Prefer to call? ${p}.`,
+    why: "You get this e-mail because you had a booking at REMPIRE.",
+  },
+};
+
+type InviteOptions = { business: Pick<Business, "name" | "timezone">; origin: string; locale: Locale };
+
+/**
+ * The invitation after a missed visit: when it was, with whom, and the
+ * booking page. No change link (the visit is over) and no client name.
+ */
+export function noShowLetter(v: VisitView, o: InviteOptions): Letter {
+  const L = o.locale;
+  const c = COPY[L];
+  const k = NO_SHOW[L] ?? NO_SHOW.ru;
+  const tz = o.business.timezone;
+  const start = Date.parse(v.startsAt);
+  const s = localParts(start, tz);
+  const dayLong = longDay(start, L, tz);
+  // inside a sentence: «вторник, 17 ноября, 12:00»; English keeps its capital weekday
+  const when = `${L === "en" ? dayLong : dayLong.charAt(0).toLowerCase() + dayLong.slice(1)}, ${s.time}`;
+  const book = `${o.origin}/${L}`;
+  const place = [v.location.name, v.location.address].filter(Boolean).join(", ");
+  const phone = v.location.phone;
+  const tel = phone ? `<a href="tel:${esc(phone.replace(/[^\d+]/g, ""))}" style="color:${SOFT};white-space:nowrap;">${esc(phone)}</a>` : "";
+  const text = [
+    k.heading,
+    "",
+    k.lead(when),
+    "",
+    `${c.barberK}: ${v.staffName}`,
+    `${c.whereK}: ${place}`,
+    "",
+    `${k.book}: ${book}`,
+    ...(phone ? ["", k.call(phone)] : []),
+  ].join("\n");
+  const body = [
+    eyebrow(k.eyebrow),
+    heading(k.heading),
+    keyLine(`${esc(dayLong)}<br><span style="font-size:28px;line-height:36px;letter-spacing:1px;">${esc(s.time)}</span>`),
+    para(esc(k.lead(when))),
+    details([
+      [c.barberK, esc(v.staffName)],
+      [c.whereK, esc(place)],
+    ]),
+    button(book, k.book, true),
+    ...(tel ? [`<tr><td style="height:10px;font-size:0;line-height:0;">&nbsp;</td></tr>`, para(esc(k.call("\u0000")).replace("\u0000", tel), SOFT, 14)] : []),
+  ];
+  const html = layout({
+    lang: L,
+    title: k.subject,
+    preheader: `${dayLong}, ${s.time} · ${v.staffName}`,
+    origin: o.origin,
+    body: body.join("\n"),
+    footer: [esc([o.business.name, v.location.address].filter(Boolean).join(" · ")), esc(k.why)],
+  });
+  return { subject: k.subject, text, html };
+}
+
+// ---- the birthday greeting (type 3: 10:00 on the day) --------------------
+
+type BirthdayCopy = { subject: string; eyebrow: string; heading: string; lead: string; book: string; why: string };
+
+const BIRTHDAY: Record<Locale, BirthdayCopy> = {
+  ru: {
+    subject: "С днём рождения от REMPIRE!",
+    eyebrow: "REMPIRE",
+    heading: "С днём рождения!",
+    lead: "Поздравляем вас с днём рождения! Желаем отличного года, и ждём в гости.",
+    book: "Записаться",
+    why: "Письмо пришло, потому что вы клиент REMPIRE.",
+  },
+  et: {
+    subject: "Palju õnne sünnipäevaks, soovib REMPIRE!",
+    eyebrow: "REMPIRE",
+    heading: "Palju õnne!",
+    lead: "Palju õnne sünnipäevaks! Soovime sulle toredat aastat ja ootame sind külla.",
+    book: "Broneeri aeg",
+    why: "Said selle kirja, sest oled REMPIRE'i klient.",
+  },
+  en: {
+    subject: "Happy birthday from REMPIRE!",
+    eyebrow: "REMPIRE",
+    heading: "Happy birthday!",
+    lead: "Happy birthday from all of us! We wish you a great year ahead, and hope to see you soon.",
+    book: "Book a visit",
+    why: "You get this e-mail because you are a REMPIRE client.",
+  },
+};
+
+/** The birthday greeting: no name (the stored one may not be his), the booking page as the one thing to do. */
+export function birthdayLetter(o: { locale: Locale; origin: string; business: Pick<Business, "name">; address?: string }): Letter {
+  const L = o.locale;
+  const k = BIRTHDAY[L] ?? BIRTHDAY.ru;
+  const book = `${o.origin}/${L}`;
+  const text = [k.heading, "", k.lead, "", `${k.book}: ${book}`].join("\n");
+  const body = [eyebrow(k.eyebrow), heading(k.heading), para(esc(k.lead)), `<tr><td style="height:10px;font-size:0;line-height:0;">&nbsp;</td></tr>`, button(book, k.book, true)];
+  const html = layout({
+    lang: L,
+    title: k.subject,
+    preheader: k.lead,
+    origin: o.origin,
+    body: body.join("\n"),
+    footer: [esc([o.business.name, o.address].filter(Boolean).join(" · ")), esc(k.why)],
+  });
+  return { subject: k.subject, text, html };
 }
 
 // ---- an invoice to a barber's company (Phase C, C5) ---------------------

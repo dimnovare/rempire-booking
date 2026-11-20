@@ -36,6 +36,8 @@ export type ViewInvoice = {
   creditOf: { id: string; number: string } | null;
   creditedBy: { id: string; number: string } | null;
   staffId: string | null;
+  /** brought over from Isolta (027): «Импортирован из Isolta» instead of «Ещё не отправлен» */
+  imported: boolean;
   /** the neighbours in the list as it opens */
   prev: string | null;
   next: string | null;

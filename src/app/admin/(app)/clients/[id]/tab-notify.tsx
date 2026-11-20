@@ -9,9 +9,10 @@
  *     tab «Отправить сообщение» shows it as a reminder;
  *   - the channels he accepts: SMS, e-mail, push;
  *   - a switch per kind of message we send a client by ourselves: the
- *     booking's confirmation, the reminder, and the letters when the salon
- *     moves or cancels his visit. No other kind is listed, because no
- *     other is sent.
+ *     booking's confirmation, the reminder, the letters when the salon
+ *     moves or cancels his visit, the birthday greeting and the invitation
+ *     after a missed visit (CLIENT_KINDS). No other kind is listed, because
+ *     no other is sent.
  *
  * The outbox queues nothing for him by a channel or of a kind that is off
  * here. Saved by the yellow «Сохранить», like the card.

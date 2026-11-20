@@ -55,18 +55,43 @@
  * and channel (src/lib/admin/client-bulk.ts queues them): the same words in
  * the payload, the client in client_id, and it goes exactly as a «manual»
  * row does.
+ *
+ * The client messages Altegio sends and we added (Dim, 20.11.2026: «All
+ * three now, as Altegio does»; docs/altegio-pages.md, «Уведомления, per
+ * type»; 022_client_messages.sql). Each has the business's on / off switch
+ * (src/lib/settings.ts) and the client's own kind (src/lib/client-notify.ts):
+ *   - «reminder_email»: the reminder by e-mail, settings.reminder_email_min
+ *     (12 h) before, planned and re-planned from the visits as the SMS is,
+ *     to the address this visit's confirmation went to and in its
+ *     language, only once that letter went. A visit booked after its time
+ *     gets none: its confirmation has just told it.
+ *   - «birthday»: at 10:00 on the salon's clock on the client's birthday
+ *     (29 February in another year: the 28th), once per client and day. The
+ *     letter and the notification go at once; the SMS is planned
+ *     OUTBOX.fallbackMin later and goes only if neither of them was sent by
+ *     then (Altegio's «если не удалось доставить в предыдущий канал»).
+ *   - «no_show»: «Приглашение недошедших», queued by the status change
+ *     itself (planNoShow, from src/lib/admin/visits.ts adminSetStatus), by
+ *     every channel, OUTBOX.noShowDelayMin later so a mis-tap put right
+ *     sends nothing. Once per visit and channel; the status back from «Не
+ *     пришёл» before it went drops it.
+ * SMS are in English for everyone and one part (decision 30, docs/kickoff.md);
+ * the reminder too. Letters and notifications are in the visit's or the
+ * client's language.
  */
 import { after } from "next/server";
-import { getBusinessById } from "./availability";
-import { refusesSql, takesSql } from "./client-notify";
+import { getBusinessById, type Business } from "./availability";
+import { birthdayMatch } from "./birthday";
+import { clientTakes, refusesSql, takesSql } from "./client-notify";
 import { sendPushToClient } from "./client-push";
 import { query, type Querier } from "./db";
 import { emailTransport, sendEmail, type LetterBody } from "./email";
-import { confirmationLetter, visitLetter } from "./letters";
+import { birthdayLetter, confirmationLetter, noShowLetter, visitLetter } from "./letters";
 import { pushConfigured, sendPushToUser, type PushSendResult } from "./push";
-import { DEFAULT_ON, pushText, type PushText } from "./push-kinds";
+import { DEFAULT_ON, clientPushText, pushText, type PushText } from "./push-kinds";
+import { readSettings } from "./settings";
 import { siteUrl } from "./site";
-import { sendSms, smsSegments, smsTransport } from "./sms";
+import { oneSmsPart, sendSms, smsTransport } from "./sms";
 import { mailGuard } from "./test-run";
 import { addDays, localParts, startOfDay } from "./tz";
 import { mintVisitLink, visitById } from "./visits";
@@ -90,12 +115,22 @@ export const OUTBOX = {
   pushStaleMin: 120,
   /** the salon's local time from which tomorrow's plan goes out */
   planAt: "20:00",
+  /** the salon's local time of the birthday greeting (Altegio's type 3) */
+  birthdayAt: "10:00",
+  /** the birthday SMS waits this long for the letter or the notification (their retries take ~30 min) */
+  fallbackMin: 40,
+  /** «Не пришёл» → the invitation, this much later: a mis-tap put right sends nothing */
+  noShowDelayMin: 2,
+  /** a visit marked «Не пришёл» this long after its start is not invited any more */
+  noShowWithinDays: 7,
 };
 
 export type OutboxRow = {
   id: string;
   business_id: string;
   appointment_id: string | null;
+  /** the client a row names itself (018): a hand-written or mass message, a birthday, a no-show */
+  client_id?: string | null;
   channel: Channel;
   kind: string;
   recipient: string;
@@ -206,6 +241,141 @@ export async function planReminders(q: Querier, now = Date.now()): Promise<{ add
   return { added: added.length + push.added, cancelled: cancelled.length + push.cancelled };
 }
 
+// the e-mail reminder's time: the business's lead ($3, minutes) before the visit
+const EMAIL_REMINDER_AT = "(a.starts_at - make_interval(mins => $3::int))";
+
+/**
+ * The reminder by e-mail (Altegio's type 1: 12 hours before), per business:
+ * planned, moved and dropped with the visits exactly as the SMS is. It goes
+ * to the address the visit's confirmation went to, in that letter's
+ * language, and only after that letter went: no address learns of a visit
+ * it was not told about (as src/lib/booking.ts queueChangeLetter).
+ */
+export async function planEmailReminders(q: Querier, now = Date.now()): Promise<{ added: number; cancelled: number }> {
+  let added = 0;
+  let cancelled = 0;
+  for (const b of await q<{ id: string; settings: unknown }>("select id, settings from businesses")) {
+    const s = readSettings(b.settings);
+    const gone = await q<{ id: string }>(
+      `update notifications n set status = 'cancelled', locked_until = null
+         from appointments a, clients c
+        where n.appointment_id = a.id and c.id = a.client_id and a.business_id = $1
+          and n.kind = 'reminder_email' and n.status = 'queued'
+          and (not $2::boolean or a.status not in ('booked', 'pending') or ${PLANNED_AT} is distinct from ${EMAIL_REMINDER_AT}
+               or ${refusesSql("c", "email", "reminder")})
+        returning n.id`,
+      [b.id, s.email_reminder_on, s.reminder_email_min],
+    );
+    cancelled += gone.length;
+    if (!s.email_reminder_on) continue;
+    const rows = await q<{ id: string }>(
+      `insert into notifications (business_id, appointment_id, client_id, channel, kind, recipient, locale, payload, send_at)
+       select a.business_id, a.id, a.client_id, 'email', 'reminder_email', conf.recipient, conf.locale,
+              jsonb_build_object('dueAt', ${EMAIL_REMINDER_AT}), ${EMAIL_REMINDER_AT}
+         from appointments a
+         join clients c on c.id = a.client_id
+         cross join lateral (select n.recipient, n.locale, n.created_at from notifications n
+                              where n.appointment_id = a.id and n.kind = 'confirmation' and n.channel = 'email' and n.status = 'sent'
+                              order by n.created_at limit 1) conf
+        where a.business_id = $1 and $2::boolean and a.status in ('booked', 'pending')
+          and ${takesSql("c", "email", "reminder")}
+          and a.starts_at > $4
+          and ${EMAIL_REMINDER_AT} < $5
+          -- booked after its time: the confirmation (queued with the booking) has just told
+          and conf.created_at < ${EMAIL_REMINDER_AT}
+          and not exists (select 1 from notifications n
+                           where n.appointment_id = a.id and n.kind = 'reminder_email'
+                             and n.status <> 'cancelled' and ${PLANNED_AT} = ${EMAIL_REMINDER_AT})
+       returning id`,
+      [b.id, s.email_reminder_on, s.reminder_email_min, new Date(now + OUTBOX.reminderMinLeadMin * 60_000), new Date(now + OUTBOX.planAheadHours * 3_600_000)],
+    );
+    added += rows.length;
+  }
+  return { added, cancelled };
+}
+
+/**
+ * The birthday greeting (Altegio's type 3), from 10:00 on each salon's
+ * clock: one row per client, channel and day (the unique index of 022 makes
+ * a second run add nothing).
+ *   e-mail  to the address on his card, as a hand-written message goes;
+ *   push    if a live phone was turned on for one of his visits;
+ *   SMS     planned fallbackMin later, and sent only if neither of the two
+ *           above went by then; at once when neither could be planned.
+ * Every channel and the kind «birthday» as the client accepts them.
+ */
+export async function planBirthdays(q: Querier, now = Date.now()): Promise<number> {
+  let added = 0;
+  for (const b of await q<{ id: string; name: string; timezone: string; settings: unknown }>("select id, name, timezone, settings from businesses")) {
+    if (!readSettings(b.settings).birthday_on) continue;
+    const local = localParts(now, b.timezone);
+    if (local.time < OUTBOX.birthdayAt) continue;
+    const m = birthdayMatch(local.date);
+    const rows = await q<{ id: string }>(
+      `insert into notifications (business_id, client_id, channel, kind, recipient, locale, payload, send_at)
+       select c.business_id, c.id, ch.channel, 'birthday', ch.recipient, c.locale,
+              jsonb_build_object('date', $2::text, 'tz', $6::text, 'business', $7::text),
+              case when ch.channel = 'sms' and (f.email or f.push) then $9::timestamptz else $8::timestamptz end
+         from clients c
+         cross join lateral (select c.email is not null and ${takesSql("c", "email", "birthday")} as email,
+                                    ${takesSql("c", "push", "birthday")}
+                                      and exists (select 1 from appointments a join client_push_subscriptions p on p.appointment_id = a.id
+                                                   where a.client_id = c.id and a.status <> 'cancelled' and p.retired_at is null) as push,
+                                    c.phone_e164 is not null and ${takesSql("c", "sms", "birthday")} as sms) f
+         cross join lateral (values ('email', c.email, f.email), ('push', c.id::text, f.push), ('sms', c.phone_e164, f.sms)) ch(channel, recipient, fits)
+        where c.business_id = $1 and c.merged_into is null and ch.fits
+          and ((c.birth_month = $3 and c.birth_day = $4) or ($5::boolean and c.birth_month = 2 and c.birth_day = 29))
+       on conflict (client_id, channel, (payload->>'date')) where kind = 'birthday' do nothing
+       returning id`,
+      [b.id, local.date, m.month, m.day, m.feb29, b.timezone, b.name, new Date(now), new Date(now + OUTBOX.fallbackMin * 60_000)],
+    );
+    added += rows.length;
+  }
+  return added;
+}
+
+/**
+ * «Приглашение недошедших» (Altegio's type 72). Call it in the status
+ * change's own transaction, with the new status: «no_show» queues the
+ * invitation by every channel the client accepts, noShowDelayMin later;
+ * any other status takes back one still queued. Idempotent per visit and
+ * channel (the unique index of 022): marking it again adds nothing, and one
+ * that went is never sent twice.
+ *   e-mail  to the address this visit's confirmation went to, in its language;
+ *   push    to the phones turned on for this visit;
+ *   SMS     to his phone, in English.
+ * Only a visit that has started, at most noShowWithinDays ago: a visit to
+ * come marked by mistake, or an old one tidied up, invites nobody.
+ */
+export async function planNoShow(q: Querier, business: Pick<Business, "id" | "settings">, appointmentId: string, status: string, now = Date.now()): Promise<number> {
+  if (status !== "no_show") {
+    await q("update notifications set status = 'cancelled', locked_until = null where appointment_id = $1 and kind = 'no_show' and status = 'queued'", [appointmentId]);
+    return 0;
+  }
+  if (!business.settings.no_show_on) return 0;
+  const rows = await q<{ id: string }>(
+    `insert into notifications (business_id, appointment_id, client_id, channel, kind, recipient, locale, payload, send_at)
+     select a.business_id, a.id, c.id, ch.channel, 'no_show', ch.recipient, ch.locale, '{}'::jsonb, $3::timestamptz
+       from appointments a
+       join clients c on c.id = a.client_id
+       left join lateral (select n.recipient, n.locale from notifications n
+                           where n.appointment_id = a.id and n.kind = 'confirmation' and n.channel = 'email' and n.status = 'sent'
+                           order by n.created_at limit 1) conf on true
+       cross join lateral (values
+         ('email', conf.recipient, coalesce(conf.locale, a.locale), conf.recipient is not null and ${takesSql("c", "email", "no_show")}),
+         ('push', a.id::text, a.locale, ${takesSql("c", "push", "no_show")}
+                                         and exists (select 1 from client_push_subscriptions p where p.appointment_id = a.id and p.retired_at is null)),
+         ('sms', c.phone_e164, a.locale, c.phone_e164 is not null and ${takesSql("c", "sms", "no_show")})
+       ) ch(channel, recipient, locale, fits)
+      where a.id = $1 and a.business_id = $2 and a.status = 'no_show' and ch.fits
+        and a.starts_at <= $4 and a.starts_at > $5
+     on conflict (appointment_id, channel) where kind = 'no_show' and status <> 'cancelled' do nothing
+     returning id`,
+    [appointmentId, business.id, new Date(now + OUTBOX.noShowDelayMin * 60_000), new Date(now), new Date(now - OUTBOX.noShowWithinDays * 86_400_000)],
+  );
+  return rows.length;
+}
+
 /** Claim due rows of the given channels for this run, or for one visit only. */
 export async function claimDue(
   q: Querier,
@@ -224,7 +394,7 @@ export async function claimDue(
                     order by send_at
                     limit $4
                     for update skip locked)
-      returning id, business_id, appointment_id, channel, kind, recipient, locale, payload, send_at, attempts`,
+      returning id, business_id, appointment_id, client_id, channel, kind, recipient, locale, payload, send_at, attempts`,
     [new Date(now), new Date(now + OUTBOX.lockMin * 60_000), channels, limit, appointmentId],
   );
   // an UPDATE returns its rows in no promised order; they go out oldest first,
@@ -249,14 +419,6 @@ function withTestNote(html: string, note: string): string {
   return /<body[^>]*>/i.test(html) ? html.replace(/<body[^>]*>/i, (m) => m + bar) : bar + html;
 }
 
-// the reminder's change link label; Estonian avoids «õ», which would make the whole SMS UCS-2
-const LINK_LABEL: Record<Locale, string> = { ru: "Перенести/отменить", et: "Muuda/tühista", en: "Change or cancel" };
-
-/**
- * The text of a message, built at send time from its payload. A reminder
- * with a change link (Dim, 17.11.2026: a short link, 2 parts) drops the
- * address when the link would otherwise cost a third SMS part.
- */
 /** The reminder as a notification: the salon's name is the title, so the line starts with the visit. */
 export function clientReminderText(row: Pick<OutboxRow, "locale" | "payload" | "appointment_id">, url: string): PushText | null {
   const p = row.payload as { startsAt?: string; staff?: string; business?: string; address?: string; tz?: string };
@@ -274,25 +436,38 @@ export function clientReminderText(row: Pick<OutboxRow, "locale" | "payload" | "
   return { title: p.business || "REMPIRE", body: `${head}${p.address ? ` ${p.address}.` : ""}`, url, tag: `visit-${row.appointment_id ?? "x"}` };
 }
 
+/**
+ * The text of an SMS, built at send time from its payload. The ones we
+ * write ourselves are in English for everyone and one part (decision 30,
+ * docs/kickoff.md: «as today»); each drops what it can spare, the address
+ * first, until it fits. `link` is the reminder's change link (Dim,
+ * 17.11.2026: a short one), or the booking page for the other two. A
+ * message written by hand is its own words, in whatever parts they take.
+ */
 export function messageText(row: Pick<OutboxRow, "kind" | "locale" | "payload">, link = ""): string | null {
   const p = row.payload as { startsAt?: string; staff?: string; business?: string; address?: string; tz?: string; text?: string };
-  if (row.kind === "reminder" && p.startsAt) {
-    const when = localParts(Date.parse(p.startsAt), p.tz || "Europe/Tallinn");
+  const name = p.business || "REMPIRE";
+  const at = () => {
+    const when = localParts(Date.parse(String(p.startsAt)), p.tz || "Europe/Tallinn");
     const [, m, d] = when.date.split("-").map(Number);
-    const day = `${pad(d)}.${pad(m)}`;
-    const name = p.business || "REMPIRE";
+    return { day: `${pad(d)}.${pad(m)}`, time: when.time };
+  };
+  if (row.kind === "reminder" && p.startsAt) {
+    const { day, time } = at();
+    const bare = `${name}: reminder of your visit on ${day} at ${time}`;
+    const head = `${bare}${p.staff ? ` with ${p.staff}` : ""}.`;
     const place = p.address ? ` ${p.address}.` : "";
-    const staff = p.staff ? p.staff : "";
-    const head =
-      row.locale === "et"
-        ? `${name}: meeldetuletus, Teie aeg ${day} kell ${when.time}${staff ? `, ${staff}` : ""}.`
-        : row.locale === "en"
-          ? `${name}: reminder of your visit on ${day} at ${when.time}${staff ? ` with ${staff}` : ""}.`
-          : `${name}: напоминаем о записи ${day} в ${when.time}${staff ? `, барбер ${staff}` : ""}.`;
-    const tail = link ? ` ${LINK_LABEL[row.locale] ?? LINK_LABEL.ru}: ${link}` : "";
-    const full = `${head}${place}${tail}`;
-    if (tail && place && smsSegments(full).segments > 2) return `${head}${tail}`;
-    return full;
+    const tail = link ? ` Change or cancel: ${link}` : "";
+    return oneSmsPart(`${head}${place}${tail}`, `${head}${tail}`, `${bare}.${tail}`, `${head}${place}`, head, `${bare}.`);
+  }
+  if (row.kind === "birthday") {
+    const head = `Happy birthday from ${name}! Wishing you a great year ahead.`;
+    return oneSmsPart(link ? `${head} Book your next visit: ${link}` : "", head);
+  }
+  if (row.kind === "no_show" && p.startsAt) {
+    const { day, time } = at();
+    const head = `${name}: we missed you on ${day} at ${time}.`;
+    return oneSmsPart(link ? `${head} Book a new time: ${link}` : "", head);
   }
   if (typeof p.text === "string" && p.text) return p.text;
   return null;
@@ -309,14 +484,92 @@ export type Senders = {
 
 export type OutboxResult = { planned: number; cancelled: number; sent: number; retry: number; failed: number; skipped: number; waiting: number };
 
-type Composed = { skip: string } | { subject: string; body: string | LetterBody } | { push: PushText };
+/** A push to a client's phones names the visit they were turned on for; by default the row's own. */
+type Composed = { skip: string } | { subject: string; body: string | LetterBody } | { push: PushText; visitId?: string };
 
 const LIVE = new Set(["booked", "pending"]);
 
+/** Push kinds that go to the phones of a client's visit, not to a staff login. */
+const TO_CLIENT_PHONE = new Set(["client_reminder", "manual", "mass", "birthday", "no_show"]);
+
+/**
+ * The birthday greeting and the no-show invitation, built now from the
+ * client and the visit as they are; or why one is not sent: the business or
+ * the client switched it off since, the day is over, the visit is no longer
+ * «Не пришёл», or (the birthday SMS) the letter or the notification went.
+ */
+async function composeClientMessage(q: Querier, row: OutboxRow, now: number, env: Env): Promise<Composed> {
+  const kind = row.kind as "birthday" | "no_show";
+  if (row.channel === "push" && now - new Date(row.send_at).getTime() > OUTBOX.pushStaleMin * 60_000) return { skip: "stale" };
+  const business = await getBusinessById(q, row.business_id);
+  if (!business) return { skip: "business gone" };
+  if (!business.settings[kind === "birthday" ? "birthday_on" : "no_show_on"]) return { skip: "switched off" };
+  if (!row.client_id || !(await clientTakes(q, row.client_id, row.channel, kind))) return { skip: "the client takes none" };
+  const origin = siteUrl(env).origin;
+  const book = `${origin}/${row.locale}`;
+  if (kind === "birthday") {
+    const p = row.payload as { date?: string; tz?: string; business?: string };
+    if (!p.date || localParts(now, p.tz || business.timezone).date !== p.date) return { skip: "not the day any more" };
+    if (row.channel === "email") {
+      const [loc] = await q<{ address: string }>("select address from locations where business_id = $1 and active order by sort, name limit 1", [business.id]);
+      const letter = birthdayLetter({ locale: row.locale, origin, business, address: loc?.address });
+      return { subject: letter.subject, body: letter };
+    }
+    if (row.channel === "push") {
+      // the phones of his latest visit that one was turned on for
+      const [v] = await q<{ id: string }>(
+        `select a.id from appointments a
+          where a.client_id = $1 and a.status <> 'cancelled'
+            and exists (select 1 from client_push_subscriptions p where p.appointment_id = a.id and p.retired_at is null)
+          order by a.starts_at desc limit 1`,
+        [row.client_id],
+      );
+      if (!v) return { skip: "no phone" };
+      const text = clientPushText("birthday", { ...p, business: business.name }, row.locale);
+      return text ? { push: text, visitId: v.id } : { skip: "no text" };
+    }
+    const [went] = await q<{ channel: string }>(
+      "select channel from notifications where client_id = $1 and kind = 'birthday' and payload->>'date' = $2 and channel <> 'sms' and status = 'sent' limit 1",
+      [row.client_id, p.date],
+    );
+    if (went) return { skip: `sent by ${went.channel}` };
+    const text = messageText({ ...row, payload: { business: business.name } }, book);
+    return text ? { subject: "REMPIRE", body: text } : { skip: "no text" };
+  }
+  const v = row.appointment_id ? await visitById(q, row.appointment_id) : null;
+  if (!v) return { skip: "visit gone" };
+  if (v.status !== "no_show") return { skip: `visit ${v.status}` };
+  if (row.channel === "email") {
+    const letter = noShowLetter(v, { business, origin, locale: row.locale });
+    return { subject: letter.subject, body: letter };
+  }
+  const seen = { business: business.name, startsAt: v.startsAt, tz: business.timezone, visitId: v.id };
+  if (row.channel === "push") {
+    const text = clientPushText("no_show", seen, row.locale);
+    return text ? { push: text } : { skip: "no text" };
+  }
+  const text = messageText({ ...row, payload: seen }, book);
+  return text ? { subject: "REMPIRE", body: text } : { skip: "no text" };
+}
+
 /** What a claimed row sends, built now; or why it is not sent at all. */
 async function compose(q: Querier, row: OutboxRow, now: number, env: Env): Promise<Composed> {
+  if (row.kind === "birthday" || row.kind === "no_show") return composeClientMessage(q, row, now, env);
   if (row.channel === "push") return composePush(q, row, now);
   const p = row.payload as { startsAt?: string; subject?: string };
+  if (row.kind === "reminder_email" && row.channel === "email") {
+    // planned by planEmailReminders; built from the visit as it is now, with a change link of its own
+    const v = row.appointment_id ? await visitById(q, row.appointment_id) : null;
+    if (!v) return { skip: "visit gone" };
+    if (!LIVE.has(v.status)) return { skip: `visit ${v.status}` };
+    if (Date.parse(v.startsAt) <= now) return { skip: "visit already started" };
+    const business = await getBusinessById(q, row.business_id);
+    if (!business) return { skip: "business gone" };
+    if (!business.settings.email_reminder_on) return { skip: "switched off" };
+    const token = await mintVisitLink(q, v.id, "email");
+    const letter = visitLetter("reminder", v, { business, origin: siteUrl(env).origin, token, locale: row.locale, now });
+    return { subject: letter.subject, body: letter };
+  }
   if (row.kind === "confirmation" && row.channel === "email") {
     const v = row.appointment_id ? await visitById(q, row.appointment_id) : null;
     if (!v) return { skip: "visit gone" };
@@ -384,7 +637,8 @@ const emptyResult = (): OutboxResult => ({ planned: 0, cancelled: 0, sent: 0, re
 /** One cron run: plan reminders, then send what is due on the channels that are set up. */
 export async function runOutbox(q: Querier, now = Date.now(), env: Env = process.env, senders: Senders = { sms: sendSms, email: sendEmail }): Promise<OutboxResult> {
   const plan = await planReminders(q, now);
-  const res: OutboxResult = { ...emptyResult(), planned: plan.added, cancelled: plan.cancelled };
+  const mail = await planEmailReminders(q, now);
+  const res: OutboxResult = { ...emptyResult(), planned: plan.added + mail.added + (await planBirthdays(q, now)), cancelled: plan.cancelled + mail.cancelled };
   if (pushConfigured(env)) res.planned += await planEveningPush(q, now);
   await deliver(q, await claimDue(q, enabledChannels(env), now), now, env, senders, res);
   const [w] = await q<{ n: number }>(`select count(*)::int as n from notifications where status = 'queued' and send_at <= $1`, [new Date(now)]);
@@ -412,17 +666,16 @@ async function deliver(q: Querier, rows: OutboxRow[], now: number, env: Env, sen
         continue;
       }
       if (row.channel === "sms" && "body" in msg) {
-        const r = await senders.sms(row.recipient, typeof msg.body === "string" ? msg.body : msg.body.text, env);
+        const r = await senders.sms(row.recipient, typeof msg.body === "string" ? msg.body : msg.body.text, env, { externalId: row.id });
         await q(
           `update notifications set status = 'sent', sent_at = $2, provider = $3, provider_ref = $4, segments = $5, locked_until = null, last_error = null where id = $1`,
           [row.id, new Date(now), r.provider, r.ref, r.segments],
         );
       } else if (row.channel === "push" && "push" in msg) {
         // a login's phones, or the phones turned on for this one visit
-        const r =
-          row.kind === "client_reminder" || row.kind === "manual" || row.kind === "mass"
-            ? await (senders.pushClient ?? sendPushToClient)(q, row.appointment_id ?? "", msg.push, env)
-            : await (senders.push ?? sendPushToUser)(q, row.recipient, msg.push, env);
+        const r = TO_CLIENT_PHONE.has(row.kind)
+          ? await (senders.pushClient ?? sendPushToClient)(q, msg.visitId ?? row.appointment_id ?? "", msg.push, env)
+          : await (senders.push ?? sendPushToUser)(q, row.recipient, msg.push, env);
         if (!r.devices) {
           await q(`update notifications set status = 'skipped', locked_until = null, last_error = 'no phone' where id = $1`, [row.id]);
           res.skipped++;
@@ -453,7 +706,9 @@ async function deliver(q: Querier, rows: OutboxRow[], now: number, env: Env, sen
       res.sent++;
     } catch (e) {
       const error = (e instanceof Error ? e.message : String(e)).slice(0, 300);
-      if (row.attempts >= OUTBOX.maxAttempts) {
+      // a provider's «never» (src/lib/sms.ts SmsRejected): the same message would be refused again
+      const permanent = typeof e === "object" && e !== null && (e as { permanent?: unknown }).permanent === true;
+      if (permanent || row.attempts >= OUTBOX.maxAttempts) {
         await q(`update notifications set status = 'failed', locked_until = null, last_error = $2 where id = $1`, [row.id, error]);
         res.failed++;
       } else {

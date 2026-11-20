@@ -286,12 +286,25 @@ gets it → send.
      the admin keeps Altegio's. A phone keeps the app's two bars and gets
      the six pages as a row of chips under the title. The font stays
      Inter: Figtree has no Cyrillic.
-   - **«Рабочий стол»** (`/admin/invoices/desk`): three figures (this
-     month, last month, overdue: how many and how much; each opens the
-     list filtered the same way), four tiles, and the latest events
-     (issued, sent, paid, credited) read from the audit log and the
-     outbox. The salon's menu still opens the section on the list: Renat's
-     routine starts there.
+   - **«Рабочий стол»** (`/admin/invoices/desk`; re-laid 20.11.2026 to
+     the re-scan, `docs/isolta-pages.md` part D): no white bar and no
+     visible title (an `h1` for screen readers), a stack 24 px apart on the
+     ground. The head (our mark on a 56 px `#e5f8ff` tile, the company and
+     its e-mail); then the three figures (this month, last month, overdue:
+     how many and how much; each opens the list filtered the same way) and
+     five tiles (Новый счёт, Показать счета, Бухгалтерский отчёт →
+     «Отчёты», Новый получатель, Показать получателей; three a row, six
+     from 1536 px), with a 336 px card at the right where the tool has its
+     promo: «Счета барберам за <месяц>», how many barbers get a month's
+     invoice and how many have it yet, and «Открыть месяц» to «Отчёты»,
+     where «Сделать черновики» is (no button without the company). Then
+     «Неоплаченные счета» at 5/12 (the five longest overdue, the sum of all
+     unpaid, «Все» to the list) in place of the tool's purchase invoices,
+     and the latest events at 7/12. Not ours: the sixth tile «Новый
+     товар/услуга» (no saved products), the photo in the band. A phone
+     keeps the section's bar for its chips and stacks the blocks. The
+     salon's menu still opens the section on the list: Renat's routine
+     starts there.
    - **«Счета», the list** (`/admin/invoices`): «+ Новый счёт», «Сводка по
      выбранным счетам» (counts and sums of the rows the filters leave:
      issued, credit invoices, turnover, unpaid, overdue, drafts; without

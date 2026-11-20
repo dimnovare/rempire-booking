@@ -3,6 +3,7 @@
  * time for each service. Plain data, safe to send to the browser.
  */
 import type { Querier } from "./db";
+import { staffRatings } from "./reviews";
 
 export type L10n = { ru?: string; et?: string; en?: string };
 
@@ -22,6 +23,7 @@ export type CatalogStaff = {
   /** his own words about himself: the «i» button opens them; {} = no button */
   bio: L10n;
   photoUrl: string | null;
+  /** the average of his reviews on show (src/lib/reviews.ts); null: none, and no stars */
   rating: number | null;
   reviewCount: number;
   /** serviceId → [price in cents, minutes]; a missing id = not offered */
@@ -36,7 +38,7 @@ export type Catalog = {
 };
 
 export async function loadCatalog(q: Querier, businessId: string): Promise<Catalog> {
-  const [biz, locs, services, staff, offers] = await Promise.all([
+  const [biz, locs, services, staff, offers, ratings] = await Promise.all([
     q<{ name: string; timezone: string }>("select name, timezone from businesses where id = $1", [businessId]),
     q<{ name: string; address: string; phone: string }>(
       "select name, address, phone from locations where business_id = $1 and active order by sort, name limit 1",
@@ -47,8 +49,8 @@ export async function loadCatalog(q: Querier, businessId: string): Promise<Catal
         where business_id = $1 and active and online order by sort, slug`,
       [businessId],
     ),
-    q<{ id: string; slug: string; display_name: string; role: L10n; bio: L10n | null; photo_url: string | null; rating: string | null; review_count: number }>(
-      `select id, slug, display_name, role, bio, photo_url, rating::text as rating, review_count from staff
+    q<{ id: string; slug: string; display_name: string; role: L10n; bio: L10n | null; photo_url: string | null }>(
+      `select id, slug, display_name, role, bio, photo_url from staff
         where business_id = $1 and active and bookable order by sort, display_name`,
       [businessId],
     ),
@@ -60,6 +62,7 @@ export async function loadCatalog(q: Querier, businessId: string): Promise<Catal
         where sv.business_id = $1 and ss.active and sv.active and sv.online`,
       [businessId],
     ),
+    staffRatings(q, businessId),
   ]);
   return {
     business: biz[0] ?? { name: "REMPIRE", timezone: "Europe/Tallinn" },
@@ -72,8 +75,8 @@ export async function loadCatalog(q: Querier, businessId: string): Promise<Catal
       role: s.role,
       bio: s.bio ?? {},
       photoUrl: s.photo_url,
-      rating: s.rating == null ? null : Number(s.rating),
-      reviewCount: s.review_count,
+      rating: ratings.get(s.id)?.rating ?? null,
+      reviewCount: ratings.get(s.id)?.count ?? 0,
       offers: Object.fromEntries(
         offers.filter((o) => o.staff_id === s.id).map((o) => [o.service_id, [o.price_cents, o.duration_min] as [number, number]]),
       ),

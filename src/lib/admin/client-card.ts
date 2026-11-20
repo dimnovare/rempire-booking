@@ -305,7 +305,7 @@ export const MESSAGES_MAX = 200;
 /** The kinds of outbox row that are a message to a client (src/lib/client-notify.ts, and «manual»). */
 /** The kinds whose words are their own, kept in the payload: written by hand on the card, or to many clients at once (client-bulk.ts). */
 const WRITTEN = ["manual", "mass"];
-const TO_CLIENT = ["confirmation", "reminder", "client_reminder", "moved", "cancelled", ...WRITTEN];
+const TO_CLIENT = ["confirmation", "reminder", "client_reminder", "reminder_email", "moved", "cancelled", "birthday", "no_show", ...WRITTEN];
 
 export type ClientMessage = {
   id: string;

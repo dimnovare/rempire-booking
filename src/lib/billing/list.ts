@@ -260,6 +260,21 @@ export function deskStats(rows: readonly ListRow[], today: string): DeskStats {
   return { thisMonth: month(thisRange), lastMonth: month(lastRange), overdue: summaryOf(rows).overdue, thisRange, lastRange };
 }
 
+/** «Рабочий стол», «Неоплаченные счета»: the first `n` of them and what all of them come to. */
+export type DeskUnpaid = { rows: ListRow[]; all: Sum; overdue: number };
+
+/**
+ * The issued invoices not paid yet (overdue or not due), the longest overdue
+ * first: by the due day, then the invoice's date and number. Credit
+ * invoices and drafts are not owed.
+ */
+export function deskUnpaid(rows: readonly ListRow[], n = 5): DeskUnpaid {
+  const owed = rows.filter((r) => r.status === "issued" || r.status === "overdue");
+  const by = (a: ListRow, b: ListRow) => (a.due || "9999").localeCompare(b.due || "9999") || a.date.localeCompare(b.date) || byNumber.compare(a.number, b.number);
+  const s = summaryOf(owed);
+  return { rows: [...owed].sort(by).slice(0, Math.max(0, n)), all: s.unpaid, overdue: s.overdue.count };
+}
+
 /* ---------- «Отчёт по получателям» ---------- */
 
 export type ReceiverReportRow = {

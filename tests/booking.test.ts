@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { POST as bookRoute } from "@/app/api/bookings/route";
-import { loadAvailability } from "@/lib/availability";
+import { getBusiness, loadAvailability } from "@/lib/availability";
 import { book, hashToken, type BookingInput } from "@/lib/booking";
 import { closeDb, query } from "@/lib/db";
 import { cleanExtra, extraFor, extraText, pricedWindows } from "@/lib/slots";
@@ -78,16 +78,22 @@ describe("database", () => {
 });
 
 describe("free slots", () => {
-  it("a 45-minute cut fits from 10:00 to the last start at 18:15", async () => {
+  // Altegio's grid (src/lib/slots.ts): every 30 minutes from the start of his day, no notice
+  it("a 45-minute cut fits from 10:00 to the last start at 18:00, every half hour", async () => {
     const s = await slotsOf({ staff: "renat", services: ["clip"], date: TUE });
     expect(s[0].start).toBe(at(TUE, "10:00"));
-    expect(s[s.length - 1].start).toBe(at(TUE, "18:15"));
-    expect(s.length).toBe(34);
+    expect(s[1].start).toBe(at(TUE, "10:30"));
+    expect(s[s.length - 1].start).toBe(at(TUE, "18:00"));
+    expect(s.length).toBe(17);
   });
 
-  it("nothing before now plus the 30-minute notice", async () => {
+  it("no notice: nothing before now, rounded up to the grid; a notice where the salon sets one", async () => {
     const s = await slotsOf({ staff: "renat", services: ["clip"], date: TUE, now: at(TUE, "10:05") });
-    expect(s[0].start).toBe(at(TUE, "10:45"));
+    expect(s[0].start).toBe(at(TUE, "10:30"));
+    expect((await slotsOf({ staff: "renat", services: ["clip"], date: TUE, now: at(TUE, "10:30") }))[0].start).toBe(at(TUE, "10:30"));
+    await query(`update businesses set settings = settings || '{"min_notice_min": 30}'::jsonb where id = $1`, [demo.business.id]);
+    demo.business = (await getBusiness(query, "rempire"))!;
+    expect((await slotsOf({ staff: "renat", services: ["clip"], date: TUE, now: at(TUE, "10:05") }))[0].start).toBe(at(TUE, "11:00"));
   });
 
   it("Sunday is closed and a barber without the service is left out", async () => {
@@ -98,19 +104,21 @@ describe("free slots", () => {
 
   it("two services add up to the barber's own total time", async () => {
     const s = await slotsOf({ staff: "renat", services: ["clip", "grey"], date: TUE });
-    expect(s[s.length - 1].start).toBe(at(TUE, "17:45")); // 45 + 30 min to 19:00
+    expect(s[s.length - 1].start).toBe(at(TUE, "17:30")); // 45 + 30 min, by 19:00
   });
 
   it("time off and a changed day are respected", async () => {
     await query("insert into time_off (staff_id, starts_at, ends_at, kind) values ($1, $2, $3, 'block')", [
       demo.staff.renat,
       iso(TUE, "13:00"),
-      iso(TUE, "14:00"),
+      iso(TUE, "13:50"),
     ]);
     const s = (await slotsOf({ staff: "renat", services: ["clip"], date: TUE })).map((x) => x.start);
-    expect(s).toContain(at(TUE, "12:15"));
+    expect(s).toContain(at(TUE, "12:00"));
     expect(s).not.toContain(at(TUE, "12:30"));
     expect(s).not.toContain(at(TUE, "13:30"));
+    // the end of the time off, then the grid again
+    expect(s).toContain(at(TUE, "13:50"));
     expect(s).toContain(at(TUE, "14:00"));
 
     // the day has its dated shift already: now it is a day off
@@ -126,14 +134,16 @@ describe("free slots", () => {
     await query(`insert into staff_day_overrides (staff_id, day, intervals) values ($1, $2, '[["10:00","12:00"]]')`, [demo.staff.renat, day]);
     const s = await slotsOf({ staff: "renat", services: ["clip"], date: day, now: at("2026-10-20", "12:00") });
     expect(new Date(s[0].start).toISOString()).toBe("2026-10-25T08:00:00.000Z");
-    expect(new Date(s[s.length - 1].start).toISOString()).toBe("2026-10-25T09:15:00.000Z");
+    expect(new Date(s[s.length - 1].start).toISOString()).toBe("2026-10-25T09:00:00.000Z");
   });
 
-  it("a tidy-up buffer keeps the chair busy after the visit", async () => {
+  it("a tidy-up buffer keeps the chair busy after the visit: the next start is when it ends", async () => {
     await query("update services set buffer_after_min = 10 where id = $1", [demo.services.clip]);
     expect((await book(query, demo.business, input({ time: "10:00" }), { now: NOW })).ok).toBe(true);
     const s = (await slotsOf({ staff: "renat", services: ["clip"], date: TUE })).map((x) => x.start);
-    expect(s[0]).toBe(at(TUE, "11:00"));
+    expect(s.slice(0, 3)).toEqual([at(TUE, "10:55"), at(TUE, "11:00"), at(TUE, "11:30")]);
+    // and a client can book it
+    expect(await book(query, demo.business, input({ time: "10:55", phone: "+372 5555 0104" }), { now: NOW })).toMatchObject({ ok: true });
   });
 
   it("days past the 60-day horizon are empty", async () => {
@@ -200,6 +210,8 @@ describe("booking", () => {
 
   it("refuses a start off the grid, in the past, or with bad details", async () => {
     expect(await book(query, demo.business, input({ time: "10:07" }), { now: NOW })).toEqual({ ok: false, code: "slot_taken" });
+    // on the old 15-minute grid, not on the half-hour one
+    expect(await book(query, demo.business, input({ time: "10:15" }), { now: NOW })).toEqual({ ok: false, code: "slot_taken" });
     expect(await book(query, demo.business, input({ date: "2026-11-16", time: "09:00" }), { now: NOW })).toEqual({ ok: false, code: "slot_taken" });
     expect(await book(query, demo.business, input({ phone: "12" }), { now: NOW })).toMatchObject({ ok: false, field: "phone" });
     expect(await book(query, demo.business, input({ name: "  " }), { now: NOW })).toMatchObject({ ok: false, field: "name" });
@@ -244,20 +256,19 @@ describe("special time", () => {
     // his day ends at 19:00
     await special("renat", TUE, "19:00", "21:00", 20);
     const s = await slotsOf({ staff: "renat", services: ["clip"], date: TUE });
-    expect(extraAt(s, "18:15")).toBe(0);
+    expect(extraAt(s, "18:00")).toBe(0);
     expect(extraAt(s, "18:30")).toBeUndefined(); // would run from 18:30 into special time
     expect(extraAt(s, "19:00")).toBe(2000);
-    expect(extraAt(s, "20:15")).toBe(2000);
+    expect(extraAt(s, "20:00")).toBe(2000);
     expect(extraAt(s, "20:30")).toBeUndefined();
   });
 
   it("inside the hours: replaces the usual price for that time", async () => {
     await special("renat", TUE, "13:00", "14:00", 15);
     const s = await slotsOf({ staff: "renat", services: ["clip"], date: TUE });
-    expect(extraAt(s, "12:15")).toBe(0);
+    expect(extraAt(s, "12:00")).toBe(0);
     expect(extraAt(s, "12:30")).toBeUndefined();
     expect(extraAt(s, "13:00")).toBe(1500);
-    expect(extraAt(s, "13:15")).toBe(1500);
     expect(extraAt(s, "13:30")).toBeUndefined();
     expect(extraAt(s, "14:00")).toBe(0);
   });
@@ -269,11 +280,13 @@ describe("special time", () => {
     const r = await loadAvailability(query, { business: demo.business, serviceIds: [demo.services.clip], staffId: demo.staff.renat, from: SUN, days: 1, now: NOW });
     expect(r.days[0].open).toBe(true);
     const by = new Map(r.days[0].slots.map((x) => [x.start, x.extraCents]));
+    // no hours that day: his day starts with the special time
     expect(by.get(at(SUN, "12:00"))).toBe(2500);
-    expect(by.get(at(SUN, "13:15"))).toBe(2500);
+    expect(by.get(at(SUN, "13:00"))).toBe(2500);
     expect(by.get(at(SUN, "13:30"))).toBeUndefined(); // 25 € then 30 €: no visit across the two
     expect(by.get(at(SUN, "14:00"))).toBe(3000);
-    expect(by.get(at(SUN, "15:15"))).toBe(3000);
+    expect(by.get(at(SUN, "15:00"))).toBe(3000);
+    expect(by.get(at(SUN, "15:30"))).toBeUndefined();
   });
 
   it("books at the price shown and keeps the extra apart", async () => {
@@ -384,10 +397,9 @@ describe("special time in percent", () => {
     await specialPct("valentin", TUE, "13:00", "14:00", 50);
     // Renat's cut is 40 €; grey hair is 35 € with him and 30 € with Valentin
     const renat = await slotsOf({ staff: "renat", services: ["clip"], date: TUE });
-    expect(extraAt(renat, "12:15")).toBe(0);
+    expect(extraAt(renat, "12:00")).toBe(0);
     expect(extraAt(renat, "12:30")).toBeUndefined(); // would run into the special hour
     expect(extraAt(renat, "13:00")).toBe(2000);
-    expect(extraAt(renat, "13:15")).toBe(2000);
     expect(extraAt(renat, "13:30")).toBeUndefined();
     expect(extraAt(renat, "14:00")).toBe(0);
     expect(extraAt(await slotsOf({ staff: "valentin", services: ["grey"], date: TUE }), "13:00")).toBe(1500);
@@ -471,9 +483,9 @@ describe("special time in percent", () => {
     expect(await res.json()).toEqual({
       error: "slot_taken",
       alternatives: [
-        [at(day, "12:15"), demo.staff.renat, 0],
+        [at(day, "12:00"), demo.staff.renat, 0],
         [at(day, "13:00"), demo.staff.renat, 2000],
-        [at(day, "13:15"), demo.staff.renat, 2000],
+        [at(day, "14:00"), demo.staff.renat, 0],
       ],
     });
     expect(await query("select id from appointments")).toHaveLength(0);
@@ -486,16 +498,17 @@ describe("a visit being moved", () => {
     if (!r.ok) throw new Error("not booked");
     const ask = { business: demo.business, serviceIds: [demo.services.clip], staffId: demo.staff.renat, from: TUE, days: 1, now: NOW };
     const starts = async (ignoreAppointmentId?: string | null) => (await loadAvailability(query, { ...ask, ignoreAppointmentId })).days[0].slots.map((s) => s.start);
-    // taken: nothing from 10:00 until the visit ends at 10:45
+    // taken: nothing from 10:00 until the visit ends at 10:45, then a start right then
     for (const without of [await starts(), await starts(null)]) {
       expect(without).not.toContain(at(TUE, "10:00"));
       expect(without).not.toContain(at(TUE, "10:30"));
-      expect(without[0]).toBe(at(TUE, "10:45"));
+      expect(without.slice(0, 2)).toEqual([at(TUE, "10:45"), at(TUE, "11:00")]);
     }
     const moving = await starts(r.visit.id);
     expect(moving[0]).toBe(at(TUE, "10:00"));
-    expect(moving).toContain(at(TUE, "10:15"));
-    expect(moving.length).toBe(34);
+    expect(moving).toContain(at(TUE, "10:30"));
+    expect(moving).not.toContain(at(TUE, "10:45"));
+    expect(moving.length).toBe(17);
     // only that visit is out of the way: another one still holds its time
     const other = await book(query, demo.business, input({ time: "12:00", phone: "+372 5555 0115" }), { now: NOW });
     if (!other.ok) throw new Error("not booked");

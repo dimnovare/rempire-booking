@@ -15,7 +15,7 @@ import { amountText, bpText, euroText } from "@/lib/money";
 import { useA } from "../../../lang";
 import { useFrame } from "../../frame";
 import { copyAction, creditAction, resendAction, setPaidAction } from "../actions";
-import { INV_ROOT, statusWord, ToolIcon, type EventLine } from "../common";
+import { INV_ROOT, PAYMENTS_SHOWN, statusWord, ToolIcon, type EventLine } from "../common";
 import { MetaTable, ReceiverCard, SenderBlock, Totals, unitOf } from "../sheet-parts";
 import { Confirm, Dialog, Field, IvTop, MenuButton } from "../ui";
 import { DocBar, LinesHead, LinesHeadRow } from "./doc-parts";
@@ -49,7 +49,7 @@ export function SentView({ inv, lines, events }: { inv: ViewInvoice; lines: View
 
   const tone = inv.status === "paid" ? " is-ok" : inv.status === "overdue" ? " is-bad" : "";
   const facts = [
-    inv.sentOn ? A.inv.sentOn(inv.sentOn) : A.inv.notSent,
+    inv.sentOn ? A.inv.sentOn(inv.sentOn) : inv.imported ? A.inv.imported : A.inv.notSent,
     inv.emailStatus && inv.emailStatus !== "sent" ? (A.inv.mail[inv.emailStatus] ?? inv.emailStatus) : "",
     inv.paidOn ? A.inv.paidOn(inv.paidOn) : "",
   ].filter(Boolean);
@@ -78,7 +78,7 @@ export function SentView({ inv, lines, events }: { inv: ViewInvoice; lines: View
   return (
     <>
       <IvTop title={invoice ? A.inv.one(inv.number ?? "") : A.inv.oneCredit(inv.number ?? "")}>
-        {live && (
+        {live && PAYMENTS_SHOWN && (
           <button type="button" className="iv-btn is-green" onClick={() => setPaying(true)}>
             {A.inv.payments}
           </button>

@@ -406,8 +406,12 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
   const myLink = mine ? mine.replace(/^\/(ru|et|en)\//, `/${lang}/`) : null;
   const roleOf = (s: CatalogStaff) => pick(s.role, lang) || c.barberK;
 
+  // the average of the barber's reviews on show (src/lib/reviews.ts): whole stars, as the widget draws
+  // them, and the count; a barber with no review shows nothing. A screen reader hears «4,9 из 5».
+  const ratedOf = (s: CatalogStaff) =>
+    c.rated(new Intl.NumberFormat(INTL[lang], { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(s.rating ?? 0));
   const stars = (s: CatalogStaff) =>
-    s.rating == null ? null : (
+    s.rating == null || s.reviewCount === 0 ? null : (
       <span className="stars" aria-hidden="true">
         {[1, 2, 3, 4, 5].map((n) => (
           <StarIcon key={n} on={n <= Math.round(s.rating ?? 0)} />
@@ -595,7 +599,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
                 className="cell-main"
                 role="radio"
                 aria-checked={barber === s.id}
-                aria-label={s.rating != null ? `${s.name}, ${roleOf(s)}, ${s.rating}, ${c.nReviews(s.reviewCount)}` : `${s.name}, ${roleOf(s)}`}
+                aria-label={s.rating != null && s.reviewCount > 0 ? `${s.name}, ${roleOf(s)}, ${ratedOf(s)}, ${c.nReviews(s.reviewCount)}` : `${s.name}, ${roleOf(s)}`}
                 onClick={() => pickBarber(s.id)}
               >
                 <span className="ava">{face(s)}</span>

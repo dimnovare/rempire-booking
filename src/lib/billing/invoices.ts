@@ -89,6 +89,8 @@ export type Invoice = {
   sentAt: string | null;
   paidAt: string | null;
   emailStatus: string | null;
+  /** brought over from Isolta as history (027): never sent from here, its events start at the import */
+  imported: boolean;
 };
 
 type Fail<C extends string = string> = { ok: false; code: C };
@@ -152,6 +154,7 @@ type InvoiceRow = {
   sent_at: Date | null;
   paid_at: Date | null;
   email_status: string | null;
+  source: string;
 };
 
 const INVOICE_SQL = `
@@ -159,7 +162,7 @@ const INVOICE_SQL = `
          i.kind, i.credit_of, o.number as credit_of_number, c.id as credited_by, i.status, i.free, i.number,
          to_char(i.period_from, 'YYYY-MM-DD') as period_from, to_char(i.period_to, 'YYYY-MM-DD') as period_to,
          to_char(i.issued_on, 'YYYY-MM-DD') as issued_on, to_char(i.due_on, 'YYYY-MM-DD') as due_on,
-         i.seller, i.buyer, i.locale, i.net_cents, i.vat_cents, i.gross_cents, i.note, i.sent_at, i.paid_at,
+         i.seller, i.buyer, i.locale, i.net_cents, i.vat_cents, i.gross_cents, i.note, i.sent_at, i.paid_at, i.source,
          (select n.status from notifications n where n.kind = 'invoice' and n.payload->>'invoiceId' = i.id::text order by n.created_at desc limit 1) as email_status
     from invoices i
     join invoice_receivers r on r.id = i.receiver_id
@@ -195,6 +198,7 @@ const invoiceOf = (r: InvoiceRow): Invoice => ({
   sentAt: r.sent_at ? new Date(r.sent_at).toISOString() : null,
   paidAt: r.paid_at ? new Date(r.paid_at).toISOString() : null,
   emailStatus: r.email_status,
+  imported: r.source === "isolta",
 });
 
 type LineRow = {
@@ -431,7 +435,9 @@ export async function makeDrafts(business: Business, month: string, actor: strin
 
 /**
  * The cron: from the billing day on, the month before gets its drafts, once.
- * A draft Renat discarded is not made again by itself.
+ * A draft Renat discarded is not made again by itself. A free invoice dated
+ * the 1st (Isolta's imported ones are free, 027) is not the month's own and
+ * does not stand in its way.
  */
 export async function planInvoiceDrafts(q: Querier, now = Date.now()): Promise<number> {
   let made = 0;
@@ -445,7 +451,7 @@ export async function planInvoiceDrafts(q: Querier, now = Date.now()): Promise<n
     const due = await q<{ id: string }>(
       `select r.id from invoice_receivers r
         where r.business_id = $1 and r.active and r.staff_id is not null
-          and not exists (select 1 from invoices i where i.receiver_id = r.id and i.period_from = $2::date and i.kind = 'invoice')`,
+          and not exists (select 1 from invoices i where i.receiver_id = r.id and i.period_from = $2::date and i.kind = 'invoice' and not i.free)`,
       [business.id, range.from],
     );
     for (const r of due) {
@@ -454,6 +460,34 @@ export async function planInvoiceDrafts(q: Querier, now = Date.now()): Promise<n
     }
   }
   return made;
+}
+
+export type MonthInvoices = { barbers: number; drafts: number; issued: number };
+
+/**
+ * «Рабочий стол», the month's card: how many barbers get a month's invoice
+ * (an active receiver with a barber, as «Сделать черновики» counts them) and
+ * how many of them have the one for `month` already, as a draft or issued
+ * (paid and credited count as issued). A free invoice is not the month's.
+ */
+export async function monthInvoices(q: Querier, businessId: string, month: string): Promise<MonthInvoices> {
+  const range = monthRange(month);
+  if (!range) return { barbers: 0, drafts: 0, issued: 0 };
+  const [r] = await q<MonthInvoices>(
+    `select count(*)::int as barbers,
+            count(*) filter (where m.status = 'draft')::int as drafts,
+            count(*) filter (where m.status is not null and m.status <> 'draft')::int as issued
+       from invoice_receivers r
+       left join lateral (
+         select i.status from invoices i
+          where i.receiver_id = r.id and i.period_from = $2::date and i.kind = 'invoice' and not i.free and i.status <> 'discarded'
+          order by case i.status when 'draft' then 0 when 'credited' then 2 else 1 end
+          limit 1
+       ) m on true
+      where r.business_id = $1 and r.active and r.staff_id is not null`,
+    [businessId, range.from],
+  );
+  return r ?? { barbers: 0, drafts: 0, issued: 0 };
 }
 
 /* ---------- changing a draft ---------- */

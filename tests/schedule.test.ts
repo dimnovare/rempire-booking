@@ -63,10 +63,13 @@ const cellOf = async (staffId: string, date: string) => (await grid(staffId, [da
 
 /**
  * The same day as online booking answers it: every free start of an hour's
- * cut with this barber, put together as the time he can be booked in.
+ * cut with this barber, put together as the time he can be booked in. On
+ * the smallest step (5 minutes), so a 45-minute cut on the salon's
+ * half-hour grid does not leave a piece's last quarter of an hour out.
  */
 async function bookingDay(staffId: string, date: string, now = NOW): Promise<[string, string][]> {
-  const a = await loadAvailability(query, { business: demo.business, serviceIds: [demo.services.clip], staffId, from: date, days: 1, now });
+  const business = { ...demo.business, settings: { ...demo.business.settings, slot_step_min: 5 } };
+  const a = await loadAvailability(query, { business, serviceIds: [demo.services.clip], staffId, from: date, days: 1, now });
   const dur = a.quotes[0].durationMin * 60_000;
   const spans: [number, number][] = [];
   for (const s of a.days[0]?.slots ?? []) {

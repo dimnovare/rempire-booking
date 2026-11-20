@@ -29,7 +29,7 @@ import { can, type Holder } from "../auth/rights";
 import type { Business } from "../availability";
 import { queueChangeLetter, queueConfirmation } from "../booking";
 import { query, withTx, type Querier } from "../db";
-import { sendPushSoon } from "../outbox";
+import { planNoShow, sendPushSoon } from "../outbox";
 import { pushVisitChange } from "../push";
 import { isLocale } from "../i18n";
 import { normalizePhone } from "../phone";
@@ -534,6 +534,8 @@ export async function adminSetStatus(business: Business, id: string, status: str
       [id, status, next],
     );
     await audit(tx, actor, id, "status", { status: cur.status, confirmed: cur.confirmed }, { status, confirmed: next });
+    // «Не пришёл» invites the client to book again; any other status takes a queued invitation back (src/lib/outbox.ts)
+    if (status !== cur.status) await planNoShow(tx, business, id, status);
     return true;
   });
 }

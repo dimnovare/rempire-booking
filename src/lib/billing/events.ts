@@ -2,7 +2,8 @@
  * What happened to an invoice, read back from what is already kept: the
  * audit log (issued, paid, the mark taken off, credited, sent again) and
  * the outbox (the letter with the PDF: to which address it went, or that
- * it did not go). Nothing is written here and no table was added for it.
+ * it did not go, and when it was first opened: notifications.opened_at,
+ * 025_mail_opened.sql). Nothing is written here.
  *
  * Three views of the same rows:
  *   invoiceEvents    one invoice («Показать действия по счёту»);
@@ -16,10 +17,14 @@ export type EventKind =
   | "issued"
   | "sent"
   | "mail_failed"
+  /** the receiver opened the letter (025_mail_opened.sql), the first time */
+  | "opened"
   | "paid"
   | "unpaid"
   | "credited"
   | "resend"
+  /** brought over from Isolta (027): one invoice's own events only, never the desk's or a receiver's journal */
+  | "imported"
   /** a receiver's own: made, changed, the rent set */
   | "receiver_new"
   | "receiver_edit"
@@ -44,7 +49,7 @@ export type BillingEvent = {
 };
 
 type AuditRow = { at: Date; action: string; after: Record<string, unknown> | null; id: string; number: string | null; kind: string; receiver: string };
-type MailRow = { at: Date; status: string; recipient: string; id: string; number: string | null; kind: string; receiver: string };
+type MailRow = { at: Date; opened_at: Date | null; status: string; recipient: string; id: string; number: string | null; kind: string; receiver: string };
 
 const ACTIONS = "('issue', 'paid', 'unpaid', 'credit', 'resend')";
 const KIND: Record<string, EventKind> = { issue: "issued", paid: "paid", unpaid: "unpaid", credit: "credited", resend: "resend" };
@@ -69,7 +74,11 @@ const fromMail = (r: MailRow): BillingEvent => ({
   cents: null,
 });
 
-const newestFirst = (a: BillingEvent, b: BillingEvent) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0);
+/** The letter's own event, and «opened» after it once Resend reported an open. */
+const mailEvents = (r: MailRow): BillingEvent[] =>
+  r.status === "sent" && r.opened_at ? [fromMail(r), { ...fromMail(r), at: iso(r.opened_at), kind: "opened" }] : [fromMail(r)];
+
+const newestFirst =(a: BillingEvent, b: BillingEvent) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0);
 
 /**
  * The events of the invoices that `where` picks (`i` is the invoice, `r` its
@@ -93,22 +102,37 @@ async function invoiceRows(q: Querier, where: string, params: unknown[], limit: 
       params,
     ),
     q<MailRow>(
-      `select coalesce(n.sent_at, n.created_at) as at, n.status, n.recipient, i.id, i.number, i.kind, coalesce(i.buyer->>'name', r.legal_name) as receiver
+      `select coalesce(n.sent_at, n.created_at) as at, n.opened_at, n.status, n.recipient, i.id, i.number, i.kind, coalesce(i.buyer->>'name', r.legal_name) as receiver
          from notifications n join invoices i on i.id::text = n.payload->>'invoiceId' join invoice_receivers r on r.id = i.receiver_id
         where n.kind = 'invoice' and n.status in ('sent', 'failed') and n.business_id = i.business_id and ${where}
         order by coalesce(n.sent_at, n.created_at) desc limit ${limit}`,
       params,
     ),
   ]);
-  return [...audit.map(fromAudit), ...born.map(fromAudit), ...mail.map(fromMail)].sort(newestFirst);
+  return [...audit.map(fromAudit), ...born.map(fromAudit), ...mail.flatMap(mailEvents)].sort(newestFirst);
 }
 
 const UUID = /^[0-9a-f-]{36}$/i;
 
-/** One invoice's events, the newest first. */
+/**
+ * One invoice's events, the newest first. An invoice imported from Isolta
+ * (027) starts with «imported», its import's audit row: what happened to it
+ * in Isolta was not exported. Only here, so 422 old invoices never fill the
+ * desk's latest events or a receiver's journal.
+ */
 export async function invoiceEvents(q: Querier, businessId: string, invoiceId: string): Promise<BillingEvent[]> {
   if (!UUID.test(invoiceId)) return [];
-  return invoiceRows(q, "i.business_id = $1 and i.id = $2", [businessId, invoiceId], 100);
+  const [events, imported] = await Promise.all([
+    invoiceRows(q, "i.business_id = $1 and i.id = $2", [businessId, invoiceId], 100),
+    q<AuditRow>(
+      `select a.at, a.action, a.after, i.id, i.number, i.kind, coalesce(i.buyer->>'name', r.legal_name) as receiver
+         from audit a join invoices i on i.id = a.entity_id join invoice_receivers r on r.id = i.receiver_id
+        where a.entity = 'invoice' and a.action = 'import' and i.business_id = $1 and i.id = $2
+        order by a.at desc limit 1`,
+      [businessId, invoiceId],
+    ),
+  ]);
+  return [...events, ...imported.map((r): BillingEvent => ({ ...fromAudit(r), kind: "imported" }))].sort(newestFirst);
 }
 
 /** The newest events across the business. */

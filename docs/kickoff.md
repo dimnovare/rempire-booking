@@ -50,6 +50,7 @@ moved to rempire.ee.
 | 33 | Staff rights | Dim, 19.11: **all of Altegio's switches**, on top of the roles. A switch is built for every right whose function we have; the others are listed as not applicable. |
 | 34 | Staging data | Dim, 19.11: until Renat's export arrives, staging is filled with **generated visits on the real shifts** (real barbers, services, prices and hours from `tools/altegio-structure.json`; fake clients). Altegio's «Выгрузить в Excel» does not download: it e-mails a link to the account's address (Renat's), so the real client base and visits come through Renat, at the latest for the move. |
 | 35 | Owner who also cuts | Dim, 19.11: the «Барбер / Мой день | Салон» switch goes («I do not like the placement or logic… for Renat who is barber and admin»). He chose **variant A** of three drawn on the design canvas: **«Мой день» is a tab of one app, not a mode.** See `docs/apps.md`, «One app for Renat». |
+| 36 | After the re-scan | Dim, decisions page round 10, 20.11 (`docs/port-check.md`). **Dashboards:** Altegio's «Визиты» and «Основные показатели», now. **Messages:** all three Altegio sends and we did not, now: the e-mail reminder 12 h before, the birthday greeting at 10:00, the invitation after a no-show; SMS through Renat's Messaggio. **Booking grid:** copy Altegio, 30 min «Оптимальный» from the barber's start, no minimum notice. **Reviews:** import the 51 and show ★ per barber on the booking page. **Switch:** before Altegio renews on 2 December. **Invoices:** «Платежи» hidden until Renat asks; «opened» mark built (Resend webhook); Isolta's issued invoices imported as history; numbering goes on at 423. **Renat's page:** questions replaced on the same link (set 3); what we leave out is listed there for him. |
 
 ### Round 1 answers (Dim, decisions page, 17.11.2026)
 
@@ -305,9 +306,17 @@ No secrets are written here. The full registry for the shop is
   four. Estonia has no sender-name registry; the name is checked by the
   provider (Messaggio 1–5 working days, Messente about 48 h). Altegio sells
   no SMS of its own: today's bill is Messaggio's.
-- **Our reminder** (`messageText` in `src/lib/outbox.ts`): Estonian and
-  English fit one part; Russian with the change link is two parts (Dim,
-  round 4: a short link, two parts).
+- **Our reminder** (`messageText` in `src/lib/outbox.ts`): since 20.11.2026
+  every SMS is English and one part (decision 30: «in English for everyone,
+  as today»); it drops the address, then the barber's name, if a text would
+  run over. E-mail and push stay in the visit's language. (Before: Russian
+  with the change link was two parts, Dim, round 4.)
+- **Messaggio** (`src/lib/sms.ts`): `POST msg.messaggio.com/api/v1/send` with
+  the header `Messaggio-Login`; env `MESSAGGIO_LOGIN`, `MESSAGGIO_SENDER`. On
+  staging, until `ALLOW_INDEXING=yes`, only numbers in `SMS_TEST_TO` get a
+  real SMS; the rest go to the log. Not yet checked against a live account:
+  whether the login is the only credential, the sender code for «REMPIRE»,
+  and the current error format.
 - **565 reminders a month cost** (Messaggio / Messente / BulkGate):
   - every text one part: €19 / €21 / €17;
   - 70 % Russian in two parts (960 parts): €33 / €36 / €28;

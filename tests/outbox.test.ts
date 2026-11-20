@@ -129,13 +129,13 @@ describe("outbox: sending", () => {
     expect(r.segments).toBeGreaterThanOrEqual(1);
     expect(sentSms).toHaveLength(1);
     expect(sentSms[0].to).toBe("+37255550301");
-    expect(sentSms[0].text).toContain("17.11 в 12:00");
+    expect(sentSms[0].text).toContain("17.11 at 12:00");
     expect(sentSms[0].text).toContain("Renat");
     // a second run sends nothing more
     expect((await runOutbox(query, at(TUE, "10:05"), DEV)).sent).toBe(0);
   });
 
-  it("writes the reminder in the visit's language", async () => {
+  it("writes the reminder in English, whatever the visit's language (decision 30)", async () => {
     await enqueue(query, {
       businessId: demo.business.id,
       channel: "sms",
@@ -146,7 +146,7 @@ describe("outbox: sending", () => {
       sendAt: NOW,
     });
     await runOutbox(query, NOW, DEV);
-    expect(sentSms[0].text).toBe("REMPIRE: meeldetuletus, Teie aeg 17.11 kell 12:00, Renat.");
+    expect(sentSms[0].text).toBe("REMPIRE: reminder of your visit on 17.11 at 12:00 with Renat.");
   });
 
   it("retries a failing send with backoff, then gives up", async () => {

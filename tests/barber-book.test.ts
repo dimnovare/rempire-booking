@@ -65,6 +65,19 @@ describe("free start times", () => {
     expect(startsIn(gaps, { durationMin: 90, bufferMin: 0, stepMin: 15, baseCents: 4000 })).toEqual([]);
   });
 
+  it("count the grid from his day's start, as the clients' times do (Altegio's «Оптимальный»)", () => {
+    const grid = at(DAY, "10:15");
+    const at30 = (from: string) =>
+      startsIn([{ from: at(DAY, from), to: at(DAY, "12:00"), extraCents: 0, grid }], { durationMin: 30, bufferMin: 0, stepMin: 30, baseCents: 4000 }).map((x) => hm(x.start));
+    expect(at30("10:15")).toEqual(["10:15", "10:45", "11:15"]);
+    // right after a visit that ended at 10:55: that start, then back on his grid
+    expect(at30("10:55")).toEqual(["10:55", "11:15"]);
+    // his free time: from the next point of his grid once the day is running; a quarter-hour piece still shows
+    const day = { windows: [[at(DAY, "10:15"), at(DAY, "19:00")]] as [number, number][], visits: [], blocks: [], special: [] };
+    expect(freeGaps(day, { now: at(DAY, "10:50"), stepMin: 30 }).map((g) => [hm(g.from), hm(g.to), hm(g.grid!)])).toEqual([["11:15", "19:00", "10:15"]]);
+    expect(freeGaps({ ...day, windows: [[at(DAY, "10:15"), at(DAY, "10:30")]] }, { now: at(DAY, "09:00"), stepMin: 30 })).toHaveLength(1);
+  });
+
   it("a gap priced in percent gives each start that percent of the visit's price, in money", () => {
     const gaps = [
       { from: at(DAY, "10:00"), to: at(DAY, "10:30"), extraCents: 0, extraPct: 0 },
@@ -92,7 +105,8 @@ describe("free start times", () => {
       if (!r.ok) throw new Error(r.code);
       return r.starts.find((s) => hm(s.start) === time)?.extraCents;
     };
-    expect(await extraAt([demo.services.clip], "18:15")).toBe(0);
+    // the salon's half-hour step (src/lib/settings.ts)
+    expect(await extraAt([demo.services.clip], "18:00")).toBe(0);
     expect(await extraAt([demo.services.clip], "18:30")).toBeUndefined(); // would run into the window
     expect(await extraAt([demo.services.clip], "19:00")).toBe(2000);
     // grey hair is 35 € with him; with the cut 75 €
@@ -137,12 +151,13 @@ describe("free start times", () => {
     if (!r.ok) throw new Error(r.code);
     const times = r.starts.map((s) => hm(s.start));
     expect(r.durationMin).toBe(45);
+    // every half hour (the salon's step), and right after his visit
     expect(times[0]).toBe("10:00");
-    expect(times).toContain("11:15");
+    expect(times).toContain("11:00");
     expect(times).not.toContain("11:30");
     expect(times).not.toContain("12:00");
     expect(times).toContain("12:45");
-    expect(times.at(-1)).toBe("18:15");
+    expect(times.at(-1)).toBe("18:00");
   });
 
   it("for a move the visit itself is not in the way; someone else's visit is «not found»", async () => {
@@ -157,7 +172,7 @@ describe("free start times", () => {
 
   it("nothing before now", async () => {
     const r = await barberFreeStarts(query, demo.business, demo.staff.renat, DAY, { serviceIds: [demo.services.clip] }, at(DAY, "14:05"));
-    expect(r.ok && hm(r.starts[0].start)).toBe("14:15");
+    expect(r.ok && hm(r.starts[0].start)).toBe("14:30");
   });
 });
 

@@ -12,7 +12,10 @@ import type { Querier } from "../db";
 
 /** The pages that can be starred, in the menu's order, and where each lives. */
 export const FAV_HREF = {
+  analytics: "/admin/analytics",
   records: "/admin/records",
+  reviews: "/admin/reviews",
+  visits: "/admin/dashboard",
   staff: "/admin/staff",
   schedule: "/admin/schedule",
   clients: "/admin/clients",

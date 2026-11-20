@@ -1,7 +1,8 @@
 /**
  * «Счета» in its own frame (the owner, 19.11.2026): the list's status
  * filter, search, period and sort, the «Сводка» sums, the desk's three
- * figures and the receivers report (src/lib/billing/list.ts, pure); a
+ * figures and its unpaid invoices, and the receivers report
+ * (src/lib/billing/list.ts, pure); the desk's month card (invoices.ts); a
  * line picked from the shop's products or the salon's services, or typed
  * (picker.ts); the draft's preview, which takes no number and changes
  * nothing (send.ts); another receiver for a free draft and a copy
@@ -12,11 +13,13 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
 import { getBusiness, type Business } from "@/lib/availability";
 import { invoiceCounts, invoiceEvents, latestEvents, receiverEvents } from "@/lib/billing/events";
+import { recordOpen } from "@/lib/mail-opened";
 import { exportInvoices, sectionRows } from "@/lib/billing/export";
-import { addDraftLine, copyInvoice, creditInvoice, invoiceById, invoiceLines, issueInvoice, openDraft, paidMoment, setDraftReceiver, setPaid, updateDraftLine } from "@/lib/billing/invoices";
+import { addDraftLine, copyInvoice, creditInvoice, invoiceById, invoiceLines, issueInvoice, monthInvoices, openDraft, paidMoment, setDraftReceiver, setPaid, updateDraftLine } from "@/lib/billing/invoices";
 import {
   DEFAULT_SORT,
   deskStats,
+  deskUnpaid,
   filterRows,
   listQueryOf,
   listStatus,
@@ -188,6 +191,18 @@ describe("«Рабочий стол»: the three figures", () => {
     // two invoices in October; one of them was credited, so it adds nothing
     expect(s.lastMonth).toEqual({ count: 2, netCents: 38800, grossCents: 38800 });
     expect(s.overdue).toEqual({ count: 1, netCents: 59640, grossCents: 59640 });
+  });
+
+  it("«Неоплаченные счета»: issued and not paid, the longest overdue first, and what all of them come to", () => {
+    const u = deskUnpaid(ROWS);
+    // the draft, the paid, the credited and the credit invoice are owed by nobody
+    expect(ids(u.rows)).toEqual(["o1", "i1"]);
+    expect(u.all).toEqual({ count: 2, netCents: 124640, grossCents: 140240 });
+    expect(u.overdue).toBe(1);
+    // a few shown, the sum stays everything's
+    expect(ids(deskUnpaid(ROWS, 1).rows)).toEqual(["o1"]);
+    expect(deskUnpaid(ROWS, 1).all.count).toBe(2);
+    expect(deskUnpaid([], 5)).toEqual({ rows: [], all: { count: 0, netCents: 0, grossCents: 0 }, overdue: 0 });
   });
 });
 
@@ -410,6 +425,35 @@ describe("«Посмотреть и отправить счёт»: the preview",
   });
 });
 
+describe("«Рабочий стол»: the month's card", () => {
+  withDb();
+
+  it("counts the barbers who get a month's invoice and which of them have October's: a draft, then issued; a free one is not it", async () => {
+    const [{ n }] = await query<{ n: number }>("select count(*)::int as n from invoice_receivers where business_id = $1 and active and staff_id is not null", [biz.id]);
+    expect(n).toBeGreaterThan(1);
+    const before = await monthInvoices(query, biz.id, "2026-10");
+    expect(before.barbers).toBe(n);
+    const v = (await receiverForStaff(query, demo.staff.valentin))!;
+    const month = await openDraft(biz, v.id, owner, NOW);
+    if (!month.ok) throw new Error("draft");
+    expect(month.made).toBe("month");
+    expect(await monthInvoices(query, biz.id, "2026-10")).toEqual({ barbers: n, drafts: before.drafts + 1, issued: before.issued });
+    await issueInvoice(biz, month.id, owner, NOW);
+    const issued = { barbers: n, drafts: before.drafts, issued: before.issued + 1 };
+    expect(await monthInvoices(query, biz.id, "2026-10")).toEqual(issued);
+    // pressed again for him: a free invoice beside the month's, which is not the month's
+    const free = await openDraft(biz, v.id, owner, NOW);
+    if (!free.ok) throw new Error("free");
+    expect(free.made).toBe("free");
+    expect(await monthInvoices(query, biz.id, "2026-10")).toEqual(issued);
+    // another month has nothing yet; a receiver switched off gets no month's invoice
+    expect(await monthInvoices(query, biz.id, "2026-09")).toMatchObject({ barbers: n });
+    await query("update invoice_receivers set active = false where id = $1", [v.id]);
+    expect((await monthInvoices(query, biz.id, "2026-10")).barbers).toBe(n - 1);
+    expect(await monthInvoices(query, biz.id, "October")).toEqual({ barbers: 0, drafts: 0, issued: 0 });
+  });
+});
+
 describe("a draft's receiver, and a copy", () => {
   withDb();
 
@@ -484,14 +528,18 @@ describe("what happened to an invoice: the audit log and the outbox", () => {
     if (!issued.ok) throw new Error("issue");
     // the letter was queued on the database's own clock
     await runOutbox(query, Date.now() + 1000, DEV);
+    // Resend reports that the receiver opened it (src/lib/mail-opened.ts)
+    await query("update notifications set provider = 'resend', provider_ref = 're_test_open' where kind = 'invoice' and payload->>'invoiceId' = $1", [d.id]);
+    expect(await recordOpen(query, "re_test_open", new Date(Date.now() + 2000))).toBe(true);
     await setPaid(biz, d.id, true, owner, NOW);
     const credit = await creditInvoice(biz, d.id, owner, NOW);
     if (!credit.ok) throw new Error("credit");
 
     const events = await invoiceEvents(query, biz.id, d.id);
-    expect(events.map((e) => e.kind).sort()).toEqual(["credited", "issued", "paid", "sent"]);
+    expect(events.map((e) => e.kind).sort()).toEqual(["credited", "issued", "opened", "paid", "sent"]);
     expect(events.every((e) => e.invoiceId === d.id && e.number === issued.number && !e.credit)).toBe(true);
     expect(events.find((e) => e.kind === "sent")).toMatchObject({ email: "delivered@resend.dev", receiver: v.legalName });
+    expect(events.find((e) => e.kind === "opened")).toMatchObject({ email: "delivered@resend.dev" });
     expect(events.find((e) => e.kind === "credited")!.other).toEqual({ id: credit.id, number: credit.number });
     // the newest first
     expect([...events].sort((a, b) => (a.at < b.at ? 1 : -1))).toEqual(events);
@@ -501,7 +549,7 @@ describe("what happened to an invoice: the audit log and the outbox", () => {
 
     // «Рабочий стол»: the business's newest, both invoices among them
     const latest = await latestEvents(query, biz.id, 12);
-    expect(latest.length).toBe(5);
+    expect(latest.length).toBe(6);
     expect(new Set(latest.map((e) => e.number))).toEqual(new Set([issued.number, credit.number]));
     expect(await latestEvents(query, "00000000-0000-4000-8000-000000000000")).toEqual([]);
     // another business's login reads nothing of it

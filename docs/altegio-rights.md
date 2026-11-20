@@ -479,6 +479,8 @@ Paths are under `src/`. «→» names the function.
 | Просматривать список записей (ours: the page «Записи»; no «Период», and «События» is not built) | `reports.bookings` | `lib/admin/records.ts` → `listRecords`, `exportRecords`, `cancelRecords`, `visitForSheet`; `app/admin/(app)/records/page.tsx` («Нет доступа» without it); `app/admin/(app)/layout.tsx` and `more/page.tsx` (the menus) |
 | ↳ Выгружать список записей в Excel | `reports.bookings.export` | `lib/admin/records.ts` → `exportRecords` (the route `app/admin/(app)/records/export/route.ts`; each export is an audit row) |
 | ↳ Показывать номера телефонов в записях | `reports.bookings.phones` | `lib/admin/records.ts` → `listRecords` (masked without it), `recordWhere` (digits then find nobody), `exportRecords` (no phone column) |
+| Просматривать отзывы (ours: the page «Отзывы»; the phone of a linked client only with `clients.list_contacts`) | `reports.reviews` | `lib/reviews.ts` → `listReviews`, `reviewsMay`; `app/admin/(app)/reviews/page.tsx` («Нет доступа» without it); `lib/admin/app-nav.ts` (the menus) |
+| ↳ Удалять отзывы (ours: «Скрыть» takes a review off the booking page and keeps it listed; «Показать» puts it back) | `reports.reviews.delete` | `lib/reviews.ts` → `setReviewHidden` (each change an audit row); `app/admin/(app)/reviews/actions.ts` → `setReviewHiddenAction` |
 | **Single** | | |
 | Совершать SMS рассылки клиентам (ours: a mass message by any channel, and a message by hand) | `single.bulk_sms` | `lib/admin/client-bulk.ts` → `queueMassMessage`; `app/admin/(app)/clients/actions.ts` → `massPreviewAction`, `sendMessageAction` |
 

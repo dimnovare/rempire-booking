@@ -76,17 +76,18 @@ describe("the client moves his own visit", () => {
     expect(await free("2026-11-18")).not.toContain(to);
   });
 
-  it("its own old time does not stand in its way: a quarter of an hour later works", async () => {
+  it("its own old time does not stand in its way: half an hour later works", async () => {
     const day = await free("2026-11-17");
-    // two free starts 15 minutes apart: the 60-minute visit overlaps itself
-    const from = day.find((s) => day.includes(s + 15 * 60_000))!;
+    // two free starts 30 minutes apart: the 60-minute visit overlaps itself
+    const later = (s: number) => s + 30 * 60_000;
+    const from = day.find((s) => day.includes(later(s)))!;
     expect(from).toBeTruthy();
     const token = await booked(from);
     // without the visit out of the way the booking page would not offer it
-    expect(await free("2026-11-17")).not.toContain(from + 15 * 60_000);
+    expect(await free("2026-11-17")).not.toContain(later(from));
     const offered = (await moveSlots(demo.business, token, 3, NOW))!.days.flatMap((d) => d.slots.map((s) => s.start));
-    expect(offered).toContain(from + 15 * 60_000);
-    expect(await moveByClient(demo.business, token, { startsAt: iso(from + 15 * 60_000) }, NOW)).toMatchObject({ ok: true, startsAt: iso(from + 15 * 60_000) });
+    expect(offered).toContain(later(from));
+    expect(await moveByClient(demo.business, token, { startsAt: iso(later(from)) }, NOW)).toMatchObject({ ok: true, startsAt: iso(later(from)) });
   });
 
   it("the time it already has is no move, and nothing is written", async () => {
@@ -97,7 +98,7 @@ describe("the client moves his own visit", () => {
     expect(rows).toHaveLength(0);
   });
 
-  it("a time another client has, a time too soon, the night: slot_taken, and the visit stays", async () => {
+  it("a time another client has, a time off the grid, the night, a time gone by: slot_taken, and the visit stays", async () => {
     const day = await free("2026-11-17");
     const mine = day[0];
     const theirs = day.find((s) => s >= mine + 60 * 60_000)!;

@@ -36,8 +36,10 @@ vi.mock("next/server", () => ({ connection: async () => {}, after: () => {} }));
 
 import * as account from "@/app/admin/(app)/account/actions";
 import * as cal from "@/app/admin/(app)/actions";
+import * as analytics from "@/app/admin/(app)/analytics/actions";
 import * as clients from "@/app/admin/(app)/clients/actions";
 import { cardFieldsOf } from "@/app/admin/(app)/clients/card-fields";
+import * as dash from "@/app/admin/(app)/dashboard/actions";
 import { POST as exportRoute } from "@/app/admin/(app)/clients/export/route";
 import { GET as fileRoute } from "@/app/admin/(app)/clients/[id]/files/[fileId]/route";
 import { POST as uploadRoute } from "@/app/admin/(app)/clients/[id]/files/route";
@@ -45,6 +47,7 @@ import * as frame from "@/app/admin/(app)/frame-actions";
 import * as invoices from "@/app/admin/(app)/invoices/actions";
 import * as records from "@/app/admin/(app)/records/actions";
 import { POST as recordsExportRoute } from "@/app/admin/(app)/records/export/route";
+import * as reviewsActs from "@/app/admin/(app)/reviews/actions";
 import * as requests from "@/app/admin/(app)/requests/actions";
 import * as schedule from "@/app/admin/(app)/schedule/actions";
 import * as services from "@/app/admin/(app)/services/actions";
@@ -805,6 +808,37 @@ describe("a section whose group switch is off", () => {
 });
 
 /* ------------------------------------------------------------------ 10. Отчёты: «Записи»; and «График работы» */
+
+describe("Отчёты: «Отзывы»", () => {
+  /** One review of Valentin's, fake. */
+  const review = async (c: Ctx) =>
+    (await query<{ id: string }>("insert into reviews (business_id, rating, body, author_name, staff_id, created_at) values ($1, 5, 'Хорошо', 'Тест', $2, now()) returning id", [c.demo.business.id, c.val]))[0].id;
+  const EVER = { from: "2020-01-01", to: "2099-12-31" };
+
+  both("reports.reviews", "desk", async (c) => {
+    await review(c);
+    return reviewsActs.listReviewsAction(EVER);
+  }, (r) => r.total === 1);
+  both("reports.reviews", "desk", async (c) => reviewsActs.setReviewHiddenAction(await review(c), true), (r) => r.ok, { also: ["reports.reviews.delete"] });
+  both("reports.reviews.delete", "desk", async (c) => reviewsActs.setReviewHiddenAction(await review(c), true), (r) => r.ok);
+
+  it("reports.reviews.delete: without it the review stays on the booking page", async () => {
+    const c = await fresh("desk");
+    await grant(c.me, "reports.reviews.delete", false);
+    const id = await review(c);
+    expect(await reviewsActs.setReviewHiddenAction(id, true)).toEqual({ ok: false, code: "forbidden" });
+    expect((await query<{ hidden: boolean }>("select hidden from reviews where id = $1", [id]))[0].hidden).toBe(false);
+  });
+});
+
+describe("Отчёты: «Основные показатели» and «Визиты»", () => {
+  both("reports.dashboard", "desk", () => analytics.kpiClientsAction({ kind: "clients" }), (r) => r !== null);
+  // Anna's visit tomorrow: ahead in the left panel, made in the feed, open in the visit window
+  both("reports.visits", "desk", () => dash.listVisitsAction({ when: "upcoming" }), (r, c) => r.upcoming === 1 && r.rows[0]?.id === c.visit);
+  both("reports.visits", "desk", () => dash.feedAction({ filter: "all" }), (r, c) => r.entries.some((e) => e.id === c.visit));
+  both("reports.visits", "desk", (c) => dash.openVisitAction(c.visit), (r) => r !== null);
+  both("reports.visits.phones", "desk", async () => (await dash.listVisitsAction({})).rows[0]?.clientPhone, (phone) => phone === PHONE);
+});
 
 describe("Отчёты: «Записи»", () => {
   /** Every visit there is, whenever it is. */

@@ -85,6 +85,14 @@ export function StatusTag({ A, status }: { A: Copy; status: string }) {
   return <span className={`inv-st st-${status}`}>{statusWord(A, status)}</span>;
 }
 
+/**
+ * «Платежи» on a sent invoice (mark it paid, take the mark off). Dim,
+ * decisions round 10 (20.11.2026): hidden until Renat asks; in six years
+ * not one payment was recorded in Isolta. The action and the «paid» status
+ * stay, so switching it back on is this one line.
+ */
+export const PAYMENTS_SHOWN = false;
+
 /* ---------- an event's words ---------- */
 
 export function eventText(A: Copy, e: BillingEvent): string {
@@ -97,6 +105,8 @@ export function eventText(A: Copy, e: BillingEvent): string {
       return E.sent(n, e.email ?? "");
     case "mail_failed":
       return E.mail_failed(n, e.email ?? "");
+    case "opened":
+      return E.opened(n, e.email ?? "");
     case "paid":
       return E.paid(n);
     case "unpaid":
@@ -105,6 +115,8 @@ export function eventText(A: Copy, e: BillingEvent): string {
       return E.credited(n, e.other?.number ?? "");
     case "resend":
       return E.resend(n);
+    case "imported":
+      return E.imported(n);
     case "receiver_new":
       return E.receiver_new;
     case "receiver_edit":
@@ -167,9 +179,11 @@ export const SortArrow = ({ size = 16 }: I) => (
   </svg>
 );
 
-export const ToolIcon = ({ name, size = 20 }: { name: "file" | "sheet" | "note" | "copy" | "bin" | "pdf" | "print" | "mail" | "pay" | "credit" | "eye" | "pencil" | "plus"; size?: number }) => {
+export const ToolIcon = ({ name, size = 20 }: { name: "file" | "fileAdd" | "personAdd" | "sheet" | "note" | "copy" | "bin" | "pdf" | "print" | "mail" | "pay" | "credit" | "eye" | "pencil" | "plus"; size?: number }) => {
   const d: Record<string, string> = {
     file: "M6 3h8l4 4v14H6zM14 3v4h4",
+    fileAdd: "M6 3h8l4 4v14H6zM14 3v4h4M12 10.500v6M9 13.500h6",
+    personAdd: "M9.500 11a3.500 3.500 0 100-7 3.500 3.500 0 000 7zM3 20c0-3.600 2.900-6 6.500-6s6.500 2.400 6.500 6M19 8v6M16 11h6",
     sheet: "M4 5h16v14H4zM4 10h16M4 15h16M10 5v14",
     note: "M5 4h14v12l-4 4H5zM15 20v-4h4M8 9h8M8 13h5",
     copy: "M9 9h11v11H9zM5 15H4V4h11v1",

@@ -20,6 +20,9 @@ export function offFor(user: Holder): string[] {
     // «График работы» goes with the section «Сотрудники», «Записи» with its own right
     ...(canGroup(user, "staff") ? [] : ["schedule"]),
     ...(can(user, "reports.bookings") ? [] : ["records"]),
+    ...(can(user, "reports.reviews") ? [] : ["reviews"]),
+    ...(can(user, "reports.dashboard") ? [] : ["analytics"]),
+    ...(can(user, "reports.visits") ? [] : ["visits"]),
     ...(can(user, "visit.sell") && can(user, "visit.sell.create") ? [] : ["sale"]),
   ];
 }
@@ -66,12 +69,12 @@ export function litTab(path: string, bar: readonly BarKey[]): BarKey | null {
 }
 
 export type MineRow = "time" | "sell" | "money";
-export type SalonRow = "staff" | "schedule" | "services" | "catalogue" | "records" | "invoices" | "sale";
+export type SalonRow = "staff" | "schedule" | "services" | "catalogue" | "analytics" | "records" | "reviews" | "visits" | "invoices" | "sale";
 export type AccountRow = "account" | "notify" | "language" | "logout";
 export type MoreRows = { mine: MineRow[]; salon: SalonRow[]; account: AccountRow[] };
 
 /** The salon's rows in the order of the sections (sections.tsx), «Продажа товара» last. */
-const SALON: readonly SalonRow[] = ["staff", "schedule", "services", "catalogue", "records", "invoices", "sale"];
+const SALON: readonly SalonRow[] = ["staff", "schedule", "services", "catalogue", "analytics", "records", "reviews", "visits", "invoices", "sale"];
 
 /**
  * «Ещё», in three groups:

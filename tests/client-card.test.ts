@@ -327,8 +327,8 @@ describe("the notification switches in the outbox", () => {
   };
   const statuses = async (kind: string) => (await outbox(kind)).map((r) => r.status);
 
-  it("the kinds are the four we send a client by ourselves", () => {
-    expect([...CLIENT_KINDS]).toEqual(["confirmation", "reminder", "moved", "cancelled"]);
+  it("the kinds are the six we send a client by ourselves", () => {
+    expect([...CLIENT_KINDS]).toEqual(["confirmation", "reminder", "moved", "cancelled", "birthday", "no_show"]);
   });
 
   it("the SMS reminder: not queued while «reminder» is off; queued once it is on; cancelled when it goes off again", async () => {

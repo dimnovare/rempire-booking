@@ -11,10 +11,15 @@
  * others:
  *
  *   confirmation  the letter after a booking (src/lib/booking.ts)
- *   reminder      before a visit: the SMS («reminder») and the notification
- *                 on his phone («client_reminder»), src/lib/outbox.ts
+ *   reminder      before a visit: the SMS («reminder»), the notification
+ *                 on his phone («client_reminder») and the letter
+ *                 («reminder_email»), src/lib/outbox.ts
  *   moved         the letter when the salon moves his visit
  *   cancelled     the letter when the salon cancels it
+ *   birthday      the greeting on his birthday («birthday»): letter and
+ *                 notification, the SMS only when neither went
+ *   no_show       «Приглашение недошедших» («no_show»): when his visit is
+ *                 marked «Не пришёл», by every channel he accepts
  *
  * A message written by hand on his card («manual») has no switch: somebody
  * chose to send it. It still goes only by a channel he accepts.
@@ -30,7 +35,7 @@
  */
 import type { Querier } from "./db";
 
-export const CLIENT_KINDS = ["confirmation", "reminder", "moved", "cancelled"] as const;
+export const CLIENT_KINDS = ["confirmation", "reminder", "moved", "cancelled", "birthday", "no_show"] as const;
 export type ClientKind = (typeof CLIENT_KINDS)[number];
 export const isClientKind = (k: unknown): k is ClientKind => typeof k === "string" && (CLIENT_KINDS as readonly string[]).includes(k);
 
@@ -44,8 +49,11 @@ export const SWITCH_OF: Record<string, ClientKind | undefined> = {
   confirmation: "confirmation",
   reminder: "reminder",
   client_reminder: "reminder",
+  reminder_email: "reminder",
   moved: "moved",
   cancelled: "cancelled",
+  birthday: "birthday",
+  no_show: "no_show",
 };
 
 /**
@@ -60,6 +68,12 @@ export function takesSql(c: string, channel: ClientChannel, kind: ClientKind | n
 /** The reverse, for cancelling what is queued already. */
 export function refusesSql(c: string, channel: ClientChannel, kind: ClientKind): string {
   return `(${c}.${OPT_OUT[channel]} or '${kind}' = any(${c}.notify_off))`;
+}
+
+/** Does this client take this kind by this channel? A client who is not there takes nothing. */
+export async function clientTakes(q: Querier, clientId: string, channel: ClientChannel, kind: ClientKind): Promise<boolean> {
+  const [r] = await q<{ ok: boolean }>(`select ${takesSql("c", channel, kind)} as ok from clients c where c.id = $1`, [clientId]);
+  return r?.ok === true;
 }
 
 /** Does the client of this visit take this kind by this channel? A visit that is not there takes nothing. */
