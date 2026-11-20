@@ -33,7 +33,7 @@ import {
 import { requestWords, weekWords } from "@/lib/barber/request-words";
 import { getBusiness, type Business } from "@/lib/availability";
 import { closeDb, query } from "@/lib/db";
-import { saveSubscription } from "@/lib/push";
+import { saveSubscription, setNotify } from "@/lib/push";
 import { pushText } from "@/lib/push-kinds";
 import { localParts, startOfDay, zonedToUtc } from "@/lib/tz";
 import { freshDemo, type Demo } from "./helpers";
@@ -77,6 +77,8 @@ const offOf = async (requestId: string) => (await reqRow(requestId)).time_off_id
 beforeEach(async () => {
   demo = await freshDemo();
   owner = await login("owner@example.test", "owner", null);
+  // off from the start (Renat, 18.11); these tests are about the push when it is on
+  await setNotify(query, demo.business.id, owner, "own_request", true);
   // as a barber's login starts: time at once, prices ask
   val = { userId: await login("valentin@example.test", "staff", "valentin"), staffId: demo.staff.valentin, staffName: "Valentin", viewing: false, time: "now", price: "ask" };
   jev = { userId: await login("jevgeni@example.test", "staff", "jevgeni"), staffId: demo.staff.jevgeni, staffName: "Jevgeni", viewing: false, time: "now", price: "ask" };

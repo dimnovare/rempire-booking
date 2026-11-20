@@ -88,9 +88,10 @@ describe("push: who gets what", () => {
     };
     const r = await book(query, demo.business, input, { source: "online" });
     expect(r.ok).toBe(true);
-    expect(who(await pushRows())).toEqual(["valentin:visit_new"]);
+    // on from the start (Renat, 18.11)
+    expect(who(await pushRows())).toEqual(["owner:own_online", "valentin:visit_new"]);
 
-    await setNotify(query, demo.business.id, ids.owner, "own_online", true);
+    await setNotify(query, demo.business.id, ids.owner, "own_online", false);
     await book(query, demo.business, { ...input, startsAt: new Date(at(DAY, "13:00")).toISOString(), phone: "+372 5555 0502", idempotencyKey: `push-book-${Math.random()}` }, { source: "online" });
     expect(who(await pushRows())).toEqual(["owner:own_online", "valentin:visit_new", "valentin:visit_new"]);
   });
@@ -104,9 +105,11 @@ describe("push: who gets what", () => {
     expect(who(await pushRows())).toEqual(["jevgeni:visit_cancelled", "jevgeni:visit_moved", "valentin:visit_moved", "valentin:visit_new"]);
   });
 
-  it("a barber's own emergency cancel: Renat gets it with the reason, the barber does not get his own", async () => {
+  it("a barber's own emergency cancel: Renat, once he switches it on, gets it with the reason; the barber does not get his own", async () => {
     const r = await adminCreateVisit(demo.business, visit("valentin", "12:00"), ids.owner);
     if (!r.ok) throw new Error(r.code);
+    // off from the start (Renat, 18.11)
+    await setNotify(query, demo.business.id, ids.owner, "own_barber", true);
     await query("delete from notifications");
     expect(await adminCancelVisit(demo.business, r.id, ids.valentin, { onlyStaffId: demo.staff.valentin, reason: "заболел" })).toBe("cancelled");
     const rows = await pushRows();
@@ -144,6 +147,7 @@ describe("push: who gets what", () => {
       idempotencyKey: `push-book-${Math.random()}`,
     };
     expect((await book(query, demo.business, input, { source: "online" })).ok).toBe(true);
+    // once, as the barber, though «Новая запись онлайн» is on too
     expect(who(await pushRows())).toEqual(["owner:visit_new"]);
     expect(kindsFor("owner", true)).toEqual(["visit_new", "visit_moved", "visit_cancelled", "day_plan", ...OWNER_KINDS]);
     expect(kindsFor("owner")).toEqual(OWNER_KINDS);
@@ -191,12 +195,13 @@ describe("push: the words", () => {
     expect(pushText("own_plan", { date: DAY, tz: TZ, count: 5, perStaff: [{ name: "Renat", n: 3 }, { name: "Valentin", n: 2 }] }, "ru")?.body).toBe("5 записей: Renat 3, Valentin 2");
   });
 
-  it("defaults until Renat answers question 4: requests and a barber's cancel on, the rest off", () => {
-    expect(wants({}, "own_barber")).toBe(true);
-    expect(wants({}, "own_request")).toBe(true);
-    expect(wants({}, "own_online")).toBe(false);
-    expect(wants({}, "own_client")).toBe(false);
+  it("defaults as Renat answered question 4 (18.11): online bookings and a client's move or cancel on, the rest off", () => {
+    expect(wants({}, "own_online")).toBe(true);
+    expect(wants({}, "own_client")).toBe(true);
+    expect(wants({}, "own_barber")).toBe(false);
+    expect(wants({}, "own_request")).toBe(false);
     expect(wants({}, "own_plan")).toBe(false);
+    expect(wants({ own_barber: true }, "own_barber")).toBe(true);
     expect(wants({ own_plan: true }, "own_plan")).toBe(true);
     expect(Object.entries(DEFAULT_ON).filter(([k]) => !k.startsWith("own_")).every(([, on]) => on)).toBe(true);
   });

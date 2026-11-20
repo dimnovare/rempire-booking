@@ -18,9 +18,10 @@ export const OWNER_KINDS = ["own_online", "own_client", "own_barber", "own_reque
 export type PushKind = (typeof STAFF_KINDS)[number] | (typeof OWNER_KINDS)[number];
 
 /**
- * On until switched off, or off until switched on. Renat's: until he answers
- * question 4 («Уведомления тебе»), the barbers' requests and a barber's
- * cancel or move are on, the rest off (Phase B brief, 17.11.2026).
+ * On until switched off, or off until switched on. Renat's, as he answered
+ * question 4 «Уведомления тебе» (18.11.2026): a new online booking and a
+ * client's move or cancel on; a barber's cancel, the barbers' requests and
+ * the evening plan off. Each stays a switch in his settings.
  */
 export const DEFAULT_ON: Record<PushKind, boolean> = {
   visit_new: true,
@@ -28,10 +29,10 @@ export const DEFAULT_ON: Record<PushKind, boolean> = {
   visit_cancelled: true,
   day_plan: true,
   request_answer: true,
-  own_online: false,
-  own_client: false,
-  own_barber: true,
-  own_request: true,
+  own_online: true,
+  own_client: true,
+  own_barber: false,
+  own_request: false,
   own_plan: false,
 };
 

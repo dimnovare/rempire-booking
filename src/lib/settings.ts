@@ -38,9 +38,9 @@ export type BusinessSettings = {
    */
   /**
    * Phase C (docs/phase-c.md). The barber's share of a client sale, in
-   * basis points (1700 = 17 %), and what it is taken from (Renat Q1; until
-   * he answers, Dim's pick: the price paid without VAT). The day of the
-   * month the drafts for the month before are made.
+   * basis points (1700 = 17 %), and what it is taken from: Renat, 18.11,
+   * the regular price with VAT, even after a discount («gross-list»). The
+   * day of the month the drafts for the month before are made.
    */
   commission_bp: number;
   commission_basis: Basis;
@@ -77,7 +77,7 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   birthday_on: true,
   no_show_on: true,
   commission_bp: 1700,
-  commission_basis: "net-paid",
+  commission_basis: "gross-list",
   billing_day: 1,
   client_reminder: "both",
 };

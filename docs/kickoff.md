@@ -24,13 +24,13 @@ moved to rempire.ee.
 | 7 | Invoices | **Our own invoicing replaces Isolta**, with no integration. It needs: rent of the barber's chair, items, a choice of who the invoice is for, CRUD for invoice receivers, then print or e-mail. The reason is cost; it pays for itself over time. |
 | 8 | SMS | Renat uses **Messaggio** now. It must be cheap, simple and reliable. |
 | 9 | Reference | Altegio's logic and data, and Fresha's simplicity. Dim has Altegio access since 19.11. The look: see 23. |
-| 10 | Universal? | **Open.** Renat's questions page, question 5: REMPIRE only, or any service later (tattoo, a massage salon, others). |
+| 10 | Universal? | **Any service** (Renat, Q&A page, 18.11): tattoo, a massage salon and others, not only barbers. Nothing changes now: words stay REMPIRE's; the code keeps one business per row (`business_id`), so a second one can be added later. |
 | 11 | Hosting plan | **Open.** Vercel Pro might stay because two services already run there. Think it through. |
 | 12 | Copying | Altegio's and Fresha's features and flows, logic and simplicity. Their logo, name and texts, never. Altegio's look for the client booking: yes, see 23. |
 | 13 | Barber companies | Each barber has an FIE or OÜ. VAT applies or not depending on the invoice receiver, so each receiver needs its own setup. |
 | 14 | Languages | RU, ET, EN. |
 | 15 | Deposits / prepayment | **None for now** (Dim, 17.11): REMPIRE takes none today, so neither do we. |
-| 16 | 17 % commission | **Open.** Renat's questions page, question 1: with or without VAT, and after a discount. A barber buying for himself pays the purchase price, no commission. |
+| 16 | 17 % commission | **From the regular price with VAT** (Renat, Q&A page, 18.11: «От цены с НДС», «От обычной цены», «17 % при продаже от конечной цены с НДС»): basis `gross-list`, also when the product had a discount. The default and staging (migration 029). A barber buying for himself pays the purchase price with VAT, no commission. |
 | 17 | Confirmations | **None** (Dim, 17.11): a booking is confirmed at once. Hours a barber opens are his promise to work them. He can still cancel a visit in an emergency. |
 | 18 | Altegio data | **Move everything we can** (Dim, 17.11): clients and phone numbers, visit history, reviews. |
 | 19 | Invoice format | **PDF by e-mail** is enough (Dim, 17.11). |
@@ -51,6 +51,7 @@ moved to rempire.ee.
 | 34 | Staging data | Dim, 19.11: until Renat's export arrives, staging is filled with **generated visits on the real shifts** (real barbers, services, prices and hours from `tools/altegio-structure.json`; fake clients). Altegio's «Выгрузить в Excel» does not download: it e-mails a link to the account's address (Renat's), so the real client base and visits come through Renat, at the latest for the move. |
 | 35 | Owner who also cuts | Dim, 19.11: the «Барбер / Мой день | Салон» switch goes («I do not like the placement or logic… for Renat who is barber and admin»). He chose **variant A** of three drawn on the design canvas: **«Мой день» is a tab of one app, not a mode.** See `docs/apps.md`, «One app for Renat». |
 | 36 | After the re-scan | Dim, decisions page round 10, 20.11 (`docs/port-check.md`). **Dashboards:** Altegio's «Визиты» and «Основные показатели», now. **Messages:** all three Altegio sends and we did not, now: the e-mail reminder 12 h before, the birthday greeting at 10:00, the invitation after a no-show; SMS through Renat's Messaggio. **Booking grid:** copy Altegio, 30 min «Оптимальный» from the barber's start, no minimum notice. **Reviews:** import the 51 and show ★ per barber on the booking page. **Switch:** before Altegio renews on 2 December. **Invoices:** «Платежи» hidden until Renat asks; «opened» mark built (Resend webhook); Isolta's issued invoices imported as history; numbering goes on at 423. **Renat's page:** questions replaced on the same link (set 3); what we leave out is listed there for him. |
+| 37 | Renat's answers, set 1 | Renat, Q&A page, 18.11 (read 20.11). **Barbers change themselves** (no request to Renat): their schedule, vacation and days off, the prices and the times of their services. **Barber notifications:** in the barber app (push), no Telegram bot. **Renat's pushes from the start:** a new online booking and a client's move or cancel; a barber's cancel, requests and the evening plan are off, each a switch in his settings. **QR plaque:** yes, one for the salon, at the reception (to build). **E-mails:** Renat tests them first himself. **Why he leaves Altegio:** a Russian service that might be shut down, slow support, rare outages, too much he never uses, prices that keep changing. |
 
 ### Round 1 answers (Dim, decisions page, 17.11.2026)
 
@@ -347,12 +348,12 @@ No secrets are written here. The full registry for the shop is
 
 **For Renat** (version 2, 17.11.2026: `docs/questions-for-renat.ru.md`; he answers on the questions page, `/ru/q/<token>`, which saves as he types):
 
-- The 17 % basis.
-- What a barber may change himself.
-- Telegram notifications for barbers through a new bot.
+- ~~The 17 % basis.~~ Answered 18.11 (decision 16).
+- ~~What a barber may change himself.~~ Answered 18.11: all four (decision 37).
+- ~~Telegram notifications for barbers through a new bot.~~ Answered 18.11: in the barber app.
 - Monthly costs today: Altegio, Messaggio, Isolta.
-- REMPIRE only, or any service.
-- Anything else.
+- ~~REMPIRE only, or any service.~~ Answered 18.11: any service (decision 10).
+- ~~Anything else.~~ Answered 18.11 (decision 37).
 
 **From Altegio and Isolta, once Dim has access:** the cancellation rule,
 services, prices and hours; the invoicing company, VAT, chair rent, the

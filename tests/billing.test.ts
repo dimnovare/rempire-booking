@@ -51,6 +51,9 @@ const pomade = FAKE_PRODUCTS.find((p) => p.purchaseCents === null)!;
 
 beforeEach(async () => {
   demo = await freshDemo();
+  // the amounts below are on the price without VAT, the switch's «net-paid»; Renat's own
+  // basis (the regular price with VAT, 18.11) is the default, tested in billing-settings.test.ts
+  await query(`update businesses set settings = settings || '{"commission_basis": "net-paid"}'::jsonb where id = $1`, [demo.business.id]);
   biz = (await getBusiness(query, "rempire"))!;
   const [u] = await query<{ id: string }>("insert into users (business_id, email, role) values ($1, 'owner@example.test', 'owner') returning id", [demo.business.id]);
   owner = u.id;

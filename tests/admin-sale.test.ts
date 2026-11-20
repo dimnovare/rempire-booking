@@ -47,12 +47,12 @@ const row = async (ref: string) => {
 };
 
 describe("the admin's sale is the barber's sale", () => {
-  it("writes the same row the barber's app writes: the shop price, 17 % of the price without VAT, waiting for the shop", async () => {
+  it("writes the same row the barber's app writes: the shop price, 17 % of the regular price with VAT (Renat, 18.11), waiting for the shop", async () => {
     const mine = await recordSale(biz, demo.staff.valentin, null, { ref: newRef(), productId: paste.productId, variant: paste.variant, mode: "client", qty: 2 }, NOW, LIVE);
     const desk = await adminSell(biz, owner, input({ qty: 2 }), NOW, LIVE);
     if (!mine.ok || !desk.ok) throw new Error("not sold");
     // 2 × 24,90 €; the barber's share is 17 % of 40,16 € (the price without 24 % VAT)
-    expect(desk.sale).toMatchObject({ staffId: demo.staff.valentin, mode: "client", qty: 2, unitCents: 2490, listCents: 2490, totalCents: 4980, commissionCents: 683, status: "done", syncStatus: "queued" });
+    expect(desk.sale).toMatchObject({ staffId: demo.staff.valentin, mode: "client", qty: 2, unitCents: 2490, listCents: 2490, totalCents: 4980, commissionCents: 847, status: "done", syncStatus: "queued" });
     expect(await row(desk.sale.ref)).toEqual(await row(mine.sale.ref));
     // one table, one kind of row: who typed it is the only difference
     const [made] = await query<{ created_by: string | null; client_id: string | null }>("select created_by, client_id from product_sales where ref = $1", [desk.sale.ref]);
@@ -67,7 +67,7 @@ describe("the admin's sale is the barber's sale", () => {
     expect((await listSales(query, demo.staff.valentin, ...day)).map((s) => s.ref)).toEqual([r.sale.ref]);
     expect(await listSales(query, demo.staff.slava, ...day)).toEqual([]);
     const st = await monthStatement(query, biz, demo.staff.valentin, "2026-10");
-    expect(st).toMatchObject({ clientCount: 1, clientCents: 2490, commissionCents: 341 });
+    expect(st).toMatchObject({ clientCount: 1, clientCents: 2490, commissionCents: 423 });
     // the barber's own undo, inside his five minutes
     expect(await undoSale(demo.staff.valentin, r.sale.ref, null, NOW + 2 * MIN)).toEqual({ ok: true });
     expect((await listSales(query, demo.staff.valentin, ...day))[0]).toMatchObject({ status: "undone", syncStatus: "none" });
@@ -90,7 +90,7 @@ describe("the admin's sale is the barber's sale", () => {
 
   it("is a test sale while SHOP_SALES is off, as the barber's: counted, never sent", async () => {
     const r = await adminSell(biz, owner, input(), NOW, TEST_RUN);
-    expect(r).toMatchObject({ ok: true, sale: { syncStatus: "test", commissionCents: 341 } });
+    expect(r).toMatchObject({ ok: true, sale: { syncStatus: "test", commissionCents: 423 } });
     let calls = 0;
     const send = async () => {
       calls++;

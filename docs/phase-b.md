@@ -38,9 +38,9 @@ a day off. Renat sees all of it in the admin.
 | Client notes | **One shared note** per client; all barbers and Renat see it |
 | Barber books visits | **Yes**, in his own column |
 | What he changes without Renat | **Ask Renat** (his question 2 on the questions page). Until he answers: time applies at once and prices wait for Renat's OK, as a switch |
-| Barber notifications | **Push now**; Telegram only if Renat wants it (his question 3) |
+| Barber notifications | **Push**, in the barber app (Renat, question 3, 18.11: «В приложении барбера»); no Telegram bot |
 | Day's plan | **20:00 the evening before** |
-| Renat's notifications | **Ask Renat** (question 4 «Уведомления тебе», added 17.11). Each kind is a **toggle in Renat's settings** (Dim's idea); his answer sets the defaults. Until then: requests and barber cancels on |
+| Renat's notifications | Each kind is a **toggle in Renat's settings** (Dim's idea). Renat's answer (question 4, 18.11) sets the defaults: **a new online booking and a client's move or cancel on**; a barber's cancel, requests and the evening plan off. With a column of his own he hears of a visit in it once, as its barber |
 
 ## Milestones
 

@@ -144,24 +144,39 @@ export type PushAudience = { staffId: string } | "owners";
  * have a live phone and want this kind; never the one who made the change.
  * In the caller's transaction, so the push exists only if the change does.
  */
-export async function queuePush(
-  q: Querier,
-  m: { businessId: string; appointmentId?: string | null; kind: PushKind; to: PushAudience; exceptUserId?: string | null; payload: Record<string, unknown>; now?: number },
-): Promise<number> {
+export async function queuePush(q: Querier, m: PushMessage): Promise<number> {
+  return (await queuePushTo(q, m)).length;
+}
+
+type PushMessage = {
+  businessId: string;
+  appointmentId?: string | null;
+  kind: PushKind;
+  to: PushAudience;
+  exceptUserId?: string | null;
+  /** logins already told of this change by another kind (Renat's own column) */
+  exceptUserIds?: string[];
+  payload: Record<string, unknown>;
+  now?: number;
+};
+
+/** queuePush, giving the logins it queued for. */
+async function queuePushTo(q: Querier, m: PushMessage): Promise<string[]> {
   const staffId = m.to === "owners" ? null : m.to.staffId;
-  const rows = await q<{ id: string }>(
+  const rows = await q<{ id: string; user_id: string }>(
     `insert into notifications (business_id, appointment_id, channel, kind, recipient, user_id, locale, payload, send_at)
      select $1, $2, 'push', $3, u.id::text, u.id, u.locale, $4::jsonb, $5
        from users u
       where u.business_id = $1 and u.active
         and (case when $6::uuid is null then u.role in ('owner', 'admin') else u.staff_id = $6::uuid end)
         and u.id::text is distinct from $7
+        and not (u.id = any($9::uuid[]))
         and coalesce((u.notify ->> $3)::boolean, $8)
         and exists (select 1 from push_subscriptions p where p.user_id = u.id and p.retired_at is null)
-     returning id`,
-    [m.businessId, m.appointmentId ?? null, m.kind, JSON.stringify(m.payload), new Date(m.now ?? Date.now()), staffId, m.exceptUserId ?? null, DEFAULT_ON[m.kind]],
+     returning id, user_id`,
+    [m.businessId, m.appointmentId ?? null, m.kind, JSON.stringify(m.payload), new Date(m.now ?? Date.now()), staffId, m.exceptUserId ?? null, DEFAULT_ON[m.kind], m.exceptUserIds ?? []],
   );
-  return rows.length;
+  return rows.map((r) => r.user_id);
 }
 
 /**
@@ -207,11 +222,13 @@ export async function pushVisitChange(
     ...o.extra,
     ...(o.owners?.action ? { action: o.owners.action } : {}),
   };
-  let n = 0;
+  // Renat with a column of his own hears of a visit in it once: as the barber
+  const told: string[] = [];
   for (const staffId of [...new Set(o.staffIds)]) {
-    n += await queuePush(q, { businessId: o.businessId, appointmentId: v.id, kind: o.kind, to: { staffId }, exceptUserId: o.actor, payload, now });
+    told.push(...(await queuePushTo(q, { businessId: o.businessId, appointmentId: v.id, kind: o.kind, to: { staffId }, exceptUserId: o.actor, payload, now })));
   }
-  if (o.owners) n += await queuePush(q, { businessId: o.businessId, appointmentId: v.id, kind: o.owners.kind, to: "owners", exceptUserId: o.actor, payload, now });
+  let n = told.length;
+  if (o.owners) n += await queuePush(q, { businessId: o.businessId, appointmentId: v.id, kind: o.owners.kind, to: "owners", exceptUserId: o.actor, exceptUserIds: told, payload, now });
   return n;
 }
 

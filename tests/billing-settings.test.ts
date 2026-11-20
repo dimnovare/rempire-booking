@@ -59,6 +59,8 @@ describe("money settings", () => {
   });
 
   it("saves, and a sale made before keeps its own share", async () => {
+    // Renat's basis from the start (18.11): the regular price with VAT
+    expect(biz.settings.commission_basis).toBe("gross-list");
     const paste = FAKE_PRODUCTS[0];
     const before = await recordSale(biz, demo.staff.valentin, null, { ref: newRef(), productId: paste.productId, variant: paste.variant, mode: "client", qty: 1 }, Date.now(), FAKE);
     expect(before.ok).toBe(true);
@@ -70,8 +72,8 @@ describe("money settings", () => {
     expect(next.settings.billing_day).toBe(3);
     const after = await recordSale(next, demo.staff.valentin, null, { ref: newRef(), productId: paste.productId, variant: paste.variant, mode: "client", qty: 1 }, Date.now(), FAKE);
     if (!before.ok || !after.ok) throw new Error("sale failed");
-    // 24,90 € with VAT: 17 % of 20,08 € net, then 20 % of 24,90 €
-    expect(before.sale.commissionCents).toBe(341);
+    // 24,90 € with VAT: 17 % of the regular 24,90 €, then 20 % of 24,90 €
+    expect(before.sale.commissionCents).toBe(423);
     expect(after.sale.commissionCents).toBe(498);
     const [{ n }] = await query<{ n: number }>("select count(*)::int as n from audit where entity = 'business' and action = 'settings'");
     expect(n).toBeGreaterThan(0);
