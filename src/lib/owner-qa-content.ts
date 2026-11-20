@@ -1,14 +1,18 @@
 /**
  * Renat's questions page (/ru/q/<token>), in plain Russian.
  *
- * The questions here are the ones Altegio and Isolta cannot answer. What we
- * will read from them ourselves is listed under «Это посмотрим сами»; what
- * Dim has already settled (17.11.2026) is under «Уже решено».
- * docs/questions-for-renat.ru.md keeps the same list.
+ * Set 3, 20.11.2026 (Dim, decisions round 10: «replace the questions, same
+ * link»): what the re-scan of Altegio and Isolta could not answer
+ * (docs/port-check.md, «❓ Renat»), first; then the questions of the first
+ * set that are still open, under their old ids, so whatever Renat wrote
+ * there shows again. Dropped from the first set: «access» (we are in both
+ * systems), «costs» (read in their billing), «universal» (now «place») and
+ * «altegio_extra» (now «pay», «skipped» and the dashboards). Their answers
+ * stay in qa_answers. docs/questions-for-renat.ru.md keeps the same list.
  *
- * Each field saves on its own («commission.vat», «extra.note»…). The page
- * sends one field at a time; every change is logged (qa_answer_log), so a
- * later addition never loses what was written first.
+ * Each field saves on its own («switch.ok», «extra.note»…). The page sends
+ * one field at a time; every change is logged (qa_answer_log), so a later
+ * addition never loses what was written first.
  *
  * Content and checks only, so the page can import it; the database side is
  * src/lib/owner-qa.ts.
@@ -22,26 +26,24 @@ export type Field =
 export type Question = { id: string; title: string; lead: string; fields: Field[] };
 
 export const INTRO =
-  "Ренат, мы делаем для REMPIRE свою систему записи вместо Altegio и свои счета барберам вместо Isolta. " +
-  "Здесь 11 коротких вопросов. Ответы сохраняются сами: можно закрыть страницу, вернуться и дописать.";
+  "Ренат, мы ещё раз посмотрели, как REMPIRE работает в Altegio и Isolta, и почти всё уже перенесли. " +
+  "Здесь 15 коротких вопросов: сначала новые, потом те, что остались с прошлого раза. " +
+  "Ответы сохраняются сами: можно закрыть страницу, вернуться и дописать.";
 
 export const QUESTIONS: Question[] = [
-  /* 18.11.2026, for the test run (docs/test-run.md): the two things the test
-     days wait on, first on the page so a returning Renat sees them. */
+  /* Dim, round 10: before Altegio renews itself on 2 December. */
   {
-    id: "access",
-    title: "Доступ к Altegio и Isolta",
+    id: "switch",
+    title: "Переход до 2 декабря",
     lead:
-      "Чтобы перенести барберов, услуги, цены и график из Altegio, а данные для счетов из Isolta, " +
-      "добавь info@diipsolutions.eu пользователем в обе системы. Хватит прав только на просмотр, если они есть.",
+      "Altegio стоит 92,99 € в месяц и сам продлится 2 декабря. Поэтому хотим перейти на новую систему до этого дня. " +
+      "Isolta оплачена на год, отменять её надо за месяц до конца.",
     fields: [
-      { id: "altegio", kind: "one", label: "Altegio", options: ["Добавил", "Добавлю на этой неделе", "Не получается, нужна помощь"] },
-      { id: "isolta", kind: "one", label: "Isolta", options: ["Добавил", "Добавлю на этой неделе", "Не получается, нужна помощь"] },
-      { id: "note", kind: "text", label: "Если что-то мешает, напиши" },
+      { id: "ok", kind: "one", label: "До 2 декабря тебе подходит?", options: ["Да", "Нет, нужно позже"] },
+      { id: "isolta", kind: "text", label: "Когда у Isolta заканчивается год? Если не знаешь, оставь пустым" },
     ],
   },
-  /* «emails» stays the id so the field keys never change; Dim, 18.11: Renat
-     may test alone first, the barbers' logins only if he wants them in. */
+  /* first set, still open: the test days wait on it */
   {
     id: "emails",
     title: "Кто тестирует",
@@ -58,6 +60,100 @@ export const QUESTIONS: Question[] = [
       },
     ],
   },
+  {
+    id: "pay",
+    title: "Оплата визитов",
+    lead:
+      "В Altegio оплату визита отмечает только Евгений, остальные барберы не отмечают. " +
+      "Новая система может записывать, сколько клиент заплатил, наличными или картой.",
+    fields: [
+      { id: "need", kind: "one", label: "Это нужно?", options: ["Да, всем барберам", "Только тем, кто хочет", "Нет, не нужно"] },
+      { id: "note", kind: "text", label: "Как сейчас считаете деньги за визиты?" },
+    ],
+  },
+  {
+    id: "app",
+    title: "Приложение Altegio для клиентов",
+    lead:
+      "Каждая восьмая запись приходит из приложения Altegio. После перехода его не будет: клиенты записываются " +
+      "по ссылке, с сайта rempire.ee или из Google Maps. Ссылку можно сохранить на телефон как приложение.",
+    fields: [{ id: "ok", kind: "one", label: "Так нормально?", options: ["Да", "Нет, нужно своё приложение", "Не знаю"] }],
+  },
+  {
+    id: "reviews",
+    title: "Новые отзывы",
+    lead:
+      "Отзывы из Altegio переносим и показываем при записи. Сейчас Altegio не просит клиента оставить отзыв, " +
+      "а новые отзывы приходили из его приложения.",
+    fields: [{ id: "ask", kind: "one", label: "Просить отзыв после визита?", options: ["Да, через 3 часа", "Нет"] }],
+  },
+  {
+    id: "paid",
+    title: "Оплата счетов барберами",
+    lead:
+      "В Isolta ни один счёт не отмечен оплаченным, поэтому все 422 стоят как просроченные. " +
+      "В новой системе можно отмечать оплату и видеть, кто должен. Пока мы эту кнопку спрятали.",
+    fields: [
+      {
+        id: "track",
+        kind: "one",
+        label: "Где ты видишь, кто заплатил?",
+        options: ["В банке, этого хватает", "Барберы платят сразу, следить не нужно", "Хочу отмечать в новой системе"],
+      },
+      { id: "terms", kind: "text", label: "У одних срок оплаты 5 дней, у других 14. От чего это зависит?" },
+    ],
+  },
+  {
+    id: "drafts",
+    title: "Черновики в Isolta",
+    lead: "В Isolta 58 неотправленных черновиков, по 5–12 в год. Выставленные счета переносим, черновики только если нужны.",
+    fields: [
+      { id: "what", kind: "one", label: "Черновики нужны?", options: ["Нет, не нужны", "Нужны, объясню ниже", "Не знаю"] },
+      { id: "note", kind: "text", label: "Если нужны, зачем" },
+    ],
+  },
+  {
+    id: "accountant",
+    title: "Бухгалтер",
+    lead: "Новая система выгружает счета в Excel и PDF. Что нужно твоему бухгалтеру и как часто?",
+    fields: [{ id: "needs", kind: "text", label: "Что бухгалтер берёт сейчас из Isolta или Altegio" }],
+  },
+  {
+    id: "place",
+    title: "Тату-студия",
+    lead: "В Altegio у REMPIRE один филиал. Тату будет записываться в той же системе?",
+    fields: [
+      { id: "tattoo", kind: "one", label: "Тату:", options: ["В той же системе, в салоне на Mardi 1", "Отдельно, в своём месте", "Пока не нужно"] },
+      { id: "note", kind: "text", label: "Что-то ещё?" },
+    ],
+  },
+  /* Dim, round 10: «list them in the Q&A for Renat if he needs any» */
+  {
+    id: "skipped",
+    title: "Что не переносим",
+    lead: "Этим в Altegio и Isolta не пользуются, поэтому в новой системе этого нет. Отметь, если что-то всё же нужно.",
+    fields: [
+      {
+        id: "need",
+        kind: "many",
+        label: "Нужно:",
+        options: [
+          "Склад и учёт товаров в салоне",
+          "Онлайн-оплата и предоплата",
+          "Расчёт зарплат",
+          "Скидки и карты постоянных клиентов",
+          "Сертификаты и абонементы",
+          "Акции",
+          "Групповые записи",
+          "Звонки и телефония",
+          "Электронные счета (e-arve)",
+          "Напоминания барберам об оплате счёта",
+        ],
+      },
+      { id: "note", kind: "text", label: "Если что-то нужно, зачем" },
+    ],
+  },
+  /* first set, still open */
   {
     id: "commission",
     title: "17 % барберу от продажи товара",
@@ -88,63 +184,6 @@ export const QUESTIONS: Question[] = [
       { id: "note", kind: "text", label: "Например, у кого нет Telegram" },
     ],
   },
-  {
-    id: "owner_push",
-    title: "Уведомления тебе",
-    lead:
-      "Тебе на телефон, как сейчас приходят заказы магазина. В приложении будет настройка, и ты сможешь " +
-      "включить или выключить каждое. Что включить с самого начала?",
-    fields: [
-      {
-        id: "which",
-        kind: "many",
-        label: "Присылать мне:",
-        options: [
-          "Новая запись онлайн",
-          "Клиент перенёс или отменил запись",
-          "Барбер отменил запись",
-          "Запрос от барбера: отпуск, график, цены",
-          "Вечером план на завтра по всему салону",
-        ],
-      },
-      { id: "note", kind: "text", label: "Что-то ещё?" },
-    ],
-  },
-  {
-    id: "costs",
-    title: "Сколько платишь сейчас в месяц",
-    lead: "Ты говорил: Altegio около 35 €, Messaggio около 35 €. Поправь, если не так, и допиши Isolta. Так посчитаем, сколько сэкономим.",
-    fields: [
-      { id: "altegio", kind: "money", label: "Altegio, € в месяц", hint: "около 35" },
-      { id: "messaggio", kind: "money", label: "Messaggio (SMS), € в месяц", hint: "около 35" },
-      { id: "isolta", kind: "money", label: "Isolta, € в месяц", hint: "сколько?" },
-    ],
-  },
-  {
-    id: "universal",
-    title: "Только REMPIRE или любой сервис",
-    lead:
-      "Систему можно сделать универсальной. Тогда потом ей пользуются тату-мастера, массажный салон или любой " +
-      "другой сервис. От этого зависит, как мы строим её с самого начала.",
-    fields: [
-      { id: "who", kind: "one", label: "Для кого система?", options: ["Только барбершоп REMPIRE", "REMPIRE: барберы и тату", "Любой сервис: тату, массаж и другие", "Пока не знаю"] },
-      { id: "note", kind: "text", label: "Есть мысли, кому ещё она подойдёт?" },
-    ],
-  },
-  /* Dim, 19.11 (decisions round 8): «Финансы», «Отчёты» and «Лояльность» are built only if Renat uses them. */
-  {
-    id: "altegio_extra",
-    title: "Касса, отчёты и скидки",
-    lead:
-      "В Altegio есть разделы «Финансы», «Отчёты» и «Лояльность». В новую систему переносим только то, чем ты " +
-      "пользуешься. Скидки и карты в Altegio сейчас не настроены.",
-    fields: [
-      { id: "cash", kind: "one", label: "Оплату визитов в Altegio отмечаешь?", options: ["Да, каждый визит", "Иногда", "Нет, это не нужно"] },
-      { id: "reports", kind: "one", label: "Отчёты и аналитику смотришь?", options: ["Да, часто", "Редко", "Нет"] },
-      { id: "loyalty", kind: "one", label: "Скидки постоянным клиентам нужны?", options: ["Нет", "Да, скидка в процентах", "Да, по-другому"] },
-      { id: "note", kind: "text", label: "Что из этого тебе важно" },
-    ],
-  },
   /* Dim, 18.11: not built yet, asked here as something we can add (docs/apps.md). */
   {
     id: "qr",
@@ -166,21 +205,24 @@ export const QUESTIONS: Question[] = [
   },
 ];
 
-/** Settled by Dim, 17.11.2026. Renat can object in «decided.note». */
+/** Settled by Dim, 17.11 and 20.11.2026. Renat can object in «decided.note». */
 export const DECIDED: string[] = [
+  "Переходим до 2 декабря, пока Altegio не продлился ещё на месяц.",
   "Запись подтверждается сразу. Барбер сам открыл время, значит клиент записывается без подтверждения. В экстренном случае барбер может отменить запись.",
+  "Время для записи как сейчас в Altegio: каждые 30 минут от начала дня барбера, записаться можно в последний момент.",
+  "Сообщения клиентам как сейчас: SMS за 2 часа и письмо за 12 часов до визита, поздравление в день рождения, приглашение прийти снова после неявки. SMS идут через твой Messaggio.",
   "Без депозита и предоплаты, как сейчас.",
   "Особое время: барбер сам открывает вечер, выходной или обед по своей цене, например +20 €. Доплата целиком идёт барберу.",
-  "Из Altegio переносим всё, что можно: клиентов с номерами, историю визитов, отзывы.",
-  "Счета барберам: PDF на почту.",
+  "Из Altegio переносим всё, что можно: клиентов с номерами, историю визитов, отзывы. Отзывы видны при записи, звёзды у каждого барбера.",
+  "Счета барберам: PDF на почту. Нумерация продолжает Isolta, со счёта 423. Старые счета из Isolta переносим как историю.",
   "Товар себе барбер берёт по закупочной цене, без 17 %.",
 ];
 export const DECIDED_NOTE: Field = { id: "note", kind: "text", label: "Если что-то здесь не так, напиши" };
 
-/** What Altegio and Isolta will tell us, so we do not ask. */
+/** What we read in Altegio and Isolta ourselves (20.11.2026), so we do not ask. */
 export const WE_READ: string[] = [
-  "Altegio: услуги, цены и время у каждого барбера, график, правило отмены.",
-  "Isolta: какая фирма выставляет счета, НДС, аренда каждого барбера, как выглядит счёт.",
+  "Altegio: барберы, услуги, цены, график, сообщения клиентам, настройки онлайн-записи, отчёты.",
+  "Isolta: фирма, счета барберам, сроки оплаты, нумерация, как выглядит счёт.",
 ];
 
 /** Every field the page may save, by its full key. */

@@ -298,7 +298,7 @@ export function QaForm({ token, initial }: { token: string; initial: Record<stri
 
       <section className="qa-q qa-read" aria-labelledby="q-read">
         <h2 className="qa-title" id="q-read">
-          Это посмотрим сами
+          Это мы уже посмотрели
         </h2>
         <p className="qa-lead">Когда получим доступ к Altegio и Isolta. Об этом не спрашиваем.</p>
         <ul className="qa-plain">

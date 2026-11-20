@@ -28,10 +28,12 @@ describe("the questions", () => {
     for (const key of FIELDS.keys()) expect(key).toMatch(/^[a-z_]{1,30}\.[a-z_]{1,30}$/);
     expect(FIELDS.has("telegram.how")).toBe(true);
     expect(FIELDS.has("decided.note")).toBe(true);
-    // 18.11: what the test run waits on, first on the page
-    expect(QUESTIONS.slice(0, 2).map((q) => q.id)).toEqual(["access", "emails"]);
-    expect(cleanValue("access.altegio", "Добавил")).toBe("Добавил");
-    expect(cleanValue("access.isolta", "Да")).toBeNull();
+    // 20.11: the switch before Altegio renews, then what the test run waits on
+    expect(QUESTIONS.slice(0, 2).map((q) => q.id)).toEqual(["switch", "emails"]);
+    expect(cleanValue("switch.ok", "Да")).toBe("Да");
+    expect(cleanValue("switch.ok", "Добавил")).toBeNull();
+    // the first set's closed questions are off the page; their answers stay in the table
+    for (const gone of ["access.altegio", "costs.isolta", "universal.who", "altegio_extra.cash"]) expect(FIELDS.has(gone)).toBe(false);
     expect(cleanValue("emails.who", "Сначала я сам")).toBe("Сначала я сам");
     expect(cleanValue("emails.who", "Все")).toBeNull();
     expect(cleanValue("emails.list", "Valentin — valentin@example.test")).toBe("Valentin — valentin@example.test");
@@ -52,8 +54,8 @@ describe("the questions", () => {
     expect(cleanValue("self.may", ["Всё"])).toBeNull();
     expect(cleanValue("extra.note", "x".repeat(5000))).toHaveLength(5000);
     expect(cleanValue("extra.note", "x".repeat(5001))).toBeNull();
-    expect(cleanValue("costs.isolta", "около 20")).toBe("около 20");
-    expect(cleanValue("costs.isolta", "1".repeat(41))).toBeNull();
+    expect(cleanValue("skipped.need", ["Акции", "Расчёт зарплат"])).toEqual(["Расчёт зарплат", "Акции"]);
+    expect(cleanValue("switch.isolta", "в марте")).toBe("в марте");
   });
 });
 
