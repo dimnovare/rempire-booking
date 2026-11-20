@@ -833,6 +833,19 @@ test.describe("the journal", () => {
       const strip = cal(page).getByRole("navigation", { name: C.days });
       await expect(strip.getByRole("button")).toHaveCount(7);
       await expect(strip.getByRole("button", { pressed: true })).toHaveCount(1);
+      // as Altegio's phone app (option D): the date in the dark bar on top, lying over the frame's own
+      const frameTop = (await page.locator(".one-top").boundingBox())!;
+      const dark = cal(page).locator(".cal-bar");
+      const darkBox = (await dark.boundingBox())!;
+      expect([Math.round(darkBox.y), Math.round(darkBox.height)]).toEqual([Math.round(frameTop.y), Math.round(frameTop.height)]);
+      expect(await dark.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgb(34, 34, 46)");
+      await expect(dark.getByLabel(C.pickDate)).toHaveValue(day);
+      // and the week floating at the bottom, 8px over the tabs, Saturday and Sunday in orange
+      const tabs = (await page.locator(".adm-nav").boundingBox())!;
+      const stripBox = (await strip.boundingBox())!;
+      expect(Math.round(tabs.y - (stripBox.y + stripBox.height))).toBe(8);
+      const weekend = strip.locator("button.is-end:not(.is-today):not([aria-pressed='true']) b");
+      if (await weekend.count()) expect(await weekend.first().evaluate((el) => getComputedStyle(el).color)).toBe("rgb(255, 159, 90)");
       // a column for each barber who works that day; a barber who is off has one only for a visit or for
       // special time (the demo gives Valentin two evening hours of it on weekdays)
       const heads = await cal(page).locator(".cal-head b").allInnerTexts();
@@ -873,6 +886,21 @@ test.describe("the journal", () => {
       await page.waitForURL((u) => u.pathname === "/admin" && u.searchParams.get("d") !== day && u.searchParams.get("d") !== null);
       await expect(cal(page).getByRole("navigation", { name: C.days }).getByRole("button", { pressed: true })).toHaveCount(1);
       await expectNoSideScroll(page);
+
+      // a swipe to the left on the strip is the next week, the same weekday; to the right, back
+      const d0 = new URL(page.url()).searchParams.get("d")!;
+      const plus = (d: string, n: number) => new Date(Date.parse(`${d}T12:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+      const swipe = async (from: number, to: number) => {
+        const b = (await cal(page).getByRole("navigation", { name: C.days }).boundingBox())!;
+        await page.mouse.move(b.x + b.width * from, b.y + b.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(b.x + b.width * to, b.y + b.height / 2, { steps: 6 });
+        await page.mouse.up();
+      };
+      await swipe(0.75, 0.2);
+      await page.waitForURL((u) => u.searchParams.get("d") === plus(d0, 7));
+      await swipe(0.2, 0.75);
+      await page.waitForURL((u) => u.searchParams.get("d") === d0);
     });
 
     test("a free time books, «Перенести» moves, a week shows it, the sheet cancels", async ({ page, barber }, info) => {
@@ -904,10 +932,14 @@ test.describe("the journal", () => {
       // his week: seven days on one screen, the visit in its day
       await cal(page).locator(".cal-bar").getByRole("button", { name: C.week, exact: true }).click();
       await page.waitForURL((u) => u.searchParams.get("v") === "week");
-      await cal(page).locator(".cal-bar").getByRole("group", { name: A.visit.barber }).getByRole("button", { name: barber.name }).click();
+      await cal(page).locator(".cal-who").getByRole("button", { name: barber.name }).click();
       await page.waitForURL((u) => u.searchParams.get("s") === demoId("staff", barber.slug));
       await expect(cal(page).locator(".cal-head")).toHaveCount(7);
       await expect(column(page, barber.slug, day).locator(".cal-v", { hasText: who })).toHaveCount(1);
+      // a week's strip at the bottom is the week before and after
+      const weeks = cal(page).locator(".cal-strip.is-weeks");
+      await expect(weeks.getByRole("button", { name: C.prev })).toBeVisible();
+      await expect(weeks.getByRole("button", { name: C.next })).toBeVisible();
       await expectNoSideScroll(page);
       await phoneShot(page, "week");
       // back to the day, and cancelled
@@ -926,7 +958,7 @@ test.describe("the journal", () => {
       await expect(cal(page).getByRole("heading", { level: 2, name: C.noSchedule })).toBeVisible();
       await expect(cal(page).getByRole("link", { name: C.setHours })).toHaveAttribute("href", "/admin/staff");
       // «Запись» is still there
-      await expect(cal(page).locator(".cal-bar").getByRole("button", { name: A.visit.new })).toBeVisible();
+      await expect(cal(page).locator(".cal-add")).toBeVisible();
       await expectNoSideScroll(page);
     });
   });

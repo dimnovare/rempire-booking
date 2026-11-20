@@ -273,6 +273,30 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
     return { staffId: first, date: d, min: d === today ? Math.min(fromMin(d), 23 * 60) : 10 * 60 };
   };
 
+  // a phone's week strip: a swipe sideways is the week before or after, the same weekday
+  const swipeRef = useRef<{ x: number; y: number } | null>(null);
+  const swipedRef = useRef(false);
+  const onStripDown = (e: React.PointerEvent) => {
+    swipeRef.current = { x: e.clientX, y: e.clientY };
+    swipedRef.current = false;
+  };
+  const onStripUp = (e: React.PointerEvent) => {
+    const s = swipeRef.current;
+    swipeRef.current = null;
+    if (!s) return;
+    const dx = e.clientX - s.x;
+    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(e.clientY - s.y) * 1.5) return;
+    swipedRef.current = true;
+    go(addDays(date, dx < 0 ? 7 : -7), "day");
+  };
+  // the tap that ends a swipe is not a day's
+  const onStripClick = (e: React.MouseEvent) => {
+    if (!swipedRef.current) return;
+    swipedRef.current = false;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
   // drag with a mouse (desktop); fingers use «Перенести»
   const dragRef = useRef<{ v: CalVisit | null; x: number; y: number; offset: number; on: boolean; justDropped: boolean }>({ v: null, x: 0, y: 0, offset: 0, on: false, justDropped: false });
   const colAt = (x: number, y: number) => {
@@ -335,6 +359,12 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
   const wideTitle = view === "week" ? title : `${dayText}, ${dayFmt(date, { weekday: "long" })}`;
   const strip = Array.from({ length: 7 }, (_, i) => addDays(weekStart(date), i));
   const todayInView = cols.some((c) => c.date === today);
+  // a phone's dark bar: «Пт, 20 ноября» for a day («Пт, 20 нояб.» on a narrow phone), «Ноябрь» for a week
+  // (its days are in the strip below)
+  const phoneTitle = view === "week" ? cap(dayFmt(date, { month: "long" })) : cap(dayFmt(date, { weekday: "short", day: "numeric", month: "long" }));
+  const phoneTitleShort = view === "week" ? phoneTitle : cap(dayFmt(date, { weekday: "short", day: "numeric", month: "short" }));
+  // «Сегодня» only when today is not one tap away already
+  const todayNear = view === "day" ? strip.includes(today) : todayInView;
   const nowMin = minutesInDay(now, today, tz);
   const nowOn = todayInView && nowMin >= lo && nowMin <= hi;
   // «Запись» works on a day nobody is at work too: the form picks the barber
@@ -360,62 +390,67 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
       className={`cal${view === "week" ? " is-week" : ""}${pending ? " is-pending" : ""}${panel ? " has-panel" : ""}${mineOn ? " is-mine" : ""}${hidden.map((k) => ` hide-${k}`).join("")}`}
       style={{ "--zoom": zoom } as React.CSSProperties}
     >
-      {/* a phone's bar; from 900px the journal's own */}
+      {/* A phone's bar, as Altegio's own phone app (Dim, 20.11.2026, option D): the date with a ▾
+          in the dark bar on top, which it lies over, and «День | Неделя»; the week floats at the
+          bottom above the tabs. From 900px the journal's own bar (journal-bar.tsx). */}
       <div className="cal-bar only-narrow">
-        <div className="cal-nav">
-          <button type="button" className="adm-ibtn" aria-label={A.cal.prev} onClick={() => go(addDays(date, view === "week" ? -7 : -1))}>
-            <PrevIcon />
+        <label className="cal-title">
+          <span className="is-long">{phoneTitle}</span>
+          <span className="is-short">{phoneTitleShort}</span>
+          <CaretIcon />
+          <input type="date" value={date} aria-label={A.cal.pickDate} onChange={(e) => e.target.value && go(e.target.value)} />
+        </label>
+        {!todayNear && (
+          <button type="button" className="cal-today" onClick={() => go(today)}>
+            {A.cal.today}
           </button>
-          <label className="cal-title">
-            <span>{title}</span>
-            <CaretIcon />
-            <input type="date" value={date} aria-label={A.cal.pickDate} onChange={(e) => e.target.value && go(e.target.value)} />
-          </label>
-          <button type="button" className="adm-ibtn" aria-label={A.cal.next} onClick={() => go(addDays(date, view === "week" ? 7 : 1))}>
-            <NextIcon />
-          </button>
-        </div>
-        {view === "day" ? (
-          <nav className="cal-strip" aria-label={A.cal.days}>
-            {strip.map((d, i) => (
-              <button key={d} type="button" className={d === today ? "is-today" : undefined} aria-pressed={d === date} aria-label={cap(dayFmt(d, { weekday: "long", day: "numeric", month: "long" }))} onClick={() => d !== date && go(d, "day")}>
-                <span>{A.staff.weekdays[i]}</span>
-                <b>{Number(d.slice(8))}</b>
-              </button>
-            ))}
-          </nav>
-        ) : (
-          <div className="adm-who cal-who" role="group" aria-label={A.visit.barber}>
-            {data.staff.map((s) => (
-              <button key={s.id} type="button" aria-pressed={s.id === staffId} onClick={() => s.id !== staffId && go(date, "week", s.id)}>
-                <Ava src={s.photoUrl} name={s.name} />
-                <span>{s.name}</span>
-              </button>
-            ))}
-          </div>
         )}
-        <div className="cal-tools">
-          {!todayInView && (
-            <button type="button" className="adm-chip" onClick={() => go(today)}>
-              {A.cal.today}
-            </button>
-          )}
-          <div className="adm-seg" role="group" aria-label={A.cal.view}>
-            <button type="button" aria-pressed={view === "day"} onClick={() => view !== "day" && go(date, "day")}>
-              {A.cal.day}
-            </button>
-            <button type="button" aria-pressed={view === "week"} onClick={() => view !== "week" && go(date, "week")}>
-              {A.cal.week}
-            </button>
-          </div>
-          {add && (
-            <button type="button" className="cal-add" aria-label={A.visit.new} onClick={add}>
-              <PlusIcon size={view === "week" ? 22 : 24} />
-              <span>{A.cal.add}</span>
-            </button>
-          )}
+        <div className="adm-seg" role="group" aria-label={A.cal.view}>
+          <button type="button" aria-pressed={view === "day"} onClick={() => view !== "day" && go(date, "day")}>
+            {A.cal.day}
+          </button>
+          <button type="button" aria-pressed={view === "week"} onClick={() => view !== "week" && go(date, "week")}>
+            {A.cal.week}
+          </button>
         </div>
       </div>
+      {view === "week" && (
+        <div className="adm-who cal-who only-narrow" role="group" aria-label={A.visit.barber}>
+          {data.staff.map((s) => (
+            <button key={s.id} type="button" aria-pressed={s.id === staffId} onClick={() => s.id !== staffId && go(date, "week", s.id)}>
+              <Ava src={s.photoUrl} name={s.name} />
+              <span>{s.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {view === "day" ? (
+        // the week of the day shown; a swipe sideways is the week before or after
+        <nav className="cal-strip only-narrow" aria-label={A.cal.days} onPointerDown={onStripDown} onPointerUp={onStripUp} onPointerCancel={() => (swipeRef.current = null)} onClickCapture={onStripClick}>
+          {strip.map((d, i) => (
+            <button key={d} type="button" className={`${d === today ? "is-today" : ""}${i >= 5 ? " is-end" : ""}`.trim() || undefined} aria-pressed={d === date} aria-label={cap(dayFmt(d, { weekday: "long", day: "numeric", month: "long" }))} onClick={() => d !== date && go(d, "day")}>
+              <span>{A.staff.weekdays[i]}</span>
+              <b>{Number(d.slice(8))}</b>
+            </button>
+          ))}
+        </nav>
+      ) : (
+        <nav className="cal-strip is-weeks only-narrow" aria-label={A.cal.days}>
+          <button type="button" aria-label={A.cal.prev} onClick={() => go(addDays(date, -7))}>
+            <PrevIcon />
+          </button>
+          <b>{title}</b>
+          <button type="button" aria-label={A.cal.next} onClick={() => go(addDays(date, 7))}>
+            <NextIcon />
+          </button>
+        </nav>
+      )}
+      {add && (
+        <button type="button" className="cal-add only-narrow" aria-label={A.visit.new} onClick={add}>
+          <PlusIcon size={view === "week" ? 22 : 24} />
+          <span>{A.cal.add}</span>
+        </button>
+      )}
       <JournalBar
         view={view}
         date={date}

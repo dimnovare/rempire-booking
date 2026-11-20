@@ -381,23 +381,36 @@ html, body { background: var(--ink); }
    the tab chose (--zoom). This block is the phone; «the journal from 900px» is the block under it. */
 .cal { display: flex; flex-direction: column; height: calc(100dvh - var(--head-h) - var(--nav-h) - env(safe-area-inset-bottom, 0px)); }
 .cal.is-pending .cal-scroll { opacity: .55; transition: opacity .2s .15s; }
-.cal-bar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; padding: 6px max(8px, env(safe-area-inset-right, 0px)) 8px max(8px, env(safe-area-inset-left, 0px)); border-bottom: 1px solid var(--line); }
-.cal-nav { display: flex; align-items: center; gap: 2px; min-width: 0; }
-.cal-nav .adm-ibtn { width: 38px; border-color: transparent !important; color: var(--mute); }
-.cal-nav .adm-ibtn:hover { color: var(--fg); }
-.cal-title { position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 4px; font: 600 20px/1 var(--display); white-space: nowrap; cursor: pointer; }
-.cal-title svg { color: var(--mute); flex: none; }
+/* A phone's bar, as Altegio's own phone app (option D, Dim 20.11.2026): it lies over the frame's dark
+   bar on the journal (the mark and the name), so the date sits where the name was, and the grid
+   starts right under it. The week floats at the bottom, above the tabs. */
+.cal-bar { position: fixed; z-index: 31; top: 0; left: 0; right: 0; display: flex; align-items: center; gap: 6px; height: calc(var(--top-h) + env(safe-area-inset-top, 0px)); padding: env(safe-area-inset-top, 0px) max(8px, env(safe-area-inset-right, 0px)) 0 max(6px, env(safe-area-inset-left, 0px)); background: var(--chrome); color: var(--chrome-fg); }
+.adm:has(.test-banner) .cal-bar { top: var(--test-h); height: var(--top-h); padding-top: 0; }
+.cal-title { position: relative; flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 8px; border-radius: 10px; font: 700 18px/1 var(--display); white-space: nowrap; cursor: pointer; }
+.cal-title span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.cal-title .is-short { display: none; }
+@media (max-width: 379.98px) { .cal-title .is-long { display: none; } .cal-title .is-short { display: inline; } }
+.cal-title svg { color: var(--lime); flex: none; }
 .cal-title input { position: absolute; inset: 0; opacity: 0; cursor: pointer; padding: 0; min-height: 0; border: 0; }
-.cal-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-.cal-strip { order: 3; flex: 1 0 100%; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
-.cal-strip button { height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; background: var(--raise); border: 1px solid var(--line-2) !important; border-radius: 8px; font-size: 11px; color: var(--mute); text-align: center; }
-.cal-strip button b { font: 600 19px/1 var(--display); color: var(--fg); }
-.cal-strip button.is-today { border-color: var(--sel) !important; }
-.cal-strip button.is-today b { color: var(--accent); }
-.cal-strip button[aria-pressed="true"] { background: var(--lime); border-color: var(--lime) !important; color: var(--on-lime); }
+.cal-today { flex: none; min-height: 36px; padding: 0 10px; border: 1px solid var(--chrome-line) !important; border-radius: 8px; background: transparent; color: var(--chrome-fg); font: 600 13px/1 var(--display); white-space: nowrap; }
+.cal-bar .adm-seg { flex: none; margin-left: auto; background: transparent; border-color: var(--chrome-line); }
+.cal-bar .adm-seg button { min-height: 38px; color: var(--chrome-fg); }
+.cal-bar .adm-seg button[aria-pressed="true"] { color: var(--on-lime); }
+.cal-strip { position: fixed; z-index: 24; left: max(8px, env(safe-area-inset-left, 0px)); right: max(8px, env(safe-area-inset-right, 0px)); bottom: calc(var(--nav-h) + 8px + env(safe-area-inset-bottom, 0px)); display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; height: 52px; padding: 4px; border-radius: 14px; background: var(--chrome); box-shadow: 0 6px 18px rgba(34, 34, 46, .28); touch-action: pan-y; user-select: none; }
+.cal-strip button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-radius: 10px; font-size: 11px; line-height: 13px; color: var(--chrome-mute); text-align: center; }
+.cal-strip button b { font: 600 16px/20px var(--display); color: var(--chrome-fg); }
+.cal-strip button.is-end, .cal-strip button.is-end b { color: #ff9f5a; }
+.cal-strip button.is-today b { color: var(--lime); }
+.cal-strip button[aria-pressed="true"] { background: var(--lime); color: var(--on-lime); }
 .cal-strip button[aria-pressed="true"] b { color: var(--on-lime); }
-.cal-who { order: 3; flex: 1 0 100%; }
-.cal-add { position: fixed; z-index: 25; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom, 0px)); width: 58px; height: 58px; display: grid; place-items: center; background: var(--lime); color: var(--on-lime); border-radius: 16px; box-shadow: 0 6px 18px rgba(34, 34, 46, .28); }
+/* a week: the strip is the week before and after */
+.cal-strip.is-weeks { grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; }
+.cal-strip.is-weeks button { height: 44px; color: var(--chrome-fg); }
+.cal-strip.is-weeks b { justify-self: center; font: 600 15px/1 var(--display); color: var(--chrome-fg); white-space: nowrap; }
+/* the last hours scroll up out from under the strip */
+@media (max-width: 899.98px) { .cal-scroll::after { content: ""; display: block; height: 68px; } }
+.cal-who { padding: 8px max(8px, env(safe-area-inset-right, 0px)) 8px max(8px, env(safe-area-inset-left, 0px)); border-bottom: 1px solid var(--line); }
+.cal-add { position: fixed; z-index: 25; right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(var(--nav-h) + 76px + env(safe-area-inset-bottom, 0px)); width: 58px; height: 58px; display: grid; place-items: center; background: var(--lime); color: var(--on-lime); border-radius: 16px; box-shadow: 0 6px 18px rgba(34, 34, 46, .28); }
 .cal-add span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .cal-moving { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px max(8px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); background: var(--lime); color: var(--on-lime); font-size: 14px; }
 .cal-moving button { flex: none; min-height: 36px; padding: 0 12px; border: 1px solid var(--on-lime) !important; font: 600 12px/1 var(--display); }
