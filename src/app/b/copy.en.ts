@@ -215,6 +215,7 @@ export const en: Copy = {
     cancel: "Cancel",
     status: "Status",
     chips: { booked: "Waiting", arrived: "Arrived", no_show: "No-show", confirmed: "Confirmed" },
+    cancelled: "Booking cancelled",
     services: "Services",
     add: "Add a service",
     remove: "Remove the service",

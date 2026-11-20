@@ -5,7 +5,7 @@ import { asBarber, B, expect, expectNoSideScroll, hydrated, nextWorkday, sheet, 
 test.describe("his day", () => {
   test.use(asBarber);
 
-  test("today: the next client on top, one tap for «Пришёл», then «Готово»", async ({ page }) => {
+  test("today: the next client on top, one tap for «Пришёл»; «Готово» is gone", async ({ page }) => {
     await page.goto("/b");
     await hydrated(page);
     await expect(page.getByRole("heading", { level: 1, name: B.day.today })).toBeVisible();
@@ -15,8 +15,9 @@ test.describe("his day", () => {
     await expect(next.getByRole("link", { name: B.visit.call })).toHaveAttribute("href", /^tel:\+/);
     await next.getByRole("button", { name: B.day.quick.arrived }).click();
     await expect(next.getByText(B.day.now, { exact: true })).toBeVisible();
-    await next.getByRole("button", { name: B.day.quick.done }).click();
-    await expect(page.locator(".bx-v.st-done").first()).toBeVisible();
+    // in the chair: nothing more to tap here (Dim, decision round 11)
+    await expect(next.locator(".adm-btn-lime")).toHaveCount(0);
+    await expect(next.getByRole("button", { name: "Готово" })).toHaveCount(0);
     await expectNoSideScroll(page);
     expect(await smallTargets(page)).toEqual([]);
   });
@@ -54,14 +55,14 @@ test.describe("his day", () => {
     await expect(page.getByRole("heading", { level: 1, name: B.day.today })).toBeVisible();
   });
 
-  test("a visit's sheet: the time, the services, the total, the status buttons", async ({ page, barber }) => {
+  test("a visit's sheet: the time, the services, the total, the four chips", async ({ page, barber }) => {
     await page.goto(`/b?d=${nextWorkday(barber.slug)}`);
     await hydrated(page);
     await page.locator(".bx-v button").first().click();
     const s = sheet(page);
-    await expect(s.locator(".adm-time b")).toHaveText(/^\d\d:\d\d–\d\d:\d\d$/);
-    await expect(s.locator(".adm-lines .tot")).toContainText("€");
-    await expect(s.getByRole("group", { name: B.visit.setStatus }).getByRole("button")).toHaveCount(3);
+    await expect(s.locator(".vs-time")).toHaveText(/^\d\d:\d\d–\d\d:\d\d · /);
+    await expect(s.locator(".vs-total b")).toContainText("€");
+    await expect(s.getByRole("group", { name: B.vs.status }).getByRole("button")).toHaveText([B.vs.chips.booked, B.vs.chips.arrived, B.vs.chips.no_show, B.vs.chips.confirmed]);
     await expect(s.getByRole("button", { name: B.book.move })).toBeVisible();
     await expect(s.getByRole("button", { name: B.client.card })).toBeVisible();
     expect(await smallTargets(page)).toEqual([]);

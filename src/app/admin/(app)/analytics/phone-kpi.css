@@ -11,7 +11,7 @@
 .pk-pick input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; padding: 0; cursor: pointer; }
 
 .pk-seg { display: flex; overflow: hidden; background: #fff; border: 1px solid #e0e3eb; border-radius: 10px; }
-.pk-seg button { flex: 1; min-width: 0; height: 40px; padding: 0 4px; border: 0; background: #fff; color: #22222e; font: 500 14px/1 var(--body); cursor: pointer; }
+.pk-seg button { flex: 1; min-width: 0; height: 40px; display: flex; align-items: center; justify-content: center; text-align: center; padding: 0 4px; border: 0; background: #fff; color: #22222e; font: 500 14px/1 var(--body); cursor: pointer; }
 .pk-seg button + button { border-left: 1px solid #e0e3eb; }
 .pk-seg button[aria-pressed="true"] { background: #ffcb00; font-weight: 600; }
 .pk-seg button[aria-pressed="true"] + button { border-left-color: #ffcb00; }

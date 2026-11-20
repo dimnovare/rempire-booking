@@ -248,6 +248,7 @@ export const et: typeof ru = {
     cancel: "Loobu",
     status: "Olek",
     chips: { booked: "Ootel", arrived: "Saabus", no_show: "Ei tulnud", confirmed: "Kinnitas" },
+    cancelled: "Broneering on tühistatud",
     services: "Teenused",
     add: "Lisa teenus",
     remove: "Eemalda teenus",

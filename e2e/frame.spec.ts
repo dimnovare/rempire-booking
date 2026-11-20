@@ -522,10 +522,10 @@ test.describe("the frame", () => {
   });
 
   test.describe("on a phone", () => {
-    test("the bar is as it was; no sidebar, no star", async ({ page }) => {
+    test("the bar: «Отчёты» where «Запросы» was; no sidebar, no star", async ({ page }) => {
       await page.goto("/admin");
       await hydrated(page);
-      await expect(menu(page).getByRole("link")).toHaveText([A.nav.calendar, A.nav.clients, A.nav.requests, A.nav.invoices, A.nav.more]);
+      await expect(menu(page).getByRole("link")).toHaveText([A.nav.calendar, A.nav.clients, A.nav.reports, A.nav.invoices, A.nav.more]);
       await expect(sb(page)).toBeHidden();
       await expect(page.locator(".adm-top")).toBeVisible();
       await expectNoSideScroll(page);
@@ -541,7 +541,7 @@ test.describe("the frame", () => {
       await page.goto("/admin/more");
       await hydrated(page);
       const rows = page.locator(".adm-more .adm-item:visible");
-      await expect(rows).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.analytics, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.sale.title]);
+      await expect(rows.locator("b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.sale.title]);
       await expectNoSideScroll(page);
       expect(await smallTargets(page)).toEqual([]);
       await phoneShot(page, "more");

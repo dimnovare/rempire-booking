@@ -54,6 +54,7 @@ export type SheetWords = {
   cancel: string;
   status: string;
   chips: Record<Chip, string>;
+  cancelled: string;
   services: string;
   add: string;
   remove: string;
@@ -311,7 +312,9 @@ export function VisitSheetView(p: VisitSheetViewProps) {
               </div>
             )}
 
-            {p.gone ? null : (
+            {p.gone ? (
+              <p className="vs-gone">{w.cancelled}</p>
+            ) : (
               <div className="vs-chips" role="group" aria-label={w.status}>
                 {CHIPS.map((c) => (
                   <button key={c} type="button" className={`c-${c}`} aria-pressed={cur === c} disabled={!p.onChip || busy} onClick={() => void chip(c)}>

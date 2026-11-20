@@ -59,6 +59,8 @@
 .vs-chips button:disabled { cursor: default; }
 .vs-chips button:disabled:not([aria-pressed="true"]) { color: #8a8f9c; }
 
+.vs-gone { margin: 0; padding: 12px 14px; border: 1px solid #f3c4c5; border-radius: 12px; background: #fdeeee; color: #b42318; font: 600 14px/20px var(--body); text-align: center; }
+
 /* the visit's services and «+ Добавить услугу» */
 .vs-line + .vs-line, .vs-line + .vs-add { border-top: 1px solid #eceef3; }
 .vs-line-main { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 14px; box-sizing: border-box; border: 0; background: #fff; color: #22222e; text-align: left; }

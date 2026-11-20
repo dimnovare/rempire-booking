@@ -233,6 +233,7 @@ export const ru = {
     cancel: "Отмена",
     status: "Статус",
     chips: { booked: "Ожидание", arrived: "Пришёл", no_show: "Не пришёл", confirmed: "Подтвердил" },
+    cancelled: "Запись отменена",
     services: "Услуги",
     add: "Добавить услугу",
     remove: "Убрать услугу",
