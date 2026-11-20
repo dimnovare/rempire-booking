@@ -12,8 +12,9 @@
  *
  * 20.11.2026 evening (Dim: «check if those are still actual»): the questions
  * Renat answered on 18.11 (emails, commission, self, telegram, qr) left the
- * list; his answers are in DECIDED. Isolta's renewal date was read in
- * Isolta itself, so «switch» no longer asks for it.
+ * list; his answers are in DECIDED. Isolta shows no renewal date (its
+ * licence API gives a rolling "last 12 months"), so «switch.isolta» asks
+ * Renat for the date of Isolta's last invoice to him.
  *
  * Each field saves on its own («switch.ok», «extra.note»…). The page sends
  * one field at a time; every change is logged (qa_answer_log), so a later
@@ -42,8 +43,12 @@ export const QUESTIONS: Question[] = [
     title: "Переход до 2 декабря",
     lead:
       "Altegio стоит 92,99 € в месяц и сам продлится 2 декабря. Поэтому хотим перейти на новую систему до этого дня. " +
-      "Isolta (94,80 € + НДС в год) сама продлилась 20 ноября ещё на год, до 20 ноября 2027: отказаться можно было только за месяц.",
-    fields: [{ id: "ok", kind: "one", label: "До 2 декабря тебе подходит?", options: ["Да", "Нет, нужно позже"] }],
+      "Isolta стоит 94,80 € + НДС в год и тоже продлевается сама; отказаться надо за месяц до продления. " +
+      "Дату продления Isolta не показывает: её видно по последнему счёту от Isolta на почте.",
+    fields: [
+      { id: "ok", kind: "one", label: "До 2 декабря тебе подходит?", options: ["Да", "Нет, нужно позже"] },
+      { id: "isolta", kind: "text", label: "Когда пришёл последний счёт от Isolta? Если не знаешь, оставь пустым" },
+    ],
   },
   {
     id: "pay",
@@ -169,7 +174,7 @@ export const DECIDED_NOTE: Field = { id: "note", kind: "text", label: "Если 
 /** What we read in Altegio and Isolta ourselves (20.11.2026), so we do not ask. */
 export const WE_READ: string[] = [
   "Altegio: барберы, услуги, цены, график, сообщения клиентам, настройки онлайн-записи, отчёты.",
-  "Isolta: фирма, счета барберам, сроки оплаты, нумерация, как выглядит счёт, когда продлевается подписка.",
+  "Isolta: фирма, счета барберам, сроки оплаты, нумерация, как выглядит счёт.",
 ];
 
 /** Every field the page may save, by its full key. */
