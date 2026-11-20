@@ -28,6 +28,7 @@ export function offFor(user: Holder): string[] {
     ...(user.role === "owner" ? [] : ["changes"]),
     // «Настройки → Локация»: its three pages with «Доступ к настройкам локации»; with none left the group is not drawn
     ...(can(user, "settings.location") ? [] : ["brand", "contacts", "gallery"]),
+    ...(can(user, "notify.sms") || can(user, "notify.email") ? [] : ["notifications"]),
     ...(can(user, "visit.sell") && can(user, "visit.sell.create") ? [] : ["sale"]),
   ];
 }
@@ -79,7 +80,7 @@ export function litTab(path: string, bar: readonly BarKey[]): BarKey | null {
 
 export type MineRow = "time" | "sell" | "money";
 export type SalonRow = "staff" | "schedule" | "services" | "catalogue" | "analytics" | "records" | "reviews" | "visits" | "messages" | "changes" | "requests" | "invoices" | "sale";
-export type SettingsRow = "brand" | "contacts" | "gallery";
+export type SettingsRow = "brand" | "contacts" | "gallery" | "notifications";
 export type AccountRow = "account" | "notify" | "language" | "logout";
 export type MoreRows = { mine: MineRow[]; salon: SalonRow[]; settings: SettingsRow[]; account: AccountRow[] };
 
@@ -106,6 +107,6 @@ export function moreOf(user: Holder): MoreRows {
   const mine: MineRow[] = appKind(user) === "own" ? ["time", ...(can(user, "visit.sell") ? (["sell"] as const) : []), "money"] : [];
   const tabs = bar.map((k) => TAB_ROW[k]);
   const salon = SALON.filter((k) => !off.includes(k) && !tabs.includes(k));
-  const settings = (["brand", "contacts", "gallery"] as const).filter((k) => !off.includes(k));
+  const settings = (["brand", "contacts", "gallery", "notifications"] as const).filter((k) => !off.includes(k));
   return { mine, salon, settings, account: ["account", "notify", "language", "logout"] };
 }

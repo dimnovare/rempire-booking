@@ -4,10 +4,12 @@
  * the last 14 days under them. What barbers change themselves, and what
  * waits for an OK, is a right of each barber's login («Доступ» → the login;
  * 19.11.2026); the card that pointed there is gone (Dim, 20.11: not needed).
+ * The client's reminder (SMS, push or both) moved to «Настройки →
+ * Уведомления» (decision page round 11).
  */
 import { Suspense } from "react";
 import { requireAdmin } from "@/lib/auth/current";
-import { can, seenStaff } from "@/lib/auth/rights";
+import { seenStaff } from "@/lib/auth/rights";
 import { listRequests } from "@/lib/barber/requests";
 import { dbConfigured, query } from "@/lib/db";
 import { Title, Wait } from "../../lang";
@@ -41,8 +43,6 @@ async function Loaded() {
       <RequestsView
         open={rows.filter((r) => r.status === "requested")}
         recent={rows.filter((r) => r.status !== "requested")}
-        system={can(user, "settings.system")}
-        reminder={business.settings.client_reminder}
         tz={business.timezone}
       />
     </>

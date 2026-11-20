@@ -1,0 +1,147 @@
+/*
+ * «Настройки → Уведомления» (notifications-view.tsx, [type]/type-view.tsx),
+ * after the boards «Notifications» and «Notification-Type»: light cards, the
+ * yellow switch (.cc-sw, admin.css) and grey channel chips; a phone first,
+ * two columns from 1100px.
+ */
+.ntf { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ntf h2 { margin: 0; }
+
+/* the two tabs, the tool's underline */
+.ntf-tabs { display: flex; gap: 8px; border-bottom: 1px solid #e0e3eb; overflow-x: auto; }
+.ntf-tabs button { flex: none; min-height: 48px; padding: 0 14px; margin-bottom: -1px; border-bottom: 3px solid transparent; color: #71757f; font: 500 15px/1 var(--body); white-space: nowrap; }
+.ntf-tabs button[aria-selected="true"] { border-bottom-color: var(--lime); color: var(--fg); }
+.ntf-panel { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+/* «Типы уведомлений»: a card per recipient */
+.ntf-cols, .ntf-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ntf-group { padding: 0; gap: 0; overflow: hidden; }
+.ntf-group-t { margin: 0; font: inherit; }
+.ntf-group-h { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 0 16px; border-bottom: 1px solid #e9ecf2 !important; text-align: left; }
+.ntf-group-name { font: 500 15px/20px var(--body); color: var(--fg); }
+.ntf-count { flex: 1; color: #71757f; font-size: 13px; }
+.ntf-caret { flex: none; color: #71757f; transition: transform .15s ease-out; }
+.ntf-group-h[aria-expanded="false"] { border-bottom: 0 !important; }
+.ntf-group-h[aria-expanded="false"] .ntf-caret { transform: rotate(180deg); }
+.ntf-list { list-style: none; margin: 0; padding: 0; }
+.ntf-row { display: flex; align-items: center; gap: 12px; padding-left: 16px; border-bottom: 1px solid #e9ecf2; }
+.ntf-row:last-child { border-bottom: 0; }
+.ntf-link { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 8px 12px 8px 0; color: var(--fg); text-decoration: none; }
+.ntf-link:hover .ntf-name b { text-decoration: underline; text-underline-offset: 3px; }
+.ntf-link > svg { flex: none; color: #9aa0aa; }
+.ntf-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ntf-name b { font: 500 15px/20px var(--body); overflow-wrap: anywhere; }
+.ntf-name small { color: #71757f; font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+.ntf-row.is-off .ntf-name b, .ntf-row.is-off .ntf-name small { color: #9aa0aa; }
+.ntf-chips { flex: none; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; max-width: 45%; }
+.ntf-chip { display: inline-flex; align-items: center; height: 26px; padding: 0 8px; border-radius: 4px; background: #e9ecf2; color: #2b3134; font: 500 12px/1 var(--body); white-space: nowrap; }
+.ntf-chip.is-off, .ntf-row.is-off .ntf-chip { background: #f3f4f7; color: #b4b8c0; }
+.ntf-bad { color: var(--warn); }
+.ntf-ok { color: var(--ok); }
+.ntf-foot { display: flex; gap: 8px; color: #71757f; font-size: 13px; line-height: 18px; }
+.ntf-foot > svg { flex: none; margin-top: 2px; }
+.ntf-foot p { margin: 0; }
+
+/* «Каналы отправки» */
+.ntf-tr { display: flex; flex-direction: column; gap: 12px; }
+.ntf-tr-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.ntf-tr-card { gap: 8px; }
+.ntf-tr-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ntf-tr-head h2 { font: 500 16px/20px var(--body); }
+.ntf-state { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: 12px; font: 500 12px/1 var(--body); white-space: nowrap; }
+.ntf-state.is-live { background: #e3f4ec; color: #17845a; }
+.ntf-state.is-console { background: #fff4d6; color: #8a6100; }
+.ntf-state.is-off { background: #fde8e7; color: #b42318; }
+.ntf-from { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.ntf-from span { color: #71757f; }
+.ntf-log { align-self: flex-start; }
+
+/* ---------- one type's page ---------- */
+.ntf-back { margin-bottom: -10px; }
+.ntf-head { flex-wrap: wrap; align-items: flex-start; }
+.ntf-on { display: inline-flex; align-items: center; gap: 10px; min-height: 44px; font: 500 15px/1 var(--body); cursor: pointer; }
+.ntf-about { margin: 0; color: #2b3134; font-size: 14px; line-height: 20px; }
+.ntf-logins { color: #71757f; }
+.ntf-split { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ntf-left { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.ntf-split.is-off .ntf-left { opacity: .55; }
+.ntf-cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.ntf-card { gap: 12px; }
+.ntf-card.is-off .ntf-card-h > div, .ntf-card.is-off .ntf-field { opacity: .5; }
+.ntf-card-h { display: flex; align-items: flex-start; gap: 12px; }
+.ntf-card-h > div { flex: 1; min-width: 0; }
+.ntf-card-h h2 { font: 500 15px/20px var(--body); overflow-wrap: anywhere; }
+.ntf-card-h p { margin: 2px 0 0; color: #71757f; font-size: 13px; line-height: 18px; }
+.ntf-ico { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #f1f3f7; color: #2b3134; }
+.ntf-field { display: flex; flex-direction: column; gap: 6px; color: #71757f; font-size: 13px; }
+:where(.adm) .ntf-field select { min-height: 44px; padding: 0 10px; border: 1px solid #dfe3ea; border-radius: 8px; background: #fff; color: var(--fg); font: 400 15px/1 var(--body); }
+.ntf-seg { display: flex; align-self: stretch; }
+.ntf-seg button { flex: 1; min-height: 40px; text-align: center; }
+
+/* the SMS text */
+.ntf-sms-top { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
+.ntf-sms-top h2 { font: 500 15px/20px var(--body); }
+.ntf-sms-top small { color: #71757f; font-size: 12px; font-weight: 400; }
+.ntf-reset { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; color: #2b3134; font-size: 13px; }
+:where(.adm) textarea.ntf-text { width: 100%; min-height: 96px; padding: 12px 14px; border: 2px solid var(--lime); border-radius: 8px; background: #fff; color: var(--fg); font: 400 15px/22px var(--body); resize: vertical; }
+:where(.adm) textarea.ntf-text:disabled { border-color: #dfe3ea; background: #f7f9fc; }
+.ntf-vars { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: #71757f; font-size: 13px; }
+.ntf-var { display: inline-flex; align-items: center; gap: 4px; min-height: 36px; padding: 0 10px; border: 1px solid #dfe3ea !important; border-radius: 6px; background: #fff; color: #71757f; font-size: 12px; white-space: nowrap; }
+.ntf-var b { color: #2b3134; font-weight: 600; }
+.ntf-var:hover:not(:disabled) { border-color: #c6cbd3 !important; background: #f7f9fc; }
+.ntf-counter { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px; }
+.ntf-meter { display: inline-flex; align-items: center; gap: 10px; font-size: 13px; white-space: nowrap; }
+.ntf-meter-bar { position: relative; display: block; width: 96px; height: 4px; border-radius: 2px; background: #e9ecf2; overflow: hidden; }
+.ntf-meter-bar i { position: absolute; inset: 0 auto 0 0; background: #2fb344; }
+.ntf-meter-bar.is-many i { background: #f59f00; }
+.ntf-warn { color: #8a6100; }
+
+/* the preview: a phone, or the letter as it arrives */
+.ntf-preview { gap: 12px; }
+.ntf-pv-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ntf-pv-top h2 { font: 500 15px/20px var(--body); }
+.ntf-dev, .ntf-pv-langs { display: inline-flex; border: 1px solid #dfe3ea; border-radius: 8px; overflow: hidden; }
+.ntf-dev button, .ntf-pv-langs button { min-height: 36px; padding: 0 12px; font-size: 13px; color: #2b3134; }
+.ntf-dev button[aria-pressed="true"], .ntf-pv-langs button[aria-pressed="true"] { background: var(--lime); }
+.ntf-pv-langs { align-self: flex-start; }
+.ntf-pv-tabs { display: flex; gap: 4px; border-bottom: 1px solid #e0e3eb; }
+.ntf-pv-tabs button { min-height: 40px; padding: 0 12px; margin-bottom: -1px; border-bottom: 2px solid transparent; font-size: 13px; color: #71757f; }
+.ntf-pv-tabs button[aria-selected="true"] { border-bottom-color: var(--lime); color: var(--fg); }
+.ntf-phone { align-self: center; display: flex; flex-direction: column; width: 100%; max-width: 236px; min-height: 420px; border: 10px solid #1f2128; border-radius: 34px; background: #fff; overflow: hidden; }
+.ntf-phone.is-android { border-radius: 22px; border-width: 8px; }
+.ntf-phone-bar { display: flex; justify-content: space-between; padding: 8px 16px 4px; font: 600 12px/1 var(--body); }
+.ntf-phone-who { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 0 10px; border-bottom: 1px solid #e9ecf2; font-size: 11px; }
+.ntf-ava { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: #a8adb7; color: #fff; font: 600 15px/1 var(--body); }
+.ntf-phone-body { flex: 1; display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+.ntf-stamp { margin: 0; color: #9aa0aa; font-size: 10px; text-align: center; }
+.ntf-bubble { align-self: flex-start; max-width: 88%; margin: 0; padding: 8px 12px; border-radius: 16px; background: #e9e9eb; color: #111; font-size: 13px; line-height: 18px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.ntf-phone.is-android .ntf-bubble { border-radius: 4px 16px 16px 16px; background: #e8eef9; }
+.ntf-bubble u { color: #0b5cd5; }
+.ntf-lock { justify-content: flex-start; padding-top: 40px; background: linear-gradient(180deg, #3a3f52, #1f2128); }
+.ntf-push { display: flex; gap: 8px; padding: 10px; border-radius: 14px; background: rgba(255, 255, 255, .92); }
+.ntf-push-app { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; background: #22222e; color: #fff; font: 600 12px/1 var(--body); }
+.ntf-push b { display: block; font-size: 12px; line-height: 16px; }
+.ntf-push p { margin: 0; font-size: 12px; line-height: 16px; overflow-wrap: anywhere; }
+.ntf-mail { display: flex; flex-direction: column; gap: 8px; }
+.ntf-subj { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.ntf-subj span { color: #71757f; }
+.ntf-frame { width: 100%; height: 520px; border: 1px solid #e0e3eb; border-radius: 8px; background: #000; }
+.ntf-sample { margin: 0; color: #71757f; font-size: 12px; text-align: center; }
+
+/* the bar at the bottom: in view while the cards scroll, above a phone's tab bar */
+.ntf-bar { position: sticky; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px)); z-index: 5; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 0 calc(-1 * max(16px, env(safe-area-inset-right, 0px))) -32px calc(-1 * max(16px, env(safe-area-inset-left, 0px))); padding: 10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px)); background: #fff; border-top: 1px solid #e0e3eb; }
+.ntf-later { flex: 1 1 260px; margin: 0; color: #2b3134; font-size: 13px; line-height: 18px; }
+.ntf-btns { display: flex; gap: 8px; }
+.ntf-btns .adm-btn { width: auto; min-height: 44px; padding: 0 18px; }
+
+@media (min-width: 900px) {
+  .ntf-cards { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .ntf-tr-list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ntf-bar { bottom: 0; margin: 0 -24px -24px; padding: 14px 24px; }
+  .ntf-btns .adm-btn { min-height: 40px; }
+}
+@media (min-width: 1100px) {
+  .ntf-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 16px; }
+  .ntf-split { display: grid; grid-template-columns: minmax(0, 1fr) 340px; align-items: start; gap: 16px; }
+  .ntf-preview { position: sticky; top: 16px; }
+}

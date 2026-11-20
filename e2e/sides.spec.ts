@@ -198,7 +198,7 @@ test.describe("an owner who cuts too, on a phone", () => {
     // «Основные показатели» is the tab «Отчёты»; «Запросы» a row
     await expect(group(M.salonGroup).locator(".mo-row b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.nav.invoices, A.sale.title]);
     // «Настройки»: the salon's page on the booking site, the owner's
-    await expect(group(M.settingsGroup).locator(".mo-row b")).toHaveText([A.nav.brand, A.nav.contacts, A.nav.gallery]);
+    await expect(group(M.settingsGroup).locator(".mo-row b")).toHaveText([A.nav.brand, A.nav.contacts, A.nav.gallery, A.nav.notifications]);
     await expect(group(M.accountGroup).locator(".mo-row b")).toHaveText([M.access, M.notify, M.language, M.logout]);
     await expect(group(M.accountGroup).locator(".mo-row", { hasText: M.language }).locator("small")).toHaveText("Русский");
     await expectNoSideScroll(page);
@@ -238,7 +238,8 @@ test.describe("an owner who cuts too, on a phone", () => {
     await opens(A.nav.invoices, /\/admin\/invoices$/);
     // «Аккаунт»
     await opens(M.access, /\/admin\/account$/, A.account.title);
-    await opens(M.notify, /\/b\/more$/, B.push.title);
+    // by its line «на этом устройстве»: «Настройки» has the salon's «Уведомления» too
+    await opens(M.notifyHint, /\/b\/more$/, B.push.title);
     await expect(page.getByRole("region", { name: B.push.title })).toBeVisible();
     // (the language and the way out are not on this page any more: they are rows of «Ещё»)
     await expect(page.getByRole("button", { name: B.more.logout })).toHaveCount(0);
@@ -391,7 +392,7 @@ test.describe("an owner who does not cut, on a phone", () => {
     await shot(page, "more-salon");
 
     // this device's notifications: his own page in the barber's half, in the same frame
-    await more.locator(".mo-row", { hasText: M.notify }).click();
+    await more.locator(".mo-row", { hasText: M.notifyHint }).click();
     await page.waitForURL((u) => u.pathname === "/b/more");
     await hydrated(page);
     await expect(page.getByRole("heading", { level: 1, name: B.push.title })).toBeVisible();

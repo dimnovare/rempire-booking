@@ -3,7 +3,7 @@ import type { Page } from "@playwright/test";
 import { COPY } from "../src/lib/i18n";
 import { DEMO_REVIEWS } from "../tools/demo-structure.mjs";
 import { OUT } from "./env";
-import { A, asBarber, asOwner, B, expect, expectNoSideScroll, hydrated, test } from "./helpers";
+import { A, asBarber, B, expect, expectNoSideScroll, hydrated, test } from "./helpers";
 
 /**
  * The client app (docs/apps.md): the booking site with its own manifest and
@@ -424,33 +424,7 @@ test.describe("the reminder as a notification", () => {
     await cancelFromTop(page);
   });
 
-  test.describe("Renat's switch", () => {
-    test.use(asOwner);
-
-    test("SMS, notification or both: it saves by itself", async ({ page }) => {
-      await page.goto("/admin/requests");
-      await hydrated(page);
-      const group = page.getByRole("group", { name: A.req.reminder });
-      const card = page.locator(".adm-card", { has: group });
-      await expect(group.getByRole("button")).toHaveText([A.req.reminderBy.sms, A.req.reminderBy.push, A.req.reminderBy.both]);
-      await expect(group.getByRole("button", { name: A.req.reminderBy.both })).toHaveAttribute("aria-pressed", "true");
-      await expect(card.getByText(A.req.reminderHint.both)).toBeVisible();
-      await expectNoSideScroll(page);
-      try {
-        await group.getByRole("button", { name: A.req.reminderBy.push }).click();
-        await expect(card.getByText(A.req.reminderHint.push)).toBeVisible();
-        await expect(card.getByText(B.saved, { exact: true }).first()).toBeVisible();
-        await page.reload();
-        await hydrated(page);
-        await expect(page.getByRole("group", { name: A.req.reminder }).getByRole("button", { name: A.req.reminderBy.push })).toHaveAttribute("aria-pressed", "true");
-      } finally {
-        // back to «both» for every other test
-        const g = page.getByRole("group", { name: A.req.reminder });
-        await g.getByRole("button", { name: A.req.reminderBy.both }).click();
-        await expect(page.locator(".adm-card", { has: g }).getByText(B.saved, { exact: true }).first()).toBeVisible();
-      }
-    });
-  });
+  // «SMS, push or both», once on «Запросы», is on «Настройки → Уведомления» now: notifications.spec.ts
 });
 
 /** «Продать»: «Фото» opens the phone's camera; an older picture has its own way in (Dim, 18.11). */

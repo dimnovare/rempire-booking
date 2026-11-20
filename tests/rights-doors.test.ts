@@ -54,6 +54,7 @@ import * as requests from "@/app/admin/(app)/requests/actions";
 import * as schedule from "@/app/admin/(app)/schedule/actions";
 import * as services from "@/app/admin/(app)/services/actions";
 import * as settingsActs from "@/app/admin/(app)/settings/actions";
+import * as notif from "@/app/admin/(app)/settings/notifications/actions";
 import * as staffActs from "@/app/admin/(app)/staff/actions";
 import * as bSell from "@/app/b/(app)/sell/actions";
 import * as bTime from "@/app/b/(app)/time/actions";
@@ -602,10 +603,19 @@ describe("Услуги", () => {
   });
 });
 
+/* ------------------------------------------------------------------ 7. Уведомления */
+
+describe("Уведомления", () => {
+  // either opens «Настройки → Уведомления»; each changes its own channel of a type
+  both("notify.sms", "owner", () => notif.saveTypeAction("reminder", { lead: { sms: 60 } }), (r) => r.ok === true);
+  both("notify.email", "owner", () => notif.saveTypeAction("confirmation", { on: false }), (r) => r.ok === true);
+});
+
 /* ------------------------------------------------------------------ 8. Настройки */
 
 describe("Настройки", () => {
-  both("settings.system", "owner", () => requests.setReminder("sms"), (r) => r === true);
+  // the reminder by SMS, by push or both, on «Уведомления» (once on «Запросы»)
+  both("settings.system", "owner", () => notif.saveTypeAction("reminder", { mode: "sms" }), (r) => r.ok === true);
   both("settings.users", "owner", (c) => account.linkUserStaff(c.desk, c.jev), (r) => r === true);
   both("settings.users.remove", "owner", (c) => account.toggleUser(c.desk, false), (r) => r === true);
   both(

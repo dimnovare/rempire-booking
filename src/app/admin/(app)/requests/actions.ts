@@ -2,9 +2,7 @@
 
 import { refresh } from "next/cache";
 import { requireAdmin } from "@/lib/auth/current";
-import { can } from "@/lib/auth/rights";
 import { answerRequest, type AnswerResult } from "@/lib/barber/requests";
-import { setClientReminder } from "@/lib/client-push";
 import { sendPushSoon } from "@/lib/outbox";
 
 /**
@@ -18,13 +16,4 @@ export async function answer(id: string, verdict: string, note: string): Promise
   if (r.ok || r.code === "gone") refresh();
   if (r.ok) sendPushSoon();
   return r;
-}
-
-/** «Доступ к системным настройкам»: the client's reminder before a visit by SMS, by a notification on his phone, or both. */
-export async function setReminder(value: string): Promise<boolean> {
-  const { user, business } = await requireAdmin();
-  if (!can(user, "settings.system")) return false;
-  const ok = await setClientReminder(business, user.id, String(value ?? ""));
-  if (ok) refresh();
-  return ok;
 }
