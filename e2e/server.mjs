@@ -34,6 +34,8 @@ const env = {
   SEED_BUSY: "",
   EMAIL_TRANSPORT: "console",
   SMS_TRANSPORT: "console",
+  // «Найти» in «Контакты» answers from src/lib/geocode.ts itself: the e2e server never calls OpenStreetMap's geocoder
+  GEOCODER: "fake",
   // no push keys: the e2e server must never call a push service
   VAPID_PUBLIC_KEY: vapid?.publicKey ?? "",
   VAPID_PRIVATE_KEY: vapid?.privateKey ?? "",

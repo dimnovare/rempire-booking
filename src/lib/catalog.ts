@@ -8,7 +8,8 @@
  * review hidden in the admin is gone from the counts on the next load.
  */
 import type { Querier } from "./db";
-import { salonReviewCount, staffRatings } from "./reviews";
+import { phonesOf, type PhoneEntry } from "./admin/location-form";
+import { salonRating, staffRatings } from "./reviews";
 
 export type L10n = { ru?: string; et?: string; en?: string };
 
@@ -41,7 +42,13 @@ export type CatalogLocation = {
   /** the salon's own logo (db/migrations/031_location_images.sql); '' keeps REMPIRE's mark */
   logo: string;
   address: string;
+  /** ISO code and postcode, under the address in «Как нас найти» (migration 034) */
+  country: string;
+  postcode: string;
+  /** the main number: letters, SMS and «Позвонить» show it; the first of `phones` */
   phone: string;
+  /** every number with its label, the main one first: «Контакты» lists them all */
+  phones: PhoneEntry[];
   /** the opening hours as the salon writes them */
   schedule: L10n;
   website: string;
@@ -58,6 +65,8 @@ export type CatalogLocation = {
   viber: string;
   /** the reviews about the salon itself on show (no barber) */
   reviewCount: number;
+  /** their average, two decimals; null with none */
+  rating: number | null;
 };
 
 export type Catalog = {
@@ -71,7 +80,10 @@ type LocationRow = {
   name: string;
   logo: string;
   address: string;
+  country: string;
+  postcode: string;
   phone: string;
+  phones: unknown;
   schedule: L10n | null;
   website: string;
   about: L10n | null;
@@ -89,7 +101,10 @@ const NO_LOCATION: LocationRow = {
   name: "",
   logo: "",
   address: "",
+  country: "",
+  postcode: "",
   phone: "",
+  phones: [],
   schedule: {},
   website: "",
   about: {},
@@ -117,14 +132,20 @@ function l10n(v: unknown): L10n {
 /** A photo the page may load: one of this site's own files, or an https address. */
 const photoOk = (u: unknown): u is string => typeof u === "string" && (/^\/(?!\/)\S+$/.test(u) || /^https:\/\/\S+$/.test(u));
 
-function locationOf(r: LocationRow, reviewCount: number): CatalogLocation {
+function locationOf(r: LocationRow, reviews: { count: number; rating: number | null }): CatalogLocation {
   const lat = r.lat == null ? null : Number(r.lat);
   const lng = r.lng == null ? null : Number(r.lng);
   return {
     name: r.name,
     logo: photoOk(r.logo) ? r.logo : "",
     address: r.address,
+    country: /^[A-Z]{2}$/.test(r.country) ? r.country : "",
+    postcode: r.postcode.trim(),
     phone: r.phone,
+    // a number with no digits is no link to call
+    phones: phonesOf(r.phones, r.phone)
+      .filter((p) => /\d/.test(p.number))
+      .map((p) => ({ number: p.number.trim(), label: p.label.trim() })),
     schedule: l10n(r.schedule),
     website: r.website.trim(),
     about: l10n(r.about),
@@ -135,7 +156,8 @@ function locationOf(r: LocationRow, reviewCount: number): CatalogLocation {
     whatsapp: r.whatsapp.trim(),
     telegram: r.telegram.trim(),
     viber: r.viber.trim(),
-    reviewCount,
+    reviewCount: reviews.count,
+    rating: reviews.rating,
   };
 }
 
@@ -143,7 +165,7 @@ export async function loadCatalog(q: Querier, businessId: string): Promise<Catal
   const [biz, locs, services, staff, offers, ratings, salonReviews] = await Promise.all([
     q<{ name: string; timezone: string }>("select name, timezone from businesses where id = $1", [businessId]),
     q<LocationRow>(
-      `select name, logo, address, phone, schedule, website, about, photos, lat, lng, instagram, facebook, whatsapp, telegram, viber
+      `select name, logo, address, country, postcode, phone, phones, schedule, website, about, photos, lat, lng, instagram, facebook, whatsapp, telegram, viber
          from locations where business_id = $1 and active order by sort, name limit 1`,
       [businessId],
     ),
@@ -166,7 +188,7 @@ export async function loadCatalog(q: Querier, businessId: string): Promise<Catal
       [businessId],
     ),
     staffRatings(q, businessId),
-    salonReviewCount(q, businessId),
+    salonRating(q, businessId),
   ]);
   return {
     business: biz[0] ?? { name: "REMPIRE", timezone: "Europe/Tallinn" },

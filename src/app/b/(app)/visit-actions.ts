@@ -10,18 +10,38 @@
  * asked where the change is made (src/lib/auth/rights.ts).
  */
 import { refresh } from "next/cache";
-import { adminSetStatus, isUuid, type AdminOutcome } from "@/lib/admin/visits";
+import { adminSetStatus, adminUpdateVisit, isUuid, type AdminOutcome } from "@/lib/admin/visits";
 import { requireStaff } from "@/lib/auth/current";
 import { can } from "@/lib/auth/rights";
 import { barberBook, barberCancel, barberFreeStarts, barberMove, searchMyClients, type MyClient, type NewVisitInput, type StartsAnswer } from "@/lib/barber/book";
 import { clientCard, setClientNote, setVisitNote, type ClientCard } from "@/lib/barber/clients";
 import { query } from "@/lib/db";
 
-export async function setVisitStatus(visitId: string, status: string): Promise<boolean> {
+/**
+ * A visit's status. `confirmed` is «Подтвердил» on a visit that waits
+ * (true: «Подтвердил», false: «Ожидание»); left out, it stays as it is. Any
+ * other status clears it (src/lib/admin/visits.ts).
+ */
+export async function setVisitStatus(visitId: string, status: string, confirmed?: boolean): Promise<boolean> {
   const { user, business, staff } = await requireStaff();
-  const ok = await adminSetStatus(business, String(visitId), String(status), user.id, { onlyStaffId: staff.id, who: user });
+  const ok = await adminSetStatus(business, String(visitId), String(status), user.id, { onlyStaffId: staff.id, who: user }, confirmed === undefined ? undefined : confirmed === true);
   if (ok) refresh();
   return ok;
+}
+
+/**
+ * The services of one of his visits («+ Добавить услугу», «Убрать услугу»
+ * in the visit sheet): his own prices and times, as the admin's window
+ * (adminUpdateVisit, with the right «visit.edit.services»). `force`: the
+ * «anyway» answer to his hours or a break.
+ */
+export async function setVisitServices(visitId: string, serviceIds: string[], force = false): Promise<AdminOutcome> {
+  const { user, business, staff } = await requireStaff();
+  const ids = Array.isArray(serviceIds) ? serviceIds.map(String) : [];
+  if (!ids.length || !ids.every(isUuid)) return { ok: false, code: "invalid", field: "services" };
+  const out = await adminUpdateVisit(business, String(visitId), { serviceIds: ids, force: force === true }, user.id, { onlyStaffId: staff.id, who: user });
+  if (out.ok) refresh();
+  return out;
 }
 
 /** Free start times on a day: for these services, or for moving this visit. */

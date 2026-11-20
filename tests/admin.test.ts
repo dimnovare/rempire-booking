@@ -3,7 +3,7 @@ import { loadAvailability } from "@/lib/availability";
 import { loadCalendar, searchClients } from "@/lib/admin/calendar";
 import { daySpan, hhmm, momentAt, snap, weekStart } from "@/lib/admin/grid";
 import { listServices, saveService } from "@/lib/admin/services";
-import { PHOTO_MAX_BYTES, addSpecialTime, cleanSpans, imageMime, listStaff, saveStaffOffers, saveStaffPhoto, saveStaffProfile, saveWeeklyHours, setDayOverride, slugify, staffDetail, staffPhoto } from "@/lib/admin/staff";
+import { PHOTO_MAX_BYTES, addSpecialTime, cleanSpans, imageMime, listStaff, saveStaffPhoto, saveStaffProfile, saveWeeklyHours, setDayOverride, slugify, staffDetail, staffPhoto } from "@/lib/admin/staff";
 import { adminCancelVisit, adminCreateVisit, adminSetStatus, adminUpdateVisit, addTimeOff, removeTimeOff, type AdminVisitInput } from "@/lib/admin/visits";
 import { closeDb, query } from "@/lib/db";
 import { zonedToUtc } from "@/lib/tz";
@@ -412,14 +412,17 @@ describe("admin: barbers and services", () => {
     expect(cal.work[demo.staff.renat][TUE]).toHaveLength(1);
   });
 
-  it("a barber's own price and time reach the client flow; switched off, the service is gone", async () => {
-    await saveStaffOffers(demo.business, demo.staff.renat, [{ serviceId: demo.services.clip, offered: true, priceCents: 4500, durationMin: 60 }], ACTOR);
+  it("a barber's own price and time, set in the service's window, reach the client flow; switched off, the service is gone", async () => {
+    const clip = (await listServices(query, demo.business.id)).find((s) => s.id === demo.services.clip)!;
+    const form = { name: clip.name, durationMin: clip.durationMin, priceCents: clip.priceCents, priceMaxCents: clip.priceMaxCents, bufferMin: clip.bufferMin, online: clip.online, active: clip.active };
+    const renat = (offered: boolean, priceCents: number, durationMin: number) => saveService(demo.business, demo.services.clip, { ...form, barbers: [{ staffId: demo.staff.renat, offered, priceCents, durationMin }] }, ACTOR);
+    expect(await renat(true, 4500, 60)).toEqual({ ok: true, id: demo.services.clip });
     let look = await loadAvailability(query, { business: demo.business, serviceIds: [demo.services.clip], staffId: demo.staff.renat, from: TUE, days: 1, now: NOW });
     expect(look.quotes[0]).toMatchObject({ priceCents: 4500, durationMin: 60 });
-    await saveStaffOffers(demo.business, demo.staff.renat, [{ serviceId: demo.services.clip, offered: false, priceCents: null, durationMin: null }], ACTOR);
+    expect((await renat(false, 4500, 60)).ok).toBe(true);
     look = await loadAvailability(query, { business: demo.business, serviceIds: [demo.services.clip], staffId: demo.staff.renat, from: TUE, days: 1, now: NOW });
     expect(look.quotes).toEqual([]);
-    expect(await saveStaffOffers(demo.business, demo.staff.renat, [{ serviceId: demo.services.clip, offered: true, priceCents: -1, durationMin: null }], ACTOR)).toMatchObject({ ok: false });
+    expect(await renat(true, -1, 60)).toEqual({ ok: false, field: `price:${demo.staff.renat}` });
   });
 
   it("adds a barber with a fresh slug, then the detail page has it", async () => {

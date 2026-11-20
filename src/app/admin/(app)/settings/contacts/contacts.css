@@ -1,0 +1,28 @@
+/* «Контакты» (contacts-view.tsx) as the board Contacts-Map (decision page
+   round 11): the country and the postcode side by side, the address with
+   «Найти», the map with the pin, the point under it; the phones, each
+   with its label and a bin, and «+ Добавить номер». */
+.lcx-cp { display: grid; grid-template-columns: minmax(0, 1fr) 104px; gap: 8px; }
+.lcx-find { display: flex; gap: 8px; min-width: 0; }
+.lcx-find input { flex: 1 1 auto; }
+.lcx-find-btn.adm-btn { flex: none; width: auto; min-height: 48px; padding: 0 12px; gap: 6px; }
+.lcx-geo { font-size: 13px; line-height: 1.35; color: var(--mute); overflow-wrap: anywhere; }
+.lcx-geo:empty { display: none; }
+.lcx-geo.is-ok { color: var(--ok); }
+.lcx-geo.is-bad { color: var(--warn); }
+.lcx-map { height: 180px; border: 1px solid #e0e3eb; border-radius: 10px; }
+.lcx-point { margin: -4px 0 0; font-size: 13px; line-height: 1.35; color: var(--mute); }
+.lcx-paste.adm-link { align-self: flex-start; min-height: 32px; margin-top: -6px; font-size: 13px; color: var(--mute); }
+.lcx-phones { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.lcx-phones li { display: flex; gap: 8px; min-width: 0; }
+/* an input's own width is about twenty letters: without min-width the number would squeeze the label to «Подпи» */
+.lcx-phones input { flex: 1 1 0; min-width: 136px; }
+.lcx-phones input.lcx-label { flex: 0 1 112px; min-width: 72px; }
+.lcx-find input { min-width: 0; }
+.lcx-bin.adm-ibtn { width: 48px; height: 48px; color: var(--mute); }
+.lcx-add { align-self: flex-start; min-height: 44px; display: inline-flex; align-items: center; font-size: 15px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+@media (min-width: 900px) {
+  .lcx-cp { grid-template-columns: minmax(0, 1fr) 160px; }
+  .lcx-map { height: 280px; }
+  .lcx-phones input.lcx-label { flex-basis: 220px; }
+}

@@ -6,7 +6,8 @@
  *   - «Моё, как барбера», for a login linked to a barber: his time, a
  *     product sale, his sums. These are the barber app's own pages (/b),
  *     which open in this same frame with «Ещё» lit;
- *   - «Салон»: the sections that have no tab of their own, and «Продажа
+ *   - «Салон»: the sections that have no tab of their own, «Запросы» with
+ *     how many wait (the red dot on «Ещё» says the same), and «Продажа
  *     товара», which a wide screen has as a tile of its sidebar;
  *   - «Настройки»: the salon's page on the booking site, «Бренд»,
  *     «Контакты», «Галерея» (the sidebar's group of the same name);
@@ -26,10 +27,11 @@ import { Wait } from "../../lang";
 import { getA } from "../../lang-server";
 import { whoAmI } from "../who";
 import { LangRow, LogoutRow } from "./account-rows";
+import { RequestsRow } from "./requests-row";
 import { SaleRow } from "./sale-row";
 
 const MINE: Record<MineRow, string> = { time: "/b/time", sell: "/b/sell", money: "/b/money" };
-const SALON: Record<Exclude<SalonRow, "sale">, string> = {
+const SALON: Record<Exclude<SalonRow, "sale" | "requests">, string> = {
   staff: "/admin/staff",
   schedule: "/admin/schedule",
   services: "/admin/services",
@@ -102,6 +104,8 @@ async function Loaded() {
               <li key={k}>
                 {k === "sale" ? (
                   <SaleRow />
+                ) : k === "requests" ? (
+                  <RequestsRow />
                 ) : (
                   <Link className="adm-item mo-row" href={SALON[k]} prefetch={false}>
                     <b>{A.nav[k]}</b>

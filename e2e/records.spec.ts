@@ -331,7 +331,7 @@ test.describe("records", () => {
     await items.first().click();
     const visit = visitSheet(page, name);
     await expect(visit).toBeVisible();
-    await expect(visit.locator(".adm-time span")).toContainText(barber.name);
+    await expect(visit.locator(".vs-staff")).toContainText(barber.name);
     await expectNoSideScroll(page);
     await visit.getByRole("button", { name: A.close }).click();
     await expect(visit).toHaveCount(0);

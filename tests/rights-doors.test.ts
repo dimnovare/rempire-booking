@@ -549,7 +549,42 @@ describe("Услуги", () => {
   both("services.edit.price", "desk", (c) => save(c, (f) => ({ priceCents: f.priceCents + 100, priceMaxCents: null })), (r) => r.ok);
   both("services.edit.online", "desk", (c) => save(c, (f) => ({ online: !f.online })), (r) => r.ok);
   both("services.delete", "desk", (c) => save(c, () => ({ active: false })), (r) => r.ok);
-  both("services.staff", "desk", (c) => staffActs.saveOffers(c.val, [{ serviceId: c.demo.services.clip, offered: true, priceCents: 2600, durationMin: 30 }]), (r) => r.ok);
+  // a barber's row in the service's window: his price and time, or whether he does it
+  both("services.staff", "desk", async (c) => services.saveServiceAction(c.demo.services.clip, { ...(await formOf(c)), barbers: [{ staffId: c.val, offered: true, priceCents: 2600, durationMin: 30 }] }), (r) => r.ok);
+
+  it("services.staff: the window's other changes need it only when a barber's row changes", async () => {
+    const c = await fresh("desk");
+    await grant(c.me, "services.staff", false);
+    const f = await formOf(c);
+    const [row] = await query<{ price_cents: number | null; duration_min: number | null }>("select price_cents, duration_min from staff_services where staff_id = $1 and service_id = $2", [c.val, c.demo.services.clip]);
+    const same = { staffId: c.val, offered: true, priceCents: row.price_cents ?? f.priceCents, durationMin: row.duration_min ?? f.durationMin };
+    // his row as it is, with the buffer changed: allowed
+    expect((await services.saveServiceAction(c.demo.services.clip, { ...f, bufferMin: f.bufferMin + 5, barbers: [same] })).ok).toBe(true);
+    // the base's length moves, and his, which was the base's, moves with it in the window: allowed
+    const longer = f.durationMin + 5;
+    expect(same.durationMin).toBe(f.durationMin);
+    expect((await services.saveServiceAction(c.demo.services.clip, { ...(await formOf(c)), durationMin: longer, barbers: [{ ...same, durationMin: longer }] })).ok).toBe(true);
+    // his own length, other than the base's, is his row's change
+    expect(await services.saveServiceAction(c.demo.services.clip, { ...(await formOf(c)), barbers: [{ ...same, durationMin: longer + 10 }] })).toEqual({ ok: false, field: "forbidden" });
+    // switching him off is a change of his row
+    expect(await services.saveServiceAction(c.demo.services.clip, { ...(await formOf(c)), barbers: [{ ...same, offered: false }] })).toEqual({ ok: false, field: "forbidden" });
+  });
+
+  it("the table's own changes ask the same rights: the switch, the price in place, a category's name", async () => {
+    for (const has of [true, false]) {
+      const c = await fresh("desk");
+      await grant(c.me, "services.edit.online", has);
+      await grant(c.me, "services.edit.price", has);
+      const f = await formOf(c);
+      expect((await services.setOnlineAction(c.demo.services.clip, !f.online)).ok, `online, ${has}`).toBe(has);
+      expect((await services.setPriceAction(c.demo.services.clip, f.priceCents + 100)).ok, `price, ${has}`).toBe(has);
+    }
+    const c = await fresh("desk");
+    const [cat] = await query<{ id: string }>("select id from service_categories where business_id = $1 limit 1", [c.demo.business.id]);
+    expect((await services.renameCategoryAction(cat.id, "ru", "Стрижки")).ok).toBe(true);
+    await grant(c.me, "services.edit", false);
+    expect(await services.renameCategoryAction(cat.id, "ru", "Бороды")).toEqual({ ok: false, field: "forbidden" });
+  });
 
   it("services.edit: a save that changes nothing of the three needs none of them", async () => {
     const c = await fresh("desk");
@@ -632,8 +667,17 @@ describe("Настройки", () => {
     expect(await settingsActs.addPhotoAction(png())).toEqual(no);
     expect(await settingsActs.removePhotoAction("/x.svg")).toEqual(no);
     expect(await settingsActs.orderPhotosAction([])).toEqual(no);
+    // «Найти» asks the geocoder for nobody without it
+    expect(await settingsActs.geocodeAction("Mardi 1, Tallinn", "EE")).toEqual({ ok: false, why: "failed" });
     await grant(c.me, "settings.location", true);
     expect(await settingsActs.addPhotoAction(png())).toMatchObject({ ok: true });
+    // with it, the e2e server's stand-in answers: nothing goes out from a test
+    process.env.GEOCODER = "fake";
+    try {
+      expect(await settingsActs.geocodeAction("Mardi 1, Tallinn", "EE")).toMatchObject({ ok: true, hit: { lat: 59.430883, lng: 24.761967, postcode: "10145" } });
+    } finally {
+      delete process.env.GEOCODER;
+    }
     const [row] = await query<{ name: string }>("select name from locations where business_id = $1", [c.demo.business.id]);
     expect(row.name).toBe("REMPIRE");
   });

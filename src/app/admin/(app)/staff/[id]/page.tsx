@@ -71,5 +71,5 @@ async function Detail({ params }: { params: PageProps<"/admin/staff/[id]">["para
   if (!d) notFound();
   // his own app is «Мой день»; another barber's opens with the right to see his column
   const app = d.id !== user.staffId && can(user, "journal.staff", { staffId: d.id });
-  return <BarberPage key={d.id} d={d} tz={business.timezone} today={today} back={<BackToStaff A={A} />} app={app} />;
+  return <BarberPage key={d.id} d={d} tz={business.timezone} today={today} back={<BackToStaff A={A} />} app={app} services={canGroup(user, "services")} />;
 }

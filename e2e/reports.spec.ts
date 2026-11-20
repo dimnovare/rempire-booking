@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { Page } from "@playwright/test";
 import { OUT } from "./env";
-import { A, asOwner, expect, expectNoSideScroll, hydrated, test } from "./helpers";
+import { A, asOwner, expect, expectNoSideScroll, hydrated, smallTargets, test } from "./helpers";
 
 /**
  * The reports Dim asked for in round 10 (20.11): «Основные показатели»
@@ -9,8 +9,9 @@ import { A, asOwner, expect, expectNoSideScroll, hydrated, test } from "./helper
  * feed) and «Отзывы»; then «Сообщения» (every message the app sent) and
  * «Изменения данных» (the change log, the owner's), decision 29. The owner
  * opens each on a phone and on a wide screen; the page has its title and its
- * cards, and nothing scrolls sideways. The demo has no reviews, so «Отзывы»
- * says there are none; the two logs hold whatever the other specs did, so
+ * cards, and nothing scrolls sideways. The demo has no reviews in the last
+ * twelve months, so «Отзывы» says there are none unless salon-review.spec.ts
+ * has sent one; it and the two logs hold whatever the other specs did, so
  * they show their count, and a change unfolds when there is one.
  */
 const D = A.dash;
@@ -27,15 +28,73 @@ const open = async (page: Page, url: string, title: string) => {
   await hydrated(page);
 };
 
+const K = A.kpiPhone;
+
 const checks = (wide: boolean) => {
-  test("«Основные показатели»: sales, attendance and fill rate", async ({ page }) => {
-    await open(page, "/admin/analytics", D.kpi);
-    for (const h of [D.sales, D.attendance, D.fill]) {
-      await expect(page.getByRole("heading", { level: 2, name: h })).toBeVisible();
-    }
-    await expectNoSideScroll(page);
-    await shot(page, "kpi", wide);
-  });
+  if (wide)
+    test("«Основные показатели»: sales, attendance and fill rate", async ({ page }) => {
+      await open(page, "/admin/analytics", D.kpi);
+      for (const h of [D.sales, D.attendance, D.fill]) {
+        await expect(page.getByRole("heading", { level: 2, name: h })).toBeVisible();
+      }
+      await expectNoSideScroll(page);
+      await shot(page, "kpi", wide);
+    });
+  else
+    test("«Отчёты» on a phone: the period, a barber, the revenue and its rows", async ({ page }) => {
+      await page.goto("/admin");
+      await hydrated(page);
+      // the tab bar's «Отчёты» opens the phone page
+      await page.getByRole("navigation", { name: A.sections }).getByRole("link", { name: A.nav.reports }).click();
+      await page.waitForURL(/\/admin\/analytics$/);
+      const pk = page.locator(".pk:visible");
+      await expect(pk.getByRole("heading", { level: 1, name: K.title })).toBeVisible();
+      await hydrated(page);
+      // a month by default, against the month before
+      const seg = pk.getByRole("group", { name: K.perLabel });
+      await expect(seg.getByRole("button")).toHaveText([K.pers.day, K.pers.week, K.pers.month, K.pers.range]);
+      await expect(seg.getByRole("button", { name: K.pers.month })).toHaveAttribute("aria-pressed", "true");
+      const rev = pk.locator(".pk-rev");
+      await expect(rev).toHaveAccessibleName(/^Выручка за /);
+      await expect(rev.locator(".pk-sum")).toHaveText(/ €$/);
+      await expect(rev.locator(".pk-bars span")).toHaveCount(7);
+      await expect(rev.locator(".pk-bars")).toHaveAccessibleName(new RegExp(`^${K.bars}: `));
+      await expect(pk.locator(".pk-rows dt b")).toHaveText([K.clients, K.records, K.noShows, K.goods, K.load]);
+      await expect(pk.locator(".pk-rows dt small")).toHaveText([K.avg, K.online, K.cancelled, K.goodsSold, K.loadHint]);
+      await expect(pk.locator(".pk-rows dd b").first()).toHaveText(/^\d+$/);
+      await expectNoSideScroll(page);
+      expect(await smallTargets(page)).toEqual([]);
+      await shot(page, "kpi", wide);
+
+      // a day: its own revenue
+      await seg.getByRole("button", { name: K.pers.day }).click();
+      await expect(seg.getByRole("button", { name: K.pers.day })).toHaveAttribute("aria-pressed", "true");
+      await expect(pk).toHaveAttribute("aria-busy", "false");
+      await expect(pk.locator(".pk-pick input")).toHaveAttribute("type", "date");
+
+      // one barber
+      await expect(pk.locator(".pk-staff b")).toHaveText(K.allStaff);
+      await pk.locator(".pk-staff").click();
+      const list = page.getByRole("dialog", { name: K.staff }).getByRole("group", { name: K.staff });
+      await expect(list.getByRole("button", { name: K.allStaff })).toHaveAttribute("aria-pressed", "true");
+      const one = list.getByRole("button").nth(1);
+      const name = (await one.innerText()).trim();
+      await one.click();
+      await expect(page.getByRole("dialog", { name: K.staff })).toHaveCount(0);
+      await expect(pk.locator(".pk-staff b")).toHaveText(name);
+      await expect(pk).toHaveAttribute("aria-busy", "false");
+
+      // «Период» asks for two dates first
+      await seg.getByRole("button", { name: K.pers.range }).click();
+      const range = page.getByRole("dialog", { name: K.pers.range });
+      await expect(range.getByLabel(K.from)).toBeVisible();
+      await expect(range.getByLabel(K.to)).toBeVisible();
+      await range.getByRole("button", { name: K.show }).click();
+      await expect(range).toHaveCount(0);
+      await expect(seg.getByRole("button", { name: K.pers.range })).toHaveAttribute("aria-pressed", "true");
+      await expect(rev).toHaveAccessibleName(K.revenueRange);
+      await expectNoSideScroll(page);
+    });
 
   test("«Визиты»: the day's visits and the booking feed", async ({ page }) => {
     await open(page, "/admin/dashboard", D.visitsTitle);
@@ -49,9 +108,13 @@ const checks = (wide: boolean) => {
     await shot(page, "visits", wide);
   });
 
-  test("«Отзывы»: none yet in the demo", async ({ page }) => {
+  test("«Отзывы»: none in the demo's last twelve months, or the ones salon-review.spec.ts sent", async ({ page }) => {
     await open(page, "/admin/reviews", A.reviews.title);
-    await expect(page.getByText(A.reviews.none)).toBeVisible();
+    const found = page.locator(".rc-found:visible");
+    await expect(found).toBeVisible();
+    const n = Number(await found.locator("b").textContent());
+    if (n > 0) await expect(page.locator(wide ? ".rv-table tbody tr:visible" : ".rv-rows li:visible").first()).toBeVisible();
+    else await expect(page.getByText(A.reviews.none)).toBeVisible();
     await expectNoSideScroll(page);
     await shot(page, "reviews", wide);
   });

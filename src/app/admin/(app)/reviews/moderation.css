@@ -1,0 +1,16 @@
+/* «Отзывы»: the new reviews from the salon's page, waiting for the salon (reviews-view.tsx). */
+
+/* «2 новых отзыва ждут проверки · Показать новые» over the list */
+.rv-waiting { margin: 8px 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; padding: 4px 12px; border-radius: 8px; background: #fff8d6; color: #2b3134; font-size: 14px; line-height: 20px; }
+.rv-waiting .adm-link { min-height: 36px; font-weight: 500; }
+/* «Новый»: yellow, as the main action */
+.rv-tag.rv-new { background: #ffcb00; color: #2b3134; font-weight: 600; }
+/* «Одобрить» and «Скрыть» side by side */
+.rv-acts { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.rv-item .rv-acts { margin-top: 4px; }
+.rv-item .rv-acts .adm-btn { margin-top: 0; }
+@media (min-width: 900px) {
+  .rv-waiting { justify-content: center; }
+  .rv-table th.rv-act, .rv-table td.rv-act { width: 1%; white-space: nowrap; }
+  .rv-table tbody tr.is-new td { background: #fffbea; }
+}

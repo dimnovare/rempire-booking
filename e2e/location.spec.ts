@@ -145,51 +145,121 @@ const checks = (wide: boolean) => {
     await expect(s.locator(".ab-panel .mark-logo")).not.toHaveClass(/\bis-own\b/);
   });
 
-  test("«Контакты»: the hours and the pin from a map's link; a short link is refused; then as they were", async ({ page }) => {
+  test("«Контакты»: the address found on the map and the pin dragged, a second phone, the hours, the pin from a map's link; then as they were", async ({ page }) => {
+    // no OpenStreetMap tile is fetched: the map shows its ground; the geocoder is the e2e server's own (GEOCODER=fake)
+    await page.route("https://tile.openstreetmap.org/**", (r) => r.abort());
     await open(page, "/admin/settings/contacts", A.nav.contacts);
-    for (const h of [C.where, C.hours, C.phoneSite, C.socials, C.messengers]) {
+    for (const h of [C.where, C.phones, C.hours, C.site, C.socials, C.messengers]) {
       await expect(page.getByRole("heading", { level: 2, name: h, exact: true })).toBeVisible();
     }
     const hours = page.getByRole("textbox", { name: `${C.hours} (RU)` });
+    const address = page.getByRole("textbox", { name: C.address, exact: true });
+    const country = page.getByRole("combobox", { name: C.country, exact: true });
+    const postcode = page.getByRole("textbox", { name: C.postcode, exact: true });
+    const point = page.locator("#loc-point:visible");
+    const mapPin = page.locator(".lcx-map:visible .osm-pin");
+    const geo = page.locator(".lcx-geo:visible");
     const pin = page.getByLabel(C.pin, { exact: true });
-    const note = page.locator("#loc-pin-note:visible");
+    const paste = page.getByRole("button", { name: C.pinPaste });
     await expect(hours).toHaveValue("пн–сб 10:00–19:00");
-    await expect(pin).toHaveValue("59.430883, 24.761967");
-    await expect(note).toContainText(C.pinIs("59.430883, 24.761967"));
-    await expect(page.getByRole("textbox", { name: C.address, exact: true })).toHaveValue("Mardi 1, Tallinn");
+    await expect(address).toHaveValue("Mardi 1, Tallinn");
+    await expect(country).toHaveValue("EE");
+    await expect(postcode).toHaveValue("");
+    await expect(point).toHaveText(C.pinLine("59.4309, 24.7620"));
+    await expect(mapPin).toHaveAttribute("data-lat", "59.430883");
+    await expect(mapPin).toHaveAttribute("data-lng", "24.761967");
+    await expect(page.getByRole("textbox", { name: C.phoneN(1), exact: true })).toHaveValue("+372 5623 7237");
+    // the link-or-numbers field waits behind its button while the pin is fine
+    await expect(pin).toHaveCount(0);
     try {
       await hours.fill("пн–сб 10:00–20:00 (e2e)");
       await saved(page);
 
+      // «Найти»: an address it does not know says so; one it knows moves the pin and fills the postcode
+      await address.fill("Nowhere street 1, Tallinn");
+      await page.getByRole("button", { name: C.find, exact: true }).click();
+      await expect(geo).toHaveText(C.findNone);
+      await address.fill("Fake street 7, Tallinn");
+      await page.getByRole("button", { name: C.find, exact: true }).click();
+      await expect(geo).toHaveText(C.found("Fake street 7, Tallinn, Tallinn, Eesti"));
+      await expect(postcode).toHaveValue("10111");
+      await expect(point).not.toHaveText(C.pinLine("59.4309, 24.7620"));
+      await saved(page);
+      const found = { lat: Number(await mapPin.getAttribute("data-lat")), lng: Number(await mapPin.getAttribute("data-lng")) };
+      expect(Math.abs(found.lat - 59.43)).toBeLessThan(0.01);
+
+      // the pin dragged to the right: further east, at the same height
+      await mapPin.scrollIntoViewIfNeeded();
+      const box = (await mapPin.boundingBox())!;
+      const x = box.x + box.width / 2;
+      const y = box.y + box.height / 3;
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x + 30, y, { steps: 6 });
+      await page.mouse.move(x + 60, y, { steps: 6 });
+      await page.mouse.up();
+      await expect.poll(async () => Number(await mapPin.getAttribute("data-lng"))).toBeGreaterThan(found.lng);
+      expect(Math.abs(Number(await mapPin.getAttribute("data-lat")) - found.lat)).toBeLessThan(0.0002);
+      await saved(page);
+
+      // a second number, with its own word
+      await page.getByRole("button", { name: `+ ${C.phoneAdd}` }).click();
+      await page.getByRole("textbox", { name: C.phoneN(2), exact: true }).fill("+372 5550 0124");
+      await page.getByRole("textbox", { name: C.labelN(2), exact: true }).fill("Тату");
+      await saved(page);
+
       // a short link names no place until it is opened: what to do instead, and nothing is sent
+      await paste.click();
+      const note = page.locator("#loc-pin-note:visible");
       await pin.fill("https://maps.app.goo.gl/AbCdEf123");
       await expect(note).toHaveText(C.pinShort);
       await expect(page.locator(".loc-bar [role=status]:visible")).toHaveText(C.pinShort);
 
-      // a place's link from Google Maps: its own pin, shown before it is saved, with a look at it on the map
+      // a place's link from Google Maps: its own pin, shown before it is saved, on our map at once
       await pin.fill("https://www.google.com/maps/place/Mardi+1,+Tallinn/@59.43,24.76,17z/data=!3m1!4b1!4m6!3m5!8m2!3d59.4301!4d24.7602");
       await expect(note).toContainText(C.pinIs("59.4301, 24.7602"));
       await expect(note.getByRole("link", { name: C.pinOpen })).toHaveAttribute("href", /openstreetmap\.org\/\?mlat=59\.4301&mlon=24\.7602/);
+      await expect(mapPin).toHaveAttribute("data-lat", "59.4301");
       await saved(page);
       await expectNoSideScroll(page);
       await shot(page, "contacts", wide);
 
+      // the salon's page: every number with its word under it, the postcode and the country under the address, the pin on our map
       const s = await salon(page);
       await expect(s.getByText("пн–сб 10:00–20:00 (e2e)")).toBeVisible();
-      await expect(s.locator(".ab-map iframe")).toHaveAttribute("src", /&marker=59\.430100%2C24\.760200$/);
+      await expect(s.getByRole("link", { name: "+372 5623 7237" })).toHaveAttribute("href", "tel:+37256237237");
+      const second = s.getByRole("link", { name: /^\+372 5550 0124/ });
+      await expect(second).toHaveAttribute("href", "tel:+37255500124");
+      await expect(second).toContainText("Тату");
+      await expect(s.getByText("10111, Эстония")).toBeVisible();
+      await expect(s.locator(".ab-map .osm-pin")).toHaveAttribute("data-lat", "59.4301");
+      await expect(s.locator(".ab-map .osm-pin")).toHaveAttribute("data-lng", "24.7602");
+      await expect(s.locator(".ab-map .osm-credit")).toHaveAttribute("href", "https://www.openstreetmap.org/copyright");
     } finally {
       await open(page, "/admin/settings/contacts", A.nav.contacts);
-      const h = page.getByRole("textbox", { name: `${C.hours} (RU)` });
-      const p = page.getByLabel(C.pin, { exact: true });
-      if ((await h.inputValue()) !== "пн–сб 10:00–19:00" || (await p.inputValue()) !== "59.430883, 24.761967") {
-        await h.fill("пн–сб 10:00–19:00");
-        await p.fill("59.430883, 24.761967");
+      const second = page.getByRole("button", { name: C.phoneRemove(2) });
+      const off =
+        (await hours.inputValue()) !== "пн–сб 10:00–19:00" ||
+        (await address.inputValue()) !== "Mardi 1, Tallinn" ||
+        (await postcode.inputValue()) !== "" ||
+        (await second.count()) > 0 ||
+        (await mapPin.getAttribute("data-lat")) !== "59.430883" ||
+        (await mapPin.getAttribute("data-lng")) !== "24.761967";
+      if (off) {
+        if (await second.count()) await second.click();
+        await hours.fill("пн–сб 10:00–19:00");
+        await address.fill("Mardi 1, Tallinn");
+        await postcode.fill("");
+        if (!(await pin.count())) await paste.click();
+        await pin.fill("59.430883, 24.761967");
         await saved(page);
       }
     }
     const s = await salon(page);
     await expect(s.getByText("пн–сб 10:00–19:00")).toBeVisible();
-    await expect(s.locator(".ab-map iframe")).toHaveAttribute("src", /&marker=59\.430883%2C24\.761967$/);
+    await expect(s.getByRole("link", { name: /\+372 5550 0124/ })).toHaveCount(0);
+    await expect(s.locator(".ab-map .osm-pin")).toHaveAttribute("data-lat", "59.430883");
+    await expect(s.locator(".ab-map .osm-pin")).toHaveAttribute("data-lng", "24.761967");
   });
 
   test("«Галерея»: a photo added, moved first, seen on the salon's page, deleted", async ({ page }) => {

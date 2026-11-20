@@ -37,9 +37,10 @@ export type RecordCancelled = (typeof RECORD_CANCELLED)[number];
  * «waiting» is two of our statuses, «ждёт» and «записан», while the client has
  * not confirmed; «confirmed» is «записан» with his confirmation (021): the
  * tool we follow has «Ожидание» and «Клиент подтвердил» apart. A cancelled
- * visit has its own choice.
+ * visit has its own choice. «Готово» is not one any more (Dim, decision
+ * round 11): «arrived» finds the visits marked «done» before too.
  */
-export const RECORD_STATUSES = ["waiting", "confirmed", "arrived", "done", "no_show"] as const;
+export const RECORD_STATUSES = ["waiting", "confirmed", "arrived", "no_show"] as const;
 export type RecordStatus = (typeof RECORD_STATUSES)[number];
 export const RECORD_SOURCES = ["online", "admin", "import"] as const;
 export type RecordSource = (typeof RECORD_SOURCES)[number];

@@ -48,7 +48,7 @@ test.describe("clients", () => {
   test("the bar: four sections and «Ещё», which lists the rest and stays lit on them", async ({ page }) => {
     await page.goto("/admin/clients");
     await hydrated(page);
-    await expect(bar(page).getByRole("link")).toHaveText([A.nav.calendar, A.nav.clients, A.nav.requests, A.nav.invoices, A.nav.more]);
+    await expect(bar(page).getByRole("link")).toHaveText([A.nav.calendar, A.nav.clients, A.nav.reports, A.nav.invoices, A.nav.more]);
     await expect(bar(page).getByRole("link", { name: A.nav.clients })).toHaveAttribute("aria-current", "page");
     await expect(page).toHaveTitle(`${A.nav.clients} · REMPIRE`);
 
@@ -57,8 +57,8 @@ test.describe("clients", () => {
     await hydrated(page);
     await expect(page.getByRole("heading", { level: 1, name: A.more.title })).toBeVisible();
     const others = page.locator(".adm-more .adm-item:visible");
-    // (the last two are the sidebar's tiles on a wide screen: e2e/frame.spec.ts)
-    await expect(others).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.analytics, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.sale.title]);
+    // (the last one is the sidebar's tile on a wide screen: e2e/frame.spec.ts); «Запросы» is a row, «Основные показатели» the tab «Отчёты»
+    await expect(others.locator("b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.sale.title]);
     await expect(bar(page).getByRole("link", { name: A.nav.more })).toHaveAttribute("aria-current", "page");
     await expect(bar(page).locator('a[aria-current="page"]:visible')).toHaveCount(1);
     await expect(page).toHaveTitle(`${A.nav.more} · REMPIRE`);
@@ -81,9 +81,9 @@ test.describe("clients", () => {
       await expect(page).toHaveTitle(`${name} · REMPIRE`);
     }
     // and a section with a tab of its own lights its own
-    await bar(page).getByRole("link", { name: A.nav.requests }).click();
-    await page.waitForURL(/\/admin\/requests$/);
-    await expect(bar(page).getByRole("link", { name: A.nav.requests })).toHaveAttribute("aria-current", "page");
+    await bar(page).getByRole("link", { name: A.nav.reports }).click();
+    await page.waitForURL(/\/admin\/analytics$/);
+    await expect(bar(page).getByRole("link", { name: A.nav.reports })).toHaveAttribute("aria-current", "page");
     await expect(bar(page).getByRole("link", { name: A.nav.more })).not.toHaveAttribute("aria-current", "page");
   });
 
@@ -416,7 +416,7 @@ test.describe("clients", () => {
       // «Ещё» by its address still works here: the same rows
       await page.goto("/admin/more");
       await hydrated(page);
-      await expect(page.locator(".adm-more .adm-item:visible")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.analytics, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.sale.title]);
+      await expect(page.locator(".adm-more .adm-item:visible b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.sale.title]);
     });
 
     test("a client's card is a 900px drawer over the list: its seven tabs, «Сохранить», the question before leaving, a comment, a file, a message", async ({ page, browser }, info) => {

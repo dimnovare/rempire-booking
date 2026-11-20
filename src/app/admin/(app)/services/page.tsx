@@ -1,14 +1,26 @@
+/**
+ * /admin/services: «Услуги» as the table of the admin we follow (Dim,
+ * decisions round 11; the boards «Услуги, таблица» and «Услуга, окно»).
+ * The categories fold, each service is a row, and a service opens in a
+ * 900px window from the right (a full-screen sheet on a phone), where each
+ * barber's own price and time are set.
+ *
+ * /admin/services?open=<id>   opens that service's window (the barber page links here)
+ *
+ * What the login may change comes with the page (`may`), by its rights
+ * (src/lib/auth/rights.ts); the server asks them again on every change.
+ */
 import { Suspense } from "react";
-import { listServices } from "@/lib/admin/services";
+import { servicesBoard } from "@/lib/admin/services";
 import { requireAdmin } from "@/lib/auth/current";
-import { canGroup } from "@/lib/auth/rights";
+import { can, canGroup } from "@/lib/auth/rights";
 import { dbConfigured, query } from "@/lib/db";
 import { Wait } from "../../lang";
 import { getA } from "../../lang-server";
 import { NoRights } from "../no-rights";
-import { ServicesEditor } from "./editor";
+import { ServicesTable } from "./table";
 
-export default function ServicesPage() {
+export default function ServicesPage({ searchParams }: PageProps<"/admin/services">) {
   return (
     <Suspense
       fallback={
@@ -17,12 +29,12 @@ export default function ServicesPage() {
         </main>
       }
     >
-      <Loaded />
+      <Loaded searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function Loaded() {
+async function Loaded({ searchParams }: Pick<PageProps<"/admin/services">, "searchParams">) {
   if (!dbConfigured())
     return (
       <main className="adm-page">
@@ -37,5 +49,22 @@ async function Loaded() {
         <NoRights />
       </main>
     );
-  return <ServicesEditor services={await listServices(query, business.id)} />;
+  const [board, sp] = await Promise.all([servicesBoard(query, business.id), searchParams]);
+  const open = typeof sp?.open === "string" && board.services.some((s) => s.id === sp.open) ? sp.open : null;
+  const edit = can(user, "services.edit");
+  return (
+    <ServicesTable
+      board={board}
+      initialOpen={open}
+      may={{
+        create: can(user, "services.create") && edit,
+        edit,
+        name: edit && can(user, "services.edit.name"),
+        price: edit && can(user, "services.edit.price"),
+        online: edit && can(user, "services.edit.online"),
+        off: edit && can(user, "services.delete"),
+        staff: can(user, "services.staff"),
+      }}
+    />
+  );
 }

@@ -9,26 +9,32 @@
  *                  salon's page («REMPIRE ▾», /api/salon/reviews).
  *   listReviews   the admin's «Отзывы», as the tool we follow has its
  *                  reviews report: date, client, barber, stars, text.
- *   setReviewHidden  takes one off the booking page or puts it back.
+ *   setReviewHidden  takes one off the booking page or puts it back; a new
+ *                  one from the site is approved or turned down by it.
+ *   submitReview  a client's own review from the salon's page («Оцените и
+ *                  напишите отзыв»; migration 035): checked, limited per
+ *                  address and per day, and kept waiting (pending, hidden)
+ *                  until the salon approves it.
  *   importReviews  the Altegio export, read by scripts/import-reviews.ts:
  *                  an upsert by each review's own key, so a second run of
  *                  the same file changes nothing.
  *
  * Rights (src/lib/auth/rights.ts): «Просматривать отзывы» (reports.reviews)
  * lists them; «Удалять отзывы» (reports.reviews.delete) hides and shows
- * them, as the tool's «Удалить» takes one off its widget. The phone of a
- * linked client only with the client base's «contacts in the list».
+ * them, as the tool's «Удалить» takes one off its widget, and approves the
+ * new ones. The phone of a linked client only with the client base's
+ * «contacts in the list».
  *
  * No Next.js here: the pages, the script and the tests call the same code.
  */
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import type { Business } from "./availability";
 import type { Querier } from "./db";
 import { can, maskPhone, seenStaff, type Holder } from "./auth/rights";
 import { seenClientsSql } from "./admin/client-scope";
 import { REVIEW_COMPANY, type ReviewFilter } from "./admin/review-filter";
 import { normalizePhone } from "./phone";
-import { addDays, isLocalDate, zonedToUtc } from "./tz";
+import { addDays, isLocalDate, todayIn, zonedToUtc } from "./tz";
 
 /* ---------- the booking page's stars ---------- */
 
@@ -57,8 +63,16 @@ export type SalonReview = { id: string; at: number; rating: number; body: string
 
 /** How many reviews about the salon itself are on show: «★ 7 отзывов» on its page (catalog.ts). */
 export async function salonReviewCount(q: Querier, businessId: string): Promise<number> {
-  const [row] = await q<{ n: number }>("select count(*)::int as n from reviews where business_id = $1 and staff_id is null and not hidden", [businessId]);
-  return Number(row?.n ?? 0);
+  return (await salonRating(q, businessId)).count;
+}
+
+/** The reviews about the salon itself on show: how many, and their average (two decimals; null with none). «4,9 ★ · 51 отзыв» on its page. */
+export async function salonRating(q: Querier, businessId: string): Promise<{ count: number; rating: number | null }> {
+  const [row] = await q<{ n: number; avg: string | null }>(
+    "select count(*)::int as n, round(avg(rating), 2)::text as avg from reviews where business_id = $1 and staff_id is null and not hidden",
+    [businessId],
+  );
+  return { count: Number(row?.n ?? 0), rating: row?.avg == null ? null : Number(row.avg) };
 }
 
 const SALON_PAGE = 6;
@@ -97,6 +111,116 @@ export async function salonReviews(
   };
 }
 
+/* ---------- a client's own review, from the salon's page ---------- */
+
+/** What one review may hold; the sheet's fields say the same (src/app/[locale]/salon-review.tsx). */
+export const REVIEW_MAX = { name: 60, body: 1000 } as const;
+/**
+ * How many reviews may come: from one address three an hour and five a
+ * day; from the whole site fifty a day, so no crowd of addresses can bury
+ * the salon's list.
+ */
+export const REVIEW_LIMITS = { perHour: 3, perDay: 5, siteDay: 50 } as const;
+/** Sent faster than this after the sheet opened: no person writes a review so fast. */
+export const REVIEW_MIN_MS = 2500;
+/** How long an address's hash is kept for the limit. */
+const HASH_KEEP_MS = 2 * 24 * 60 * 60 * 1000;
+
+/** What the salon's page sends: every field as typed. `website` is the field no person sees; `ms` how long the sheet was open. */
+export type ReviewInput = { rating?: unknown; staffId?: unknown; name?: unknown; text?: unknown; website?: unknown; ms?: unknown };
+export type CleanReview = { rating: number; staffId: string | null; name: string; body: string };
+export type ReviewField = "rating" | "staff" | "name" | "text" | "link";
+export type ReviewSent = { ok: true } | { ok: false; code: "invalid"; field: ReviewField } | { ok: false; code: "too_many" };
+
+/* control characters out; a line break kept only in the text */
+// eslint-disable-next-line no-control-regex
+const CTRL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩]/g;
+/** A link or an address of a site: «https://…», «www.…», «name.com». Spam is links; a review needs none. */
+const LINK = /(?:https?:\/\/|www\.|\b[a-z0-9-]{2,63}\.(?:com|net|org|info|biz|ru|ee|io|me|xyz|top|site|online|shop|club|pro|link|click)\b)/i;
+
+/**
+ * The review as it will be kept, or the first field that is wrong: 1 to 5
+ * whole stars; the barber's id, or nobody for the salon itself; a name of 1
+ * to 60 with a letter in it, on one line; a text of up to 1000, its
+ * paragraphs kept. No links in either.
+ */
+export function cleanReviewInput(input: unknown): { ok: true; value: CleanReview } | { ok: false; field: ReviewField } {
+  const o = (input && typeof input === "object" ? input : {}) as ReviewInput;
+  const rating = typeof o.rating === "number" ? o.rating : typeof o.rating === "string" && /^[1-5]$/.test(o.rating.trim()) ? Number(o.rating) : NaN;
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return { ok: false, field: "rating" };
+  const who = typeof o.staffId === "string" ? o.staffId.trim() : "";
+  if (o.staffId != null && typeof o.staffId !== "string") return { ok: false, field: "staff" };
+  if (who && who !== "salon" && !UUID.test(who)) return { ok: false, field: "staff" };
+  const name = (typeof o.name === "string" ? o.name : "").normalize("NFC").replace(CTRL, " ").replace(/\s+/g, " ").trim();
+  if (!name || [...name].length > REVIEW_MAX.name || !/\p{L}/u.test(name)) return { ok: false, field: "name" };
+  const body = (typeof o.text === "string" ? o.text : "")
+    .normalize("NFC")
+    .replace(/\r\n?/g, "\n")
+    .replace(/\t/g, " ")
+    .replace(CTRL, "")
+    .replace(/[  ]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if ([...body].length > REVIEW_MAX.body) return { ok: false, field: "text" };
+  if (LINK.test(name) || LINK.test(body)) return { ok: false, field: "link" };
+  return { ok: true, value: { rating, staffId: who && who !== "salon" ? who : null, name, body } };
+}
+
+/**
+ * The address, unreadable: an HMAC of it and the salon's day, keyed with
+ * the database's own random key (review_salt, migration 035). The same
+ * address gives one hash a day, so a day's reviews can be counted, and
+ * another the next day.
+ */
+async function addressHash(q: Querier, ip: string, day: string): Promise<string> {
+  const [row] = await q<{ salt: string }>("select salt from review_salt limit 1");
+  if (!row) throw new Error("review_salt is empty: migration 035 makes it");
+  return createHmac("sha256", row.salt).update(`${day}\n${ip.trim().toLowerCase()}`).digest("hex");
+}
+
+/**
+ * A client's review from the salon's page: kept waiting for the salon
+ * (pending and hidden, source «ours»), never shown or counted before it is
+ * approved in «Отзывы».
+ *
+ * A bot is told «thank you» and nothing is written: the field no person
+ * sees has something in it, or the sheet was sent within REVIEW_MIN_MS of
+ * opening. Then the fields (cleanReviewInput), the barber (one of this
+ * salon's, active and bookable), and the limits (REVIEW_LIMITS): «too_many»
+ * once they are reached. The sender's address is kept only as a hash, two
+ * days; older hashes are cleared on the way.
+ */
+export async function submitReview(q: Querier, business: Pick<Business, "id" | "timezone">, input: ReviewInput, ctx: { ip: string; now?: number }): Promise<ReviewSent> {
+  const o = (input && typeof input === "object" ? input : {}) as ReviewInput;
+  if ((typeof o.website === "string" && o.website.trim()) || (typeof o.ms === "number" && o.ms < REVIEW_MIN_MS)) return { ok: true };
+  const c = cleanReviewInput(o);
+  if (!c.ok) return { ok: false, code: "invalid", field: c.field };
+  const v = c.value;
+  if (v.staffId) {
+    const [s] = await q("select id from staff where id = $1 and business_id = $2 and active and bookable", [v.staffId, business.id]);
+    if (!s) return { ok: false, code: "invalid", field: "staff" };
+  }
+  const now = ctx.now ?? Date.now();
+  const at = (ms: number) => new Date(ms).toISOString();
+  await q("update reviews set ip_hash = null where ip_hash is not null and created_at < $1::timestamptz", [at(now - HASH_KEEP_MS)]);
+  const hash = await addressHash(q, ctx.ip, todayIn(business.timezone, now));
+  const [n] = await q<{ hour: number; day: number; site: number }>(
+    `select count(*) filter (where ip_hash = $2 and created_at > $3::timestamptz)::int as hour,
+            count(*) filter (where ip_hash = $2)::int as day,
+            count(*)::int as site
+       from reviews
+      where business_id = $1 and source = 'ours' and created_at > $4::timestamptz`,
+    [business.id, hash, at(now - 60 * 60 * 1000), at(now - 24 * 60 * 60 * 1000)],
+  );
+  if (n && (n.hour >= REVIEW_LIMITS.perHour || n.day >= REVIEW_LIMITS.perDay || n.site >= REVIEW_LIMITS.siteDay)) return { ok: false, code: "too_many" };
+  await q(
+    `insert into reviews (business_id, rating, body, author_name, staff_id, created_at, source, hidden, pending, ip_hash)
+     values ($1, $2, $3, $4, $5, $6::timestamptz, 'ours', true, true, $7)`,
+    [business.id, v.rating, v.body, v.name, v.staffId, at(now), hash],
+  );
+  return { ok: true };
+}
+
 /* ---------- the admin's list ---------- */
 
 export type ReviewRow = {
@@ -117,6 +241,8 @@ export type ReviewRow = {
   staffPhoto: string | null;
   source: "altegio" | "ours";
   hidden: boolean;
+  /** sent from the site and not looked at yet: hidden until approved (migration 035) */
+  pending: boolean;
 };
 
 export type ReviewList = {
@@ -126,6 +252,8 @@ export type ReviewList = {
   /** the average of what was found, hidden ones included; null when nothing was */
   average: number | null;
   rows: ReviewRow[];
+  /** the new ones waiting for the salon, whatever the filter: «2 новых отзыва ждут проверки» */
+  waiting: number;
 };
 
 export type ReviewsMay = { open: boolean; hide: boolean; phones: boolean };
@@ -135,7 +263,7 @@ export function reviewsMay(who: Holder | null | undefined): ReviewsMay {
   return { open, hide: open && can(who, "reports.reviews.delete"), phones: open && can(who, "clients.list_contacts") };
 }
 
-const NONE: ReviewList = { total: 0, page: 1, pages: 0, average: null, rows: [] };
+const NONE: ReviewList = { total: 0, page: 1, pages: 0, average: null, rows: [], waiting: 0 };
 
 /** One page of the list for this filter, newest first. `who` null: no cut (the tests, the script). */
 /**
@@ -165,12 +293,20 @@ export async function listReviews(q: Querier, business: Pick<Business, "id" | "t
   else if (f.staffId) where += ` and r.staff_id = ${p(f.staffId)}::uuid`;
   if (f.rating) where += ` and r.rating = ${p(f.rating)}`;
   if (f.shown === "shown") where += " and not r.hidden";
-  else if (f.shown === "hidden") where += " and r.hidden";
-  where += seenReviewsSql(who, p);
+  else if (f.shown === "hidden") where += " and r.hidden and not r.pending";
+  else if (f.shown === "pending") where += " and r.pending";
+  const seen = seenReviewsSql(who, p);
+  where += seen;
 
-  const [head] = await q<{ n: number; avg: string | null }>(`select count(*)::int as n, round(avg(r.rating), 2)::text as avg from reviews r where ${where}`, params);
+  const [head] = await q<{ n: number; avg: string | null; waiting: number }>(
+    `select count(*)::int as n, round(avg(r.rating), 2)::text as avg,
+            (select count(*)::int from reviews r where r.business_id = $1 and r.pending${seen}) as waiting
+       from reviews r where ${where}`,
+    params,
+  );
   const total = Number(head?.n ?? 0);
-  if (!total) return { ...NONE, page: f.page };
+  const waiting = Number(head?.waiting ?? 0);
+  if (!total) return { ...NONE, page: f.page, waiting };
   const pages = Math.ceil(total / f.size);
   const page = Math.min(f.page, pages);
   const rows = await q<{
@@ -186,16 +322,17 @@ export async function listReviews(q: Querier, business: Pick<Business, "id" | "t
     photo_url: string | null;
     source: "altegio" | "ours";
     hidden: boolean;
+    pending: boolean;
     client_seen: boolean;
   }>(
     `select r.id, r.created_at, r.rating, r.body, r.author_name, r.client_id, c.phone_e164,
             (c.id is not null${seenClientsSql(who, p)}) as client_seen,
-            r.staff_id, s.display_name, s.photo_url, r.source, r.hidden
+            r.staff_id, s.display_name, s.photo_url, r.source, r.hidden, r.pending
        from reviews r
        left join clients c on c.id = r.client_id
        left join staff s on s.id = r.staff_id
       where ${where}
-      order by r.created_at desc, r.id
+      order by r.pending desc, r.created_at desc, r.id
       limit ${p(f.size)} offset ${p((page - 1) * f.size)}`,
     params,
   );
@@ -205,6 +342,7 @@ export async function listReviews(q: Querier, business: Pick<Business, "id" | "t
     page,
     pages,
     average: head?.avg == null ? null : Number(head.avg),
+    waiting,
     rows: rows.map((r) => ({
       id: r.id,
       createdAt: new Date(r.created_at).getTime(),
@@ -219,13 +357,19 @@ export async function listReviews(q: Querier, business: Pick<Business, "id" | "t
       staffPhoto: r.photo_url,
       source: r.source,
       hidden: r.hidden,
+      pending: r.pending,
     })),
   };
 }
 
 export type ReviewHidden = { ok: true; hidden: boolean } | { ok: false; code: "forbidden" | "not_found" };
 
-/** «Скрыть» / «Показать»: off the booking page or back on it. Every change is an audit row. */
+/**
+ * «Скрыть» / «Показать»: off the booking page or back on it. Every change is
+ * an audit row. A new review from the site (pending) is looked at by the
+ * same tap: «Показать» approves it («approve»), «Скрыть» turns it down
+ * («decline»); either way it is no longer new.
+ */
 export async function setReviewHidden(q: Querier, businessId: string, who: Holder & { id?: string }, id: string, hidden: boolean): Promise<ReviewHidden> {
   if (!can(who, "reports.reviews") || !can(who, "reports.reviews.delete")) return { ok: false, code: "forbidden" };
   if (!/^[0-9a-f-]{36}$/i.test(id)) return { ok: false, code: "not_found" };
@@ -234,21 +378,22 @@ export async function setReviewHidden(q: Querier, businessId: string, who: Holde
     params.push(v);
     return `$${params.length}`;
   });
-  const [row] = await q<{ hidden: boolean; was: boolean }>(
-    `with old as (select r.id, r.hidden from reviews r where r.id = $1 and r.business_id = $2${scope} for update)
-     update reviews r set hidden = $3, updated_at = case when old.hidden = $3 then r.updated_at else now() end
+  const [row] = await q<{ hidden: boolean; was: boolean; waited: boolean }>(
+    `with old as (select r.id, r.hidden, r.pending from reviews r where r.id = $1 and r.business_id = $2${scope} for update)
+     update reviews r set hidden = $3, pending = false,
+            updated_at = case when old.hidden = $3 and not old.pending then r.updated_at else now() end
        from old where r.id = old.id
-     returning r.hidden, old.hidden as was`,
+     returning r.hidden, old.hidden as was, old.pending as waited`,
     params,
   );
   if (!row) return { ok: false, code: "not_found" };
-  if (row.was !== row.hidden) {
+  if (row.was !== row.hidden || row.waited) {
     await q(`insert into audit (actor, entity, entity_id, action, before, after) values ($1, 'review', $2, $3, $4::jsonb, $5::jsonb)`, [
       who.id ?? "admin",
       id,
-      row.hidden ? "hide" : "show",
-      JSON.stringify({ hidden: row.was }),
-      JSON.stringify({ hidden: row.hidden }),
+      row.waited ? (row.hidden ? "decline" : "approve") : row.hidden ? "hide" : "show",
+      JSON.stringify(row.waited ? { hidden: row.was, pending: true } : { hidden: row.was }),
+      JSON.stringify(row.waited ? { hidden: row.hidden, pending: false } : { hidden: row.hidden }),
     ]);
   }
   return { ok: true, hidden: row.hidden };

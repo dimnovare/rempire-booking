@@ -102,7 +102,8 @@ function VisitLine({ v, tz, showTime }: { v: CardVisit; tz: string; showTime: bo
       </span>
       <span className="end">
         <span>{eur(v.totalCents)}</span>
-        {v.status !== "booked" && v.status !== "done" && <span className={`adm-tag${bad ? " warn" : ""}`}>{B.visit.status[v.status] ?? v.status}</span>}
+        {/* «done», from before «Готово» left the app, reads «Пришёл» as «arrived» does (B.visit.status) */}
+        {v.status !== "booked" && <span className={`adm-tag${bad ? " warn" : ""}`}>{B.visit.status[v.status] ?? v.status}</span>}
       </span>
     </li>
   );

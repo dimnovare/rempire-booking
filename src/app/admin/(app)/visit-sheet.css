@@ -1,0 +1,136 @@
+/* A visit on a phone (visit-sheet.tsx): the design boards «Visit sheet» and «Visit sheet: add»,
+   one look for Renat's phone journal and the barber's day. Measured from the boards (390px wide). */
+.vs-wrap { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; background: rgba(18, 18, 26, .55); }
+.vs-wrap-add { z-index: 51; background: rgba(18, 18, 26, .45); }
+.vs-sheet { width: 100%; max-width: 560px; max-height: calc(100dvh - 40px - env(safe-area-inset-top, 0px)); display: flex; flex-direction: column; overflow: hidden; background: #f7f9fc; color: #22222e; border-radius: 16px 16px 0 0; box-shadow: 0 -8px 24px rgba(0, 0, 0, .18); font-family: var(--body); }
+.vs-sheet button, .vs-sheet input, .vs-sheet textarea { font-family: inherit; }
+.vs-add-sheet { height: min(80dvh, 680px); box-shadow: 0 -8px 28px rgba(0, 0, 0, .22); }
+
+/* the head: the client, the time and the day, the barber */
+.vs-head { flex: none; padding: 0 max(16px, env(safe-area-inset-right, 0px)) 12px max(16px, env(safe-area-inset-left, 0px)); background: #fff; border-bottom: 1px solid #e3e6ee; }
+.vs-grab { height: 18px; display: flex; align-items: center; justify-content: center; }
+.vs-grab::before { content: ""; width: 36px; height: 5px; border-radius: 3px; background: #d5d8e0; }
+.vs-title { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+.vs-title h2 { flex: 1; min-width: 0; margin: 0; font: 700 22px/28px var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs-add-sheet .vs-title h2 { font-size: 20px; line-height: 26px; }
+.vs-x { flex: none; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: #f1f3f7; color: #22222e; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.vs-when { margin-top: 4px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.vs-time { min-width: 0; font: 600 16px/22px var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs-staff { flex: none; display: flex; align-items: center; gap: 7px; font-size: 14px; line-height: 20px; color: #5f6475; }
+.vs-staff i { width: 22px; height: 22px; border-radius: 50%; background: #3a3a46; color: #fff; font: normal 600 11px/22px var(--body); text-align: center; }
+.vs-lead { margin: 0; font-size: 13px; line-height: 18px; color: #5f6475; }
+
+/* the body: cards on the light ground */
+.vs-body { flex: 1 1 auto; min-height: 0; overflow: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 9px; padding: 12px max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.vs-body > * { flex-shrink: 0; }
+.vs-box { background: #fff; border: 1px solid #e3e6ee; border-radius: 12px; overflow: hidden; }
+
+.vs-phone { display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 0 7px 0 14px; }
+.vs-phone .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.vs-phone small { font-size: 12px; line-height: 16px; color: #5f6475; }
+.vs-phone b { font: 600 16px/22px var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs-call { flex: none; height: 44px; padding: 0 14px 0 12px; border: 1px solid #e0e3eb; border-radius: 22px; background: #fff; display: flex; align-items: center; gap: 8px; font: 600 14px/1 var(--body); color: #22222e; text-decoration: none; }
+.vs-card { width: 100%; display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 0 10px 0 14px; border: 0; background: #fff; color: #22222e; font: 500 15px/20px var(--body); text-align: left; text-decoration: none; cursor: pointer; }
+.vs-phone + .vs-card { border-top: 1px solid #eceef3; }
+.vs-card .n { flex: 1; min-width: 0; }
+.vs-card small { font-size: 13px; color: #5f6475; white-space: nowrap; }
+
+/* the notes: the client's with a yellow edge, the client's comment, the visit's own */
+.vs-note-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 20px; margin-bottom: 4px; }
+.vs-label { font-size: 12px; line-height: 16px; color: #5f6475; }
+.vs-note.is-comment .vs-label { display: block; margin-bottom: 4px; }
+.vs-link { min-height: 32px; margin: -6px -4px -6px 0; padding: 0 4px; border: 0; background: none; font: 600 13px/1 var(--body); color: #22222e; text-decoration: underline; text-decoration-color: #ffcb00; text-decoration-thickness: 2px; text-underline-offset: 3px; cursor: pointer; }
+.vs-note-text { margin: 0; padding: 7px 12px; background: #fff; border-left: 3px solid #ffcb00; border-radius: 0 8px 8px 0; font-size: 14px; line-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.vs-note.is-comment .vs-note-text, .vs-note.is-visit .vs-note-text { border-left-color: #c3c8d4; }
+.vs-note textarea { width: 100%; box-sizing: border-box; min-height: 76px; padding: 8px 12px; border: 1px solid #e0e3eb; border-radius: 10px; background: #fff; color: #22222e; font-size: 15px; line-height: 20px; resize: vertical; }
+.vs-hint { display: block; margin-top: 4px; font-size: 12px; line-height: 16px; color: #5f6475; }
+.vs-note-btns { display: flex; gap: 8px; margin-top: 8px; }
+.vs-note-btns .vs-btn { flex: 1; }
+
+/* the four chips */
+.vs-chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid #e0e3eb; border-radius: 12px; overflow: hidden; background: #fff; }
+.vs-chips button { height: 52px; min-width: 0; padding: 0 2px; border: 0; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font: 500 12.5px/15px var(--body); color: #22222e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+.vs-chips button + button { border-left: 1px solid #e0e3eb; }
+.vs-chips button[aria-pressed="true"] { font-weight: 600; color: #fff; }
+.vs-chips .c-booked[aria-pressed="true"] { background: #8a8f9c; }
+.vs-chips .c-arrived[aria-pressed="true"] { background: #1cb58e; }
+.vs-chips .c-no_show[aria-pressed="true"] { background: #e5484d; }
+.vs-chips .c-confirmed[aria-pressed="true"] { background: #3b82f6; }
+.vs-chips button:disabled { cursor: default; }
+.vs-chips button:disabled:not([aria-pressed="true"]) { color: #8a8f9c; }
+
+.vs-gone { margin: 0; padding: 12px 14px; border: 1px solid #f3c4c5; border-radius: 12px; background: #fdeeee; color: #b42318; font: 600 14px/20px var(--body); text-align: center; }
+
+/* the visit's services and «+ Добавить услугу» */
+.vs-line + .vs-line, .vs-line + .vs-add { border-top: 1px solid #eceef3; }
+.vs-line-main { width: 100%; display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 14px; box-sizing: border-box; border: 0; background: #fff; color: #22222e; text-align: left; }
+button.vs-line-main { cursor: pointer; }
+.vs-line .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.vs-line b { font: 500 15px/20px var(--body); }
+.vs-line small { font-size: 13px; line-height: 18px; color: #5f6475; }
+.vs-line .sum { flex: none; font: 600 15px/20px var(--body); white-space: nowrap; }
+.vs-line.is-sp b, .vs-line.is-sp .sum { color: #5f6475; font-weight: 500; }
+.vs-line.is-open .vs-line-main { background: #f7f9fc; }
+.vs-line-more { display: flex; justify-content: flex-end; padding: 0 14px 10px; background: #f7f9fc; }
+.vs-add { width: 100%; height: 50px; padding: 0 14px; border: 0; background: #fff; display: flex; align-items: center; gap: 12px; font: 600 15px/1 var(--body); color: #22222e; cursor: pointer; }
+.vs-add .plus { width: 32px; height: 32px; border-radius: 50%; background: #ffcb00; color: #22222e; display: flex; align-items: center; justify-content: center; }
+
+.vs-total { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 0 2px; }
+.vs-total span { font: 700 18px/24px var(--body); }
+.vs-total small { font-size: 13px; font-weight: 500; color: #5f6475; }
+.vs-total b { font: 700 20px/24px var(--body); white-space: nowrap; }
+
+/* payment: drawn, not yet working (it waits for Renat's answer on finance) */
+.vs-pay { border: 1.5px dashed #c3c8d4; border-radius: 12px; padding: 8px; }
+.vs-pay-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.vs-pay-row button { height: 50px; border: 1px solid #e6e8ee; border-radius: 10px; background: #f1f3f7; color: #a3a8b6; display: flex; align-items: center; justify-content: center; gap: 8px; font: 600 16px/1 var(--body); }
+.vs-pay p { margin: 6px 0 0; text-align: center; font-size: 12px; line-height: 16px; color: #8a8f9c; }
+
+/* the foot: «Перенести», «Отменить запись», the cancel question, «Записать снова» */
+.vs-foot { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.vs-foot.is-one { grid-template-columns: 1fr; }
+.vs-btn { min-height: 44px; padding: 0 8px; border: 1px solid #e0e3eb; border-radius: 10px; background: #fff; display: flex; align-items: center; justify-content: center; gap: 8px; font: 600 15px/1.2 var(--body); color: #22222e; white-space: nowrap; cursor: pointer; }
+.vs-btn:disabled { opacity: .55; cursor: default; }
+.vs-btn-warn { color: #e5484d; }
+.vs-btn-warnfill { border-color: #e5484d; background: #e5484d; color: #fff; }
+.vs-btn-main { border-color: #ffcb00; background: #ffcb00; color: #22222e; }
+.vs-ask { padding: 12px; border: 1px solid #f3c4c5; border-radius: 12px; background: #fff5f5; }
+.vs-ask p { margin: 0 0 10px; font: 600 15px/20px var(--body); color: #b42318; }
+.vs-again { width: 100%; }
+.vs-meta { margin: 0; padding: 0 2px; font-size: 12px; line-height: 16px; color: #8a8f9c; }
+
+/* «Добавить услугу» */
+.vs-find { margin-top: 10px; height: 44px; box-sizing: border-box; padding: 0 12px; border: 1px solid #e0e3eb; border-radius: 10px; background: #fff; display: flex; align-items: center; gap: 8px; color: #8a8f9c; }
+.vs-find input { flex: 1; min-width: 0; height: 42px; padding: 0; border: 0; outline: 0; background: transparent; color: #22222e; font-size: 15px; }
+.vs-find input::placeholder { color: #8a8f9c; }
+.vs-find:focus-within { border-color: #22222e; }
+.vs-add-body { gap: 0; }
+.vs-offer { position: relative; width: 100%; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 7px 12px 7px 14px; box-sizing: border-box; border: 0; background: #fff; color: #22222e; text-align: left; cursor: pointer; }
+.vs-offer + .vs-offer { border-top: 1px solid #eceef3; }
+.vs-offer .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.vs-offer b { font: 500 15px/20px var(--body); }
+.vs-offer small { display: flex; align-items: center; gap: 8px; font-size: 13px; line-height: 18px; color: #5f6475; }
+.vs-offer em { padding: 0 6px; border-radius: 6px; background: #eef0f4; font: normal 11px/16px var(--body); color: #5f6475; }
+.vs-offer .sum { flex: none; font: 600 15px/20px var(--body); white-space: nowrap; }
+.vs-offer .mark { flex: none; width: 30px; height: 30px; box-sizing: border-box; border: 1.5px solid #d5d8e0; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #5f6475; }
+.vs-offer.is-on { background: #fff8d6; }
+.vs-offer.is-on::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: #ffcb00; }
+.vs-offer.is-on b { font-weight: 600; }
+.vs-offer.is-on .mark { border: 0; background: #ffcb00; color: #22222e; }
+.vs-offer.is-there { cursor: default; }
+.vs-offer.is-there .mark { color: #8a8f9c; }
+.vs-add-foot { flex: none; padding: 12px max(16px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); background: #fff; border-top: 1px solid #e3e6ee; box-shadow: 0 -4px 14px rgba(34, 34, 46, .07); }
+.vs-add-row { display: flex; align-items: center; gap: 12px; }
+.vs-add-row .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.vs-add-row b { font: 700 17px/22px var(--body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs-add-row small { font-size: 12px; line-height: 16px; color: #5f6475; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vs-add-go { flex: none; min-height: 48px; padding: 0 24px; font-size: 16px; }
+.vs-warn { margin: 0 0 10px; font-size: 13px; line-height: 18px; color: #b42318; }
+
+/* a wider screen (the barber app on a tablet): the sheets in the middle */
+@media (min-width: 600px) {
+  .vs-wrap { align-items: center; padding: 16px; }
+  .vs-sheet { border-radius: 16px; max-height: 88dvh; }
+  .vs-grab { height: 10px; }
+  .vs-grab::before { display: none; }
+}

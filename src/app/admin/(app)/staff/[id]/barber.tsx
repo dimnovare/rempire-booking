@@ -4,8 +4,9 @@
  * The barber page, six parts. On a phone: a line per part with what is set
  * now («Пн–Пт 10–20 · Сб 10–18 · Вс выходной»); a tap opens that part alone
  * as a sheet. From 900px there is room, so every part is open as a card and
- * a change is made right where it is seen. Profile, prices and the week
- * save by themselves; the lists add a record with one «Добавить».
+ * a change is made right where it is seen. Profile and the week save by
+ * themselves; the lists add a record with one «Добавить». His services and
+ * prices are shown only, each linking to its window in «Услуги».
  */
 import Link from "next/link";
 import { useState } from "react";
@@ -17,7 +18,7 @@ import { eur, type Copy } from "../../../copy";
 import { useA } from "../../../lang";
 import { Ava, NextIcon, PlusIcon } from "../../../icons";
 import { Pane } from "../../sheet";
-import { DaysForm, HoursForm, OffersForm, ProfileForm, SpecialForm, TimeOffForm } from "./forms";
+import { DaysForm, HoursForm, offerEff, OffersList, ProfileForm, SpecialForm, TimeOffForm } from "./forms";
 
 type Part = "profile" | "offers" | "hours" | "days" | "off" | "special";
 
@@ -49,6 +50,7 @@ export function BarberPage({
   today,
   back,
   app = false,
+  services = false,
 }: {
   d: StaffDetail;
   tz: string;
@@ -56,6 +58,8 @@ export function BarberPage({
   back: React.ReactNode;
   /** «Открыть его приложение»: the login may see this barber's column, and the barber is not the login itself */
   app?: boolean;
+  /** the login may open «Услуги»: each of his services links to its window, where his price and time are set */
+  services?: boolean;
 }) {
   const A = useA();
   const [open, setOpen] = useState<Part | null>(null);
@@ -63,7 +67,7 @@ export function BarberPage({
   const tm = new Intl.DateTimeFormat(A.intl, { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
   const offered = d.offers.filter((o) => o.offered);
-  const prices = offered.map((o) => o.priceCents ?? o.defaultCents);
+  const prices = offered.map((o) => offerEff(o).e.priceCents);
   const lo = Math.min(...prices);
   const hi = Math.max(...prices);
   const firstDay = d.overrides[0];
@@ -82,14 +86,14 @@ export function BarberPage({
     },
     { k: "special", title: A.staff.special, value: firstSp ? `${dt.format(firstSp.from)}, ${tm.format(firstSp.from)}–${tm.format(firstSp.to)}, ${extraText(firstSp)}${more(A, d.special.length)}` : A.staff.none },
   ];
-  // the first three save by themselves; on a phone their sheet ends with «Готово»
+  // profile and the week save by themselves; on a phone their sheet ends with «Готово»
   const done = () => setOpen(null);
   const form = (k: Part) => {
     if (k === "profile")
       return (
         <ProfileForm id={d.id} onDone={done} initial={{ name: d.name, role: { ru: d.role.ru ?? "", et: d.role.et ?? "", en: d.role.en ?? "" }, photoUrl: d.photoUrl ?? "", bookable: d.bookable, active: d.active }} />
       );
-    if (k === "offers") return <OffersForm staffId={d.id} offers={d.offers} onDone={done} />;
+    if (k === "offers") return <OffersList offers={d.offers} link={services} />;
     if (k === "hours") return <HoursForm staffId={d.id} hours={d.hours} onDone={done} />;
     if (k === "days") return <DaysForm staffId={d.id} overrides={d.overrides} today={today} />;
     if (k === "off") return <TimeOffForm staffId={d.id} rows={d.timeOff} tz={tz} today={today} />;
