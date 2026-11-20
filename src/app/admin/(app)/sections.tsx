@@ -37,6 +37,7 @@ export const SECTIONS = [
   { href: "/admin/settings/brand", key: "brand", icon: "cog", bar: false },
   { href: "/admin/settings/contacts", key: "contacts", icon: "cog", bar: false },
   { href: "/admin/settings/gallery", key: "gallery", icon: "cog", bar: false },
+  { href: "/admin/settings/notifications", key: "notifications", icon: "cog", bar: false },
 ] as const;
 
 /** «Ещё»: only in a phone's bar. Lit while one of the sections behind it is open. */
@@ -59,7 +60,7 @@ export const ACCOUNT = { href: "/admin/account", key: "account", icon: "key" } a
  * (frame.tsx): a page by its own key, a row by `off` or its key; a group
  * with no page left is not drawn.
  */
-export type MenuPage = { href: string; key: "analytics" | "records" | "reviews" | "visits" | "messages" | "changes" | "staffList" | "schedule" | "clientBase" | "catalogue" | "brand" | "contacts" | "gallery" };
+export type MenuPage = { href: string; key: "analytics" | "records" | "reviews" | "visits" | "messages" | "changes" | "staffList" | "schedule" | "clientBase" | "catalogue" | "brand" | "contacts" | "gallery" | "notifications" };
 export type MenuRow = { key: "reports" | "team" | "clients" | "services" | "goods" | "requests" | "invoices" | "settings" | "account"; icon: string; href?: string; pages?: readonly MenuPage[]; off?: string };
 export const MENU: readonly MenuRow[] = [
   {
@@ -98,6 +99,7 @@ export const MENU: readonly MenuRow[] = [
       { href: "/admin/settings/brand", key: "brand" },
       { href: "/admin/settings/contacts", key: "contacts" },
       { href: "/admin/settings/gallery", key: "gallery" },
+      { href: "/admin/settings/notifications", key: "notifications" },
     ],
   },
   { key: "account", icon: "key", href: "/admin/account" },

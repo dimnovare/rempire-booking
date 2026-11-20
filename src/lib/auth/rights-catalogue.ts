@@ -56,7 +56,7 @@ export const GROUPS: Record<GroupKey, Words & { size: number; on: string; built:
   goods: { ru: "Товары", et: "Tooted", en: "Products", size: 39, on: "SM VW AD CC AC MG OW", built: false },
   staff: { ru: "Сотрудники", et: "Töötajad", en: "Team", size: 8, on: "SM MG OW", built: true },
   services: { ru: "Услуги", et: "Teenused", en: "Services", size: 12, on: "SM MG OW", built: true },
-  notify: { ru: "Уведомления", et: "Teavitused", en: "Notifications", size: 2, on: "SM MG OW", built: false },
+  notify: { ru: "Уведомления", et: "Teavitused", en: "Notifications", size: 2, on: "SM MG OW", built: true },
   settings: { ru: "Настройки", et: "Seaded", en: "Settings", size: 10, on: "SM AD CC MG OW", built: true },
   clients: { ru: "Клиентская база", et: "Kliendibaas", en: "All clients", size: 26, on: "SM VW AD CC MG OW", built: true },
   reports: { ru: "Отчёты", et: "Aruanded", en: "Reports", size: 25, on: "SM VW AD MG OW", built: true },
@@ -251,8 +251,9 @@ const ROWS = [
   ["services.delete", null, TOP, 1, "Удаление услуг", "Delete services", "Teenuste kustutamine"],
 
   // ---- 7. Уведомления (2)
-  ["notify.sms", null, ADM3, 0, "Доступ к разделу SMS-уведомления", "Access to the SMS Notifications section", "Ligipääs jaotisele «SMS-teavitused»"],
-  ["notify.email", null, ADM3, 0, "Доступ к разделу Email-уведомления", "Access to the Email Notifications section", "Ligipääs jaotisele «E-kirja teavitused»"],
+  // «Настройки → Уведомления» (settings/notifications/, src/lib/admin/notification-store.ts): either opens it; each changes its own channel
+  ["notify.sms", null, ADM3, 1, "Доступ к разделу SMS-уведомления", "Access to the SMS Notifications section", "Ligipääs jaotisele «SMS-teavitused»"],
+  ["notify.email", null, ADM3, 1, "Доступ к разделу Email-уведомления", "Access to the Email Notifications section", "Ligipääs jaotisele «E-kirja teavitused»"],
 
   // ---- 8. Настройки (10)
   ["settings.system", null, ADM3, 1, "Доступ к системным настройкам", "Access to system settings", "Ligipääs süsteemiseadetele"],

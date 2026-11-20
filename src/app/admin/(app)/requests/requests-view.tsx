@@ -3,10 +3,8 @@
 import { useEffect, useState } from "react";
 import type { RequestRow } from "@/lib/barber/requests";
 import { requestWords } from "@/lib/barber/request-words";
-import { REMINDER_CHANNELS, type ReminderChannel } from "@/lib/settings";
 import { useA } from "../../lang";
-import { SaveState, useAutoSave } from "../autosave";
-import { answer, setReminder } from "./actions";
+import { answer } from "./actions";
 
 type Toast = { text: string; bad?: boolean };
 
@@ -16,8 +14,7 @@ function useWhen(tz: string) {
   return (ms: number) => f.format(new Date(ms));
 }
 
-/** `system`: the login may set the salon's own settings (the reminder). */
-export function RequestsView({ open, recent, system, reminder, tz }: { open: RequestRow[]; recent: RequestRow[]; system: boolean; reminder: ReminderChannel; tz: string }) {
+export function RequestsView({ open, recent, tz }: { open: RequestRow[]; recent: RequestRow[]; tz: string }) {
   const A = useA();
   const R = A.req;
   const when = useWhen(tz);
@@ -30,8 +27,6 @@ export function RequestsView({ open, recent, system, reminder, tz }: { open: Req
 
   return (
     <div className="adm-cards">
-      {system && <Reminder channel={reminder} />}
-
       <section className="adm-card">
         <h2 className="adm-card-h">
           {R.open}
@@ -122,27 +117,5 @@ function OpenRow({ r, tz, when, onToast }: { r: RequestRow; tz: string; when: st
         </div>
       </div>
     </li>
-  );
-}
-
-/** Owner only: how a client is reminded before a visit (docs/apps.md, step 4). It saves by itself. */
-function Reminder({ channel }: { channel: ReminderChannel }) {
-  const A = useA();
-  const R = A.req;
-  const [now, setNow] = useState(channel);
-  const auto = useAutoSave(now, setNow, (v) => setReminder(v), { label: R.reminder });
-  return (
-    <section className="adm-card">
-      <h2 className="adm-card-h">{R.reminder}</h2>
-      <div className="adm-seg adm-seg-wide" role="group" aria-label={R.reminder}>
-        {REMINDER_CHANNELS.map((v) => (
-          <button key={v} type="button" aria-pressed={now === v} onClick={() => setNow(v)}>
-            {R.reminderBy[v]}
-          </button>
-        ))}
-      </div>
-      <p className="adm-meta">{R.reminderHint[now]}</p>
-      <SaveState auto={auto} />
-    </section>
   );
 }
