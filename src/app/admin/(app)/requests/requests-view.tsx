@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { RequestRow } from "@/lib/barber/requests";
 import { requestWords } from "@/lib/barber/request-words";
@@ -17,12 +16,8 @@ function useWhen(tz: string) {
   return (ms: number) => f.format(new Date(ms));
 }
 
-/**
- * `rightsNote`: the login manages rights, so it is told where «what barbers
- * change themselves» lives now; `system`: it may set the salon's own
- * settings (the reminder).
- */
-export function RequestsView({ open, recent, rightsNote, system, reminder, tz }: { open: RequestRow[]; recent: RequestRow[]; rightsNote: boolean; system: boolean; reminder: ReminderChannel; tz: string }) {
+/** `system`: the login may set the salon's own settings (the reminder). */
+export function RequestsView({ open, recent, system, reminder, tz }: { open: RequestRow[]; recent: RequestRow[]; system: boolean; reminder: ReminderChannel; tz: string }) {
   const A = useA();
   const R = A.req;
   const when = useWhen(tz);
@@ -35,7 +30,6 @@ export function RequestsView({ open, recent, rightsNote, system, reminder, tz }:
 
   return (
     <div className="adm-cards">
-      {rightsNote && <SelfNote />}
       {system && <Reminder channel={reminder} />}
 
       <section className="adm-card">
@@ -149,36 +143,6 @@ function Reminder({ channel }: { channel: ReminderChannel }) {
       </div>
       <p className="adm-meta">{R.reminderHint[now]}</p>
       <SaveState auto={auto} />
-    </section>
-  );
-}
-
-/**
- * Where the two salon-wide switches were until 19.11.2026: what a barber
- * changes himself is now a right of his own login («Доступ» → the login),
- * so this card only says where to find it.
- */
-function SelfNote() {
-  const A = useA();
-  const R = A.req;
-  return (
-    <section className="adm-card" data-self-note="">
-      <h2 className="adm-card-h">{R.switches}</h2>
-      <p className="adm-meta">{R.movedLead}</p>
-      <ul className="adm-moved">
-        <li>
-          <b>{R.time}</b>
-          <span>{R.movedTime}</span>
-        </li>
-        <li>
-          <b>{R.price}</b>
-          <span>{R.movedPrice}</span>
-        </li>
-      </ul>
-      <p className="adm-meta">{R.switchHint}</p>
-      <Link className="adm-btn adm-btn-line adm-btn-sm adm-btn-auto" href="/admin/account" prefetch={false}>
-        {R.movedGo}
-      </Link>
     </section>
   );
 }

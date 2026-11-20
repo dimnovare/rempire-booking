@@ -36,8 +36,10 @@ export async function GET(_request: Request, ctx: RouteContext<"/[locale]/manife
     scope: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#ffffff",
-    theme_color: "#f2f2f2",
+    // the start-up screen: all black, the icon's own black around the tower (Dim, 20.11); once the
+    // page is up, its theme-color (#f2f2f2, layout.tsx) takes over the status bar
+    background_color: "#000000",
+    theme_color: "#000000",
     icons: [
       { src: "/icons/app-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/icons/app-512.png", sizes: "512x512", type: "image/png", purpose: "any" },

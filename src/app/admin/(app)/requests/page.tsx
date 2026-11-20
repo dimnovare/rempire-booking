@@ -2,8 +2,8 @@
  * /admin/requests «Запросы» (Phase B, B4): what the barbers changed or ask
  * for from their app. Waiting ones on top with «Согласовать» / «Отклонить»;
  * the last 14 days under them. What barbers change themselves, and what
- * waits for an OK, was two switches here; since 19.11.2026 it is a right of
- * each barber's login («Доступ» → the login), and this page says so.
+ * waits for an OK, is a right of each barber's login («Доступ» → the login;
+ * 19.11.2026); the card that pointed there is gone (Dim, 20.11: not needed).
  */
 import { Suspense } from "react";
 import { requireAdmin } from "@/lib/auth/current";
@@ -41,7 +41,6 @@ async function Loaded() {
       <RequestsView
         open={rows.filter((r) => r.status === "requested")}
         recent={rows.filter((r) => r.status !== "requested")}
-        rightsNote={can(user, "settings.users.rights")}
         system={can(user, "settings.system")}
         reminder={business.settings.client_reminder}
         tz={business.timezone}

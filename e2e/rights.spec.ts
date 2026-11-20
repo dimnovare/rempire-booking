@@ -336,19 +336,14 @@ test.describe("who may open a login's rights", () => {
     }
   });
 
-  test("«Запросы» says where the two switches went", async ({ browser }, info) => {
+  test("«Запросы» lists requests only: no card about the rights (Dim, 20.11)", async ({ browser }, info) => {
     const owner = await phoneOf(browser, info, "owner");
     try {
       await owner.goto("/admin/requests");
       await hydrated(owner);
-      const card = owner.locator("[data-self-note]:visible");
-      await expect(card).toContainText(A.req.movedLead);
-      await expect(card).toContainText(rightDef("journal.schedule")!.ru);
-      await expect(card).toContainText(rightDef("services.staff")!.ru);
-      // the old «Сразу | С моего ОК» buttons are gone
-      await expect(owner.getByRole("group", { name: A.req.time })).toHaveCount(0);
-      await card.getByRole("link", { name: A.req.movedGo }).click();
-      await owner.waitForURL((u) => u.pathname === "/admin/account");
+      await expect(owner.getByRole("heading", { level: 2, name: A.req.open })).toBeVisible();
+      await expect(owner.getByText(rightDef("journal.schedule")!.ru)).toHaveCount(0);
+      await expect(owner.getByRole("link", { name: /«Доступ»/ })).toHaveCount(0);
       await expectNoSideScroll(owner);
     } finally {
       await owner.context().close();

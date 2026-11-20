@@ -29,6 +29,8 @@ describe("the client app's manifest", () => {
       expect(res.headers.get("content-type")).toMatch(/application\/manifest\+json/);
       const m = await res.json();
       expect(m).toMatchObject({ id: "/", short_name: "REMPIRE", lang: locale, start_url: `/${locale}`, scope: "/", display: "standalone" });
+      // the start-up screen is all black: no white around the black icon (Dim, 20.11)
+      expect(m).toMatchObject({ background_color: "#000000", theme_color: "#000000" });
       expect(m.icons.map((i: { src: string; sizes: string; purpose: string }) => `${i.src} ${i.sizes} ${i.purpose}`)).toEqual([
         "/icons/app-192.png 192x192 any",
         "/icons/app-512.png 512x512 any",

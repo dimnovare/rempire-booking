@@ -414,6 +414,16 @@ barbers' test run on staging: `docs/test-run.md`)
   or e-mail.
 - Renat's overview.
 
+**Last: the live walk-through** (Dim, 20.11.2026)
+
+- When every feature is built: Claude clicks through every page and
+  feature on staging, as each kind of login (owner, admin, barber, client).
+- Takes out what is not needed (as the «Что барберы меняют сами» card on
+  «Запросы», removed 20.11).
+- Checks each page against Altegio and Isolta for look, feel and function
+  (`docs/altegio-pages.md`, `docs/isolta-pages.md`, the design canvas), and
+  fixes the differences.
+
 ## 11. First steps for this chat
 
 1. Create the repo and a minimal Next.js app, deployed to the staging
