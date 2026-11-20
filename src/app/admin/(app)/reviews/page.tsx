@@ -13,6 +13,7 @@ import { connection } from "next/server";
 import { cleanReviews, defaultReviews } from "@/lib/admin/review-filter";
 import { listStaff } from "@/lib/admin/staff";
 import { requireAdmin } from "@/lib/auth/current";
+import { seenStaff } from "@/lib/auth/rights";
 import { dbConfigured, query } from "@/lib/db";
 import { listReviews, reviewsMay } from "@/lib/reviews";
 import { todayIn } from "@/lib/tz";
@@ -41,5 +42,8 @@ async function Loaded() {
   if (!may.open) return <NoRights />;
   const first = defaultReviews(todayIn(business.timezone));
   const [initial, staff] = await Promise.all([listReviews(query, business, cleanReviews(first), user), listStaff(query, business.id)]);
-  return <ReviewsView initial={initial} first={first} tz={business.timezone} may={may} staff={staff.map((s) => ({ id: s.id, name: s.name }))} />;
+  // the barber picker offers only the barbers this login sees
+  const seen = seenStaff(user);
+  const picks = staff.filter((s) => seen === "all" || seen.includes(s.id)).map((s) => ({ id: s.id, name: s.name }));
+  return <ReviewsView initial={initial} first={first} tz={business.timezone} may={may} staff={picks} />;
 }

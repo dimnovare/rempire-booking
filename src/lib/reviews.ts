@@ -21,7 +21,8 @@
 import { createHash } from "node:crypto";
 import type { Business } from "./availability";
 import type { Querier } from "./db";
-import { can, maskPhone, type Holder } from "./auth/rights";
+import { can, maskPhone, seenStaff, type Holder } from "./auth/rights";
+import { seenClientsSql } from "./admin/client-scope";
 import { REVIEW_COMPANY, type ReviewFilter } from "./admin/review-filter";
 import { normalizePhone } from "./phone";
 import { addDays, isLocalDate, zonedToUtc } from "./tz";
@@ -83,6 +84,19 @@ export function reviewsMay(who: Holder | null | undefined): ReviewsMay {
 const NONE: ReviewList = { total: 0, page: 1, pages: 0, average: null, rows: [] };
 
 /** One page of the list for this filter, newest first. `who` null: no cut (the tests, the script). */
+/**
+ * A WHERE part over `reviews r` for the barbers a login sees, as the other
+ * reports have it: empty for «all», else only those barbers' reviews (a
+ * review of the salon itself belongs to no barber, so a limited login does
+ * not get it).
+ */
+function seenReviewsSql(who: Holder | null | undefined, p: (value: unknown) => string): string {
+  const seen = who ? seenStaff(who) : "all";
+  if (seen === "all") return "";
+  if (!seen.length) return " and false";
+  return ` and r.staff_id = any(${p([...seen])}::uuid[])`;
+}
+
 export async function listReviews(q: Querier, business: Pick<Business, "id" | "timezone">, f: ReviewFilter, who: Holder | null = null): Promise<ReviewList> {
   if (who && !can(who, "reports.reviews")) return NONE;
   const params: unknown[] = [business.id];
@@ -98,6 +112,7 @@ export async function listReviews(q: Querier, business: Pick<Business, "id" | "t
   if (f.rating) where += ` and r.rating = ${p(f.rating)}`;
   if (f.shown === "shown") where += " and not r.hidden";
   else if (f.shown === "hidden") where += " and r.hidden";
+  where += seenReviewsSql(who, p);
 
   const [head] = await q<{ n: number; avg: string | null }>(`select count(*)::int as n, round(avg(r.rating), 2)::text as avg from reviews r where ${where}`, params);
   const total = Number(head?.n ?? 0);
@@ -117,8 +132,10 @@ export async function listReviews(q: Querier, business: Pick<Business, "id" | "t
     photo_url: string | null;
     source: "altegio" | "ours";
     hidden: boolean;
+    client_seen: boolean;
   }>(
     `select r.id, r.created_at, r.rating, r.body, r.author_name, r.client_id, c.phone_e164,
+            (c.id is not null${seenClientsSql(who, p)}) as client_seen,
             r.staff_id, s.display_name, s.photo_url, r.source, r.hidden
        from reviews r
        left join clients c on c.id = r.client_id
@@ -140,8 +157,9 @@ export async function listReviews(q: Querier, business: Pick<Business, "id" | "t
       rating: Number(r.rating),
       body: r.body,
       authorName: r.author_name,
-      clientId: r.client_id,
-      clientPhone: phones ? r.phone_e164 : maskPhone(r.phone_e164),
+      // a client the login does not see: the name the review was signed with, no card and no phone
+      clientId: r.client_seen ? r.client_id : null,
+      clientPhone: !r.client_seen ? null : phones ? r.phone_e164 : maskPhone(r.phone_e164),
       staffId: r.staff_id,
       staffName: r.display_name,
       staffPhoto: r.photo_url,
@@ -157,12 +175,17 @@ export type ReviewHidden = { ok: true; hidden: boolean } | { ok: false; code: "f
 export async function setReviewHidden(q: Querier, businessId: string, who: Holder & { id?: string }, id: string, hidden: boolean): Promise<ReviewHidden> {
   if (!can(who, "reports.reviews") || !can(who, "reports.reviews.delete")) return { ok: false, code: "forbidden" };
   if (!/^[0-9a-f-]{36}$/i.test(id)) return { ok: false, code: "not_found" };
+  const params: unknown[] = [id, businessId, hidden === true];
+  const scope = seenReviewsSql(who, (v) => {
+    params.push(v);
+    return `$${params.length}`;
+  });
   const [row] = await q<{ hidden: boolean; was: boolean }>(
-    `with old as (select id, hidden from reviews where id = $1 and business_id = $2 for update)
+    `with old as (select r.id, r.hidden from reviews r where r.id = $1 and r.business_id = $2${scope} for update)
      update reviews r set hidden = $3, updated_at = case when old.hidden = $3 then r.updated_at else now() end
        from old where r.id = old.id
      returning r.hidden, old.hidden as was`,
-    [id, businessId, hidden === true],
+    params,
   );
   if (!row) return { ok: false, code: "not_found" };
   if (row.was !== row.hidden) {

@@ -145,6 +145,28 @@ describe("the admin's list", () => {
     expect((await listReviews(query, demo.business, all(), ownerWith(["reports.reviews"]))).total).toBe(0);
   });
 
+  it("a login limited to some barbers gets only their reviews, and a client only when it sees the client", async () => {
+    const [c] = await query<{ id: string }>("insert into clients (business_id, name, phone_e164) values ($1, 'Тест Клиент', $2) returning id", [demo.business.id, PHONE]);
+    const valentins = await add("valentin", 5, { client: c.id });
+    const jevgenis = await add("jevgeni", 4);
+    await add(null, 3);
+    const d = desk();
+    const onlyValentin = (clients: string[]): Holder & { id: string } => ({
+      ...d,
+      rights: { ...d.rights, values: { ...d.rights.values, "journal.staff": [demo.staff.valentin], "clients.show": clients } },
+    });
+    // Valentin's review alone: not Jevgeni's, not the salon's; a pick of Jevgeni finds nothing
+    const mine = await listReviews(query, demo.business, all(), onlyValentin([demo.staff.valentin]));
+    expect(mine.rows.map((r) => r.id)).toEqual([valentins]);
+    expect((await listReviews(query, demo.business, all({ staffId: demo.staff.jevgeni }), onlyValentin([demo.staff.valentin]))).total).toBe(0);
+    // the client has no visit with the barbers whose clients this login sees: no card, no phone
+    const blind = await listReviews(query, demo.business, all(), onlyValentin([demo.staff.jevgeni]));
+    expect(blind.rows[0]).toMatchObject({ id: valentins, clientId: null, clientPhone: null });
+    // «Скрыть» reaches only the reviews it lists
+    expect(await setReviewHidden(query, demo.business.id, onlyValentin([demo.staff.valentin]), jevgenis, true)).toEqual({ ok: false, code: "not_found" });
+    expect(await setReviewHidden(query, demo.business.id, onlyValentin([demo.staff.valentin]), valentins, true)).toEqual({ ok: true, hidden: true });
+  });
+
   it("«Скрыть» and «Показать» with «Удалять отзывы», each change an audit row", async () => {
     const id = await add("valentin", 5);
     expect(await setReviewHidden(query, demo.business.id, barber(), id, true)).toEqual({ ok: false, code: "forbidden" });
