@@ -89,9 +89,12 @@ function pinOf(lat: number, lng: number): PinParse {
 
 const NUM = String.raw`[-+]?\d{1,3}(?:\.\d+)?`;
 /** «59.430883, 24.761967», «59.430883 24.761967», «59.430883;24.761967» */
-const PAIR = new RegExp(String.raw`^(${NUM})\s*[,;\s]\s*(${NUM})$`);
+// (the separators do not overlap, so a long run of spaces cannot make the match slow)
+const PAIR = new RegExp(String.raw`^(${NUM})(?:\s*[,;]\s*|\s+)(${NUM})$`);
 /** «59,430883; 24,761967» or «59,430883, 24,761967»: decimal commas, so the two need a ; a space or «, » between them */
-const PAIR_COMMA = /^([-+]?\d{1,3}(?:,\d+)?)\s*(?:;|,\s|\s)\s*([-+]?\d{1,3}(?:,\d+)?)$/;
+const PAIR_COMMA = /^([-+]?\d{1,3}(?:,\d+)?)(?:\s*;\s*|\s*,\s+|\s+)([-+]?\d{1,3}(?:,\d+)?)$/;
+/** Longer than any map link: refused before a pattern reads it. */
+const PIN_MAX = 2000;
 /** «59.4308° N, 24.7619° E», as a map shows a place */
 const HEMI = /^(\d{1,3}(?:[.,]\d+)?)\s*°?\s*([NS])[\s,;]+(\d{1,3}(?:[.,]\d+)?)\s*°?\s*([EW])$/i;
 /** «59°25'51.2"N 24°45'43.1"E», as Google Maps shows a place */
@@ -164,7 +167,9 @@ function pinInLink(raw: string): PinParse {
  * or a link from Google Maps or OpenStreetMap. '' is «no pin, no map».
  */
 export function parsePin(input: unknown): PinParse {
-  const s = String(input ?? "").trim();
+  const raw = String(input ?? "");
+  if (raw.length > PIN_MAX) return { ok: false, why: "bad" };
+  const s = raw.trim();
   if (!s) return { ok: true, pin: null };
   let m = PAIR.exec(s);
   if (m) return pinOf(Number(m[1]), Number(m[2]));

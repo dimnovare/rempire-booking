@@ -75,6 +75,14 @@ describe("the pin, from what the owner types or pastes", () => {
     expect(parsePin("59.43088349, 24.76196712")).toEqual(at(59.430883, 24.761967));
   });
 
+  it("a long paste is refused at once, and spaces cannot make it slow", () => {
+    expect(parsePin("1".padEnd(2001, " ") + "x")).toEqual({ ok: false, why: "bad" });
+    const t = performance.now();
+    expect(parsePin("1" + " ".repeat(1990) + "x")).toEqual({ ok: false, why: "bad" });
+    expect(parsePin("1" + " ;".repeat(990) + "x")).toEqual({ ok: false, why: "bad" });
+    expect(performance.now() - t).toBeLessThan(200);
+  });
+
   it("as a map shows a place: N/E, and degrees, minutes, seconds", () => {
     expect(parsePin("59.4309° N, 24.762° E")).toEqual(at(59.4309, 24.762));
     expect(parsePin("33.8688 S 151.2093 E")).toEqual(at(-33.8688, 151.2093));
