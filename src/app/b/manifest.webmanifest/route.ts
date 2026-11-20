@@ -27,8 +27,10 @@ export function GET() {
     scope: "/",
     display: "standalone",
     orientation: "portrait",
-    background_color: "#f7f9fc",
-    theme_color: "#22222e",
+    // the start-up screen: all white, the same white as the icon's square (Dim, 20.11: #f7f9fc
+    // showed the square's edge); once the page is up, its theme-color (#22222e, layout.tsx) takes over
+    background_color: "#ffffff",
+    theme_color: "#ffffff",
     icons: [
       { src: "/b/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
       { src: "/b/icons/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },

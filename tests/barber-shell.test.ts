@@ -134,6 +134,11 @@ describe("manifest", () => {
     expect(m).toMatchObject({ id: "/b", start_url: "/b/start", scope: "/", display: "standalone" });
     expect(m.icons.map((i: { sizes: string; purpose: string }) => `${i.sizes} ${i.purpose}`)).toEqual(["192x192 any", "512x512 any", "512x512 maskable"]);
   });
+
+  it("starts on pure white, the white of its icon's square (src/app/b/icons), so no edge shows (Dim, 20.11)", async () => {
+    const m = await manifest().json();
+    expect(m).toMatchObject({ background_color: "#ffffff", theme_color: "#ffffff" });
+  });
 });
 
 describe("install guide", () => {
