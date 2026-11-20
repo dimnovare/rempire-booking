@@ -2,12 +2,13 @@
 
 /**
  * The barber's day on his phone (B2): the week strip, his hours and the
- * day's money, the next client with «call» and one tap for «arrived» or
- * «done», then the whole day in order: visits, free time, breaks.
+ * day's money, the next client with «call» and one tap for «arrived», then
+ * the whole day in order: visits, free time, breaks.
  * Pull down (or come back to the app) to refresh.
  *
  * B3: «+» or a tap on free time books a visit in his column; a visit's sheet
- * moves it, cancels it (with a reason) or books the client again.
+ * (visit-sheet.tsx: the app's one visit sheet) moves it, cancels it (with a
+ * reason), books the client again, and adds or takes away a service.
  * B6: the visit's sheet edits the client's shared note and the visit's own
  * note, and opens the client's card (his visits with this client).
  *
@@ -30,11 +31,11 @@ import { NextIcon, PlusIcon, PrevIcon } from "../../admin/icons";
 import { cap, dateWords, eur, hm, minsText, pick3 } from "../copy.shared";
 import { useB, useTitle } from "../lang";
 import { CancelSheet, MoveSheet, NewVisitSheet, type NewPrefill } from "./book-sheets";
-import { ClientSheet, NoteEditor } from "./client-sheet";
-import { BSheet } from "./sheet";
+import { ClientSheet } from "./client-sheet";
 import { MayProvider, useMay } from "./may";
 import { OwnSeg } from "./own-head";
-import { saveClientNote, saveVisitNote, setVisitStatus } from "./visit-actions";
+import { setVisitStatus } from "./visit-actions";
+import { VisitSheet } from "./visit-sheet";
 
 const MIN = 60_000;
 /** how far to pull (px, after the drag is halved) before letting go refreshes */
@@ -258,15 +259,14 @@ function Day({ days, date, today, now: serverNow, tz, step, offers, may, own = f
         <VisitSheet
           v={open}
           tz={tz}
-          busy={busy}
+          offers={offers}
           canBook={canBook}
           onClose={() => setSheet(null)}
-          onStatus={status}
           onMove={() => setSheet({ kind: "move", id: open.id })}
           onCancel={() => setSheet({ kind: "cancel", id: open.id })}
           onAgain={() => again(open)}
           onClient={() => setSheet({ kind: "client", id: open.id })}
-          onSaved={(text) => setToast({ text })}
+          onSaved={(text, bad) => setToast({ text, bad })}
         />
       )}
       {open && sheet?.kind === "client" && (
@@ -300,8 +300,8 @@ function NextCard({ v, now, tz, busy, onOpen, onStatus }: { v: BVisit; now: numb
   const may = useMay();
   const inChair = v.status === "arrived" || v.start <= now;
   const wait = Math.max(1, Math.round((v.start - now) / MIN));
-  // one tap for what comes next: «arrived» from half an hour before, then «done»
-  const next = v.status === "arrived" ? "done" : v.status === "booked" && v.start - now <= 30 * MIN ? "arrived" : null;
+  // one tap for «arrived» from half an hour before («Готово» left the app: Dim, decision round 11)
+  const next = v.status === "booked" && v.start - now <= 30 * MIN ? "arrived" : null;
   const quick = next && may.edit && (!CAME.has(v.status) || may.editCame) ? next : null;
   const phone = may.call ? v.clientPhone : null;
   return (
@@ -448,146 +448,6 @@ function Timeline({
         })}
       </ol>
     </>
-  );
-}
-
-function VisitSheet({
-  v,
-  tz,
-  busy,
-  canBook,
-  onClose,
-  onStatus,
-  onMove,
-  onCancel,
-  onAgain,
-  onClient,
-  onSaved,
-}: {
-  v: BVisit;
-  tz: string;
-  busy: boolean;
-  canBook: boolean;
-  onClose: () => void;
-  onStatus: (v: BVisit, s: string) => void;
-  onMove: () => void;
-  onCancel: () => void;
-  onAgain: () => void;
-  onClient: () => void;
-  onSaved: (text: string) => void;
-}) {
-  const B = useB();
-  const may = useMay();
-  const date = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(v.start);
-  // a visit still to come can be moved or cancelled (one that took place is history)
-  const ahead = v.status === "booked" || v.status === "pending";
-  // a visit the client has come to has a right of its own
-  const canEdit = may.edit && (!CAME.has(v.status) || may.editCame);
-  return (
-    <BSheet title={v.clientName} onClose={onClose}>
-      <p className="adm-time">
-        <b>
-          {hm(v.start, tz)}–{hm(v.end, tz)}
-        </b>
-        <span>{cap(dateWords(date, B.lang))}</span>
-      </p>
-      {v.clientPhone ? (
-        may.call ? (
-          <a className="adm-phone" href={`tel:${v.clientPhone}`}>
-            {v.clientPhone} · {B.visit.call}
-          </a>
-        ) : (
-          // a masked number: shown, never a link to call
-          <span className="adm-phone">{v.clientPhone}</span>
-        )
-      ) : (
-        may.card && <p className="adm-meta">{B.visit.noPhone}</p>
-      )}
-      {may.card && (
-        <button type="button" className="adm-txt lime bx-card-link" onClick={onClient}>
-          {B.client.card}
-        </button>
-      )}
-      <NoteEditor
-        key={`c-${v.clientId}`}
-        label={B.visit.clientNote}
-        hint={B.visit.clientNoteHint}
-        value={v.clientNote}
-        canEdit={may.card && may.clientNote}
-        onSave={async (text) => {
-          const ok = await saveClientNote(v.clientId, text);
-          if (ok) onSaved(B.client.noteSaved);
-          return ok;
-        }}
-      />
-      <div className="adm-status" role="group" aria-label={B.visit.setStatus}>
-        {(["arrived", "done", "no_show"] as const).map((s) => (
-          <button key={s} type="button" aria-pressed={v.status === s} disabled={busy || !canEdit} onClick={() => onStatus(v, v.status === s ? "booked" : s)}>
-            {B.visit.status[s]}
-          </button>
-        ))}
-      </div>
-      <ul className="adm-lines">
-        {v.services.map((s, i) => (
-          <li key={i}>
-            <span>
-              {pick3(s.name, B.lang)} <small className="adm-meta">· {minsText(s.durationMin, B.h, B.min)}</small>
-            </span>
-            <span>{eur(s.priceCents)}</span>
-          </li>
-        ))}
-        {v.extraCents > 0 && (
-          <li className="is-sp">
-            <span>{B.visit.extra}</span>
-            <span>+{eur(v.extraCents)}</span>
-          </li>
-        )}
-        <li className="tot">
-          <span>{B.visit.total}</span>
-          <span>{eur(v.totalCents)}</span>
-        </li>
-      </ul>
-      {v.comment && (
-        <div className="bx-noteblk">
-          <small>{B.visit.comment}</small>
-          <p className="adm-note">«{v.comment}»</p>
-        </div>
-      )}
-      <NoteEditor
-        key={`v-${v.id}`}
-        label={B.visit.visitNote}
-        value={v.staffNote}
-        canEdit={canEdit && may.note}
-        onSave={async (text) => {
-          const ok = await saveVisitNote(v.id, text);
-          if (ok) onSaved(B.client.noteSaved);
-          return ok;
-        }}
-      />
-      <p className="adm-meta">
-        {B.visit.source[v.source] ?? v.source}
-        {v.reminder ? "" : ` · ${B.visit.reminderOff}`}
-      </p>
-      {((ahead && may.move) || canBook) && (
-        <div className="adm-bar-row bx-visit-acts">
-          {ahead && may.move && (
-            <button type="button" className="adm-btn adm-btn-line adm-btn-auto" onClick={onMove}>
-              {B.book.move}
-            </button>
-          )}
-          {canBook && (
-            <button type="button" className="adm-btn adm-btn-ghost adm-btn-auto" onClick={onAgain}>
-              {B.book.again}
-            </button>
-          )}
-        </div>
-      )}
-      {ahead && may.cancel && (
-        <button type="button" className="adm-txt warn bx-cancel" onClick={onCancel}>
-          {B.book.cancel}
-        </button>
-      )}
-    </BSheet>
   );
 }
 

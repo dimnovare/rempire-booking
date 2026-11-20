@@ -16,7 +16,7 @@ import Link from "next/link";
 import { litTab, TAB_HREF, type BarKey } from "@/lib/admin/app-nav";
 import { SectionIcon } from "@/app/admin/(app)/sections";
 
-const ICON: Record<BarKey, string> = { mine: "me", calendar: "cal", clients: "cli", requests: "req", invoices: "inv", more: "more" };
+const ICON: Record<BarKey, string> = { mine: "me", calendar: "cal", clients: "cli", reports: "rep", invoices: "inv", more: "more" };
 
 export type AppBarProps = {
   /** the bar's name for a screen reader: «Разделы» */
@@ -28,7 +28,7 @@ export type AppBarProps = {
   path: string;
   /** which half draws the bar */
   half: "admin" | "b";
-  /** «Запросов ждёт: 2», when requests wait for an answer: the dot on «Запросы» */
+  /** «Запросов ждёт: 2», when requests wait for an answer: the dot on «Ещё», where «Запросы» is a row */
   waiting?: string | null;
   className?: string;
 };
@@ -43,7 +43,7 @@ export function AppBar({ label, bar, words, path, half, waiting, className }: Ap
           <>
             <SectionIcon name={ICON[k]} />
             <span>{words[k]}</span>
-            {k === "requests" && waiting && <i className="one-dot" role="img" aria-label={waiting} title={waiting} />}
+            {k === "more" && waiting && <i className="one-dot" role="img" aria-label={waiting} title={waiting} />}
           </>
         );
         const current = lit === k ? "page" : undefined;

@@ -110,9 +110,10 @@ export const DotsIcon = ({ size = 16 }: P) => (
 
 /**
  * The small mark at the right of a visit's strip: a clock while it waits, a
- * plus once the client is in, a tick when the visit is done, a minus if he
- * did not come. A visit that waits and that the client has confirmed has a
- * bare tick, no ring («Клиент подтвердил»).
+ * plus once the client is in (a visit marked «done» before «Готово» left
+ * the app too: Dim, decision round 11), a minus if he did not come. A visit
+ * that waits and that the client has confirmed has a bare tick, no ring
+ * («Клиент подтвердил»).
  */
 export function StatusMark({ status, confirmed = false, size = 11 }: { status: string; confirmed?: boolean; size?: number }) {
   if (confirmed && status === "booked")
@@ -126,9 +127,7 @@ export function StatusMark({ status, confirmed = false, size = 11 }: { status: s
       <circle cx="12" cy="12" r="9" />
       {status === "no_show" ? (
         <path d="M7.5 12h9" />
-      ) : status === "done" ? (
-        <path d="M7.5 12.5l3 3 6-6.5" />
-      ) : status === "arrived" ? (
+      ) : status === "arrived" || status === "done" ? (
         <path d="M12 7.5v9M7.5 12h9" />
       ) : (
         <path d="M12 7v5.5l3.5 2" />

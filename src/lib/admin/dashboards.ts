@@ -115,6 +115,15 @@ export function previousPeriod(p: Period): Period {
   return { from: addDays(p.from, -n), to: addDays(p.from, -1) };
 }
 
+/** Is the period one whole calendar month, its first day to its last? */
+export const wholeMonth = (p: Period) => p.from.endsWith("-01") && addDays(p.to, 1).endsWith("-01") && p.to.slice(0, 7) === p.from.slice(0, 7);
+
+/** The whole calendar month before a period's first day: «к октябрю» for November. */
+export function previousMonth(p: Period): Period {
+  const to = addDays(p.from.slice(0, 8) + "01", -1);
+  return { from: to.slice(0, 8) + "01", to };
+}
+
 /** The days of a period, in order. */
 export function periodDates(p: Period): string[] {
   const out: string[] = [];
@@ -145,8 +154,12 @@ export function staffScope(who: Holder | undefined, picked: string | null): stri
 
 /* ---------- «Основные показатели» ---------- */
 
-/** What the page asks: the period and the barber of «Фильтры». */
-export type KpiQuery = { from?: unknown; to?: unknown; staffId?: unknown };
+/**
+ * What the page asks: the period and the barber of «Фильтры». `compare`
+ * «month»: a whole calendar month is compared with the whole month before
+ * it (the phone's «Отчёты», «к октябрю»), not with the same number of days.
+ */
+export type KpiQuery = { from?: unknown; to?: unknown; staffId?: unknown; compare?: unknown };
 
 export type SalesDay = { date: string; servicesCents: number; goodsCents: number };
 export type VisitorsDay = { date: string; fresh: number; regular: number };
@@ -177,6 +190,8 @@ export type KpiReport = {
     clients: Figure;
     visits: Figure;
     records: Figure;
+    /** the records the client made himself online (cancelled ones too, as «Записи») */
+    online: Figure;
     fresh: Figure;
     regular: Figure;
     lost: Figure;
@@ -186,13 +201,15 @@ export type KpiReport = {
     done: Figure;
     open: Figure;
     cancelled: Figure;
+    /** the no-shows among «Незавершённые» */
+    noShow: Figure;
     /** per cent with one decimal */
     avg: Figure;
     days: FillDay[];
   };
 };
 
-type VisitRow = { day: string; status: string; client_id: string; total_cents: number; min: number; first_day: string | null };
+type VisitRow = { day: string; status: string; source: string; client_id: string; total_cents: number; min: number; first_day: string | null };
 type GoodsRow = { day: string; cents: number; n: number };
 
 /** The staff part of a WHERE over `alias`, its value pushed by `p`. */
@@ -213,7 +230,7 @@ async function loadVisitRows(q: Querier, business: Business, from: string, to: s
   const who = staffSql("a", staff, p);
   const whoB = staff ? ` and b.staff_id = any($${params.length}::uuid[])` : "";
   const rows = await q<VisitRow>(
-    `select to_char(a.starts_at at time zone $4::text, 'YYYY-MM-DD') as day, a.status, a.client_id, a.total_cents,
+    `select to_char(a.starts_at at time zone $4::text, 'YYYY-MM-DD') as day, a.status, a.source, a.client_id, a.total_cents,
             (extract(epoch from (a.ends_at - a.starts_at)) / 60)::int as min,
             case when a.status in ('arrived', 'done') then (
               select to_char(min(b.starts_at) at time zone $4::text, 'YYYY-MM-DD') from appointments b
@@ -349,6 +366,8 @@ function sumUp(rows: VisitRow[], goods: GoodsRow[], work: Map<string, number>, p
   const worked = fill.filter((d) => d.busyPct !== null);
   return {
     records: inP.length,
+    online: inP.filter((r) => r.source === "online").length,
+    noShow: inP.filter((r) => r.status === "no_show").length,
     visits: came.length,
     clients: clients.size,
     fresh: fresh.size,
@@ -373,7 +392,7 @@ function sumUp(rows: VisitRow[], goods: GoodsRow[], work: Map<string, number>, p
 export async function kpiReport(q: Querier, business: Business, raw: KpiQuery, who?: Holder, now = Date.now()): Promise<KpiReport | null> {
   if (who && !can(who, "reports.dashboard")) return null;
   const period = cleanPeriod(raw?.from, raw?.to, todayIn(business.timezone, now));
-  const prev = previousPeriod(period);
+  const prev = raw?.compare === "month" && wholeMonth(period) ? previousMonth(period) : previousPeriod(period);
   const asked = raw?.staffId;
   const picked = isUuid(asked) ? asked : null;
   const staff = staffScope(who, picked);
@@ -422,6 +441,7 @@ export async function kpiReport(q: Querier, business: Business, raw: KpiQuery, w
       clients: figure(a.clients, b.clients),
       visits: figure(a.visits, b.visits),
       records: figure(a.records, b.records),
+      online: figure(a.online, b.online),
       fresh: figure(a.fresh, b.fresh),
       regular: figure(a.regular, b.regular),
       lost: figure(lostCur, lostPrev),
@@ -431,6 +451,7 @@ export async function kpiReport(q: Querier, business: Business, raw: KpiQuery, w
       done: figure(a.done, b.done),
       open: figure(a.open, b.open),
       cancelled: figure(a.cancelled, b.cancelled),
+      noShow: figure(a.noShow, b.noShow),
       avg: figure(a.avgFill, b.avgFill),
       days: a.fill,
     },

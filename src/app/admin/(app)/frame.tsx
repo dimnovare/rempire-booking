@@ -18,7 +18,7 @@
  *
  * And the login's own tabs for a phone's bottom bar (`bar`, with «Мой
  * день» for a login linked to a barber) and how many requests wait for an
- * answer (`waiting`, the dot on «Запросы»): src/lib/admin/app-nav.ts.
+ * answer (`waiting`, the dot on «Ещё», where «Запросы» is a row): src/lib/admin/app-nav.ts.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { BarKey } from "@/lib/admin/app-nav";
@@ -44,7 +44,7 @@ type Frame = {
 };
 
 /** The salon's own tabs: what a login not linked to a barber has. */
-const SALON_BAR: readonly BarKey[] = ["calendar", "clients", "requests", "invoices", "more"];
+const SALON_BAR: readonly BarKey[] = ["calendar", "clients", "reports", "invoices", "more"];
 const NONE: Frame = { favs: [], star: () => {}, open: () => {}, say: () => {}, off: [], bar: SALON_BAR, waiting: 0 };
 const Ctx = createContext<Frame>(NONE);
 
