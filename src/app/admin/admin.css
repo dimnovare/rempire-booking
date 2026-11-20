@@ -888,7 +888,7 @@ button.cal-head:hover b { color: var(--accent); }
 /* ---------- «Счета»: the invoicing tool's own frame (the owner, 19.11.2026) ----------
    Inside /admin/invoices the section wears the frame of the invoicing tool Renat used until now
    (measured in docs/isolta-pages.md; the two design boards «Счета, список» and «Счёт, черновик»):
-   a 260px indigo sidebar with the section's six pages and «В салон» (invoices/side.tsx, which
+   an indigo sidebar (the salon's 220px) with the section's six pages and «В салон» (invoices/side.tsx, which
    sidebar.tsx shows in place of the salon's), a lilac-grey ground, a white 88px bar with the title
    and the page's buttons, content in white cards with 8px corners inside a centred 1344px box.
    A phone keeps the app's bars and gets the six pages as a row of chips under the title.
@@ -923,21 +923,22 @@ button.cal-head:hover b { color: var(--accent); }
 :root:has(.iv-side) .adm-nav.one-nav a[aria-current="page"] { color: #fff; }
 :root:has(.iv-side) .adm-top .adm-tag.lime { border-color: #fff; color: #fff; }
 
-/* the sidebar, from 900px */
+/* the sidebar, from 900px. Dim, 20.11.2026: it must not grow when «Счета» opens. The indigo is
+   the invoicing tool's; the width (the salon's 220px), the head, the rows and their type are the
+   salon sidebar's own (.sb-head, .sb-brand, .sb-menu, .sb-row), so nothing moves between the two. */
 @media (min-width: 900px) {
-  :root:has(.adm-top:not(.bx-top)):has(.iv-side) { --side-w: 260px; }
-  .sb.iv-side { background: #312e6b; overflow-y: auto; font: 400 16px/24px var(--body); }
-  .iv-brand { flex: none; height: 73px; display: flex; align-items: center; gap: 10px; padding: 24px 32px; color: #fff; font: 700 18px/24px var(--body); letter-spacing: 1px; }
-  .iv-mark { flex: none; width: 24px; height: 24px; border-radius: 6px; background: #fff; color: #312e6b; display: grid; place-items: center; }
-  .iv-mark svg { height: 17px; width: auto; }
-  .iv-brand .adm-tag { margin-left: auto; letter-spacing: 0; border-color: #fff; color: #fff; }
-  .iv-nav { flex: 1; display: flex; flex-direction: column; gap: 4px; padding: 0 16px; }
-  .iv-nav a, .iv-foot a { height: 48px; display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 8px; color: #fff; font-size: 16px; line-height: 24px; }
-  .iv-nav a > svg, .iv-foot a > svg { flex: none; }
+  .sb.iv-side { background: #312e6b; overflow-y: auto; }
+  .iv-brand { flex: none; height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 12px; color: #dfe4ed; font: 500 14px/20px var(--body); }
+  .iv-mark { flex: none; width: 20px; height: 20px; border-radius: 6px; background: #fff; color: #312e6b; display: grid; place-items: center; }
+  .iv-mark svg { height: 15px; width: auto; }
+  .iv-brand .adm-tag { margin-left: auto; border-color: #fff; color: #fff; }
+  .iv-nav { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 4px 12px; }
+  .iv-nav a, .iv-foot a { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: 8px; color: #fff; font: 500 14px/24px var(--body); }
+  .iv-nav a > svg, .iv-foot a > svg { flex: none; width: 20px; height: 20px; }
+  .iv-nav a > span, .iv-foot a > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .iv-nav a:hover, .iv-foot a:hover { background: rgba(37, 36, 66, .5); }
   .iv-nav a[aria-current="page"] { background: #252442; }
-  .iv-foot { flex: none; padding: 0 16px 16px; }
-  :root:has(.iv-side) .adm-savetoast { left: calc(var(--side-w) + 16px); }
+  .iv-foot { flex: none; padding: 0 12px 12px; }
 }
 
 /* a page: the white bar, then the body */

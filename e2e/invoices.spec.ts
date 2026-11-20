@@ -224,15 +224,18 @@ test.describe("invoices", () => {
     test("the section's own frame: the indigo sidebar with its six pages; «В салон» goes back to the journal", async ({ page }) => {
       await page.goto("/admin/invoices");
       await hydrated(page);
-      // 260px of indigo in place of the salon's sidebar: no month, no tiles, no menu of sections
-      expect(await side(page).evaluate((el) => [el.getBoundingClientRect().width, getComputedStyle(el).backgroundColor])).toEqual([260, "rgb(49, 46, 107)"]);
+      // indigo in place of the salon's sidebar, as wide as it (220px, Dim 20.11: it must not grow): no month, no tiles, no menu of sections
+      expect(await side(page).evaluate((el) => [el.getBoundingClientRect().width, getComputedStyle(el).backgroundColor])).toEqual([220, "rgb(49, 46, 107)"]);
+      // the head and the rows are the salon's: 48px and 40px
+      expect((await side(page).locator(".iv-brand").boundingBox())!.height).toBe(48);
+      expect((await sideNav(page).getByRole("link").first().boundingBox())!.height).toBe(40);
       await expect(page.locator(".sb-month, .sb-tiles, .sb-menu")).toHaveCount(0);
       await expect(side(page).locator(".iv-brand")).toContainText("REMPIRE");
       await expect(sideNav(page).getByRole("link")).toHaveText(MENU);
       const here = sideNav(page).getByRole("link", { name: I.menu.list, exact: true });
       await expect(here).toHaveAttribute("aria-current", "page");
       await expect(here).toHaveCSS("background-color", "rgb(37, 36, 66)");
-      expect(await here.evaluate((el) => [el.getBoundingClientRect().height, getComputedStyle(el).borderRadius])).toEqual([48, "8px"]);
+      expect(await here.evaluate((el) => [el.getBoundingClientRect().height, getComputedStyle(el).borderRadius])).toEqual([40, "8px"]);
       // the page: the lilac-grey ground and the white 88px bar with the title and its buttons
       await expect(page.locator("body")).toHaveCSS("background-color", "rgb(243, 243, 247)");
       const bar = page.locator(".iv-top:visible");

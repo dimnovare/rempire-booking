@@ -272,7 +272,9 @@ gets it → send.
    the measures in `docs/isolta-pages.md`).
    - **The frame:** inside `/admin/invoices` the salon's sidebar gives way
      to the section's own (`invoices/side.tsx`, shown by `sidebar.tsx`):
-     260 px of indigo (`#312e6b`), our mark and «REMPIRE», six 48 px rows
+     indigo (`#312e6b`) but the salon sidebar's own size (220 px; Dim,
+     20.11: it must not grow when «Счета» opens), its 48 px head with our
+     mark and «REMPIRE», six 40 px rows of 14 px / 500
      with 8 px corners (the open one `#252442`): «Рабочий стол», «Счета»,
      «Получатели», «Товары и услуги», «Отчёты», «Настройки»; at the foot
      «В салон», back to the journal. The ground is `#f3f3f7`; each page
