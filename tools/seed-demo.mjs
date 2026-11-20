@@ -104,6 +104,17 @@ export async function seedDemo(db) {
     );
     svc[s.slug] = row.id;
   }
+  // «Услуги» stands in categories (migration 036): the demo's services in one, as REMPIRE's are; one there already stays
+  await db.query(
+    `insert into service_categories (id, business_id, name, sort) select $2, $1, $3::jsonb, 0
+      where not exists (select 1 from service_categories where business_id = $1)`,
+    [biz.id, demoId("category", "barbering"), JSON.stringify({ ru: "Барберинг", et: "Barbering", en: "Barbering" })],
+  );
+  await db.query(
+    `update services set category_id = (select id from service_categories where business_id = $1 order by sort, created_at limit 1)
+      where business_id = $1 and category_id is null`,
+    [biz.id],
+  );
   for (const [i, st] of DEMO.staff.entries()) {
     const photo = `/barbers/${st.slug}.webp`;
     const inserted = await one(

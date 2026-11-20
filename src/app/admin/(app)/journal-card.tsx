@@ -12,21 +12,17 @@
  * may call; the numbers are the visit window's own (visitWindowAction: the
  * client's data, the client shown to the login, his history), and none
  * without those rights; a chip writes at once with «Редактирование записи»
- * (and «…пришедшего клиента» once he came), as the window's do. «Готово» is
- * no chip: it is going away everywhere.
+ * (and «…пришедшего клиента» once he came), as the window's do. No
+ * «Готово»: it left the app (decision round 11); a done visit reads «Пришёл».
  */
 import { useEffect, useState } from "react";
 import type { CalVisit } from "@/lib/admin/calendar";
 import { eur } from "../copy";
 import { useA } from "../lang";
 import { visitWindowAction, setVisitStatus } from "./actions";
-import { CAME, timeOf, useMay } from "./visit-parts";
-
-/** The four chips and what each writes: a status and the «Подтвердил» flag (021_visit_confirmed.sql). */
-const CHIPS = ["booked", "arrived", "no_show", "confirmed"] as const;
-type Chip = (typeof CHIPS)[number];
-const WRITES: Record<Chip, [string, boolean]> = { booked: ["booked", false], arrived: ["arrived", false], no_show: ["no_show", false], confirmed: ["booked", true] };
-const chipOf = (status: string, confirmed: boolean): Chip => (CAME.has(status) ? "arrived" : status === "no_show" ? "no_show" : confirmed ? "confirmed" : "booked");
+// the four chips and what each writes (a status and the «Подтвердил» flag): the visit sheets' own
+import { CAME, CHIP, CHIPS, chipOf, timeOf, type Chip } from "./visit-kit";
+import { useMay } from "./visit-parts";
 
 export type CardNumbers = { visits: number; noShows: number; soldCents: number };
 /** What was read for a visit: its numbers, or null when the login has no right to them. */
@@ -110,7 +106,7 @@ export function VisitCard({
   const current = chipOf(st.status, st.confirmed);
   const pick = async (c: Chip) => {
     if (c === current || busy) return;
-    const [status, confirmed] = WRITES[c];
+    const [status, confirmed] = CHIP[c];
     setBusy(true);
     try {
       if (await setVisitStatus(v.id, status, confirmed)) {

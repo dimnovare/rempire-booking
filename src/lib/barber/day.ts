@@ -25,6 +25,8 @@ export type BVisit = {
   end: number;
   blockedUntil: number;
   status: string;
+  /** «Подтвердил»: a waiting visit the client said he will come to (021_visit_confirmed.sql) */
+  confirmed: boolean;
   source: string;
   clientId: string;
   clientName: string;
@@ -76,6 +78,8 @@ export type BMay = {
   /** a visit's status; one the client has come to */
   edit: boolean;
   editCame: boolean;
+  /** a visit's services: «+ Добавить услугу», «Убрать услугу» (visit.edit.services) */
+  services: boolean;
   /** the visit's own note; the client's shared note */
   note: boolean;
   clientNote: boolean;
@@ -97,6 +101,7 @@ export function barberMay(who: Holder, staffId: string, today: string): BMay {
     pickClient: can(who, "visit.client_list"),
     edit: can(who, "visit.edit"),
     editCame: can(who, "visit.edit.arrived"),
+    services: can(who, "visit.edit.services"),
     note: can(who, "visit.edit.comment"),
     clientNote: can(who, "clients.note.edit"),
     move: can(who, "journal.move") || can(who, "visit.edit.staff_time"),
@@ -158,6 +163,7 @@ export async function loadBarberDays(q: Querier, business: Business, staffId: st
       ends_at: Date;
       blocked_until: Date;
       status: string;
+      confirmed: boolean;
       source: string;
       client_id: string;
       client_name: string;
@@ -169,7 +175,7 @@ export async function loadBarberDays(q: Querier, business: Business, staffId: st
       total_cents: number;
       extra_cents: number;
     }>(
-      `select a.id, a.starts_at, a.ends_at, a.blocked_until, a.status, a.source,
+      `select a.id, a.starts_at, a.ends_at, a.blocked_until, a.status, a.confirmed_at is not null as confirmed, a.source,
               a.client_id, c.name as client_name, c.phone_e164, c.staff_note as client_note,
               a.client_comment, a.staff_note, a.reminder_min, a.total_cents, a.extra_cents
          from appointments a join clients c on c.id = a.client_id
@@ -214,6 +220,7 @@ export async function loadBarberDays(q: Querier, business: Business, staffId: st
     end: ms(v.ends_at),
     blockedUntil: ms(v.blocked_until),
     status: v.status,
+    confirmed: v.confirmed,
     source: v.source,
     clientId: v.client_id,
     clientName: v.client_name,

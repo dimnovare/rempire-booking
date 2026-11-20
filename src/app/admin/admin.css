@@ -777,28 +777,6 @@ button.cal-head:hover b { color: var(--accent); }
   .adm-rail .adm-item[aria-current="page"] b, .adm-rail.is-index li:first-child .adm-item b { color: var(--accent); }
 }
 
-/* ---------- services: the list and, from 900px, the editor always open beside it ---------- */
-.adm-two-main { display: flex; flex-direction: column; gap: 18px; min-width: 0; container-type: inline-size; }
-.adm-svc-head { display: none; }
-.adm-svc .c { display: none; }
-@media (min-width: 900px) {
-  .adm-page.adm-two { display: grid; grid-template-columns: minmax(0, 1fr) clamp(380px, 32vw, 520px); gap: 24px; align-items: start; }
-  .adm-two > .adm-pane-wrap { position: sticky; top: calc(var(--head-h) + 24px); }
-  .adm-two .adm-pane > .adm-sheet-head h2 { font-size: 22px; }
-  .adm-svc { padding: 10px 12px; border-left: 2px solid transparent; }
-  .adm-svc[aria-current="true"] { background: var(--raise); border-left-color: var(--lime); }
-  .adm-svc[aria-current="true"] .plain { color: var(--accent); }
-}
-/* with room, the facts get their own columns */
-@container (min-width: 760px) {
-  .adm-svc-head, .adm-svc { display: grid; grid-template-columns: minmax(0, 1fr) 130px 120px 150px 90px; gap: 0 12px; align-items: center; }
-  .adm-svc-head { padding: 0 12px 8px 14px; color: var(--mute); font-size: 13px; }
-  .adm-svc-head > :last-child { text-align: right; }
-  .adm-svc .c { display: block; color: var(--mute); font-size: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .adm-svc .txt small { display: none; }
-  .adm-two-main .adm-list { border-top-color: var(--line-2); }
-}
-
 /* ---------- the barber page ---------- */
 /* the portrait in the profile: what clients see, and one button to pick a file */
 .adm-photo { display: flex; align-items: flex-start; gap: 14px; }
@@ -833,15 +811,6 @@ button.cal-head:hover b { color: var(--accent); }
 .adm-sumrow .tx small { color: var(--mute); font-size: 14px; overflow-wrap: anywhere; }
 .adm-sumrow[aria-expanded="true"] { box-shadow: inset 2px 0 0 var(--lime); padding-left: 12px; background: var(--raise); }
 .adm-sumrow[aria-expanded="true"] b, .adm-sumrow[aria-expanded="true"] .adm-chev { color: var(--accent); }
-.adm-ptable { width: 100%; border-collapse: collapse; }
-.adm-ptable th { font-size: 12px; color: var(--mute); font-weight: 400; text-align: left; padding: 0 4px 6px; }
-.adm-ptable th.r { text-align: right; }
-.adm-ptable td { padding: 6px 4px; border-top: 1px solid var(--line); vertical-align: middle; }
-.adm-ptable td:first-child { width: 30px; }
-.adm-ptable td.n { font-size: 14px; line-height: 1.25; }
-.adm-ptable td.n small { display: block; color: var(--dim); font-size: 12px; }
-.adm-ptable input[type="number"] { width: 66px; min-height: 44px; padding: 0 6px; text-align: right; }
-.adm-ptable tr.is-off td.n { color: var(--dim); }
 .adm-week { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
 .adm-week .wd { display: flex; align-items: flex-start; gap: 10px; min-height: 60px; padding: 8px 0; border-bottom: 1px solid var(--line); }
 .adm-week .wd > .adm-sw { margin-top: 8px; }

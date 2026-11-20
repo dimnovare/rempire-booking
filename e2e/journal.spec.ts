@@ -470,6 +470,7 @@ test.describe("the journal", () => {
       const chips = card.getByRole("group", { name: C.cardStatus }).getByRole("button");
       await expect(chips).toHaveText([C.cardChips.booked, C.cardChips.arrived, C.cardChips.no_show, C.cardChips.confirmed]);
       await expect(chips.nth(0)).toHaveAttribute("aria-pressed", "true");
+      await expect(card.getByRole("button", { name: "Готово" })).toHaveCount(0);
       // the services, each with its length and price, and the sum
       const lines = card.locator(".jr-card-svc li");
       expect(await lines.count()).toBeGreaterThan(0);

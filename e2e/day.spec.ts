@@ -9,7 +9,7 @@ import { asBarber, B, expect, expectNoSideScroll, hydrated, nextWorkday, sheet, 
 test.describe("his day", () => {
   test.use(asBarber);
 
-  test("today: his one column of the journal; a tap on a visit opens its sheet, «Пришёл» marks it, and back", async ({ page, barber }) => {
+  test("today: his one column of the journal; a tap on a visit opens the visit sheet, «Пришёл» marks it, «Ожидание» back; no «Готово»", async ({ page, barber }) => {
     await page.goto("/b");
     await hydrated(page);
     await expect(page.getByRole("heading", { level: 1, name: B.day.today })).toBeVisible();
@@ -24,20 +24,24 @@ test.describe("his day", () => {
     // today is in the strip: no «Сегодня» in the bar
     await expect(page.locator(".bx-cal .cal-bar").getByRole("button", { name: B.day.today, exact: true })).toHaveCount(0);
 
-    // a visit still waiting: its sheet, with a way to call
+    // a visit still waiting: the app's one visit sheet, its four chips
     const visit = page.locator(".bx-cal .cal-v.st-booked", { hasText: "Demo client" }).first();
     const times = (await visit.locator(".t span").first().innerText()).trim();
     const same = page.locator(".bx-cal .cal-v").filter({ has: page.locator(".t span", { hasText: times }) });
     await visit.click();
     const s = sheet(page);
-    await expect(s.locator(".adm-time b")).toHaveText(times);
-    const arrived = s.getByRole("group", { name: B.visit.setStatus }).getByRole("button", { name: B.visit.status.arrived, exact: true });
+    await expect(s.locator(".vs-time")).toHaveText(new RegExp(`^${times} · `));
+    const chips = s.getByRole("group", { name: B.vs.status });
+    await expect(chips.getByRole("button")).toHaveText([B.vs.chips.booked, B.vs.chips.arrived, B.vs.chips.no_show, B.vs.chips.confirmed]);
+    await expect(s.getByRole("button", { name: "Готово" })).toHaveCount(0);
+    const arrived = chips.getByRole("button", { name: B.vs.chips.arrived, exact: true });
     await arrived.click();
     await expect(arrived).toHaveAttribute("aria-pressed", "true");
     await expect(same).toHaveClass(/st-arrived/);
-    // a second tap takes it back
-    await arrived.click();
-    await expect(arrived).toHaveAttribute("aria-pressed", "false");
+    // «Ожидание» takes it back
+    const waiting = chips.getByRole("button", { name: B.vs.chips.booked, exact: true });
+    await waiting.click();
+    await expect(waiting).toHaveAttribute("aria-pressed", "true");
     await expect(same).toHaveClass(/st-booked/);
     await s.getByRole("button", { name: B.close }).click();
     await expect(s).toHaveCount(0);
@@ -91,14 +95,14 @@ test.describe("his day", () => {
     await expect(page.getByRole("heading", { level: 1, name: B.day.today })).toBeVisible();
   });
 
-  test("a visit's sheet: the time, the services, the total, the status buttons", async ({ page, barber }) => {
+  test("a visit's sheet: the time, the services, the total, the four chips", async ({ page, barber }) => {
     await page.goto(`/b?d=${nextWorkday(barber.slug)}`);
     await hydrated(page);
     await page.locator(".bx-cal .cal-v").first().click();
     const s = sheet(page);
-    await expect(s.locator(".adm-time b")).toHaveText(/^\d\d:\d\d–\d\d:\d\d$/);
-    await expect(s.locator(".adm-lines .tot")).toContainText("€");
-    await expect(s.getByRole("group", { name: B.visit.setStatus }).getByRole("button")).toHaveCount(3);
+    await expect(s.locator(".vs-time")).toHaveText(/^\d\d:\d\d–\d\d:\d\d · /);
+    await expect(s.locator(".vs-total b")).toContainText("€");
+    await expect(s.getByRole("group", { name: B.vs.status }).getByRole("button")).toHaveText([B.vs.chips.booked, B.vs.chips.arrived, B.vs.chips.no_show, B.vs.chips.confirmed]);
     await expect(s.getByRole("button", { name: B.book.move })).toBeVisible();
     await expect(s.getByRole("button", { name: B.client.card })).toBeVisible();
     expect(await smallTargets(page)).toEqual([]);

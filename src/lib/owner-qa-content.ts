@@ -10,6 +10,12 @@
  * «altegio_extra» (now «pay», «skipped» and the dashboards). Their answers
  * stay in qa_answers. docs/questions-for-renat.ru.md keeps the same list.
  *
+ * 20.11.2026 evening (Dim: «check if those are still actual»): the questions
+ * Renat answered on 18.11 (emails, commission, self, telegram, qr) left the
+ * list; his answers are in DECIDED. Isolta shows no renewal date (its
+ * licence API gives a rolling "last 12 months"), so «switch.isolta» asks
+ * Renat for the date of Isolta's last invoice to him.
+ *
  * Each field saves on its own («switch.ok», «extra.note»…). The page sends
  * one field at a time; every change is logged (qa_answer_log), so a later
  * addition never loses what was written first.
@@ -27,7 +33,7 @@ export type Question = { id: string; title: string; lead: string; fields: Field[
 
 export const INTRO =
   "Ренат, мы ещё раз посмотрели, как REMPIRE работает в Altegio и Isolta, и почти всё уже перенесли. " +
-  "Здесь 15 коротких вопросов: сначала новые, потом те, что остались с прошлого раза. " +
+  "Здесь 10 коротких вопросов. Что ты уже ответил, теперь внизу, в «Уже решено». " +
   "Ответы сохраняются сами: можно закрыть страницу, вернуться и дописать.";
 
 export const QUESTIONS: Question[] = [
@@ -37,27 +43,11 @@ export const QUESTIONS: Question[] = [
     title: "Переход до 2 декабря",
     lead:
       "Altegio стоит 92,99 € в месяц и сам продлится 2 декабря. Поэтому хотим перейти на новую систему до этого дня. " +
-      "Isolta оплачена на год, отменять её надо за месяц до конца.",
+      "Isolta стоит 94,80 € + НДС в год и тоже продлевается сама; отказаться надо за месяц до продления. " +
+      "Дату продления Isolta не показывает: её видно по последнему счёту от Isolta на почте.",
     fields: [
       { id: "ok", kind: "one", label: "До 2 декабря тебе подходит?", options: ["Да", "Нет, нужно позже"] },
-      { id: "isolta", kind: "text", label: "Когда у Isolta заканчивается год? Если не знаешь, оставь пустым" },
-    ],
-  },
-  /* first set, still open: the test days wait on it */
-  {
-    id: "emails",
-    title: "Кто тестирует",
-    lead:
-      "Новую систему можно сначала попробовать самому, а можно сразу с барберами. " +
-      "Каждый барбер входит в своё приложение по e-mail: туда приходит код для входа.",
-    fields: [
-      { id: "who", kind: "one", label: "Кто тестирует?", options: ["Сначала я сам", "Я и барберы"] },
-      {
-        id: "list",
-        kind: "text",
-        label: "Если с барберами: имя барбера и e-mail, который он открывает на телефоне, по одному в строке",
-        rows: 6,
-      },
+      { id: "isolta", kind: "text", label: "Когда пришёл последний счёт от Isolta? Если не знаешь, оставь пустым" },
     ],
   },
   {
@@ -83,8 +73,8 @@ export const QUESTIONS: Question[] = [
     id: "reviews",
     title: "Новые отзывы",
     lead:
-      "Отзывы из Altegio переносим и показываем при записи. Сейчас Altegio не просит клиента оставить отзыв, " +
-      "а новые отзывы приходили из его приложения.",
+      "Отзывы из Altegio переносим и показываем при записи. На странице салона клиент сможет сам написать отзыв, " +
+      "а ты его одобришь. Сейчас Altegio не просит клиента оставить отзыв, новые приходили из его приложения.",
     fields: [{ id: "ask", kind: "one", label: "Просить отзыв после визита?", options: ["Да, через 3 часа", "Нет"] }],
   },
   {
@@ -121,7 +111,7 @@ export const QUESTIONS: Question[] = [
   {
     id: "place",
     title: "Тату-студия",
-    lead: "В Altegio у REMPIRE один филиал. Тату будет записываться в той же системе?",
+    lead: "Ты писал, что в системе будут любые услуги: тату, массаж и другие. В Altegio у REMPIRE один филиал. Где будет тату?",
     fields: [
       { id: "tattoo", kind: "one", label: "Тату:", options: ["В той же системе, в салоне на Mardi 1", "Отдельно, в своём месте", "Пока не нужно"] },
       { id: "note", kind: "text", label: "Что-то ещё?" },
@@ -153,50 +143,7 @@ export const QUESTIONS: Question[] = [
       { id: "note", kind: "text", label: "Если что-то нужно, зачем" },
     ],
   },
-  /* first set, still open */
-  {
-    id: "commission",
-    title: "17 % барберу от продажи товара",
-    lead: "Барбер продаёт клиенту товар из магазина и получает 17 %. Как считаем?",
-    fields: [
-      { id: "vat", kind: "one", label: "От какой цены?", options: ["От цены с НДС: сколько заплатил клиент", "От цены без НДС"] },
-      { id: "discount", kind: "one", label: "Если у товара скидка?", options: ["От цены со скидкой", "От обычной цены"] },
-      { id: "note", kind: "text", label: "Если считаете иначе, напиши как" },
-    ],
-  },
-  {
-    id: "self",
-    title: "Что барбер меняет сам",
-    lead: "В приложении барбера. Что не отмечено, барбер отправляет тебе запросом, а ты подтверждаешь.",
-    fields: [
-      { id: "may", kind: "many", label: "Барбер сам меняет:", options: ["Свой график", "Отпуск и выходные", "Цены своих услуг", "Время своих услуг"] },
-      { id: "note", kind: "text", label: "Что-то ещё?" },
-    ],
-  },
-  {
-    id: "telegram",
-    title: "Уведомления барберам в Telegram",
-    lead:
-      "Новая запись, отмена или перенос, а утром план на день. Приходит в Telegram от нового бота REMPIRE, " +
-      "не от бота магазина. Telegram бесплатный, SMS платные.",
-    fields: [
-      { id: "how", kind: "one", label: "Как удобнее барберам?", options: ["В Telegram", "В приложении барбера", "И там, и там", "Спрошу у барберов"] },
-      { id: "note", kind: "text", label: "Например, у кого нет Telegram" },
-    ],
-  },
-  /* Dim, 18.11: not built yet, asked here as something we can add (docs/apps.md). */
-  {
-    id: "qr",
-    title: "QR-код для салона",
-    lead:
-      "Можем сделать табличку с QR-кодом. Клиент наводит камеру телефона, и открывается запись: " +
-      "так он записывается на следующий визит прямо в кресле. Табличку печатаешь сам и ставишь у зеркала, на стойке или на двери. " +
-      "Можно сделать и свой код каждому барберу: он сразу открывает запись к этому барберу.",
-    fields: [
-      { id: "want", kind: "one", label: "Нужна такая табличка?", options: ["Да, одна на салон", "Да, своя у каждого барбера", "Пока не нужна"] },
-      { id: "note", kind: "text", label: "Где бы ты её поставил?" },
-    ],
-  },
+  /* first set: Renat answered it on 18.11; it stays so he can add more */
   {
     id: "extra",
     title: "Что ещё важно",
@@ -205,7 +152,7 @@ export const QUESTIONS: Question[] = [
   },
 ];
 
-/** Settled by Dim, 17.11 and 20.11.2026. Renat can object in «decided.note». */
+/** Settled by Dim (17.11 and 20.11.2026) and by Renat's answers of 18.11. Renat can object in «decided.note». */
 export const DECIDED: string[] = [
   "Переходим до 2 декабря, пока Altegio не продлился ещё на месяц.",
   "Запись подтверждается сразу. Барбер сам открыл время, значит клиент записывается без подтверждения. В экстренном случае барбер может отменить запись.",
@@ -215,7 +162,12 @@ export const DECIDED: string[] = [
   "Особое время: барбер сам открывает вечер, выходной или обед по своей цене, например +20 €. Доплата целиком идёт барберу.",
   "Из Altegio переносим всё, что можно: клиентов с номерами, историю визитов, отзывы. Отзывы видны при записи, звёзды у каждого барбера.",
   "Счета барберам: PDF на почту. Нумерация продолжает Isolta, со счёта 423. Старые счета из Isolta переносим как историю.",
-  "Товар себе барбер берёт по закупочной цене, без 17 %.",
+  "17 % барберу от продажи товара: от конечной цены с НДС, от обычной цены, даже если у товара скидка.",
+  "Товар себе барбер берёт по закупочной цене с НДС, без 17 %.",
+  "Барбер сам меняет свой график, отпуск и выходные, цены и время своих услуг.",
+  "Уведомления барберам приходят в приложении барбера. Тебе: новая запись онлайн, перенос или отмена клиентом.",
+  "Новую систему сначала пробуешь ты сам, барберов добавим потом.",
+  "Сделаем табличку с QR-кодом для записи: одна на салон, на ресепшн.",
 ];
 export const DECIDED_NOTE: Field = { id: "note", kind: "text", label: "Если что-то здесь не так, напиши" };
 

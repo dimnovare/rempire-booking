@@ -8,10 +8,12 @@
  */
 import { refresh } from "next/cache";
 import { addPhoto, orderPhotos, removeLogo, removePhoto, saveBrand, saveContacts, saveLogo, type LocResult, type PhotosResult } from "@/lib/admin/location";
-import { MAX_PHOTOS } from "@/lib/admin/location-form";
+import { cleanCountry, HOME_COUNTRY, LOC_MAX, MAX_PHONES, MAX_PHOTOS } from "@/lib/admin/location-form";
 import { PHOTO_MAX_BYTES } from "@/lib/admin/staff";
 import { requireAdmin } from "@/lib/auth/current";
 import { can } from "@/lib/auth/rights";
+import { query } from "@/lib/db";
+import { geocode, type GeoResult } from "@/lib/geocode";
 
 const NO = { ok: false as const, field: "forbidden" };
 
@@ -42,6 +44,15 @@ export async function saveBrandAction(input: { name: string; about: { ru: string
   return r;
 }
 
+/** The phones as the page sends them, copied by name: five rows and a few empty ones at most. */
+const phones = (v: unknown) =>
+  Array.isArray(v)
+    ? v.slice(0, MAX_PHONES * 2).map((p) => {
+        const o = (p && typeof p === "object" ? p : {}) as Record<string, unknown>;
+        return { number: str(o.number), label: str(o.label) };
+      })
+    : undefined;
+
 /** «Контакты»: every field at once; saved by themselves (autosave.tsx). */
 export async function saveContactsAction(input: Record<string, unknown>): Promise<LocResult> {
   const { user, business, may } = await allowed();
@@ -51,9 +62,12 @@ export async function saveContactsAction(input: Record<string, unknown>): Promis
     business,
     {
       address: str(o.address),
+      country: str(o.country),
+      postcode: str(o.postcode),
       pin: str(o.pin),
       schedule: text3(o.schedule),
       phone: str(o.phone),
+      phones: phones(o.phones),
       website: str(o.website),
       facebook: str(o.facebook),
       instagram: str(o.instagram),
@@ -65,6 +79,19 @@ export async function saveContactsAction(input: Record<string, unknown>): Promis
   );
   if (r.ok) refresh();
   return r;
+}
+
+/**
+ * «Найти»: the typed address on OpenStreetMap (src/lib/geocode.ts), only on
+ * that tap, only for a login that may change the contacts. Nothing is saved
+ * here: the page puts the pin, the country and the postcode into its form,
+ * and the form saves itself.
+ */
+export async function geocodeAction(address: string, country: string): Promise<GeoResult> {
+  const { user, may } = await allowed();
+  if (!may) return { ok: false, why: "failed" };
+  const lang = /^(ru|et|en)$/.test(String(user.locale ?? "")) ? String(user.locale) : "ru";
+  return geocode(query, str(address).slice(0, LOC_MAX.address), cleanCountry(str(country)) ?? HOME_COUNTRY, lang);
 }
 
 /** A new logo. Returns its address. */

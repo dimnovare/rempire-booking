@@ -26,6 +26,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { InstallOffer } from "./install-offer";
 import { RemindMe } from "./remind-me";
+import { ReviewCard, ReviewSheet } from "./salon-review";
+import "./salon-page.css";
+import { OsmMap } from "@/components/osm-map";
 import {
   AtIcon,
   ChatIcon,
@@ -118,16 +121,23 @@ const initials = (name: string) =>
 /** The place in a maps app: the pin when there is one, else the address. */
 const mapsHref = (l: CatalogLocation) =>
   `https://www.google.com/maps/search/?api=1&query=${l.pin ? `${l.pin.lat},${l.pin.lng}` : encodeURIComponent(l.address)}`;
-/** OpenStreetMap's own embed around the pin (no key, no account): a few streets either way. */
-const mapFrame = ({ lat, lng }: { lat: number; lng: number }) => {
-  const f = (n: number) => n.toFixed(6);
-  const box = [lng - 0.0053, lat - 0.00135, lng + 0.0053, lat + 0.00135].map(f).join("%2C");
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${box}&layer=mapnik&marker=${f(lat)}%2C${f(lng)}`;
+/** The country's name in the page's language («Эстония», «Eesti»); the code itself where the browser has no names. */
+const countryName = (code: string, lang: Locale) => {
+  if (!code) return "";
+  try {
+    return new Intl.DisplayNames([INTL[lang]], { type: "region" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
 };
-/** The rows under «Контакты»: what is set, each a link. Socials and messengers by name, never their marks. */
-function contactRows(l: CatalogLocation): { key: string; href: string; text: string; icon: React.ReactNode; out?: boolean }[] {
-  const rows: { key: string; href: string; text: string; icon: React.ReactNode; out?: boolean }[] = [];
-  if (digits(l.phone)) rows.push({ key: "phone", href: `tel:${l.phone.replace(/[^\d+]/g, "")}`, text: l.phone, icon: <PhoneIcon /> });
+type ContactRow = { key: string; href: string; text: string; icon: React.ReactNode; out?: boolean; sub?: string };
+/** The rows under «Контакты»: what is set, each a link. Every phone, the main one first, its label under it. Socials and messengers by name, never their marks. */
+function contactRows(l: CatalogLocation): ContactRow[] {
+  const rows: ContactRow[] = [];
+  const phones = l.phones.length ? l.phones : digits(l.phone) ? [{ number: l.phone, label: "" }] : [];
+  phones.forEach((p, i) => {
+    if (digits(p.number)) rows.push({ key: `phone-${i}`, href: `tel:${p.number.replace(/[^\d+]/g, "")}`, text: p.number, icon: <PhoneIcon />, sub: p.label || undefined });
+  });
   if (l.website) rows.push({ key: "web", href: http(l.website) ? l.website : `https://${l.website}`, text: l.website.replace(/^https?:\/\//i, "").replace(/\/$/, ""), icon: <GlobeIcon />, out: true });
   if (l.instagram) rows.push({ key: "instagram", href: http(l.instagram) ? l.instagram : `https://www.instagram.com/${handle(l.instagram)}`, text: "Instagram", icon: <AtIcon />, out: true });
   if (l.facebook) rows.push({ key: "facebook", href: http(l.facebook) ? l.facebook : `https://www.facebook.com/${handle(l.facebook)}`, text: "Facebook", icon: <AtIcon />, out: true });
@@ -171,6 +181,13 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
   const [reviews, setReviews] = useState<SalonReviews | null>(null);
   const [reviewsBusy, setReviewsBusy] = useState(false);
   const [reviewsError, setReviewsError] = useState(false);
+  // «Оцените и напишите отзыв»: the stars tapped (0: the sheet is closed), and whether one went from here
+  const [rateWith, setRateWith] = useState(0);
+  const [reviewSent, setReviewSent] = useState(false);
+  const closeReview = useCallback(() => setRateWith(0), []);
+  const onReviewSent = useCallback(() => setReviewSent(true), []);
+  // the salon's page closed under an open sheet: the sheet goes with it
+  if (!about && rateWith > 0) setRateWith(0);
   const aboutPushed = useRef(false); // the page has its own history entry: back closes it
   const aboutFrom = useRef<{ y: number; el: HTMLElement | null }>({ y: 0, el: null }); // where the step was, and what opened the page
   const reviewsAsked = useRef(false);
@@ -1222,13 +1239,19 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
     const words = L.about[lang] || L.about.en || pick(L.about, lang);
     const hours = pick(L.schedule, lang);
     const contacts = contactRows(L);
-    const place = (
+    // «Как нас найти»: the postcode and the country under the address
+    const region = [L.postcode, countryName(L.country, lang)].filter(Boolean).join(", ");
+    const place = (more = "") => (
       <a className="ab-row" href={mapsHref(L)} target="_blank" rel="noreferrer">
         <PinIcon />
-        <span>{L.address}</span>
+        <span>
+          {L.address}
+          {more && <small className="ab-sub">{more}</small>}
+        </span>
       </a>
     );
     const last = reviews?.rows[reviews.rows.length - 1]?.id;
+    const avg = L.rating == null ? "" : new Intl.NumberFormat(INTL[lang], { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(L.rating);
     return (
       <main className="app ab-app" aria-labelledby="ab-name">
         {demo && <p className="demo">{c.demo}</p>}
@@ -1250,16 +1273,25 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
             <button
               type="button"
               className="ab-rating"
-              aria-label={`${c.nReviews(L.reviewCount)}. ${s.toReviews}`}
+              aria-label={`${c.nReviews(L.reviewCount)}${avg ? `, ${c.rated(avg)}` : ""}. ${s.toReviews}`}
               onClick={() => reviewsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
             >
               <StarIcon size={20} />
-              <span>{c.nReviews(L.reviewCount)}</span>
+              {/* «4,9 · 7 отзывов»: the average of the salon's own reviews on show, then how many */}
+              <span>
+                {avg && (
+                  <>
+                    <b className="ab-avg">{avg}</b>
+                    {" · "}
+                  </>
+                )}
+                {c.nReviews(L.reviewCount)}
+              </span>
             </button>
           )}
           {(L.address || hours) && (
             <ul className="ab-rows">
-              {L.address && <li>{place}</li>}
+              {L.address && <li>{place()}</li>}
               {hours && (
                 <li className="ab-row">
                   <ClockIcon />
@@ -1278,7 +1310,10 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
                   <li key={r.key}>
                     <a className="ab-row" href={r.href} {...(r.out ? { target: "_blank", rel: "noreferrer" } : {})}>
                       {r.icon}
-                      <span>{r.text}</span>
+                      <span>
+                        {r.text}
+                        {r.sub && <small className="ab-sub">{r.sub}</small>}
+                      </span>
                     </a>
                   </li>
                 ))}
@@ -1311,63 +1346,79 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
               <h2 className="ab-h" id="ab-where">
                 {s.where}
               </h2>
-              {L.address && <div className="ab-rows">{place}</div>}
+              {L.address && <div className="ab-rows">{place(region)}</div>}
               <div className="ab-map">
-                <iframe src={mapFrame(L.pin)} title={s.map} loading="lazy" tabIndex={-1} aria-hidden="true" referrerPolicy="no-referrer" />
-                {/* the whole map is one tap into the phone's maps app; the frame itself takes no touch, so the page scrolls over it */}
-                <a href={mapsHref(L)} target="_blank" rel="noreferrer" aria-label={`${s.openMap}: ${L.address || name}`}>
+                {/* our own picture of OpenStreetMap's tiles with the pin (src/components/osm-map.tsx), loaded only when near */}
+                <OsmMap pin={L.pin} zoom={16} lazy label={s.map} />
+                {/* the whole map is one tap into the phone's maps app; the picture takes no touch, so the page scrolls over it; «© OpenStreetMap» stays above */}
+                <a className="ab-map-open" href={mapsHref(L)} target="_blank" rel="noreferrer" aria-label={`${s.openMap}: ${L.address || name}`}>
                   <span>{s.openMap}</span>
                 </a>
               </div>
             </section>
           )}
-          {L.reviewCount > 0 && (
-            <section className="ab-reviews" ref={reviewsRef} aria-labelledby="ab-reviews">
-              <h2 className="ab-h" id="ab-reviews">
-                {s.reviews}
-              </h2>
-              <p className="sub">{c.nReviews(L.reviewCount)}</p>
-              {reviews && reviews.rows.length > 0 && (
-                <ul className="rvs">
-                  {reviews.rows.map((r) => (
-                    <li key={r.id} className="rv">
-                      <span className="rv-ava" aria-hidden="true">
-                        {initials(r.name)}
-                      </span>
-                      <span className="rv-head">
-                        <b>{r.name}</b>
-                        <span className="rv-meta">
-                          <span className="rv-stars" role="img" aria-label={c.rated(String(r.rating))}>
-                            {[1, 2, 3, 4, 5].map((n) => (
-                              <StarIcon key={n} size={14} on={n <= r.rating} />
-                            ))}
-                          </span>
-                          <time dateTime={new Date(r.at).toISOString()}>{fmtDay(r.at)}</time>
+          {/* always there: the card to write one, then the reviews on show */}
+          <section className="ab-reviews" ref={reviewsRef} aria-labelledby="ab-reviews">
+            <h2 className="ab-h" id="ab-reviews">
+              {s.reviews}
+            </h2>
+            <p className="sub">{L.reviewCount > 0 ? c.nReviews(L.reviewCount) : s.noneYet}</p>
+            <ReviewCard c={c} sent={reviewSent} onRate={setRateWith} />
+            {L.reviewCount > 0 && (
+              <>
+                {reviews && reviews.rows.length > 0 && (
+                  <ul className="rvs">
+                    {reviews.rows.map((r) => (
+                      <li key={r.id} className="rv">
+                        <span className="rv-ava" aria-hidden="true">
+                          {initials(r.name)}
                         </span>
-                      </span>
-                      {r.body && <p className="rv-body">{r.body}</p>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {!reviews && !reviewsError && (
-                <p className="wait" role="status">
-                  {c.loading}
-                </p>
-              )}
-              {reviewsError && (
-                <p className="alert" role="alert">
-                  {s.noMore}
-                </p>
-              )}
-              {(reviews?.more || reviewsError) && (
-                <button type="button" className="btn ab-more" disabled={reviewsBusy} onClick={() => void loadReviews(reviews ? last : undefined)}>
-                  {s.more}
-                </button>
-              )}
-            </section>
-          )}
+                        <span className="rv-head">
+                          <b>{r.name}</b>
+                          <span className="rv-meta">
+                            <span className="rv-stars" role="img" aria-label={c.rated(String(r.rating))}>
+                              {[1, 2, 3, 4, 5].map((n) => (
+                                <StarIcon key={n} size={14} on={n <= r.rating} />
+                              ))}
+                            </span>
+                            <time dateTime={new Date(r.at).toISOString()}>{fmtDay(r.at)}</time>
+                          </span>
+                        </span>
+                        {r.body && <p className="rv-body">{r.body}</p>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {!reviews && !reviewsError && (
+                  <p className="wait" role="status">
+                    {c.loading}
+                  </p>
+                )}
+                {reviewsError && (
+                  <p className="alert" role="alert">
+                    {s.noMore}
+                  </p>
+                )}
+                {(reviews?.more || reviewsError) && (
+                  <button type="button" className="btn ab-more" disabled={reviewsBusy} onClick={() => void loadReviews(reviews ? last : undefined)}>
+                    {s.more}
+                  </button>
+                )}
+              </>
+            )}
+          </section>
         </div>
+        {rateWith > 0 && (
+          <ReviewSheet
+            c={c}
+            stars={rateWith}
+            // the first name this device booked with, if any: what a review is signed with
+            name={(form.name.trim().split(/\s+/)[0] ?? "").slice(0, 60)}
+            staff={catalog.staff.map((x) => ({ id: x.id, name: x.name }))}
+            onSent={onReviewSent}
+            onClose={closeReview}
+          />
+        )}
       </main>
     );
   };

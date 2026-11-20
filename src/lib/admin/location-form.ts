@@ -13,6 +13,10 @@
  * How a value is kept, so the booking page can link it (contactRows there):
  *   phone              as typed, a plausible number with its country code;
  *                      one typed without one gets +372 (normalizePhone)
+ *   phones             the same for each, in order, with the owner's label
+ *                      (migration 034); the first is the main one, `phone`
+ *   country            ISO 3166-1 alpha-2, upper case; 'EE' when none is given
+ *   postcode           as typed: letters, digits, a space or a dash
  *   website            as typed: https://… or a bare domain (www.rempire.ee)
  *   instagram, facebook, telegram
  *                      a full https:// address, or a name kept as «@name»
@@ -27,15 +31,25 @@ export const LOC_MAX = {
   address: 200,
   schedule: 120,
   phone: 40,
+  phoneLabel: 30,
+  postcode: 12,
   website: 200,
   social: 200,
 } as const;
 
 /** The widget allows eight photos (migration 031 holds the same floor). */
 export const MAX_PHOTOS = 8;
+/** «+ Добавить номер» stops here (migration 034 holds the same floor). */
+export const MAX_PHONES = 5;
+/** Where a salon is when nothing says otherwise: the geocoder looks there first. */
+export const HOME_COUNTRY = "EE";
+/** The countries «Страна» offers, by their ISO codes; the names come from Intl.DisplayNames in the page's language. */
+export const COUNTRIES = ["EE", "LV", "LT", "FI", "SE", "NO", "DK", "DE", "PL", "GB", "IE", "NL", "BE", "FR", "ES", "IT", "AT", "CH", "CZ", "UA", "US"] as const;
 
 export type Text3 = { ru: string; et: string; en: string };
 export type Pin = { lat: number; lng: number };
+/** One of the salon's numbers and the owner's word for it ('' for none). */
+export type PhoneEntry = { number: string; label: string };
 
 export type BrandInput = { name: string; about: Text3 };
 export type ContactsInput = {
@@ -43,7 +57,13 @@ export type ContactsInput = {
   /** what was typed or pasted: «59.43, 24.76», a map's link, or '' for no map */
   pin: string;
   schedule: Text3;
+  /** the main number; with `phones` given, it is their first and this is not read */
   phone: string;
+  /** every number, the main one first: «+ Добавить номер» (migration 034) */
+  phones?: PhoneEntry[];
+  /** ISO code; none is HOME_COUNTRY */
+  country?: string;
+  postcode?: string;
   website: string;
   facebook: string;
   instagram: string;
@@ -51,7 +71,7 @@ export type ContactsInput = {
   telegram: string;
   viber: string;
 };
-export type CleanContacts = Omit<ContactsInput, "pin"> & { pin: Pin | null };
+export type CleanContacts = Omit<ContactsInput, "pin" | "phones" | "country" | "postcode"> & { pin: Pin | null; phones: PhoneEntry[]; country: string; postcode: string };
 
 export type Checked<T> = { ok: true; value: T } | { ok: false; field: string };
 
@@ -205,6 +225,55 @@ export function cleanPhone(v: unknown): string | null {
   return s.startsWith("+") ? s : e164;
 }
 
+/**
+ * «Телефоны»: each number as cleanPhone keeps it, with its label on one
+ * line. A row with neither a number nor a label is an empty «Второй номер»
+ * and is left out; a label with no number, a number that is not one, the
+ * same number twice or more than MAX_PHONES is refused (null).
+ */
+export function cleanPhones(v: unknown): PhoneEntry[] | null {
+  if (!Array.isArray(v) || v.length > MAX_PHONES * 2) return null;
+  const out: PhoneEntry[] = [];
+  const seen = new Set<string>();
+  for (const raw of v) {
+    const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+    const label = line(o.label);
+    const number = cleanPhone(o.number);
+    if (number === null || label.length > LOC_MAX.phoneLabel) return null;
+    if (!number) {
+      if (label) return null;
+      continue;
+    }
+    const key = normalizePhone(number);
+    if (!key || seen.has(key)) return null;
+    seen.add(key);
+    out.push({ number, label });
+  }
+  return out.length > MAX_PHONES ? null : out;
+}
+
+/** The salon's numbers as stored: `phones` when it has any, else the one `phone` (a row from before migration 034, or the demo seed's). */
+export function phonesOf(list: unknown, phone: string): PhoneEntry[] {
+  const out = Array.isArray(list)
+    ? list.flatMap((p) => (p && typeof p === "object" && typeof p.number === "string" && p.number.trim() ? [{ number: p.number, label: typeof p.label === "string" ? p.label : "" }] : []))
+    : [];
+  return out.length ? out : phone.trim() ? [{ number: phone, label: "" }] : [];
+}
+
+/** «Страна»: an ISO code, upper case; none is HOME_COUNTRY. Null: not two letters. */
+export function cleanCountry(v: unknown): string | null {
+  const s = line(v).toUpperCase();
+  if (!s) return HOME_COUNTRY;
+  return /^[A-Z]{2}$/.test(s) ? s : null;
+}
+
+/** «Индекс»: '' or letters, digits, a space or a dash, as typed. Null: anything else. */
+export function cleanPostcode(v: unknown): string | null {
+  const s = line(v);
+  if (!s) return "";
+  return s.length <= LOC_MAX.postcode && /^[A-Za-z0-9](?:[A-Za-z0-9 -]*[A-Za-z0-9])?$/.test(s) ? s : null;
+}
+
 /** A WhatsApp or Viber number: E.164, from a number or a wa.me link. Null: neither. */
 export function cleanChatNumber(v: unknown): string | null {
   const s = line(v);
@@ -276,12 +345,23 @@ export function cleanContacts(input: unknown): Checked<CleanContacts> {
   const o = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
   const address = line(o.address);
   if (address.length > LOC_MAX.address) return { ok: false, field: "address" };
+  const country = cleanCountry(o.country);
+  if (country === null) return { ok: false, field: "country" };
+  const postcode = cleanPostcode(o.postcode);
+  if (postcode === null) return { ok: false, field: "postcode" };
   const pin = parsePin(o.pin);
   if (!pin.ok) return { ok: false, field: "pin" };
   const schedule = text3(o.schedule, false);
   for (const k of LANGS) if (schedule[k].length > LOC_MAX.schedule) return { ok: false, field: "schedule" };
-  const phone = cleanPhone(o.phone);
-  if (phone === null) return { ok: false, field: "phone" };
+  // the list when the page sends one; else the one main number, as before migration 034
+  let phones: PhoneEntry[] | null;
+  if (Array.isArray(o.phones)) phones = cleanPhones(o.phones);
+  else {
+    const one = cleanPhone(o.phone);
+    phones = one === null ? null : one ? [{ number: one, label: "" }] : [];
+  }
+  if (phones === null) return { ok: false, field: "phone" };
+  const phone = phones[0]?.number ?? "";
   const website = cleanWebsite(o.website);
   if (website === null) return { ok: false, field: "website" };
   const facebook = cleanSocial("facebook", o.facebook);
@@ -294,7 +374,7 @@ export function cleanContacts(input: unknown): Checked<CleanContacts> {
   if (telegram === null) return { ok: false, field: "telegram" };
   const viber = cleanChatNumber(o.viber);
   if (viber === null) return { ok: false, field: "viber" };
-  return { ok: true, value: { address, pin: pin.pin, schedule, phone, website, facebook, instagram, whatsapp, telegram, viber } };
+  return { ok: true, value: { address, country, postcode, pin: pin.pin, schedule, phone, phones, website, facebook, instagram, whatsapp, telegram, viber } };
 }
 
 /** {ru, et, en} as stored: only the languages that have words ('{}' is «not set», as 028 has it). */

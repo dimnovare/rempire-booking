@@ -80,20 +80,24 @@ one too, in the widget's order (screenshots of it at 375 px, 20.11):
 1. A back arrow on the grey band; scrolled down, a white bar with the
    back arrow, the small mark and the name.
 2. The mark over the white panel's edge; the name.
-3. «★ 7 отзывов»: the reviews about the salon itself; a tap scrolls down
-   to them. Not there when there are none.
+3. «★ 4,9 · 7 отзывов»: the average and the count of the reviews about the
+   salon itself; a tap scrolls down to them. Not there when there are none.
 4. The address (opens the maps app) and the hours line.
-5. «Контакты»: the phone (a `tel:` link) and the site; Instagram,
-   Facebook, WhatsApp, Telegram and Viber by name when set (none is today).
+5. «Контакты»: every phone (each a `tel:` link, the main one first, its
+   label in grey under it) and the site; Instagram, Facebook, WhatsApp,
+   Telegram and Viber by name when set (none is today).
 6. «О компании» and the salon's own words.
 7. «Фото»: a strip of photos (today the logo on black).
-8. «Как нас найти»: the address again and a map with the pin. The map is
-   OpenStreetMap's own embed (no key), loaded only when scrolled to; the
-   whole map is one tap into the phone's maps app (Google Maps at the pin).
-   No pin, no map.
-9. «Отзывы», «7 отзывов», then the reviews, the newest first: initials in
-   a grey circle, the name as signed, the stars, the date, the text; six,
-   then «Ещё отзывы» for six more.
+8. «Как нас найти»: the address again, the postcode and the country under
+   it, and a map with the pin. The map is our own picture of
+   OpenStreetMap's tiles (`src/components/osm-map.tsx`, no key, no map
+   library), its tiles loaded only when scrolled near, «© OpenStreetMap» a
+   link of its own; the rest of the map is one tap into the phone's maps
+   app (Google Maps at the pin). No pin, no map.
+9. «Отзывы», «7 отзывов» (or «Отзывов пока нет»), the card «Оцените и
+   напишите отзыв» with five empty stars, then the reviews, the newest
+   first: initials in a grey circle, the name as signed, the stars, the
+   date, the text; six, then «Ещё отзывы» for six more.
 10. «Записаться» at the bottom: the booking start (a visit being moved goes
     back to its times).
 
@@ -101,16 +105,25 @@ one too, in the widget's order (screenshots of it at 375 px, 20.11):
   address becomes `/{locale}/about` (a pushed entry). The back arrow, the
   phone's back and Escape close it, and the step is as it was, scrolled
   where it was. Opened by its own address, the booking start is under it.
-- **Data:** `locations` (migration 028): `schedule` and `about` per
-  language, `website`, `photos`, `lat`/`lng`, the socials and messengers.
-  REMPIRE's public values are filled in by the migration and by the demo
+- **Data:** `locations` (migrations 028 and 034): `schedule` and `about`
+  per language, `website`, `photos`, `lat`/`lng`, `phones` (the main one
+  also in `phone`), `country`, `postcode`, the socials and messengers.
+  REMPIRE's public values are filled in by the migrations and by the demo
   seed. The reviews are `reviews` with no barber and not hidden
   (`src/lib/reviews.ts`, `salonReviews`; `/api/salon/reviews`): the name
   as signed, no client and no phone.
-- **Not there yet:** the widget's «Оцените и напишите отзыв» card with
-  five empty stars. We have no review form; it comes with ours.
-- **No admin for it yet:** the details change by SQL until the salon
-  settings get a «Контакты» page.
+- **Writing a review** (decision page round 11): a tap on a star of the
+  card opens the sheet (`src/app/[locale]/salon-review.tsx`): the stars and
+  their word, «О ком отзыв» (the salon or a barber), «Имя», «Отзыв»,
+  «Отправить» and «Отзыв появится после проверки салоном»; sent, «Спасибо
+  за отзыв!». POST `/api/salon/reviews` keeps it waiting (pending and
+  hidden, migration 035) until the owner presses «Одобрить» in «Отзывы»,
+  where the new ones come first with «Новый». No captcha, no phone, no
+  e-mail: a field no person sees, a few seconds' minimum, no links, three
+  an hour and five a day from one address (kept only as a day's hash,
+  cleared after two days) and fifty a day for the whole site.
+- **The admin:** «Настройки → Контакты» (the address found on the map with
+  «Найти», the pin dragged, several phones), «Бренд» and «Галерея».
 
 ## Moving and cancelling (the visit's own link)
 

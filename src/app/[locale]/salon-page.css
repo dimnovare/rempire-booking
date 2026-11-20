@@ -1,0 +1,12 @@
+/* The salon's page (booking-flow.tsx, aboutScreen): what «Контакты» with
+   several phones, the postcode and our own map added. */
+
+/* a phone's label, the postcode and country: a grey line under the row's text */
+.ab-row .ab-sub { display: block; font-size: 14px; line-height: 20px; color: var(--ink-2); }
+/* «4,9 · 7 отзывов» */
+.ab-rating .ab-avg { color: var(--ink); font-weight: 600; }
+
+/* the map fills its frame; the picture takes no touch, so the page scrolls over it */
+.ab-map .osm { position: absolute; inset: 0; pointer-events: none; }
+/* the copyright line stays a link of its own, above the link into the maps app */
+.ab-map .osm-credit { pointer-events: auto; z-index: 4; }

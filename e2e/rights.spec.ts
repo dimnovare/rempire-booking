@@ -50,7 +50,7 @@ test.describe("a login's rights", () => {
     };
     try {
       // before: the phone is there, and it is a link to call
-      const call = (await openVisit()).locator("a.adm-phone");
+      const call = (await openVisit()).locator("a.vs-call");
       await expect(call).toHaveAttribute("href", /^tel:\+\d+$/);
       const phone = ((await call.getAttribute("href")) ?? "").slice(4);
 
@@ -74,7 +74,7 @@ test.describe("a login's rights", () => {
       // the barber: no number to call on his day or in the visit, and the real one is not on the page at all
       const s = await openVisit();
       await expect(s.locator("a[href^='tel:']")).toHaveCount(0);
-      await expect(s.locator(".adm-phone")).toHaveText(/^\+\d{4}•+\d\d$/);
+      await expect(s.locator(".vs-phone b")).toHaveText(/^\+\d{4}•+\d\d$/);
       await expect(his.locator("a[href^='tel:']")).toHaveCount(0);
       expect(await his.content()).not.toContain(phone);
       await his.goto("/b");
@@ -86,7 +86,7 @@ test.describe("a login's rights", () => {
       await phones.check();
       await expect(counter(page, "journal")).toHaveText(R.count(was, 8));
       await saveRights(page);
-      await expect((await openVisit()).locator("a.adm-phone")).toHaveAttribute("href", `tel:${phone}`);
+      await expect((await openVisit()).locator("a.vs-call")).toHaveAttribute("href", `tel:${phone}`);
 
       // the history: both saves, the newest first, each with who and what
       const rows = page.locator(".rt-hist:visible li");

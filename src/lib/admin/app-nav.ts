@@ -32,18 +32,22 @@ export function offFor(user: Holder): string[] {
   ];
 }
 
-export type BarKey = "mine" | "calendar" | "clients" | "requests" | "invoices" | "more";
+export type BarKey = "mine" | "calendar" | "clients" | "reports" | "invoices" | "more";
 
 /**
  * A phone's bottom bar for an owner or the front desk, five tabs at most.
  * Linked to a barber: «Мой день» comes first and «Счета» goes behind
  * «Ещё». Not linked: the salon's four and «Ещё». A barber's own bar is the
  * barber app's (src/app/b/(app)/nav.tsx) and is not listed here.
+ *
+ * «Отчёты» is the phone's «Основные показатели» (/admin/analytics), with
+ * that page's right; «Запросы» is a row of «Ещё» (Dim, decision round 11),
+ * and its red dot is on «Ещё».
  */
 export function barOf(user: Holder): BarKey[] {
   const off = offFor(user);
-  const keys: BarKey[] = appKind(user) === "own" ? ["mine", "calendar", "clients", "requests", "more"] : ["calendar", "clients", "requests", "invoices", "more"];
-  return keys.filter((k) => !off.includes(k));
+  const keys: BarKey[] = appKind(user) === "own" ? ["mine", "calendar", "clients", "reports", "more"] : ["calendar", "clients", "reports", "invoices", "more"];
+  return keys.filter((k) => !off.includes(k === "reports" ? "analytics" : k));
 }
 
 /** Where each tab goes: «Мой день» is the barber app's own day (/b), the rest are the salon's pages. */
@@ -51,7 +55,7 @@ export const TAB_HREF: Record<BarKey, string> = {
   mine: "/b",
   calendar: "/admin",
   clients: "/admin/clients",
-  requests: "/admin/requests",
+  reports: "/admin/analytics",
   invoices: "/admin/invoices",
   more: "/admin/more",
 };
@@ -69,25 +73,28 @@ export function litTab(path: string, bar: readonly BarKey[]): BarKey | null {
   const has = (k: BarKey) => (bar.includes(k) ? k : bar.includes("more") ? "more" : null);
   if (under(path, "/b")) return path === "/b" || under(path, "/b/week") ? has("mine") : has("more");
   if (path === "/admin") return has("calendar");
-  for (const k of ["clients", "requests", "invoices"] as const) if (under(path, TAB_HREF[k])) return has(k);
+  for (const k of ["clients", "reports", "invoices"] as const) if (under(path, TAB_HREF[k])) return has(k);
   return under(path, "/admin") ? has("more") : null;
 }
 
 export type MineRow = "time" | "sell" | "money";
-export type SalonRow = "staff" | "schedule" | "services" | "catalogue" | "analytics" | "records" | "reviews" | "visits" | "messages" | "changes" | "invoices" | "sale";
+export type SalonRow = "staff" | "schedule" | "services" | "catalogue" | "analytics" | "records" | "reviews" | "visits" | "messages" | "changes" | "requests" | "invoices" | "sale";
 export type SettingsRow = "brand" | "contacts" | "gallery";
 export type AccountRow = "account" | "notify" | "language" | "logout";
 export type MoreRows = { mine: MineRow[]; salon: SalonRow[]; settings: SettingsRow[]; account: AccountRow[] };
 
 /** The salon's rows in the order of the sections (sections.tsx), «Продажа товара» last. */
-const SALON: readonly SalonRow[] = ["staff", "schedule", "services", "catalogue", "analytics", "records", "reviews", "visits", "messages", "changes", "invoices", "sale"];
+const SALON: readonly SalonRow[] = ["staff", "schedule", "services", "catalogue", "analytics", "records", "reviews", "visits", "messages", "changes", "requests", "invoices", "sale"];
+/** The row a tab stands for: «Отчёты» is «Основные показатели». */
+const TAB_ROW: Partial<Record<BarKey, SalonRow>> = { reports: "analytics", invoices: "invoices" };
 
 /**
  * «Ещё», in four groups:
  *   - «Моё, как барбера», only for a login linked to a barber: his time,
  *     «Продать товар» (with the right to sell), his sums;
  *   - «Салон»: every section that has no tab of its own in this login's
- *     bar, each only with its right, and «Продажа товара»;
+ *     bar, each only with its right («Запросы» among them), and «Продажа
+ *     товара»;
  *   - «Настройки»: the salon's page on the booking site, «Бренд»,
  *     «Контакты», «Галерея», with the right to change it;
  *   - «Аккаунт»: the logins and rights, this device's notifications, the
@@ -97,7 +104,8 @@ export function moreOf(user: Holder): MoreRows {
   const off = offFor(user);
   const bar = barOf(user);
   const mine: MineRow[] = appKind(user) === "own" ? ["time", ...(can(user, "visit.sell") ? (["sell"] as const) : []), "money"] : [];
-  const salon = SALON.filter((k) => !off.includes(k) && !(bar as string[]).includes(k));
+  const tabs = bar.map((k) => TAB_ROW[k]);
+  const salon = SALON.filter((k) => !off.includes(k) && !tabs.includes(k));
   const settings = (["brand", "contacts", "gallery"] as const).filter((k) => !off.includes(k));
   return { mine, salon, settings, account: ["account", "notify", "language", "logout"] };
 }
