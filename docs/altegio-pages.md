@@ -1294,3 +1294,344 @@ There is no «роли и права» item here.
 - [Editing work schedules](https://alteg.io/en/support/knowledge-base/10128987037085/)
 - [Client database filters](https://alteg.io/en/support/knowledge-base/4861296116253/)
 - [Client management, list of articles](https://alteg.io/en/support/knowledge-base/categories/clients-management/)
+
+---
+
+# Part 4: re-scan, 20.11.2026
+
+*Dim, 20.11.2026: «Scan again… check what we have & what Altegio has, what was used… and what we're missing». Looking only, in Renat's login; the change log shows no entry by that login on 20.11. Figures are the salon's own (no client data). Where this part and parts 1–3 differ, this part is newer. The comparison with our app is `docs/port-check.md`.*
+
+### Scan notes
+- **The journal loaded once.** `/location/337850/` (the salon link in the location switcher) redirects to `/timetable/337850/`. I read the page text through the DOM, clicked and hovered nothing, recorded no client data, and left at once.
+- **One page would not let me leave.** `/notifications/337850/type/19` claimed unsaved changes as soon as it loaded; I had changed nothing. The browser refused both navigating away and closing the tab. I switched off the page's leave-warning in the page's own memory (JS on `beforeunload`), then navigated away. Nothing was saved, and I never pressed «Сохранить».
+- **Clicks, all by `ref`:** two notification row titles (each checked first to be the title, not the switch) and the in-page tab «Доп. данные клиента». No other clicks.
+- **Screenshots:** five in all: «Визиты», three of «Основные показатели» (the extra two show the lower blocks), and the chain «Сводный отчет». I saved none myself; the tool keeps result images in the session's tool-results folder automatically.
+- **Not mine:** a tab «Finago Isolta» in the group belongs to another session and was left alone.
+
+### A. Menu tree
+**Location admin sidebar:** the same as «Full menu» in `docs/altegio-pages.md`. The only difference is that the «Цифровые платежи» group head links to `/settings/payment_policy/337850/`.
+
+**Settings hub `/settings/menu/337850/`:** the same 20 links. `…/setting_storage/` is the hub with the «Товары» breadcrumb, and `/analytics/reports/337850/reports_storage/` is the reports hub scrolled to «Склад».
+
+**New: the chain module «Chain Rempire».** It has its own sidebar (active group in violet, colour not measured). `/group/318560` itself was not opened.
+- **Аналитика:**
+  - Сводный отчет `/group_analytics/318560`
+  - Детализация по локациям `/group_analytics/filial/318560/`
+  - по дням `…/filial_daily/`
+  - по параметрам `…/filial_daily_separated/`
+  - Выполнение плана `…/plan_implementation/`
+  - Услуги `…/services/`
+  - Сотрудники `…/employee/`
+  - Кадровый отчет `…/hr/`
+  - Настройки `/group_analytics/options/318560`
+- **Клиенты** `/group_clients/318560`
+- **Обзор:** Записи `/group_dashboard/records/318560/`
+- **Сотрудники:**
+  - `/group_employees/318560/`
+  - Должности `/group_positions/318560/list/`
+  - Миграция в сеть `/group_employees_migrate/318560`
+  - Типы нерабочих дней `/group_off_days_types/318560/`
+  - Расчет зарплат `/group_payroll/salary_period/318560/`
+  - Аналитика
+- **Услуги:**
+  - Настройки услуг `/group_services/318560`
+  - Подразделения `/service_category_subdivisions/318560/`
+  - Миграция услуг `/group_services_attachment/318560`
+  - Аналитика
+- **Склад:** Товары `/shared_goods/318560/` · Миграция `/chain_goods_migration/318560/`
+- **Лояльность**, every path under `/group_loyalty_*/318560`:
+  - Типы карт `card_types` · Карты `cards`
+  - Акции `programs` · Автоприменение акций `auto_program`
+  - Транзакции `transactions` · Реферальная программа `referral_program`
+  - Типы сертификатов `certificate_types` · Сертификаты `certificates`
+  - Типы абонементов `abonement_types` · Абонементы `abonements`
+- **Счета клиентов** (all under `/group_deposits/318560/`): Типы счетов `deposit_types/` · Список `deposit_report/` · Операции `account_operations/`
+- **Онлайн-продажи:** Настройки `/group_online_sale/318560/settings/` · Список продаж `…/orders/`
+- **Телефония** `/group_voip_integration/318560/`
+- **Настройки:**
+  - Основные `/group_settings/318560`
+  - Пользователи `/group_users/318560`
+  - Дополнительные поля `/settings/custom_fields/318560/`
+  - Планы `/group_plans/318560/`
+
+**Other pages not in our doc:**
+- `/balance/337850/` redirects to `/license/337850/`.
+- `/cabinet/info/` redirects to `/personal_account/profile/`, with tabs Профиль · Язык · Телефон · Email · Пароль · Уведомления · Конфиденциальность · Управление аккаунтом.
+- `/online_booking/337850/settings/` + `grid` · `records` · `master_step` · `client_fields`.
+- `/online/mobile/337850/main` (branded app).
+- `/notifications/337850/email_channel_settings`.
+- `/appstore/337850/applications/installed` and app pages `/appstore/337850/applications/{id}/info` (tabs Информация · Настройки · Отзывы).
+
+### B. Function table
+
+| Section | Page | Does | Used? | Evidence |
+|---|---|---|---|---|
+| Журнал | timetable | day/week visits | yes | 762 records in 30 days |
+| Отчеты | Визиты | today + booking feed | yes (auto) | 162 upcoming; 35 692 «новые онлайн» never confirmed (✓) |
+| Отчеты | Основные показатели | KPI dashboard | yes | figures in D |
+| Отчеты | Записи, Клиенты, Сообщения, Отзывы, Изменения | lists | yes | 1 853 messages and 51 reviews (details in C); 1 097 changes 20.10–20.12 |
+| Отчеты | События, Акции, Звонки, Операции с данными, stock reports | — | no | empty |
+| Сотрудники | list, schedule | staff, shifts | yes | 5 barbers + «Altegio.me MCP» system user; 500 shift hours 1–20.11 |
+| Сотрудники | Должности | positions | no | empty |
+| Сотрудники | Типы нерабочих дней (chain) | leave types | defaults | 5 system types |
+| Сотрудники | Доступ (rights) | per-person rights | yes, customised | they differ per barber (see C) |
+| Клиенты | base | CRM | yes | 3 207 clients |
+| Клиенты | categories, classes, auto-labels, discounts | segmentation | defaults / no | VIP/Loyal/Permanent only; all rules empty |
+| Онлайн-запись | form, settings | widget | yes | 65 % of bookings come from the widget; «Любой специалист» on; online cancel/move allowed |
+| Онлайн-запись | Персональный домен, branded app, promo block, group booking | — | no | empty / off |
+| Услуги | categories, services | catalogue | yes | 1 category, 12 services, EN + ET names |
+| Товары | all | stock | no | empty |
+| Цифровые платежи | all | online pay, policy | no | no Adyen; policy sub-tabs disabled |
+| Финансы | operations, accounts, documents | money from visits | yes (auto) | 81 sales in 30 days; Jevgeni's login writes the finance changes |
+| Финансы | suppliers, own items | — | no | |
+| Расчет зарплат | all 8 | payroll | no | no schemes, rules, criteria, bonuses or fines; settings default |
+| Уведомления | types, channels | auto messages | yes | 1 853 messages in a month (596 SMS, 1 094 e-mail) |
+| Лояльность | location and chain | cards, certificates, abonements, deposits, promotions | no | all empty; referral flag on but both promos «Не применять» |
+| Ресурсы | | rooms / equipment | no | empty |
+| Интеграции | installed | apps | yes | 4 apps (in C) |
+| Интеграции | webhooks, API keys | | no | off |
+| Настройки | brand, contacts, gallery, system, journal | profile | yes | filled |
+| Настройки | legal, receipt | | partial / defaults | |
+| Биллинг | licence | subscription | yes | €92.99/month, renews 02.12.2026 |
+| Chain | users, custom fields, plans, online sales, telephony | | no | 1 user (Renat); 0 fields; plans blank |
+| Chain | Сводный отчет | chain KPI | auto | shows the same location's data |
+
+### C. New findings, page by page
+
+### Расчет зарплат (none of it is used)
+- **`/salary_general_settings/`:**
+  - «Дата начисления вознаграждения»: **Дата визита или продажи** / Дата поступления средств на банковский счет.
+  - «Учет комиссий за эквайринг»: Вычитать комиссию… / **Не вычитать**.
+  - «Сохранить». Both settings are on their defaults.
+- **`/salary/calculations/` «Взаиморасчеты»:**
+  - Filters: dates, and a barber select (5 barbers + «—»).
+  - Empty state «Для этого сотрудника на выбранные даты нет данных».
+  - Buttons: «Создать расчетную ведомость», «Создать внеочередное начисление», «Выписать премию», «Выписать штраф».
+  - Two barbers checked back to 2020: no data.
+- **`/salary_daily/`:**
+  - A date field; head buttons «Выгрузить в Excel», «Создать ведомость и начислить».
+  - A grid: time rows × the barbers working that day, then rows «За день», «Итого», «Взаиморасчеты».
+  - Each barber shows «Для сотрудника не установлена схема расчета зарплаты…».
+- **`/salary_period/`:**
+  - Columns: Сотрудник (name, role «Barber») · Рабочее время (days, hours) · Оказано услуг · Стоимость услуг · Продажа товаров · Стоимость товаров · Итоговая стоимость · Оплачено в кассы · Зарплата · Взаиморасчеты; a total row.
+  - 1–20.11: 64 days / 500 h in all. Jevgeni 15 d / 84.25 h, Slava 11 / 86.75, Renat 14 / 127, Valentin 13 / 112, Milena 11 / 90.
+  - All money columns are 0, because no barber has a scheme.
+- **Rules, criteria and schemes** (`/salary_params/list/`, `/salary_criteria/list/`, `/salary_scheme/list/`): each is an empty list with «Добавить …».
+- **`/salary_extension_reasons/`:** two tables, «Премии» and «Штрафы» (Название, Стандартная сумма), with add buttons and «Сохранить». Both empty.
+
+### Уведомления, per type
+- Each channel has a delivery mode, one of: «Всегда отправлять», «Не отправлять», «Отправлять, если не удалось доставить в предыдущий канал». The fallback order is Email → Altegio.me → SMS.
+
+| id | Type | State | When | Email | App | SMS |
+|---|---|---|---|---|---|---|
+| 1 | Напоминание | on | SMS 2 h before, e-mail 12 h before | always | never | always |
+| 2 | Создание (виджет) | on | at once | always | always | never |
+| 8 | Создание (журнал) | on | at once | always | always | never |
+| 9 | Подтверждение записи | on | on the admin's ✓ | always | always | never |
+| 4 | Отмена (online-made visits) | on | at once | always | always | never |
+| 72 | Приглашение недошедших | on | «Сразу» after the status change; status radio has none selected | always | always | always |
+| 3 | День рождения | on | 10:00 on the day | always | always | fallback |
+| 7 | Подтверждение номера (also widget login) | on | at once | – | – | always |
+| 6 / 20 | Запрос отзыва (виджет / журнал) | off | 3 h after; can skip by service or existing review | always | always | fallback |
+| 16 / 17 | Новая / окончание скидки | off | «за 0» days | always | always | fallback |
+
+Staff and admin messages; the «App» column here is «Приложение администратора»:
+
+| id | Type | State | App | Email | SMS |
+|---|---|---|---|---|---|
+| 11 | Создание записи клиентом, to staff | on | always | always | never |
+| 13 | Отмена клиентом или админом, to staff | on | always | always | fallback |
+| 12 | Отмена через виджет, to admin | on | always | always | never |
+| 10 | Создание записи клиентом, to admin | off | always | always | fallback |
+| 19 | Скорое завершение расписания | off | – | – | always (1, 3 and 7 days before) |
+
+Two more notes on notifications:
+- `type/5`, `type/14`, `type/15` and `type/18` are blank pages.
+- On «Каналы отправки», the SMS «Настроить» link goes to `/appstore/337850/applications/null/settings`, a broken link. The e-mail channel settings page did not render its labels.
+
+### Онлайн-запись
+- **`/online/online_settings/`** is a hub, not a form. Groups: «Информация о компании», «Используйте промоблок» (app 210), «Повышение конверсии», «Функциональность», «Еще больше возможностей».
+- **`settings/grid`** (online slots):
+  - «Недоступные дни для записи онлайн»: none.
+  - Weekday slot toggles Пн…Вс.
+  - Slot type **Оптимальный**, «От начала рабочего дня сотрудника», step **30 min**, «Время до начала визита: Не выбрано».
+  - «Добавить исключение по дням недели».
+- **`settings/records`:** clients may move **and** cancel online, both «Без ограничений».
+- **`settings/master_step`:** «Любой специалист» **on**; «Сотрудник для онлайн-записи: Любой».
+- **`settings/client_fields`:**
+  - Fields: Имя (required), Телефон (required), Комментарий к записи (optional, saved to the visit), Email (optional, saved to the client card).
+  - «Текст в виджете» is empty; group booking is off.
+  - **SMS phone confirmation is off**, and so is the push confirmation.
+- **Персональный домен:** subdomain + domain (altegio.me / rsrv.ws) + form select. Not set.
+- **Платёжная политика:** the sub-tabs Услуги, Сотрудники, Клиенты and Записи are **disabled** until a policy type is chosen.
+
+### Интеграции
+- Categories: Платежные системы, Аналитика, Лояльность, CRM, Телефония, ИИ-боты, Уведомления, Фискальные документы (Скоро), Персонал, Продвижение, Онлайн-запись.
+- **Installed (4), all free:**
+  - **Altegio.me MCP:** clients find the salon, book, move and cancel from Claude, ChatGPT and similar assistants.
+  - **Altegio.me:** the clients' mobile app.
+  - **Google Maps** «Book online» button, listed twice (apps 12 and 5).
+- Correction to our doc: the «Altegio.me MCP» author in the change log is this client-booking integration, not an admin AI connection.
+
+### Биллинг
+- Licence active until **04.12.2026**.
+- Plan «Тариф: 5 сотрудников, 1 месяц»; there is no named tier. Staff 5 / 5, «Достигнут лимит».
+- Auto-renewal on **02.12.2026**: €92.99 (€74.99 + VAT 24 % €18).
+- The price was €49.99 + VAT until January 2026. The history goes back to 24.11.2022, when the plan was for 4 staff.
+- `/balance/invoices/`: empty for 3 months. Purposes in its filter: пополнение баланса, лицензия, консалтинг, доп. опция, мобильное приложение.
+- A hidden «Запрос на снятие заморозки» dialog in the DOM shows a licence can be frozen.
+
+### Access rights
+- One barber (Slava): Журнал 6 / 8, Окно записи 23 / 29, Финансы 2 / 38, Товары 0 / 39; Ресурсы on; IP limit, SMS mailing and adding a location off.
+- The barber in our doc had 7 / 8, 26 / 29, 2 / 38, 1 / 39. So rights are tuned per person.
+- Altegio has 8 preset roles: Owner, Manager, Receptionist, Call center, Accountant, Professional, System manager, Viewer.
+- The individual rights inside each group are not in the DOM (each group would have to be expanded).
+
+### Chain
+- **Пользователи:** one user, Renat, with rights to change chain settings and users, view clients and visits, and online sales.
+- **Дополнительные поля:** none, on both the visit and the client tab.
+- **Планы:** a blank grid by month (types Оборот / Клиенты / Средний чек).
+- **Loyalty, certificates, abonements, deposit types, online sales:** all empty. «Акции» need a card type first.
+- **Реферальная программа:** «активна» ticked, but both promos are «Не применять».
+- **Телефония:** not connected.
+- **Типы нерабочих дней:** 5 system types (Оплачиваемый выходной, Прогул, Выходной за свой счет, Отпуск, Больничный).
+- **Network settings:** the main location sets the SMS tariff, currency and balance.
+
+### Usage evidence
+- **Messages, 20.10–20.11:** 1 853 in all; 596 SMS (messaggio.com), 1 094 e-mail, about 163 push or app.
+- **Reviews:** 51 in 12 months, the newest dated 20.11.2026, although review requests are off.
+- **Booking sources, last 30 days** (chain pie): Company form, mobile 65 %; **AdminApp Altegio 21 %**; Altegio.me app 12 %; admin web 2 %.
+- **Visit statuses:** 88 % waiting, 12 % came, 0 % did not come.
+- **Change log by author, 20.10–20.12:** Jevgeni 179 (including finance), Renat 110, Valchi 90, Slava 89, Milena 44, MCP 0. The rest, about 585, are «Неавторизованный пользователь», which looks like clients booking through the widget or app.
+
+### D. Dashboards
+
+### «Визиты» `/dashboard/337850`
+**Frame**
+- Page `#f7f9fc`, font Inter, base text 13 px `#676a6c`. Content starts at x 236, padding 20 10 40.
+- Head: title 24/32, weight 400, `#2b3134` at x 291, y 20; a chevron (list of reports), (i), a star; breadcrumb «Отчеты › Все отчеты».
+
+**Left panel**
+- Size: 530 px at x 246, y 110, 778 px high, in a 560 px column with 15 px gutters.
+- Title bar:
+  - 60 px, white, 1 px `#e0e3eb`, radius 12 12 0 0, padding 9 15 15; «Визиты» 16/17.6, 400.
+  - Switch on the right: «предстоящие (162)» 130 × 28 and «прошедшие» 88 × 28; 12/18, white, 1 px `#e0e3eb`, outer corners 6.
+  - The active button is pressed in: `inset 0 2px 5px rgba(0,0,0,.15)`.
+- Body: white, 1 px `#e0e3eb`, radius 0 0 12 12, padding 15.
+- Date line «Пятница, 20 ноября» 12/13.2, `#2b3134`, margin 5 0 10.
+- Six timeline rows, each 498 × 100:
+  - Left 90 px: a clock badge 30 × 25 (`#f7f9fc`, 1 px `#e7eaec`, radius 4); the time 13 px `#2b3134`; the length 11 px **`#583cf1`**.
+  - Right 352 px: a 1 px `#e7eaec` left line (the timeline), padding 10 15 0.
+  - In the right part: «Name / phone» as an underlined link 13 px `#2b3134` (opens the visit), services 13 px `#71757f`, the barber 11 px `#71757f`.
+- «Подробнее»: full width, 498 × 30, 12 px, white, 1 px `#e0e3eb`, radius 6.
+
+**Right panel «Лента активности по записям»**
+- Size: 1089 px at x 806; same title style.
+- Filter buttons, 28 px: «новые онлайн (35692)» 150 wide, «Все» 40 (active), «Онлайн» 62, «Офлайн» 63.
+- A day heading, then entries split by 1 px **dashed** `#e7eaec` lines with 20 px margins. 8 entries today, about 267 px each.
+- Entry, top to bottom:
+  - Tag «НОВЫЙ ВИДЖЕТ»: 115 × 24, uppercase 12 px `#583cf1` on `#e1e1fd`, radius 4.
+  - The service as an underlined link, 14/24 `#2b3134`.
+  - Far right, two buttons 34 × 30 (white, 1 px `#e0e3eb`, radius 6): ✓ «Подтвердить запись» and a bin «Отменить запись».
+  - Meta line, 14/24 `#71757f`: date, person icon + barber, clock + length, an icon + client.
+  - History:
+    - «✎ — Изменение — Пт, 20 ноября, 12:13:» (date `#2b3134`), and sub-lines with 12 px icons `#c6cbd3` and 12/16 text `#71757f`.
+    - «☑ — Создание — …», then the date, barber, length, client, status and comment.
+
+### «Основные показатели» `/analytics/337850`
+**Head and controls**
+- The URL holds `start_date`, `end_date`, `user_id`, `position_id`, `master_id`.
+- Head as above, breadcrumb «Отчеты».
+- At y 114:
+  - «Период» label 12/16 `#71757f`.
+  - Date-range field 220 × 32: white, 1 px `#e0e3eb`, radius 8, padding 3 9, text 14/24, a calendar icon.
+  - Caption «Выбрано 30 дней» 12/16 `#71757f`.
+  - «Фильтры» 89 × 32 at x 481: 12/16, 500, white, 1 px `#e0e3eb`, radius 8, a funnel icon.
+
+**Layout**
+- One column, **800 px at x 245**; the rest of the screen is empty.
+- Three section cards with 24 px gaps: Продажи (y 210, h 660), Посещаемость (y 894, h 590), Заполненность (y 1 508, h 622).
+- Card: white, 1 px `#e0e3eb`, radius 12, padding 20; title 20/24, 500. «Посещаемость» has an (i) at the right of its title.
+- The lower sections load when scrolled into view.
+
+**KPI card**
+- 242 × 99, three per row with 16 px gaps, padding 12 16.
+- Label 12/16 `#2b3134`; (i) 16 px `#71757f` top right.
+- Value 24/32, 500, `#2b3134`.
+- Change tag: 24 px high, radius 4, padding 4 6, 12 px.
+  - Falling: «↓ -10 %» `#f72c32` on `#feefef`.
+  - Unchanged: «0 %» on `#eaeef4`.
+  - Rising: «↑ 11 %» `#219c2b` on `#e9f7e9`.
+- Sub-line 12/16, 500, `#71757f`. «Посмотреть клиентов ↗» in the same style, as a flat button.
+
+**Charts** (ApexCharts, 758 × 275)
+- Grid `#e0e0e0`; axis text 12 px `#9aa3b1`; legend centred underneath, 12 px `#373d3f`, round markers.
+- Sales: smooth 2 px lines at 0.85 opacity, «Всего продаж» `#6644e0`, «Услуги» `#df7800`, «Товары» `#72bef4`. The y axis is 0–400.
+- Attendance: stacked bars 16 px wide, «Новых клиентов» `rgba(114,189,243,.85)` under «Не новых» `rgba(102,68,224,.85)`. Totals above the bars, 11 px, 500.
+- Fill rate: stacked bars, «Всего занято рабочего времени» `#ffcb00` at .85 and «Неявки» `#72bef4`. The y axis is 0–30 %, with % labels on top.
+
+**Blocks and figures, 22.10–20.11.2026**
+1. **Продажи**
+   - Cards: Итого €3.45K (−10 %, 81 операция) · Услуги €3.45K (−10 %, 81) · Товары €0 (0 %).
+   - Then the line chart.
+   - Cards: Средняя стоимость визита €42.6 (−1 %) · услуги €42.6 (−1 %) · товара €0.
+   - Footnote 11/14, 500, `#71757f`: prepayments are not counted.
+2. **Посещаемость**
+   - Cards: Клиенты 64 (−11 %, with a link) · Визиты 81 (−8 %) · Записи 762 (−1 %).
+   - Then the bars.
+   - Cards: Новые 9 (−30 %) · Не новых 55 (−6 %) · Потерянные 20 (+11 %).
+3. **Заполненность**
+   - Cards: Завершенные 81 (11 %) · Незавершенные 592 (78 %) · Отмененные 89 (12 %).
+   - Then the bars.
+   - One card: Средняя заполненность 11.2 (−10 %), «За рабочий день».
+
+### Chain «Сводный отчет» `/group_analytics/318560` (old style)
+- Controls: from / to date fields across the full width; an orange «Показать».
+- Six tiles, 3 per row, 530 px each:
+  - Tiles: Доход, Сумма услуг, Доход по товарам, Средний чек, Средний чек по услугам, Средняя заполненность.
+  - Title bar 48 px, title 14 px / 600, a blue (i).
+  - Value 30/33, **weight 100**, `#676a6c`; sub-line 11 px; the change in red, right-aligned.
+- Then a chart panel:
+  - Tabs «Выручка | Записи | Заполненность»; Flot bars in teal `rgb(26,179,148)`.
+  - «Записи» has three series: all bookings (teal), online (navy `rgb(70,79,136)`), new clients (orange).
+  - A right column of client figures with progress bars.
+- Record tiles.
+- Two pies: one by source, one by status (figures in C).
+
+Other chart-like pages are already in our doc: «Счета и кассы», «Отчет по кассе за день», and a client's «Статистика».
+
+### E. Questions for Renat
+1. In 30 days, 592 of 762 visits were never marked «came» or paid, and only Jevgeni's login records payments. How do the other four take payment? Must our app make them close each visit?
+2. 35 692 online bookings were never confirmed with ✓, yet the «booking confirmed» message is switched on. Do you ever confirm bookings? Do you want that step at all?
+3. You got 51 reviews this year with review requests switched off. Where do clients leave them? Should our app ask for a review 3 hours after the visit?
+4. Altegio sent 596 SMS last month. Who pays for them, and how much per SMS? Is that inside the €92.99 or billed separately?
+5. 21 % of bookings are made in Altegio's staff mobile app. Does every barber book clients from his phone?
+6. 12 % of bookings come through the Altegio.me app, and the Google Maps «Book online» button points to Altegio. Is it fine to lose the app channel? Should the Maps button point to our link?
+7. Clients can cancel or move a booking online right up to the start time. Keep that, or set a limit (2 h? 24 h?)?
+8. Clients can pick «any barber». Keep it?
+9. Phone confirmation by SMS code is switched off in the widget. Keep it off?
+10. Barbers have different access rights (for example, one sees some finance and another does not). What should each barber see in our app?
+11. Is the birthday greeting (10:00, e-mail and app, SMS as a fallback) and the «come back» message after a cancel or no-show wanted in the new app? Should they stay in English?
+12. The Altegio licence renews on 2 December for €92.99 and runs to 4 December. When do you want to switch, and should we cancel the renewal in time?
+13. «Chain Rempire» has one location. Is a second one planned (the tattoo studio)?
+
+### F. Change log («Изменения данных»)
+- **Before the scan:** 1 095 entries; the newest was 20.11.2026 11:56.
+- **After the scan:** 1 097 entries. Newest first:
+
+| When (20.11.2026) | Entity | Author | Action |
+|---|---|---|---|
+| 12:13 | Запись от 24.11 17:15 | Неавторизованный пользователь | Изменение |
+| 12:01 | Запись от 20.11 18:00 | Неавторизованный пользователь | Изменение |
+| 11:56 | Запись от 20.11 13:00 | Неавторизованный пользователь | Изменение |
+| 11:30 | Запись от 07.12 11:30 | Неавторизованный пользователь | Изменение |
+| 11:22 | Запись от 25.11 14:00 | Неавторизованный пользователь | Изменение |
+
+- The two new entries match two widget bookings created at 12:01 and 12:13, which the «Визиты» feed shows with «НОВЫЙ ВИДЖЕТ».
+- Filtered to Renat's login (the one this scan uses), the newest entry is 19.11.2026 17:16. There are none on 20.11.
+
+Sources (Altegio help):
+- [Team Member Roles and Access Rights](https://alteg.io/en/support/knowledge-base/19029472943261-User-roles/)
+- [Access rights](https://alteg.io/en/support/knowledge-base/categories/access-rights/)
+- [Finance access rights](https://alteg.io/en/support/knowledge-base/4847129943453-Finance-access-rights)
+- [Booking window access rights](https://alteg.io/en/support/knowledge-base/4847132275229-Booking-window-access-rights)

@@ -604,3 +604,254 @@ Sources:
 - [How to create credit note and can I create a partial credit note](https://help.isolta.com/en/articles/2781789-how-to-create-credit-note-and-can-i-create-a-partial-credit-note)
 - [How to send an e-invoice](https://help.isolta.com/en/articles/3728391-how-to-send-an-e-invoice)
 - [Can I cancel the invoice I just sent](https://help.isolta.com/en/articles/1101019-can-i-cancel-the-invoice-i-just-sent)
+
+---
+
+# Part 3: re-scan, 20.11.2026
+
+*Dim, 20.11.2026: «Scan again… what was used… and what we're missing», and «the dashboards are a bit different». Looking only; the counts before and after match (F). Measured at a 1365×911 viewport (MUI «lg»); parts 1–2 have the 1920 px figures. No receiver's name, code, e-mail or single sum. Where this part and parts 1–2 differ, this part is newer. The comparison with our app is `docs/port-check.md`.*
+
+Three corrections to `docs/isolta-pages.md`:
+- The last column of the invoice list is not a note icon. Its tooltip is «Записи платежей» (payment records).
+- The sidebar background is `#312e6b`, not dark navy. Only the active item is `#252442`.
+- E-invoicing is **not** active. `#/settings/e-invoicing` says «Not activated» for e-mail, e-invoices and printing, although e-mails still go out.
+
+### A. Menu tree
+
+- **Рабочий стол** `#/`: no sub-menu.
+- **Инвойсы** `#/invoices`: no sub-menu. One invoice is `#/invoices/<id>`.
+  - Routes in Isolta's code, not opened: `/<id>/send`, `/<id>/send-reminder`.
+  - `#/invoices/new` was not opened: two unexplained drafts dated 19.11 suggest opening it may create a draft.
+- **Контакты** `#/contacts`
+  - Sub-menu: «Контакты» `#/contacts`, «Show contact groups» `#/contacts/groups`, «Показать отчет» `#/contacts/report` (same page as `#/reports/contacts`).
+  - One contact: `#/contacts/<id>`, tabs `?tab=invoices` and `?tab=memo`.
+- **Товары/услуги** `#/products`
+  - Sub-menu: «Товары/услуги», «Показать отчет» `#/products/report` (same page as `#/reports/products`).
+- **Отчеты** `#/reports`
+  - Sub-menu: «Отчеты по продажам» `#/reports`, «Отчет клиента» `#/reports/contacts`, «Отчет о продукции» `#/reports/products`.
+- **Add-ons** `#/integrations` redirects to `#/integrations/etasku`; no sub-menu.
+  - `#/integrations/maksuvahti` is a blank page.
+  - `#/integrations/mobilepay` redirects to `#/settings`.
+- **Настройки** `#/settings`
+  - Sub-menu: «Моя компания», «Настройки инвойсирования» `/invoicing`, «Заказ» `/order`, «Мой аккаунт» `/account`, «Порекомендуйте» `/refer-to-friend`.
+  - Reached by address only: `/notifications-settings` «Оповещения», `/export` «Data export», `/e-invoicing` «Digital invoicing», `/integrations` «Transfers».
+- **Выход** `#/logout`: not opened.
+- **«Page not found»:** `#/settings/users`, `#/users`, `#/recurring-invoices`, `#/offers`, `#/quotes`, `#/payments`, `#/reminders`, `#/expenses`, `#/purchase-invoices`, `#/expenses/purchase-invoices`.
+- `#/invoices/recurring` is read as an invoice id. It shows H1 «Инвойс» and a dialog «Не найдено» («К сожалению, предмет вашего поиска не был найден»); its «ОК» sends you to `#/`.
+- **Conclusion:** Isolta has no recurring invoices, quotes list, payments page, reminders list or users page.
+
+### B. Function table
+
+| Section | Function | Used here? | Evidence |
+|---|---|---|---|
+| Dashboard | Month stat cards | yes (read) | This month 6 invoices / 4 168,94 €; last month 6 / 3 849,23 €; overdue 422. |
+| Dashboard | Purchase invoices | no | «Нет строк»; receiving e-invoices «Not activated». |
+| Dashboard | Latest events | no | «No notifications». |
+| Invoices | Issue invoices | **yes** | 480 in the list = 422 issued + 58 drafts. Issued per year: 2020 23, 2021 54, 2022 60, 2023 63, 2024 71, 2025 77, 2026 74 so far. Newest #422, dated 10.11.2026. |
+| Invoices | Drafts | **yes** | 58 drafts. Per year: 5, 12, 7, 7, 5, 10, 12. Newest two dated 19.11.2026. |
+| Invoices | Send by e-mail | **yes**, the only method | In the action logs of 9 contacts: 130 e-mail sends, 129 «Открыт.», no other kind of event. #422 sent and opened about 10.11. |
+| Invoices | Resend | sometimes | One contact: 18 invoices in 2026, 7 of them e-mailed twice. |
+| Invoices | E-invoice, printing service | no | No such events; «Digital invoicing: Not activated». |
+| Invoices | Record payments | **no** | Paid 0, partly paid 0, bad debt 0. Payments 0 in every month Nov 2025–Nov 2026. Receivables at month end rise by exactly that month's count (341 to 422). |
+| Invoices | Reminders | no | Filter «Просрочен, напоминание выслано» 0; none in the logs; default reminder text empty. |
+| Invoices | Credit notes | no | «Возвратные накладные (0)»; client report shows 0 credit notes every year 2020–2026. |
+| Invoices | Modify / copy / delete / «Создать…» / PDF / print | unknown | These leave no trace on screen. |
+| Invoices | Note, attachments | no (sampled) | #422: note 0/4000, no attachments. |
+| Invoices | Detail fields, descriptions | no | «Показать подробные данные (0)»; description fields empty. |
+| Invoices | Lines | free text | One line «teenused», quantity 1, no unit, 0 %, «Без НДС» (net and gross totals equal). |
+| Invoices | Payment terms | yes | 5 days and 14 days both occur; the default is 14. |
+| Invoices | Group invoices | no | Filter 0; no contact groups. |
+| Invoices | Summary, filters, date range | read-only views | See C. |
+| Invoices | CSV export | unknown | Not pressed. |
+| Contacts | List, card | **yes** | 18 contacts. Invoice counts on page 1: 1, 18, 2, 4, 9, 65, 0, 16, 1, 12. No contact notes on page 1. |
+| Contacts | Action log | automatic | Only e-mail sent and opened; no manual entries. |
+| Contacts | Groups, import/export | no / unknown | Groups empty. |
+| Reports | Client report | data present | Customers per year: 5, 5, 7, 6, 7, 7, 10; November 2026: 5. |
+| Reports | Sales report files | unknown | Invoice summary and receivables have data; both payment reports 0 and disabled. |
+| Products | Catalogue, report | no | Empty. |
+| Add-ons | eTasku | no | Not connected. |
+| Settings | Company, logo, bank account | yes | Filled. |
+| Settings | Numbering | yes | Next number 423; no prefix or suffix. |
+| Settings | Default texts | no | Cover letter, descriptions, reminder text, references all empty. |
+| Settings | Plan | yes | «Pro – Annually», 94,80 € + VAT 25,5 % a year. |
+| Settings | Users | one login | No users or roles feature; two-factor not activated; interface language RU. |
+| Settings | Notifications | on | «Входящий инвойс принят» is ticked. |
+| Settings | Data export, transfers, referral | no | None made. |
+
+Monthly issued invoices: Nov 2025 7, Dec 2025 7, Jan 7, Feb 5, Mar 6, Apr 7, May 9, Jun 7, Jul 7, Aug 12, Sep 2, Oct 6, Nov 6. Invoices are mostly dated the 1st–3rd of the month and some mid-month. Receivers open them within 1–3 days.
+
+### C. New findings
+
+**Invoice list `#/invoices`**
+- At 1365 px the columns «Референц-номер для оплаты» and «без НДС» are hidden. Visible: Статус 120 · Получатель 400 · № 110 · Дата 100 · Срок 100 · с НДС 120 · icon 76.
+- The last column is a 24 px icon in `rgba(11,11,20,.6)` with tooltip «Записи платежей». It shows only on issued invoices, not on drafts. It carries a MUI dot badge whose background is transparent. Not clicked.
+- Count per status filter:
+
+  | Filter | Count |
+  |---|---|
+  | Все инвойсы | 480 |
+  | Group invoices | 0 |
+  | Все подлежащие к получению | 422 |
+  | Просроченые платежи | 422 |
+  | Просрочен, напоминание выслано | 0 |
+  | Просрочен, напоминание не выслано | 422 |
+  | Только непросроченные | 0 |
+  | Черновики инвойсов | **57** |
+  | Оплаченные | 0 |
+  | Частично оплаченные | 0 |
+  | Выручка | 0 |
+
+- The drafts filter shows 57, but the summary says 58 drafts and 422 + 58 = 480. One draft escapes the filter.
+- An empty result shows «По данному критерию поиска инвойсов не найдено».
+- The Date range «Year» filter with ‹ › gives per-year totals of 28, 66, 67, 70, 76, 87, 86. Nothing before 2020.
+- Filters are kept in memory until the page reloads, not in the address or browser storage.
+- Paid, partly paid, credited, reminded and bad-debt invoices do not exist here, so those pills and banners cannot be seen live. The code description in the doc remains the only source.
+
+**«Сводка по выбранным инвойсам»**
+- It opens without selecting rows and summarises the currently filtered list.
+- Dialog 630×524: head padding 24, title 24px/600/32px, × 40 px round. No footer and no buttons.
+- Three card-tables 582 wide, 24 px apart; white, 8 px corners, card shadow.
+  - Head row 37 px: (empty) / «без НДС» / «с НДС», 14px/500 grey, cell padding 6/16.
+  - Rows 33 px, 14px/400, hairline `#e0e0e0`.
+- Table 1: «Выставленные инвойсы (422)», «Возвратные накладные (0)», then «Оборот» in 600 on `#e8fcf8`.
+- Table 2: «Оплаченные (0)», «Частично оплаченные (0)», «Неоплаченные счета (0)», «Просроченные (422)», «Плохие долги (0)», then «Итого» in 600 on `#e5f1ff`.
+- Table 3: «Черновики инвойсов (58)» in 600 on `#fff2e5`.
+
+**Invoice #422**
+- Its «Действия по инвойсу» popover reads: «Инвойс №422 отправлен по электронной почте…» and «Открыт.», both 10 days ago.
+- «Заметка» dialog: «Заметка (не будет видна на инвойсе)», 0 / 4000, «Save».
+- «Приложения к инвойсу»: no files.
+
+**Contact action log `#/contacts/<id>`**
+- Entries are grouped per invoice; each group is a small «Действие по инвойсу / Описание» table and is a button.
+- The list stops at 25 groups, then «Show more». Another «Show more» in the contact card expands more fields (not opened).
+- The longest log goes back to 10.2020.
+
+**Reports**
+- Month by month, the invoice summary count equals that month's issued invoices. Receivables at month end rise by exactly that count. «Платежи» and «Бухгалтерский отчет, основанный на платеже» are 0 in every month checked.
+
+**`#/settings/e-invoicing`, lower half**
+- «Digital invoicing — e-mail, e-invoices and the printing service — **Not activated**».
+  - Strong identification by a person with signing rights is required, through «Start authentication».
+  - «Want to send an e-invoice to Finland?»: contact Isolta's customer service.
+- «Receive purchase invoices electronically — **Not activated**»: an e-invoice address (OVT), 0,67 € per invoice + VAT, three steps, «Start authentication».
+- This contradicts «Настройки инвойсирования», which says «Выставление э-инвойсов активировано».
+
+**Plan**
+- In the app: Pro, annual, 94,80 € + 25,5 % VAT.
+- Isolta's public site says Pro includes all features without restrictions. E-invoices, the printing service and payment-default checks cost extra per transaction.
+- The site's features page lists no recurring invoices, payment reminders, bank link, multi-user or mobile app.
+
+**Users**
+- One login. There is no users or roles page.
+
+### D. Dashboard `#/` at a 1365×911 viewport
+
+**Page**
+- The main area is x 260–1365, background `#f3f3f7`, font Figtree.
+- No top bar and no H1 on the dashboard; other pages have the 88 px white bar.
+- The content box has a 1344 max width and 32 px side padding, giving a 1041 px column (x 292–1333). That would be 1280 at full width.
+- A vertical stack with 24 px padding top and bottom and 24 px between rows. The page ends at y 870; nothing scrolls.
+
+**Row 1, the head** (y 24, 56 high; flex row, gap 12)
+- Logo tile: MUI rounded Avatar 56×56, corners 10 %, background `#e5f8ff`, logo with object-fit contain. Renat's logo is black, so the tile looks black.
+- Text stack, gap 8:
+  - company name 20px/700/20px `rgba(11,11,20,.87)`;
+  - account e-mail 16px/400/14px `rgba(11,11,20,.6)`.
+
+**Row 2** (y 104, 420 high; flex row, gap 24)
+
+Left column, 681 wide, stack gap 24:
+- **Stat cards**: MUI Grid with 16 px spacing, items xs12 / sm4. Three cards of 216×120 at x 292, 524 and 757.
+  - Card: white, 8 px corners, shadow `0 4px 16px -1px rgba(18,63,99,.08), 0 0 1px rgba(18,63,99,.24)`.
+  - The whole card is a button, padding 16, flex column with space-between.
+  - Caption: 12px/700/16px, uppercase, letter-spacing 1 px, centred. It wraps to two lines at this width; at 1920 it fits on one and the card is 104 high.
+  - Caption colours: `#086a91` (this month), `#0a60c2` (last month), `#c2660a` (overdue).
+  - At the bottom, two 24 px rows with space-between:
+    - labels «Инвойсы» / «Итого» 16px/400/24px `#252442`;
+    - values 16px/700/24px `#252442`, right-aligned.
+  - Hover: background `rgba(11,11,20,.04)`, shadow becomes `0 4px 16px -1px rgba(18,63,99,.24), 0 0 1px rgba(18,63,99,.32)`.
+- **Tiles**: Grid with 24 px row gap and 16 px column gap, items xs6 / sm4 / xl2.
+  - Three per row here, in two rows. From 1536 px it is six in one row (140×126 at 1920).
+  - Tile 216×126, same card look and hover, padding 16/8, content centred.
+  - Icon chip 32×32, 8 px corners, `#ccd0ff`, icon 24 px `#312e6b`, 26 px from the top.
+  - Label 16px/400, normal line height, `rgba(11,11,20,.87)`, centred in a 40 px box 61 px from the top.
+
+Right, **promo card**:
+- Fixed 336 wide; its height stretches to the row (420 here, 254 at 1920).
+- White, 8 px corners, card shadow, overflow hidden, padding-bottom 24, flex column.
+- Head band 336×88: background `#e5f8ff` plus the photo `hero-3.webp` (contain, left centre). Over it a layer `rgba(49,46,107,.8)` with padding 16/24.
+  - Title h6 20px/600/28px `#f3f3f7`, two lines.
+- Body, padding 16/24: one paragraph 14px/400/20px `#252442`.
+- Button pinned to the bottom, padding 0 24: primary 166×40 «Читайте больше».
+  - Info icon 20 px at the left.
+  - Text 14px/500/24px on `#312e6b`, 8 px corners.
+
+**Row 3** (y 548, 298 high): Grid xs12 / md5 + md7, 24 px apart
+
+- **«Purchase invoices»** 420×298 (519 at 1920): white card, 8 px corners, card shadow, padding 16.
+  - Title h6 20px/600/28px `#252442`.
+  - 24 px under the title, a DataGrid 388×214, 1 px `#e0e0e0` border, 8 px corners.
+  - Head row 56: «Имя» (flex, 186 here), «Срок платежа» 100 (truncated), «Итого» 100 right-aligned; titles 14px/500 `rgba(11,11,20,.6)`.
+  - Empty body 104 high: «Нет строк» 14px/400, centred.
+  - Footer 52 with a top line:
+    - left «Итого: 0,00 €» 14px grey;
+    - right «0–0 of 0» and ‹ › round 40 px icon buttons, disabled grey `rgba(0,0,0,.26)`.
+- **«Latest events»** 597×298 (737 at 1920): same card, title h6, 16 px gap, then «No notifications» 14px/400/20px `rgba(11,11,20,.6)`.
+
+An Intercom launcher, about 48 px round and indigo, sits bottom right.
+
+**Frame**
+- The drawer paper is 260 wide, white, with a 1 px `rgba(0,0,0,.12)` line on its right. Inside it a 259 px column in **`#312e6b`**.
+- Logo box 259×73, padding 24/32; the white «finago isolta» wordmark is 116×24. A 1 px divider below it, then a 16 px gap; the menu starts at y 90.
+- Menu items:
+  - Each list item is 56 high with padding 4/16; the link inside is 227×48 at x 16, padding 12/16, 8 px corners.
+  - Icon 20×20 `#e5f8ff` at x 32; 12 px gap; label 16px/400/24px `#ffffff` at x 64.
+  - Active `#252442`; hover `#3c3894`.
+- Sub-menu items:
+  - Link 195×36 at x 48, list item 44 high, padding 8/16, 8 px corners.
+  - 14px/400/20px `#f3f3f7`, no icon.
+  - The current one is `#252442`, and so is its parent.
+- «Выход» sits at the bottom in its own list (padding 8/0); the item is at y 843.
+- Top bar on the other pages: 88 high, white, padding 24/0; H1 28px/700/36px `#252442` at x 292.
+
+### E. Unclear (questions for Renat)
+
+1. Isolta shows no payment ever recorded, so all 422 issued invoices count as overdue. Do you track who paid somewhere else, such as the bank or a spreadsheet? Should our invoices track payments, or only issue and send?
+2. What are the 58 drafts, 5–12 a year? Are they templates you copy each month, or leftovers? Should they move to the new system?
+3. Some invoices were e-mailed twice; for one barber, 7 of 18 this year. Why: a wrong address, a changed amount, or the barber asked again?
+4. About 5 of the 128 invoices I checked have no e-mail send in the log. Were they given as a PDF or on paper?
+5. Some invoices give 5 days to pay and others 14. Does this depend on the barber?
+6. Does your accountant receive Isolta's monthly report files («Сводка по инвойсам», «Дебиторская задолженность»)? Which one does the accountant need?
+7. Isolta's «Digital invoicing» page says «Not activated». Has Isolta asked you to authenticate? Could e-mail sending stop before we switch?
+8. When does the yearly Pro plan renew? Isolta must be told a month ahead to cancel.
+9. When was the last barber contact added? Isolta shows no creation date.
+10. Not for Renat: what the dashboard stat cards and the «Записи платежей» icon open (not clicked), and why one draft escapes the drafts filter (57 vs 58).
+
+### F. Proof of no writes
+
+**Before and after, unchanged:**
+- Dashboard: 6 / 6 / 422 and the same monthly totals; «Purchase invoices» empty; «Latest events: No notifications».
+- Invoice list: 480. Top rows: two drafts dated 19.11.2026, then #422 dated 10.11 and #421 dated 01.11.
+- Contacts: 18.
+- Next invoice number: 423, which is 422 issued + 1.
+- #422's log still has only «sent» and «Открыт.».
+
+**What I clicked:**
+- Select options in the status, «Date range» and report period filters, and the ‹ › month and year steps.
+- «Сводка по выбранным инвойсам», closed with Esc.
+- The status chip's popover, opened and closed.
+- One «Show more» in a contact's action log.
+- On #422, «Инструменты», then «Заметка к инвойсу» and «Приложения». Both dialogs were closed with Esc and nothing was saved.
+- «ОК» on the «Не найдено» notice.
+- One hover.
+
+**One timing slip:** that «ОК» sent the tab to the dashboard while my next click, «Инструменты», had already landed on the invoice page. «Инструменты» only opens its menu. I checked straight after: no dialog open, counts unchanged.
+
+**Otherwise:** no clicks in grid rows or headers, no checkboxes, no typing, no script fetches. I read the page and its JS only, reloaded once to clear the in-memory filters, and closed my tab at the end.
+
+I wrote no files.
+
+Sources:
+- [Isolta, invoicing for entrepreneurs (pricing)](https://isolta.com/)
+- [Isolta features](https://www.isolta.com/features/)
