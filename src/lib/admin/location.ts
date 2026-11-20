@@ -29,7 +29,7 @@
 import { can, type Holder } from "../auth/rights";
 import type { Business } from "../availability";
 import { withTx, type Querier } from "../db";
-import { cleanBrand, cleanContacts, formText3, MAX_PHOTOS, pinText, storedText3, type BrandInput, type ContactsInput, type Pin, type Text3 } from "./location-form";
+import { cleanBrand, cleanContacts, formText3, MAX_PHOTOS, phonesOf, pinText, storedText3, type BrandInput, type ContactsInput, type PhoneEntry, type Pin, type Text3 } from "./location-form";
 import { imageMime, PHOTO_MAX_BYTES } from "./staff";
 import { isUuid } from "./visits";
 
@@ -51,9 +51,15 @@ export type LocationSettings = {
   /** the uploaded logo's address; '' is none (the booking page keeps REMPIRE's mark) */
   logo: string;
   address: string;
+  /** ISO code (migration 034) */
+  country: string;
+  postcode: string;
   pin: Pin | null;
   schedule: Text3;
+  /** the main number: the first of `phones` */
   phone: string;
+  /** every number, the main one first (migration 034) */
+  phones: PhoneEntry[];
   website: string;
   facebook: string;
   instagram: string;
@@ -70,10 +76,13 @@ type Row = {
   about: unknown;
   logo: string;
   address: string;
+  country: string;
+  postcode: string;
   lat: number | string | null;
   lng: number | string | null;
   schedule: unknown;
   phone: string;
+  phones: unknown;
   website: string;
   facebook: string;
   instagram: string;
@@ -83,7 +92,7 @@ type Row = {
   photos: unknown;
 };
 
-const COLUMNS = "id, name, about, logo, address, lat, lng, schedule, phone, website, facebook, instagram, whatsapp, telegram, viber, photos";
+const COLUMNS = "id, name, about, logo, address, country, postcode, lat, lng, schedule, phone, phones, website, facebook, instagram, whatsapp, telegram, viber, photos";
 
 /** The booking page's location (catalog.ts reads the same one); locked for the change when `lock`. */
 async function salonLocation(q: Querier, businessId: string, lock = false): Promise<Row | null> {
@@ -102,9 +111,12 @@ function settingsOf(r: Row): LocationSettings {
     about: formText3(r.about),
     logo: r.logo,
     address: r.address,
+    country: r.country,
+    postcode: r.postcode,
     pin: lat != null && lng != null && Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null,
     schedule: formText3(r.schedule),
     phone: r.phone,
+    phones: phonesOf(r.phones, r.phone),
     website: r.website,
     facebook: r.facebook,
     instagram: r.instagram,
@@ -163,7 +175,10 @@ export async function saveBrand(business: Pick<Business, "id">, input: BrandInpu
   });
 }
 
-/** «Контакты»: the address and the pin, the hours, the phone, the site, the socials and the messengers. */
+/** The numbers as one line for the audit row: «+372 5623 7237; +372 5555 0000 (Тату)». */
+const phonesText = (list: readonly PhoneEntry[]) => list.map((p) => (p.label ? `${p.number} (${p.label})` : p.number)).join("; ");
+
+/** «Контакты»: the address, its country, postcode and pin, the hours, the phones, the site, the socials and the messengers. */
 export async function saveContacts(business: Pick<Business, "id">, input: ContactsInput, who: Who): Promise<LocResult> {
   if (!locationMay(who)) return NO;
   const c = cleanContacts(input);
@@ -175,9 +190,11 @@ export async function saveContacts(business: Pick<Business, "id">, input: Contac
     const was = settingsOf(loc);
     const flat = (s: Omit<LocationSettings, "id" | "name" | "about" | "logo" | "photos">) => ({
       address: s.address,
+      country: s.country,
+      postcode: s.postcode,
       pin: pinText(s.pin),
       ...flat3("schedule", s.schedule),
-      phone: s.phone,
+      phones: phonesText(s.phones),
       website: s.website,
       facebook: s.facebook,
       instagram: s.instagram,
@@ -187,12 +204,30 @@ export async function saveContacts(business: Pick<Business, "id">, input: Contac
     });
     const d = diff(flat(was), flat(v));
     if (!d.changed) return { ok: true as const };
+    // `phone` is the list's first: the one number the booking site, the letters and the SMS show (migration 034)
     await tx(
       `update locations
           set address = $2, lat = $3, lng = $4, schedule = $5::jsonb, phone = $6, website = $7,
-              facebook = $8, instagram = $9, whatsapp = $10, telegram = $11, viber = $12
+              facebook = $8, instagram = $9, whatsapp = $10, telegram = $11, viber = $12,
+              phones = $13::jsonb, country = $14, postcode = $15
         where id = $1`,
-      [loc.id, v.address, v.pin?.lat ?? null, v.pin?.lng ?? null, JSON.stringify(storedText3(v.schedule)), v.phone, v.website, v.facebook, v.instagram, v.whatsapp, v.telegram, v.viber],
+      [
+        loc.id,
+        v.address,
+        v.pin?.lat ?? null,
+        v.pin?.lng ?? null,
+        JSON.stringify(storedText3(v.schedule)),
+        v.phone,
+        v.website,
+        v.facebook,
+        v.instagram,
+        v.whatsapp,
+        v.telegram,
+        v.viber,
+        JSON.stringify(v.phones),
+        v.country,
+        v.postcode,
+      ],
     );
     await audit(tx, who.id, loc.id, "edit", d.before, d.after);
     return { ok: true as const };

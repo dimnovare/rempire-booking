@@ -1,0 +1,39 @@
+/* «Оцените и напишите отзыв» on the salon's page and its sheet (salon-review.tsx). */
+
+/* the card: a framed block on the white panel, centred, five empty stars */
+.rvc { margin-top: 16px; padding: 16px; border: 1px solid var(--line); border-radius: 16px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.rvc h3 { margin: 0; font: 500 16px/24px var(--body); }
+.rvc-stars { margin-top: 8px; display: flex; gap: 4px; }
+.rvc-stars button { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 12px; }
+.rvc-stars button:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.rvc-sub { margin: 4px 0 0; font-size: 14px; line-height: 20px; color: var(--ink-2); }
+.rvc-sent { margin: 8px 0 0; display: flex; align-items: center; gap: 8px; font-size: 14px; line-height: 20px; color: var(--ink-2); }
+.rvc-sent svg { flex: none; color: var(--badge); }
+
+/* the sheet */
+.rvf form { display: flex; flex-direction: column; }
+.rvf-rate { margin-top: 16px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; }
+.rvf-stars { display: flex; gap: 2px; margin-left: -4px; }
+.rvf-stars button { width: 48px; height: 48px; display: grid; place-items: center; border-radius: 12px; }
+.rvf-stars button:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.rvf-word { font-weight: 500; }
+.rvf .alert { margin-top: 4px; }
+.rvf form > .t2 { margin-right: 48px; }
+.rvf .rvf-label { margin: 16px 0 0; font-size: 12px; line-height: 16px; }
+.rvf-chips { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+.rvf-chips button { min-height: 40px; padding: 0 16px; border: 1px solid var(--edge); border-radius: 100px; background: var(--surface); font-size: 14px; line-height: 20px; }
+.rvf-chips button[aria-checked="true"] { border-color: var(--primary); background: var(--primary); color: var(--on-primary); }
+.rvf-field { margin-top: 16px; }
+.rvf-text textarea.input { height: auto; min-height: 112px; padding: 12px 16px; resize: vertical; }
+.rvf .rvf-send { margin-top: 20px; }
+.rvf .rvf-form-err { margin-top: 16px; }
+.rvf .rvf-note { margin: 12px 0 0; font-size: 12px; line-height: 16px; color: var(--ink-2); text-align: center; }
+/* out of sight and out of reach: only a bot fills it */
+.rvf-trap { position: absolute; left: -10000px; top: auto; width: 1px; height: 1px; overflow: hidden; }
+
+/* sent */
+.rvf-done { padding-top: 24px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.rvf-tick { width: 56px; height: 56px; border-radius: 50%; background: var(--badge); color: var(--on-primary); display: grid; place-items: center; }
+.rvf .rvf-done .t2 { margin: 16px 0 0; }
+.rvf .rvf-done p { margin: 8px 0 0; color: var(--ink-2); }
+.rvf .rvf-done .btn { margin-top: 24px; }

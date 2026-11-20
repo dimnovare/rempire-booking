@@ -7,8 +7,9 @@
  *   staffId   one barber, «company» for the reviews about the salon itself
  *             («О компании»), or every review;
  *   rating    one number of stars, or any;
- *   shown     every review, only those on the booking page, or only the
- *             hidden ones (ours: the tool deletes instead of hiding).
+ *   shown     every review, only the new ones from the site that wait for
+ *             the salon (migration 035), only those on the booking page, or
+ *             only the hidden ones (ours: the tool deletes instead of hiding).
  *
  * The page sends every field as it was picked (`ReviewQuery`); `cleanReviews`
  * reads it, and what is not one of the choices is the same as nothing
@@ -20,7 +21,7 @@ import { addMonths } from "./record-filter";
 
 export const REVIEW_PAGE_SIZES = [25, 50, 100] as const;
 export const REVIEW_PAGE_SIZE = 25;
-export const REVIEW_SHOWN = ["all", "shown", "hidden"] as const;
+export const REVIEW_SHOWN = ["all", "pending", "shown", "hidden"] as const;
 export type ReviewShown = (typeof REVIEW_SHOWN)[number];
 /** The staff filter's word for the reviews about the salon, not a barber. */
 export const REVIEW_COMPANY = "company";

@@ -1,8 +1,8 @@
 /**
  * /admin/settings/contacts «Контакты», the second page of «Настройки →
- * Локация» (docs/altegio-pages.md, «Контакты»): the address and its pin,
- * the opening hours, the phone and the site, the social pages and the
- * messengers. The form is contacts-view.tsx.
+ * Локация» (docs/altegio-pages.md, «Контакты»): the address with its
+ * country, postcode and pin on the map, the phones, the opening hours, the
+ * site, the social pages and the messengers. The form is contacts-view.tsx.
  */
 import { Suspense } from "react";
 import { pinText } from "@/lib/admin/location-form";
@@ -25,9 +25,11 @@ async function Loaded() {
     <ContactsView
       initial={{
         address: loc.address,
+        country: loc.country,
+        postcode: loc.postcode,
         pin: pinText(loc.pin),
         schedule: loc.schedule,
-        phone: loc.phone,
+        phones: loc.phones,
         website: loc.website,
         facebook: loc.facebook,
         instagram: loc.instagram,
