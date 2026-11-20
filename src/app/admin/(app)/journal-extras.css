@@ -1,0 +1,117 @@
+/* The journal's extras (journal-grid.tsx, journal-card.tsx, journal-hours.tsx), measured on the boards
+   Journal-Hover, Journal-Head and Journal-DayOff: the bar «Новый сеанс» under the mouse, a visit's card on
+   hover, the menu behind a barber's head, a day nobody works and «Добавить сотрудника в расписание». The
+   grid's own rules are admin.css («calendar» and «the journal from 900px»). */
+
+/* «12:00 Новый сеанс»: one line of the scale (15px from 900px), green, under the mouse */
+.jr-slot { position: absolute; z-index: 4; left: 3px; right: 3px; top: calc(var(--ppm) * var(--t) * 1px); height: calc(var(--ppm) * var(--m, 15) * 1px); display: flex; align-items: center; gap: 4px; padding: 0 6px; overflow: hidden; border-radius: 3px; background: #1cb58e; color: #fff; font: 600 10px/1 var(--body); white-space: nowrap; pointer-events: none; }
+.jr-slot b { font-weight: 600; font-variant-numeric: tabular-nums; }
+@media (min-width: 900px) { :where(.adm:not(.bx)) .jr-slot { left: 6px; right: 6px; } }
+
+/* ---------- a visit's card ---------- */
+.jr-card-wrap { position: fixed; z-index: 45; width: 384px; }
+.jr-card-wrap.is-right { padding-left: 8px; }
+.jr-card-wrap.is-left { padding-right: 8px; }
+.jr-card { display: flex; flex-direction: column; gap: 14px; padding: 18px 20px; border-radius: 12px; background: #fff; box-shadow: rgba(0, 29, 102, .16) 0 6px 24px, rgba(0, 29, 102, .06) 0 0 0 1px; color: #2b3134; font: 400 12px/16px var(--body); text-align: left; }
+.jr-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.jr-card-who { min-width: 0; }
+.jr-card-who h3 { margin: 0; font: 600 15px/20px var(--body); overflow-wrap: anywhere; }
+.jr-card-phone { margin: 2px 0 0; display: flex; align-items: center; gap: 4px; color: #71757f; font: 400 12px/16px var(--body); font-variant-numeric: tabular-nums; }
+.jr-card-copy { flex: none; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: #71757f; }
+.jr-card-copy:hover { background: #eaeef4; color: #2b3134; }
+.jr-card-when { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.jr-card-when b { font: 500 12px/16px var(--body); font-variant-numeric: tabular-nums; }
+.jr-card-when small { color: #71757f; font: 400 11px/14px var(--body); }
+.jr-card-nums { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid #eef0f4; border-radius: 8px; }
+.jr-card-nums > div { min-width: 0; padding: 8px 10px; }
+.jr-card-nums > div + div { border-left: 1px solid #eef0f4; }
+.jr-card-nums dt { color: #71757f; font: 400 11px/14px var(--body); }
+.jr-card-nums dd { margin: 2px 0 0; font: 600 14px/20px var(--body); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.jr-card-nums dd.is-bad { color: #d1050b; }
+.jr-card-nums.is-wait dd { color: #9aa3b1; }
+.jr-card-chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.jr-chip { height: 32px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: 8px; background: #eaeef4; color: #2b3134; font: 500 12px/16px var(--body); white-space: nowrap; }
+.jr-chip > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.jr-chip:hover:not(:disabled) { background: #dfe4ec; }
+.jr-chip[aria-pressed="true"], .jr-chip[aria-pressed="true"]:hover { background: #2b3134; color: #fff; }
+:where(.adm) .jr-chip:disabled { opacity: .6; cursor: default; }
+:where(.adm) .jr-chip[aria-pressed="true"]:disabled { opacity: 1; }
+.jr-chip-i { flex: none; }
+.jr-chip-i.is-wait { color: #71757f; }
+.jr-chip-i.is-came { color: #1cb58e; }
+.jr-chip-i.is-no { color: #d1050b; }
+.jr-chip-i.is-ok { color: #8f72b8; }
+.jr-chip[aria-pressed="true"] .jr-chip-i.is-wait { color: #fff; }
+.jr-card-svc h4 { margin: 0 0 6px; color: #71757f; font: 500 11px/14px var(--body); }
+.jr-card-svc ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.jr-card-svc li { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.jr-card-svc li > span:first-child { min-width: 0; }
+.jr-card-svc li b { font: 500 12px/16px var(--body); overflow-wrap: anywhere; }
+.jr-card-svc li small { margin-left: 6px; color: #71757f; font: 400 11px/14px var(--body); white-space: nowrap; }
+.jr-card-svc li .num { flex: none; font: 600 12px/16px var(--body); }
+.jr-card-total { margin: 10px 0 0; padding-top: 10px; border-top: 1px dashed #e0e3eb; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.jr-card-total span { font: 600 13px/16px var(--body); }
+.jr-card-total b { font: 600 16px/20px var(--body); }
+.jr-card-open { width: 100%; height: 32px; border: 1px solid #e0e3eb; border-radius: 8px; background: #fff; color: #2b3134; font: 500 12px/16px var(--body); }
+.jr-card-open:hover { border-color: #c6cbd3; }
+
+/* ---------- a barber's head and its menu (from 900px) ---------- */
+.jr-head-wrap { position: relative; flex: 1; min-width: 0; align-self: stretch; display: flex; align-items: center; }
+.jr-head-btn { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; margin: 0 -8px; padding: 6px 8px; border-radius: 8px; color: inherit; text-align: left; }
+.jr-head-btn > svg { flex: none; margin-left: auto; color: #71757f; opacity: 0; }
+.jr-head-btn:hover, .jr-head-wrap.is-open .jr-head-btn { background: #eaeef4; }
+.jr-head-btn:hover > svg, .jr-head-wrap.is-open .jr-head-btn > svg { opacity: 1; }
+/* the open head's menu lies over its neighbours' heads */
+.cal-head:has(.jr-head-wrap.is-open) { z-index: 8; }
+.jr-head-menu { position: absolute; z-index: 20; top: calc(50% + 26px); left: -8px; width: 244px; padding: 6px; border-radius: 12px; background: #fff; box-shadow: rgba(0, 29, 102, .16) 0 6px 24px; color: #2b3134; font: 400 12px/16px var(--body); }
+.jr-head-top { display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px; padding: 8px 10px 10px; border-bottom: 1px solid #eef1f6; }
+.jr-head-top b { font: 600 13px/16px var(--body); }
+.jr-head-top small { color: #71757f; font: 400 12px/16px var(--body); font-variant-numeric: tabular-nums; }
+.jr-head-item { width: 100%; height: 36px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 8px; color: #2b3134; font: 500 13px/16px var(--body); text-align: left; text-decoration: none; white-space: nowrap; }
+.jr-head-item svg { flex: none; color: #71757f; }
+.jr-head-item:hover { background: #f7f9fc; }
+.jr-head-edit { display: flex; flex-direction: column; gap: 10px; padding: 6px 4px 4px; }
+.jr-head-acts, .jr-dlg-acts { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* the times and the buttons of the menu and the dialog */
+.jr-time-row { display: flex; align-items: center; gap: 8px; color: #71757f; font: 400 12px/16px var(--body); }
+:where(.adm) .jr-time { width: 96px; height: 32px; min-height: 32px; padding: 0 8px; border: 1px solid #e0e3eb; border-radius: 8px; background: #fff; color: #2b3134; font: 400 13px/16px var(--body); font-variant-numeric: tabular-nums; }
+.jr-xbtn { height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0 14px; border: 1px solid #e0e3eb; border-radius: 8px; background: #fff; color: #2b3134; font: 500 12px/16px var(--body); white-space: nowrap; }
+.jr-xbtn:hover { border-color: #c6cbd3; }
+.jr-xbtn.is-main { border-color: #ffcb00; background: #ffcb00; }
+.jr-xbtn.is-main:hover { filter: brightness(1.05); }
+.jr-hours-err { margin: 0; padding: 0 6px; color: var(--warn); font: 400 12px/16px var(--body); }
+
+/* ---------- a day nobody works ---------- */
+.jr-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px 16px; color: #2b3134; text-align: center; }
+.jr-empty-disc { width: 88px; height: 88px; margin-bottom: 4px; display: grid; place-items: center; border-radius: 50%; background: #eaeef4; color: #71757f; }
+.jr-empty h2 { margin: 0; font: 500 18px/24px var(--body); }
+.jr-empty p { max-width: 320px; margin: 0 0 8px; color: #71757f; font: 400 13px/18px var(--body); }
+.jr-empty-btn { width: 236px; max-width: 100%; height: 32px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #e0e3eb; border-radius: 8px; background: #fff; color: #2b3134; font: 500 12px/16px var(--body); text-decoration: none; }
+.jr-empty-btn:hover { border-color: #c6cbd3; }
+.jr-empty-btn.is-main { border-color: #ffcb00; background: #ffcb00; }
+@media (max-width: 899.98px) { .jr-empty-btn, .jr-xbtn, :where(.adm) .jr-time { height: 44px; min-height: 44px; } }
+
+/* «Добавить сотрудника в расписание»: on the right over the dimmed journal; a phone's at the bottom */
+.jr-dlg-wrap { position: fixed; inset: 0; z-index: 60; background: rgba(43, 49, 52, .36); }
+.jr-dlg { position: absolute; top: 120px; right: 24px; width: 356px; max-width: calc(100% - 32px); max-height: calc(100dvh - 140px); overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 20px; border-radius: 12px; background: #fff; box-shadow: rgba(0, 29, 102, .16) 0 6px 24px; color: #2b3134; font: 400 12px/16px var(--body); text-align: left; }
+@media (max-width: 899.98px) { .jr-dlg { top: auto; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); left: 12px; width: auto; max-width: none; max-height: calc(100dvh - 96px); } }
+.jr-dlg h2 { margin: 0; font: 500 20px/24px var(--body); }
+.jr-dlg-sub { margin: -8px 0 4px; color: #71757f; font: 400 12px/16px var(--body); }
+.jr-dlg h3 { margin: 0; color: #71757f; font: 500 12px/16px var(--body); }
+.jr-dlg-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.jr-dlg-all, .jr-dlg-break { min-height: 24px; color: #2b3134; font: 500 12px/16px var(--body); }
+.jr-dlg-all { text-decoration: underline; text-underline-offset: 2px; }
+.jr-dlg-break { align-self: flex-start; }
+.jr-dlg-list { list-style: none; margin: 0; padding: 0; border: 1px solid #e0e3eb; border-radius: 8px; overflow: hidden; }
+.jr-dlg-list li + li { border-top: 1px solid #eef1f6; }
+.jr-dlg-list label { min-height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 12px; cursor: pointer; }
+.jr-dlg-list label:hover { background: #f7f9fc; }
+:where(.adm) .jr-dlg-list input { appearance: none; flex: none; width: 18px; height: 18px; min-height: 18px; margin: 0; padding: 0; border: 1px solid #c6cbd3; border-radius: 4px; background: #fff; cursor: pointer; }
+:where(.adm) .jr-dlg-list input:checked { border-color: #ffcb00; background: #ffcb00 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232b3134' stroke-width='3'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 12px no-repeat; }
+.jr-dlg-ava { flex: none; width: 28px; height: 28px; border-radius: 50%; background: #2b3134; color: #fff; font: 700 11px/1 var(--body); }
+.jr-dlg-list label > span:last-child { min-width: 0; display: flex; flex-direction: column; }
+.jr-dlg-list b { font: 500 13px/16px var(--body); }
+.jr-dlg-list small { color: #71757f; font: 400 12px/16px var(--body); }
+.jr-dlg-x { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: #71757f; font: 400 16px/1 var(--body); }
+.jr-dlg-x:hover { background: #eaeef4; color: #2b3134; }

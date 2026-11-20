@@ -69,7 +69,7 @@ test.describe("Renat on /b", () => {
     await page.getByRole("button", { name: barber.name }).click();
     await page.waitForURL((u) => u.pathname === "/b");
     await expect(page.getByRole("link", { name: B.pick.viewing(barber.name) })).toBeVisible();
-    await expect(page.locator(".bx-v").first()).toBeVisible();
+    await expect(page.locator(".bx-cal .cal-v").first()).toBeVisible();
     await page.goto("/b/more");
     await expect(page.getByRole("link", { name: B.more.toAdmin })).toBeVisible();
     // Renat's own kinds: five, about the salon; on from the start as he answered (18.11): online bookings, a client's move or cancel

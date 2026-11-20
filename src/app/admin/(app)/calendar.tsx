@@ -2,7 +2,8 @@
 
 /**
  * Renat's calendar. Fewer taps than Altegio:
- *   new visit  «Запись» (next free time) or a tap on an empty time →
+ *   new visit  a tap on an empty time (from 900px the bar «Новый сеанс»
+ *              under the mouse says which), or a phone's «Запись» →
  *              the client's phone → the service → «Записать»;
  *   move       drag it (mouse), or tap it → «Перенести» → tap the new time;
  *   cancel     tap it → «Отменить запись» → «Да, отменить»;
@@ -23,6 +24,15 @@
  * (3½ columns fit, swipe for the rest; a week all on one screen) and takes
  * only the visits' colours.
  *
+ * From 900px a visit under the mouse (or the keyboard) shows its card
+ * (journal-card.tsx): the client, his numbers, the status chips, the
+ * services; a barber's head opens his day's hours (journal-hours.tsx), and
+ * a day nobody works offers the schedule and «Добавить сотрудников в день».
+ * A click, a drag and the bar snap to the line the scale shows: 15, 10 or 5
+ * minutes (ZOOM_STEP); a phone to the salon's booking step.
+ *
+ * The grid itself is shared with the barber's «Мой день» (journal-grid.tsx).
+ *
  * A tapped visit opens in its window (visit-window.tsx): from 900px the
  * three columns of the product we follow, over the dimmed journal; a phone
  * keeps its bottom sheet. So does a new visit (new-visit.tsx): from 900px
@@ -36,9 +46,8 @@
  * control it has no right to is not drawn. That is only tidiness: the
  * actions ask the same rights again.
  */
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { CalBlock, CalendarData, CalMay, CalVisit } from "@/lib/admin/calendar";
 import { daySpan, hhmm, minutesInDay, momentAt, snap, weekStart } from "@/lib/admin/grid";
 import { dayNumbers, dayStaff, isVisitState, visitLook, type MineToday } from "@/lib/admin/journal";
@@ -49,7 +58,10 @@ import { eur } from "../copy";
 import { useA } from "../lang";
 import { Ava, CaretIcon, NextIcon, PlusIcon, PrevIcon, StatusMark, TickIcon } from "../icons";
 import { addBlock, createVisit, deleteBlock, findClients, updateVisit } from "./actions";
-import { isZoom, JournalBar, type Zoom } from "./journal-bar";
+import { isZoom, JournalBar, ZOOM_STEP, type Zoom } from "./journal-bar";
+import { VisitCard, type CardCache } from "./journal-card";
+import { JournalGrid, minuteAt, PhoneBar, WeekStrip, type GridCol } from "./journal-grid";
+import { DayOff, HeadMenu, type HoursMay } from "./journal-hours";
 import { JournalMine, type MineLinks } from "./journal-mine";
 import { JournalSide } from "./journal-side";
 import { Sheet } from "./sheet";
@@ -63,13 +75,8 @@ import { VisitPanel } from "./visit-window";
 const PHONE_PX = { day: 1.2, week: 0.8 };
 const noon = (date: string) => Date.parse(`${date}T12:00:00Z`);
 const MIN = 60_000;
-/** A place on the grid: `t` minutes from its top, `m` minutes long. */
-const at = (t: number, m?: number): React.CSSProperties => {
-  const place: Record<string, number> = m == null ? { "--t": t } : { "--t": t, "--m": m };
-  return place;
-};
 
-type Col = { key: string; staffId: string; date: string };
+type Col = GridCol;
 /** A new visit, or from 900px its time-off form instead («Перерыв»: `off`). */
 type Open = { kind: "new"; staffId: string; date: string; min: number; off?: boolean } | { kind: "visit"; id: string } | { kind: "block"; id: string } | null;
 type Toast = { text: string; bad?: boolean } | null;
@@ -87,6 +94,8 @@ export type CalendarProps = {
   goodsCents: number | null;
   /** what the login may do here (its rights) */
   may: CalMay;
+  /** what the login may do with a barber's hours from here: change a day, open «График работы» */
+  hours?: HoursMay;
   /**
    * «Мой день | Весь салон» (docs/apps.md, «One app for Renat»): for a login
    * linked to a barber whose column it sees, his column's id, today in it
@@ -105,7 +114,9 @@ export function Calendar(props: CalendarProps) {
   );
 }
 
-function Journal({ data, view, date, today, staffId, now: serverNow, step, goodsCents, may, mine = null }: CalendarProps) {
+const NO_HOURS: HoursMay = { edit: false, page: false };
+
+function Journal({ data, view, date, today, staffId, now: serverNow, step: bookStep, goodsCents, may, hours = NO_HOURS, mine = null }: CalendarProps) {
   const A = useA();
   const router = useRouter();
   const tz = data.tz;
@@ -134,6 +145,11 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
   const mineOn = !!mineId && mineRaw === "1" && (view === "day" || staffId === mineId);
   // (the width is the styles' business; here it only says which columns the grid works with)
   const wide = useWide();
+  // a click and a drag snap to the line the grid shows: from 900px 15, 10 or 5 minutes by the scale
+  // (each a 15px line), on a phone the salon's booking step
+  const step = wide ? ZOOM_STEP[zoom] : bookStep;
+  // what a visit's card read (his numbers), until the journal's data changes
+  const cards: CardCache = useMemo(() => new Map(), [data]);
 
   const cols: Col[] = useMemo(() => {
     if (view === "week") return staffId ? data.dates.map((d) => ({ key: `${staffId}:${d}`, staffId, date: d })) : [];
@@ -152,8 +168,6 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
     return daySpan(view === "week" ? data.dates : [date], tz, spans);
   }, [cols, data, view, date, tz]);
   const total = hi - lo;
-  /** Minutes from the top of the grid. */
-  const minOf = useCallback((ms: number, d: string) => minutesInDay(ms, d, tz) - lo, [tz, lo]);
 
   // the clock line, and new online bookings, once a minute
   useEffect(() => {
@@ -231,15 +245,9 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
     void run(false);
   };
 
-  /** The minute under a point of a column, whatever the scale: read from the column's own height. */
-  const minuteAt = (el: HTMLElement, clientY: number) => {
-    const r = el.getBoundingClientRect();
-    return lo + ((clientY - r.top) / r.height) * total;
-  };
-
   const onColumnClick = (c: Col, e: React.MouseEvent<HTMLDivElement>) => {
     if (dragRef.current.justDropped) return;
-    const m = snap(minuteAt(e.currentTarget, e.clientY), step);
+    const m = snap(minuteAt(e.currentTarget, e.clientY, lo, hi), step);
     if (m < lo || m >= hi) return;
     if (moving) {
       moveTo(moving, c.staffId, momentAt(c.date, m, tz));
@@ -253,9 +261,9 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
   const nextFree = (): { staffId: string; date: string; min: number } => {
     const active = cols.filter((c) => data.staff.find((s) => s.id === c.staffId)?.active !== false);
     const dates = [...new Set(active.map((c) => c.date))].filter((d) => d >= today || view === "day");
-    const fromMin = (d: string) => (d === today ? Math.ceil(minutesInDay(now, d, tz) / step) * step : 0);
+    const fromMin = (d: string) => (d === today ? Math.ceil(minutesInDay(now, d, tz) / bookStep) * bookStep : 0);
     for (const d of dates) {
-      for (let m = fromMin(d); m <= 24 * 60 - 30; m += step) {
+      for (let m = fromMin(d); m <= 24 * 60 - 30; m += bookStep) {
         const t = momentAt(d, m, tz);
         const e = t + 30 * MIN;
         for (const c of active) {
@@ -273,30 +281,6 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
     return { staffId: first, date: d, min: d === today ? Math.min(fromMin(d), 23 * 60) : 10 * 60 };
   };
 
-  // a phone's week strip: a swipe sideways is the week before or after, the same weekday
-  const swipeRef = useRef<{ x: number; y: number } | null>(null);
-  const swipedRef = useRef(false);
-  const onStripDown = (e: React.PointerEvent) => {
-    swipeRef.current = { x: e.clientX, y: e.clientY };
-    swipedRef.current = false;
-  };
-  const onStripUp = (e: React.PointerEvent) => {
-    const s = swipeRef.current;
-    swipeRef.current = null;
-    if (!s) return;
-    const dx = e.clientX - s.x;
-    if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(e.clientY - s.y) * 1.5) return;
-    swipedRef.current = true;
-    go(addDays(date, dx < 0 ? 7 : -7), "day");
-  };
-  // the tap that ends a swipe is not a day's
-  const onStripClick = (e: React.MouseEvent) => {
-    if (!swipedRef.current) return;
-    swipedRef.current = false;
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
   // drag with a mouse (desktop); fingers use «Перенести»
   const dragRef = useRef<{ v: CalVisit | null; x: number; y: number; offset: number; on: boolean; justDropped: boolean }>({ v: null, x: 0, y: 0, offset: 0, on: false, justDropped: false });
   const colAt = (x: number, y: number) => {
@@ -307,7 +291,7 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
     if (e.pointerType !== "mouse" || e.button !== 0 || !may.move) return;
     const colEl = (e.currentTarget as HTMLElement).closest<HTMLElement>("[data-col]");
     if (!colEl) return;
-    dragRef.current = { v, x: e.clientX, y: e.clientY, offset: minuteAt(colEl, e.clientY) - minutesInDay(v.start, colEl.dataset.date!, tz), on: false, justDropped: false };
+    dragRef.current = { v, x: e.clientX, y: e.clientY, offset: minuteAt(colEl, e.clientY, lo, hi) - minutesInDay(v.start, colEl.dataset.date!, tz), on: false, justDropped: false };
   };
   useEffect(() => {
     const move = (e: PointerEvent) => {
@@ -317,7 +301,7 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
       d.on = true;
       const hit = colAt(e.clientX, e.clientY);
       if (!hit?.col) return setGhost(null);
-      setGhost({ col: hit.col.key, min: snap(minuteAt(hit.el, e.clientY) - d.offset + step / 2, step) });
+      setGhost({ col: hit.col.key, min: snap(minuteAt(hit.el, e.clientY, lo, hi) - d.offset + step / 2, step) });
     };
     const up = (e: PointerEvent) => {
       const d = dragRef.current;
@@ -330,7 +314,7 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
       setGhost(null);
       const hit = colAt(e.clientX, e.clientY);
       if (!hit?.col) return;
-      const m = snap(minuteAt(hit.el, e.clientY) - d.offset + step / 2, step);
+      const m = snap(minuteAt(hit.el, e.clientY, lo, hi) - d.offset + step / 2, step);
       moveTo(v, hit.col.staffId, momentAt(hit.col.date, m, tz));
     };
     window.addEventListener("pointermove", move);
@@ -365,25 +349,60 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
   const phoneTitleShort = view === "week" ? phoneTitle : cap(dayFmt(date, { weekday: "short", day: "numeric", month: "short" }));
   // «Сегодня» only when today is not one tap away already
   const todayNear = view === "day" ? strip.includes(today) : todayInView;
-  const nowMin = minutesInDay(now, today, tz);
-  const nowOn = todayInView && nowMin >= lo && nowMin <= hi;
-  // «Запись» works on a day nobody is at work too: the form picks the barber
+  // «Запись» (a phone's): it works on a day nobody is at work too, the form picks the barber
   const add = may.create && data.staff.length > 0 && (view === "day" || cols.length > 0) && !moving ? () => setSheet({ kind: "new", ...nextFree() }) : null;
-  const halves: number[] = [];
-  for (let m = lo; m < hi; m += 30) halves.push(m);
-  /** The journal's time marks: the hour large with a small «00», the half hour as a small grey «30». */
-  const marks = halves.map((m) =>
-    m % 60 === 0 ? (
-      <span key={m} className="jr-tick" style={at(m - lo)}>
-        <b>{m / 60}</b>
-        <i>00</i>
-      </span>
-    ) : (
-      <span key={m} className="jr-tick is-half" style={at(m - lo)}>
-        <i>30</i>
-      </span>
-    ),
+  const say = (text: string, bad?: boolean) => setToast({ text, bad });
+  const longDay = (d: string) => cap(dayFmt(d, { weekday: "long", day: "numeric", month: "long" }));
+
+  /** A day's head: the barber, his day's visits and load (a phone), his label (from 900px), and from 900px his hours' menu. */
+  const dayHead = (c: Col) => {
+    const s = staffById(c.staffId);
+    const mineV = data.visits.filter((v) => v.staffId === c.staffId && minutesInDay(v.start, c.date, tz) >= 0 && minutesInDay(v.start, c.date, tz) < 1440);
+    const sum = mineV.reduce((n, v) => n + v.totalCents, 0);
+    const work = data.work[c.staffId]?.[c.date] ?? [];
+    const workMin = work.reduce((n, [a, b]) => n + (b - a) / MIN, 0);
+    const busyMin = mineV.filter((v) => v.status !== "no_show").reduce((n, v) => n + (v.end - v.start) / MIN, 0);
+    const load = workMin ? Math.min(100, Math.round((busyMin / workMin) * 100)) : 0;
+    // (a barber with no hours has a column for a visit, or for special time: then he is not off)
+    const line = mineV.length ? `${A.cal.visits(mineV.length)} · ${eur(sum)}` : work.length || data.special.some((x) => x.staffId === c.staffId) ? "—" : A.cal.closed;
+    const own = c.staffId === mineId;
+    // «Мой день»: his own head also says his hours, «Барбер · 10:00–19:00»
+    const hoursLine = mineOn && own ? work.map(([a, b]) => `${timeOf(tz, a)}–${timeOf(tz, b)}`).join(", ") || A.cal.closed : "";
+    const inner = (
+      <>
+        <Ava src={s?.photoUrl} name={s?.name ?? "?"} className="cal-ava" />
+        <span className="cal-who2">
+          <b>{s?.name}</b>
+          {/* a phone: the day's visits and their sum; from 900px the label under the name, as the journal's heads */}
+          <small className="only-narrow">{line}</small>
+          <small className="jr-role only-wide">{[A.pick(s?.role), hoursLine].filter(Boolean).join(" · ")}</small>
+          <span className="cal-load only-narrow" aria-hidden="true">
+            <i style={{ width: `${load}%` }} />
+          </span>
+        </span>
+      </>
+    );
+    return (
+      <div key={c.key} className="cal-head" data-mine={own ? "" : undefined}>
+        {wide && s ? (
+          <HeadMenu staff={s} date={c.date} today={today} tz={tz} work={work} dayText={dayFmt(c.date, { day: "numeric", month: "long" })} may={hours} onSaid={say}>
+            {inner}
+            <CaretIcon size={10} />
+          </HeadMenu>
+        ) : (
+          inner
+        )}
+      </div>
+    );
+  };
+  const weekHead = (c: Col) => (
+    <button key={c.key} type="button" className={`cal-head${c.date === today ? " is-today" : ""}`} onClick={() => go(c.date, "day")}>
+      <b>{cap(dayFmt(c.date, { weekday: "short" }))}</b>
+      <small className="only-narrow">{Number(c.date.slice(8))}</small>
+      <small className="jr-role only-wide">{dayFmt(c.date, { day: "numeric", month: "long" })}</small>
+    </button>
   );
+  const dragged = dragRef.current.v;
 
   return (
     <div
@@ -393,18 +412,7 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
       {/* A phone's bar, as Altegio's own phone app (Dim, 20.11.2026, option D): the date with a ▾
           in the dark bar on top, which it lies over, and «День | Неделя»; the week floats at the
           bottom above the tabs. From 900px the journal's own bar (journal-bar.tsx). */}
-      <div className="cal-bar only-narrow">
-        <label className="cal-title">
-          <span className="is-long">{phoneTitle}</span>
-          <span className="is-short">{phoneTitleShort}</span>
-          <CaretIcon />
-          <input type="date" value={date} aria-label={A.cal.pickDate} onChange={(e) => e.target.value && go(e.target.value)} />
-        </label>
-        {!todayNear && (
-          <button type="button" className="cal-today" onClick={() => go(today)}>
-            {A.cal.today}
-          </button>
-        )}
+      <PhoneBar className="only-narrow" title={phoneTitle} titleShort={phoneTitleShort} date={date} pickLabel={A.cal.pickDate} onPick={(d) => go(d)} today={todayNear ? null : { label: A.cal.today, go: () => go(today) }}>
         <div className="adm-seg" role="group" aria-label={A.cal.view}>
           <button type="button" aria-pressed={view === "day"} onClick={() => view !== "day" && go(date, "day")}>
             {A.cal.day}
@@ -413,7 +421,7 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
             {A.cal.week}
           </button>
         </div>
-      </div>
+      </PhoneBar>
       {view === "week" && (
         <div className="adm-who cal-who only-narrow" role="group" aria-label={A.visit.barber}>
           {data.staff.map((s) => (
@@ -426,14 +434,17 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
       )}
       {view === "day" ? (
         // the week of the day shown; a swipe sideways is the week before or after
-        <nav className="cal-strip only-narrow" aria-label={A.cal.days} onPointerDown={onStripDown} onPointerUp={onStripUp} onPointerCancel={() => (swipeRef.current = null)} onClickCapture={onStripClick}>
-          {strip.map((d, i) => (
-            <button key={d} type="button" className={`${d === today ? "is-today" : ""}${i >= 5 ? " is-end" : ""}`.trim() || undefined} aria-pressed={d === date} aria-label={cap(dayFmt(d, { weekday: "long", day: "numeric", month: "long" }))} onClick={() => d !== date && go(d, "day")}>
-              <span>{A.staff.weekdays[i]}</span>
-              <b>{Number(d.slice(8))}</b>
-            </button>
-          ))}
-        </nav>
+        <WeekStrip
+          className="only-narrow"
+          days={strip}
+          date={date}
+          today={today}
+          label={A.cal.days}
+          dayName={(_, i) => A.staff.weekdays[i]}
+          dayLabel={longDay}
+          onPick={(d) => go(d, "day")}
+          onSwipe={(by) => go(addDays(date, 7 * by), "day")}
+        />
       ) : (
         <nav className="cal-strip is-weeks only-narrow" aria-label={A.cal.days}>
           <button type="button" aria-label={A.cal.prev} onClick={() => go(addDays(date, -7))}>
@@ -467,7 +478,6 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
         onZoom={setZoom}
         side={side}
         onSide={() => setSideRaw(side ? "0" : "1")}
-        onAdd={add}
         mine={mineId ? { on: mineOn, staffId: mineId, pick: pickMine } : null}
         go={go}
       />
@@ -484,188 +494,85 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
         {!cols.length ? (
           data.staff.length > 0 && view === "day" ? (
             // nobody works this day and nobody is booked
-            <div className="jr-empty">
-              <h2>{A.cal.noSchedule}</h2>
-              <Link className="adm-btn adm-btn-line adm-btn-sm" href="/admin/staff" prefetch={false}>
-                {A.cal.setHours}
-              </Link>
-            </div>
+            <DayOff staff={data.staff} date={date} dayText={dayText} longDay={longDay(date)} may={hours} onSaid={say} />
           ) : (
             <p className="adm-wait">{A.cal.noStaff}</p>
           )
         ) : (
-          <div className="cal-scroll" ref={scroller}>
-            {/* data-from, data-to: the hours shown, as minutes of the day */}
-            <div className="cal-grid" data-from={lo} data-to={hi} style={{ "--cols": cols.length, "--span": total, "--off": (60 - (lo % 60)) % 60 } as React.CSSProperties}>
-              <div className="cal-corner" />
-              {cols.map((c) => {
-                const s = staffById(c.staffId);
-                if (view === "week")
-                  return (
-                    <button key={c.key} type="button" className={`cal-head${c.date === today ? " is-today" : ""}`} onClick={() => go(c.date, "day")}>
-                      <b>{cap(dayFmt(c.date, { weekday: "short" }))}</b>
-                      <small className="only-narrow">{Number(c.date.slice(8))}</small>
-                      <small className="jr-role only-wide">{dayFmt(c.date, { day: "numeric", month: "long" })}</small>
-                    </button>
-                  );
-                const mine = data.visits.filter((v) => v.staffId === c.staffId && minutesInDay(v.start, c.date, tz) >= 0 && minutesInDay(v.start, c.date, tz) < 1440);
-                const sum = mine.reduce((n, v) => n + v.totalCents, 0);
-                const work = data.work[c.staffId]?.[c.date] ?? [];
-                const workMin = work.reduce((n, [a, b]) => n + (b - a) / MIN, 0);
-                const busyMin = mine.filter((v) => v.status !== "no_show").reduce((n, v) => n + (v.end - v.start) / MIN, 0);
-                const load = workMin ? Math.min(100, Math.round((busyMin / workMin) * 100)) : 0;
-                // (a barber with no hours has a column for a visit, or for special time: then he is not off)
-                const line = mine.length ? `${A.cal.visits(mine.length)} · ${eur(sum)}` : work.length || data.special.some((x) => x.staffId === c.staffId) ? "—" : A.cal.closed;
-                const own = c.staffId === mineId;
-                // «Мой день»: his own head also says his hours, «Барбер · 10:00–19:00»
-                const hours = mineOn && own ? work.map(([a, b]) => `${timeOf(tz, a)}–${timeOf(tz, b)}`).join(", ") || A.cal.closed : "";
-                return (
-                  <div key={c.key} className="cal-head" data-mine={own ? "" : undefined}>
-                    <Ava src={s?.photoUrl} name={s?.name ?? "?"} className="cal-ava" />
-                    <span className="cal-who2">
-                      <b>{s?.name}</b>
-                      {/* a phone: the day's visits and their sum; from 900px the label under the name, as the journal's heads */}
-                      <small className="only-narrow">{line}</small>
-                      <small className="jr-role only-wide">{[A.pick(s?.role), hours].filter(Boolean).join(" · ")}</small>
-                      <span className="cal-load only-narrow" aria-hidden="true">
-                        <i style={{ width: `${load}%` }} />
-                      </span>
-                    </span>
-                  </div>
-                );
-              })}
-              <div className="cal-corner cal-corner-r only-wide" />
-
-              <div className="cal-gutter">
-                {halves
-                  .filter((m) => m % 60 === 0)
-                  .map((m) => (
-                    <span key={m} className={`cal-tick${m === lo ? " is-first" : ""}`} style={at(m - lo)}>
-                      {hhmm(m)}
-                    </span>
-                  ))}
-                {marks}
-                {nowOn && (
-                  <span className="cal-nowtag" style={at(nowMin - lo)}>
-                    {hhmm(nowMin)}
+          <JournalGrid
+            scrollRef={scroller}
+            cols={cols}
+            lo={lo}
+            hi={hi}
+            tz={tz}
+            today={today}
+            now={now}
+            work={(c) => data.work[c.staffId]?.[c.date] ?? []}
+            visits={data.visits}
+            blocks={data.blocks}
+            special={data.special}
+            shortMin={40 / PHONE_PX[view]}
+            step={step}
+            wideParts
+            mineId={mineId}
+            target={!!moving}
+            head={view === "week" ? weekHead : dayHead}
+            visitClass={(v) => `${moving?.id === v.id ? "is-moving" : ""}${visitOpen?.id === v.id ? " is-open" : ""}`}
+            visitLabel={(v) => `${timeOf(tz, v.start)}–${timeOf(tz, v.end)}, ${v.clientName}, ${A.visit.status[v.status] ?? v.status}`}
+            visitBody={(v) => (
+              <>
+                <span className="t">
+                  <span>
+                    {timeOf(tz, v.start)}—{timeOf(tz, v.end)}
                   </span>
-                )}
-              </div>
-              {cols.map((c) => (
-                <div key={c.key} className={`cal-col${moving ? " is-target" : ""}`} data-col={c.key} data-date={c.date} data-mine={c.staffId === mineId ? "" : undefined} onClick={(e) => onColumnClick(c, e)}>
-                  {(data.work[c.staffId]?.[c.date] ?? []).map(([a, b], i) => (
-                    <div key={`w${i}`} className="cal-work" style={at(minOf(a, c.date), (b - a) / MIN)} />
-                  ))}
-                  {data.special
-                    .filter((x) => x.staffId === c.staffId)
-                    .map((x) => {
-                      const top = Math.max(0, minOf(x.from, c.date));
-                      const bottom = Math.min(total, minOf(x.to, c.date));
-                      if (bottom <= 0 || top >= total) return null;
-                      return (
-                        <div key={x.id} className="cal-sp" style={at(top, bottom - top)}>
-                          {/* the window as it was set, «+20 €» or «+50 %»; a visit in it shows its own money */}
-                          <span>{extraText(x)}</span>
-                        </div>
-                      );
-                    })}
-                  {data.blocks
-                    .filter((b) => b.staffId === c.staffId)
-                    .map((b) => {
-                      const top = Math.max(0, minOf(b.from, c.date));
-                      const bottom = Math.min(total, minOf(b.to, c.date));
-                      if (bottom <= 0 || top >= total) return null;
-                      const kind = A.block.kinds[b.kind] ?? b.kind;
-                      const note = b.note ? ` · ${b.note}` : "";
-                      return (
-                        <button
-                          key={b.id}
-                          type="button"
-                          data-item
-                          className={`cal-off k-${b.kind}`}
-                          style={at(top, bottom - top)}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (!moving) setSheet({ kind: "block", id: b.id });
-                          }}
-                        >
-                          <span className="only-narrow">
-                            {kind}
-                            {note}
-                          </span>
-                          {/* from 900px a break says its times, as the journal's; a vacation or a sick day its name */}
-                          <span className="only-wide">
-                            {b.kind === "block" ? `${timeOf(tz, b.from)}—${timeOf(tz, b.to)}` : kind}
-                            {note}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  {data.visits
-                    .filter((v) => v.staffId === c.staffId)
-                    .map((v) => {
-                      const top = minOf(v.start, c.date);
-                      const m = (v.end - v.start) / MIN;
-                      if (top + m <= 0 || top >= total) return null;
-                      const look = visitLook(v.status, v.source);
-                      const running = v.status !== "no_show" && v.start <= now && now < v.end;
-                      const cls = [
-                        "cal-v",
-                        `st-${v.status}`,
-                        `src-${v.source}`,
-                        `by-${look.maker}`,
-                        `k-${look.state}`,
-                        running ? "is-now" : "",
-                        v.extraCents ? "is-sp" : "",
-                        moving?.id === v.id ? "is-moving" : "",
-                        visitOpen?.id === v.id ? "is-open" : "",
-                        m * PHONE_PX[view] < 40 ? "is-short" : "",
-                      ];
-                      return (
-                        <button
-                          key={v.id}
-                          type="button"
-                          data-item
-                          className={cls.filter(Boolean).join(" ")}
-                          // the strip by who made it, the body and the name by its state (src/lib/admin/journal.ts)
-                          style={{ ...at(top, m), "--h": look.strip, "--b": look.body, "--n": look.name } as React.CSSProperties}
-                          aria-label={`${timeOf(tz, v.start)}–${timeOf(tz, v.end)}, ${v.clientName}, ${A.visit.status[v.status] ?? v.status}`}
-                          onPointerDown={(e) => onVisitPointerDown(v, e)}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (dragRef.current.justDropped) return;
-                            if (moving) {
-                              if (moving.id !== v.id) setToast({ text: A.visit.overlap, bad: true });
-                              return;
-                            }
-                            setSheet({ kind: "visit", id: v.id });
-                          }}
-                        >
-                          <span className="t">
-                            <span>
-                              {timeOf(tz, v.start)}—{timeOf(tz, v.end)}
-                            </span>
-                            {v.source === "online" && <i className="dot" title={A.visit.source.online} />}
-                            <StatusMark status={v.status} confirmed={v.confirmed} />
-                          </span>
-                          <b>{v.clientName}</b>
-                          {/* the phone is on the card from 900px only, for the logins that already see it in the visit */}
-                          {v.clientPhone && <span className="p">{v.clientPhone}</span>}
-                          <span className="s">{v.services.map((s) => A.pick(s.name)).join(", ")}</span>
-                        </button>
-                      );
-                    })}
-                  {ghost?.col === c.key && dragRef.current.v && (
-                    <div className="cal-ghost" style={at(ghost.min - lo, (dragRef.current.v.end - dragRef.current.v.start) / MIN)}>
-                      {hhmm(ghost.min)}
-                    </div>
-                  )}
-                  {c.date === today && nowOn && <div className="cal-now" style={at(nowMin - lo)} />}
-                </div>
-              ))}
-              <div className="cal-gutter cal-gutter-r only-wide">{marks}</div>
-            </div>
-          </div>
+                  {v.source === "online" && <i className="dot" title={A.visit.source.online} />}
+                  <StatusMark status={v.status} confirmed={v.confirmed} />
+                </span>
+                <b>{v.clientName}</b>
+                {/* the phone is on the card from 900px only, for the logins that already see it in the visit */}
+                {v.clientPhone && <span className="p">{v.clientPhone}</span>}
+                <span className="s">{v.services.map((x) => A.pick(x.name)).join(", ")}</span>
+              </>
+            )}
+            blockBody={(b) => {
+              const kind = A.block.kinds[b.kind] ?? b.kind;
+              const note = b.note ? ` · ${b.note}` : "";
+              return (
+                <>
+                  <span className="only-narrow">
+                    {kind}
+                    {note}
+                  </span>
+                  {/* from 900px a break says its times, as the journal's; a vacation or a sick day its name */}
+                  <span className="only-wide">
+                    {b.kind === "block" ? `${timeOf(tz, b.from)}—${timeOf(tz, b.to)}` : kind}
+                    {note}
+                  </span>
+                </>
+              );
+            }}
+            onBlock={(b) => !moving && setSheet({ kind: "block", id: b.id })}
+            // the window as it was set, «+20 €» or «+50 %»; a visit in it shows its own money
+            specialBody={(x) => <span>{extraText(x)}</span>}
+            onColumn={onColumnClick}
+            onVisitDown={onVisitPointerDown}
+            onVisit={(v) => {
+              if (dragRef.current.justDropped) return;
+              if (moving) {
+                if (moving.id !== v.id) setToast({ text: A.visit.overlap, bad: true });
+                return;
+              }
+              setSheet({ kind: "visit", id: v.id });
+            }}
+            ghost={ghost && dragged ? { col: ghost.col, min: ghost.min, len: (dragged.end - dragged.start) / MIN } : null}
+            // from 900px: the bar «12:00 Новый сеанс» under the mouse, and a visit's card on hover
+            slotLabel={wide && !moving && !ghost && (may.create || may.schedule) ? A.cal.newSlot : null}
+            card={
+              wide && !moving && !ghost && !sheet
+                ? (v) => <VisitCard v={v} tz={tz} staffName={staffById(v.staffId)?.name ?? ""} cache={cards} onOpen={() => setSheet({ kind: "visit", id: v.id })} onSay={say} />
+                : null
+            }
+          />
         )}
         {/* «Мой день» has its own panel; the clients' one is back with «Весь салон» */}
         {mineOn && mine ? <JournalMine today={mine.today} links={mine.links} now={now} tz={tz} /> : side && <JournalSide tz={tz} />}

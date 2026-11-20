@@ -142,10 +142,15 @@ gets it → send.
        the title («19 ноября, четверг»; a click picks any date), then
        «Продать» (the sale drawer), the day's numbers, «День | Неделя»
        (the week asks for the barber), the status filter, the scale, the
-       right panel, and the one yellow button, «Запись».
+       right panel. No «Запись» from 900 px (20.11.2026): free time under
+       the mouse says «12:00 Новый сеанс» and a click books there; a phone
+       keeps its yellow «+».
      - **Columns:** only the barbers who work that day (hours, or special
        time) or have a visit on it; time off stays in the column as a
-       block. A day nobody works says «Расписание не установлено». The day
+       block. A day nobody works says «На этот день нет графика работы»,
+       with the yellow «Настроить график работы» (that day in «График
+       работы») and «Добавить сотрудников в день» (the dialog «Добавить
+       сотрудника в расписание»: barbers to tick, the hours, breaks). The day
        runs from the earliest start to the latest end among them, 1 px a
        minute, the time on both sides with the large hour numbers.
      - **A visit:** the strip says who made it (online violet, the salon
@@ -161,13 +166,23 @@ gets it → send.
        tick per state; the scale is 1, 1.5 or 3 px a minute (15, 10 or 5
        minutes to a line); the panel has one tab, «Клиенты», the client
        base's own search.
+     - **Built 20.11.2026** (`journal-grid.tsx`, `journal-card.tsx`,
+       `journal-hours.tsx`, `journal-extras.css`): the card on hover
+       (the client and his phone with a copy button, the time and the
+       barber, «Визитов / Не пришёл / Потратил», four chips that write at
+       once, the services, «Итого», «Открыть запись»; Tab shows it too);
+       the menu behind a barber's head (his hours that day, «Изменить
+       часы на сегодня», «Сделать выходным», «Открыть график работы»,
+       written as one dated day of «График работы», with its rights). A
+       click or a drag snaps to the scale's step: 15, 10 or 5 minutes.
+       The barber's «Мой день» is one column of the same grid at a phone's
+       sizes (`src/app/b/(app)/day-view.tsx`, `day-grid.css`; the board
+       MyDay-Grid): the dark bar with the day and «День | Неделя», a row
+       with him and the day's numbers, the week floating over the tabs.
      - **Not built:** cash, card and loyalty in the day's numbers
        (payments are not built); subscriptions and certificates under
-       «Продать»; the bar's menu button and «Добавить сотрудника в
-       расписание»; the menu behind a barber's head; the card on hover and
-       pulling a visit's foot to make it longer; the panel's chat. A tap
-       on the grid still snaps to the booking step (15 minutes), whatever
-       the scale.
+       «Продать»; the bar's menu button; pulling a visit's foot to make it
+       longer; the panel's chat.
    - **The visit window: built 20.11.2026** (`visit-window.tsx` and
      `visit-parts.tsx` in `src/app/admin/(app)/`; what it reads beside the
      visit in `src/lib/admin/visit-window.ts`; the «visit window» block of
@@ -217,7 +232,7 @@ gets it → send.
        «Повторение записи» and «Списание расходников» (no such function
        here); «Записывает другого посетителя» (a visit has one client).
      - **The new visit: built 20.11.2026** (`new-visit.tsx`; the design
-       board «Новая запись»). A tap on a free time or the bar's «Запись»
+       board «Новая запись»). A tap on a free time (or a phone's «+»)
        opens it from 900 px, in the same frame, chips, tiles, cards and
        foot (`visit-parts.tsx`: one copy of each); the journal does not
        make room for it. A phone keeps its bottom sheet.

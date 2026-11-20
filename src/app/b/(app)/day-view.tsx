@@ -1,48 +1,64 @@
 "use client";
 
 /**
- * The barber's day on his phone (B2): the week strip, his hours and the
- * day's money, the next client with «call» and one tap for «arrived», then
- * the whole day in order: visits, free time, breaks.
- * Pull down (or come back to the app) to refresh.
+ * The barber's day on his phone (B2), as the salon's journal on a phone
+ * (board MyDay-Grid): the dark bar with the day (a ▾ opens a date) and
+ * «День | Неделя», a row with him, the day's visits and money and how busy
+ * it is, then his one column of the journal's grid (journal-grid.tsx, the
+ * admin's own): his hours white on grey, breaks and time off hatched,
+ * special time with its extra, the visits in the journal's colours, the
+ * clock line; the week floats at the bottom above the tabs. Pull down (or
+ * come back to the app) to refresh.
  *
- * B3: «+» or a tap on free time books a visit in his column; a visit's sheet
- * (visit-sheet.tsx: the app's one visit sheet) moves it, cancels it (with a
- * reason), books the client again, and adds or takes away a service.
+ * B3: a tap on free time books a visit in his column at the time tapped
+ * (the bar «Новый сеанс» stays there while the sheet is open), so does
+ * «+»; a visit's sheet (visit-sheet.tsx: the app's one visit sheet) moves
+ * it, cancels it (with a reason), books the client again, and adds or
+ * takes away a service.
  * B6: the visit's sheet edits the client's shared note and the visit's own
  * note, and opens the client's card (his visits with this client).
  *
  * `own`: the same day as «Мой день» of an owner or the front desk who cuts
- * too (docs/apps.md, «One app for Renat»), a tab of the one app. The head
- * follows the design board: «Мой день», a line with the day, the count and
- * the sum, «День | Неделя», and «+ Запись»; a visit is a card in the
- * journal's colours. Everything it does is the barber's day.
+ * too (docs/apps.md, «One app for Renat»), a tab of the one app.
  */
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { daySpan, minutesInDay, momentAt, snap } from "@/lib/admin/grid";
 import type { Offer } from "@/lib/barber/book";
-import { visitLook } from "@/lib/admin/journal";
-import type { BBlock, BDay, BMay, BVisit } from "@/lib/barber/day";
-import { coversDay, freeGaps, hoursText, nextVisit, type Gap } from "@/lib/barber/gaps";
-import { extraText, hasExtra } from "@/lib/slots";
-import { addDays, localParts, startOfDay } from "@/lib/tz";
-import { NextIcon, PlusIcon, PrevIcon } from "../../admin/icons";
+import type { BDay, BMay, BVisit } from "@/lib/barber/day";
+import { COUNTED, coversDay, freeGaps, hoursText } from "@/lib/barber/gaps";
+import { extraText } from "@/lib/slots";
+import { addDays, localParts } from "@/lib/tz";
+import { JournalGrid, minuteAt, PhoneBar, WeekStrip, type GridCol } from "../../admin/(app)/journal-grid";
+import { Ava, PlusIcon, StatusMark } from "../../admin/icons";
 import { cap, dateWords, eur, hm, minsText, pick3 } from "../copy.shared";
 import { useB, useTitle } from "../lang";
 import { CancelSheet, MoveSheet, NewVisitSheet, type NewPrefill } from "./book-sheets";
 import { ClientSheet } from "./client-sheet";
-import { MayProvider, useMay } from "./may";
+import { MayProvider } from "./may";
 import { OwnSeg } from "./own-head";
-import { setVisitStatus } from "./visit-actions";
+import "./day-grid.css";
 import { VisitSheet } from "./visit-sheet";
 
 const MIN = 60_000;
 /** how far to pull (px, after the drag is halved) before letting go refreshes */
 const PULL = 64;
 
-type Props = { days: BDay[]; date: string; today: string; now: number; tz: string; step: number; offers: Offer[]; may: BMay; own?: boolean };
-const CAME = new Set(["arrived", "done"]);
+type Props = {
+  days: BDay[];
+  date: string;
+  today: string;
+  now: number;
+  tz: string;
+  step: number;
+  offers: Offer[];
+  may: BMay;
+  own?: boolean;
+  /** whose column it is: the row above the grid */
+  me: { id: string; name: string; photoUrl: string | null };
+};
+/** «Мой день» is 76px an hour (board MyDay-Grid; day-grid.css, --ppm): a visit under 45 minutes is one line. */
+const SHORT_MIN = 45;
 
 /** What is open over the day: a visit, a new visit, or a visit being moved or cancelled. */
 type Open = { kind: "visit" | "move" | "cancel" | "client"; id: string } | { kind: "new"; prefill: NewPrefill };
@@ -56,13 +72,12 @@ export function DayView(props: Props) {
   );
 }
 
-function Day({ days, date, today, now: serverNow, tz, step, offers, may, own = false }: Props) {
+function Day({ days, date, today, now: serverNow, tz, step, offers, may, own = false, me }: Props) {
   const B = useB();
   useTitle(own ? B.own.title : B.nav.day);
   const router = useRouter();
   const [sel, setSel] = useState(days.some((d) => d.date === date) ? date : days[0].date);
   const [sheet, setSheet] = useState<Open | null>(null);
-  const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<{ text: string; bad?: boolean } | null>(null);
   const now = useNow(serverNow);
   // offline, or the copy the service worker kept (a weak connection says it is online)
@@ -86,18 +101,8 @@ function Day({ days, date, today, now: serverNow, tz, step, offers, may, own = f
     // the address follows the strip: a reload, «back» or the refresh land on this day
     window.history.replaceState(null, "", d === today ? "/b" : `/b?d=${d}`);
   };
-
-  const status = async (v: BVisit, s: string) => {
-    setBusy(true);
-    try {
-      const ok = await setVisitStatus(v.id, s);
-      setToast(ok ? { text: B.visit.status[s] ?? s } : { text: B.error, bad: true });
-    } catch {
-      setToast({ text: B.error, bad: true });
-    } finally {
-      setBusy(false);
-    }
-  };
+  /** Any day: one of this week at once, another week from the server. */
+  const goTo = (d: string) => (days.some((x) => x.date === d) ? choose(d) : router.replace(d === today ? "/b" : `/b?d=${d}`));
 
   const day = days.find((d) => d.date === sel) ?? days[0];
   const visitOf = (id: string) => days.flatMap((d) => d.visits).find((v) => v.id === id) ?? null;
@@ -121,38 +126,98 @@ function Day({ days, date, today, now: serverNow, tz, step, offers, may, own = f
     setSheet(null);
     setToast({ text });
     if (!date || date === sel) return;
-    if (days.some((d) => d.date === date)) choose(date);
-    else router.replace(date === today ? "/b" : `/b?d=${date}`);
+    goTo(date);
   };
   const rel = sel === today ? B.day.today : sel === addDays(today, 1) ? B.day.tomorrow : sel === addDays(today, -1) ? B.day.yesterday : null;
   const words = cap(dateWords(sel, B.lang));
   const wholeDay = day.blocks.find((b) => coversDay(b, sel, tz));
   const hours = hoursText(day.windows, tz);
-  const next = sel === today ? nextVisit(day.visits, now) : null;
   const thisWeek = days.some((d) => d.date === today);
-
   // a new visit is offered only with the right to make one
   const canBook = offers.length > 0 && may.create;
-  const dayState = wholeDay ? `${B.day.kinds[wholeDay.kind] ?? wholeDay.kind} · ${B.day.allDay}` : hours ? B.day.hours(hours) : B.day.off;
-  const toToday =
-    !thisWeek || sel !== today ? (
-      thisWeek ? (
-        <button type="button" className="adm-txt" onClick={() => choose(today)}>
-          {B.day.toToday}
-        </button>
-      ) : (
-        <Link href="/b" className="adm-txt" prefetch={false} replace>
-          {B.day.toToday}
-        </Link>
-      )
-    ) : null;
-  const specials = day.special.map((s) => (
-    <p key={s.id} className="bx-sp">
-      {B.day.special(extraText(s))} · {hm(s.from, tz)}–{hm(s.to, tz)}
-    </p>
-  ));
+
+  /* ---- the grid: his one column ---- */
+  const col: GridCol = { key: sel, staffId: me.id, date: sel };
+  const visits = useMemo(() => day.visits.map((v) => ({ ...v, staffId: me.id })), [day, me.id]);
+  const blocks = useMemo(() => day.blocks.map((b) => ({ ...b, staffId: me.id })), [day, me.id]);
+  const special = useMemo(() => day.special.map((x) => ({ ...x, staffId: me.id })), [day, me.id]);
+  // the day runs over his hours, his visits, his special time, and time off of a part of the day (a break he
+  // set after his hours shows); a whole day off does not stretch it to midnight
+  const [lo, hi] = useMemo(
+    () =>
+      daySpan([sel], tz, [
+        ...day.windows.map(([from, to]) => ({ from, to })),
+        ...day.visits.map((v) => ({ from: v.start, to: v.end })),
+        ...day.special.map((x) => ({ from: x.from, to: x.to })),
+        ...day.blocks.filter((b) => !coversDay(b, sel, tz) && b.from >= momentAt(sel, 0, tz) && b.to <= momentAt(sel, 24 * 60, tz)),
+      ]),
+    [sel, tz, day],
+  );
+  // free time to book: a piece long enough for his shortest service
+  const gaps = freeGaps(day, { now, stepMin: step }).filter((g) => canBook && g.to - g.from >= shortest);
+  const workMin = day.windows.reduce((n, [a, b]) => n + (b - a) / MIN, 0);
+  const busyMin = day.visits.filter((v) => COUNTED.has(v.status)).reduce((n, v) => n + (v.end - v.start) / MIN, 0);
+  const load = workMin ? Math.min(100, Math.round((busyMin / workMin) * 100)) : 0;
+  const marked = sheet?.kind === "new" && sheet.prefill.date === sel && sheet.prefill.start ? sheet.prefill.start : null;
+
+  // open at the clock (today) or an hour before his day starts; the page scrolls, so pulling down at its top refreshes
+  const gridRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const colEl = gridRef.current?.querySelector<HTMLElement>("[data-col]");
+    if (!colEl) return;
+    const first = day.windows.length ? minutesInDay(day.windows[0][0], sel, tz) - 30 : lo;
+    const target = sel === today ? minutesInDay(Date.now(), sel, tz) - 60 : first;
+    const r = colEl.getBoundingClientRect();
+    const bar = document.querySelector(".bx-cal .cal-bar")?.getBoundingClientRect().bottom ?? 0;
+    const y = window.scrollY + r.top + ((Math.max(lo, target) - lo) / (hi - lo)) * r.height - bar - 72;
+    window.scrollTo({ top: Math.max(0, y) });
+    // a day chosen in the strip opens the same way; not on every refresh
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel]);
+
+  /** A tap on free time: the time under the finger on the step grid, inside the piece; the keyboard: its start. */
+  const tapFree = (from: number, to: number, e: React.MouseEvent<HTMLButtonElement>) => {
+    const colEl = e.currentTarget.closest<HTMLElement>("[data-col]");
+    let start = from;
+    if (colEl && e.detail > 0) {
+      const at = momentAt(sel, snap(minuteAt(colEl, e.clientY, lo, hi), step), tz);
+      start = Math.max(from, Math.min(at, to - shortest));
+    }
+    book({ start });
+  };
+
+  const sp = (x: (typeof special)[number]) => {
+    const free = !day.visits.some((v) => v.status !== "cancelled" && v.start < x.to && v.end > x.from);
+    return (
+      <>
+        <i className="bx-cal-sp-i" aria-hidden="true">
+          %
+        </i>
+        <span>
+          <b>{B.day.spTitle(extraText(x))}</b>
+          <small>
+            {hm(x.from, tz)}–{hm(x.to, tz)}
+            {free && ` · ${B.day.spFree}`}
+          </small>
+        </span>
+      </>
+    );
+  };
+
   return (
-    <main className={`adm-page bx-day${own ? " is-own" : ""}`}>
+    <main className={`bx-cal${own ? " is-own" : ""}`}>
+      <PhoneBar
+        title={cap(dateWords(sel, B.lang))}
+        titleShort={cap(dateWords(sel, B.lang, { weekday: "short", day: "numeric", month: "short" }))}
+        date={sel}
+        pickLabel={B.day.pickDate}
+        onPick={goTo}
+        // «Сегодня» when today is not in the strip already
+        today={thisWeek ? null : { label: B.day.today, go: () => router.replace("/b") }}
+      >
+        <OwnSeg view="day" date={sel} today={today} words={B.own} />
+      </PhoneBar>
+      <h1 className="bx-cal-h1">{own ? B.own.title : (rel ?? words)}</h1>
       <div className="bx-pull" style={{ height: pulled }} aria-hidden={pulled === 0}>
         {pulled > 0 && <span>{pulled >= PULL ? B.day.release : B.day.pull}</span>}
       </div>
@@ -162,98 +227,119 @@ function Day({ days, date, today, now: serverNow, tz, step, offers, may, own = f
         </p>
       )}
 
-      {own && (
-        // «Мой день»: the head of the design board
-        <header className="bx-own-head">
-          <div>
-            <h1 className="adm-h1">{B.own.title}</h1>
-            <p className="bx-own-line">
-              {words}
-              {day.count > 0 && ` · ${B.day.visits(day.count)}`}
-              {/* the day's sum: «Показывать статистику» */}
-              {day.count > 0 && may.stats && ` · ${eur(day.totalCents)}`}
-            </p>
-            {/* a day he is not at work says so */}
-            {(wholeDay || !hours) && <p className="bx-own-line">{dayState}</p>}
-          </div>
-          <OwnSeg view="day" date={sel} today={today} words={B.own} />
-        </header>
-      )}
-
-      <nav className="bx-strip" aria-label={B.day.days}>
-        <Link href={`/b?d=${addDays(sel, -7)}`} className="adm-ibtn" aria-label={B.day.prevWeek} prefetch={false} replace>
-          <PrevIcon />
-        </Link>
-        <div className="bx-strip-days">
-          {days.map((d) => (
-            <button
-              key={d.date}
-              type="button"
-              aria-pressed={d.date === sel}
-              aria-label={`${dateWords(d.date, B.lang)}${d.count ? `, ${B.day.visits(d.count)}` : ""}`}
-              className={`${d.date === today ? "is-today" : ""}${d.windows.length ? "" : " is-off"}`}
-              onClick={() => choose(d.date)}
-            >
-              <small>{dateWords(d.date, B.lang, { weekday: "short" })}</small>
-              <b>{Number(d.date.slice(8))}</b>
-              <i>{d.count || ""}</i>
-            </button>
-          ))}
-        </div>
-        <Link href={`/b?d=${addDays(sel, 7)}`} className="adm-ibtn" aria-label={B.day.nextWeek} prefetch={false} replace>
-          <NextIcon />
-        </Link>
-      </nav>
-
-      {own ? (
-        (toToday || specials.length > 0) && (
-          <div className="bx-head">
-            {toToday && <div className="bx-head-row bx-own-today">{toToday}</div>}
-            {specials}
-          </div>
-        )
-      ) : (
-        <header className="bx-head">
-          <div className="bx-head-row">
-            <h1 className="adm-h1">{rel ?? words}</h1>
-            {toToday}
-          </div>
-          {rel && <p className="adm-meta">{words}</p>}
-          <p className="bx-sum">
-            <span>{dayState}</span>
-            {day.count > 0 && (
-              <span>
-                {B.day.visits(day.count)}
-                {/* the day's sum: «Показывать статистику» */}
-                {may.stats && (
-                  <>
-                    {" "}
-                    · <b>{eur(day.totalCents)}</b>
-                  </>
-                )}
-              </span>
-            )}
+      {/* him, the day's visits and money (the sum: «Показывать статистику»), and how full the day is */}
+      <section className="bx-cal-sum" aria-label={words}>
+        <Ava src={me.photoUrl} name={me.name} className="bx-cal-ava" />
+        <div>
+          <b>{me.name}</b>
+          <p>
+            {wholeDay ? `${B.day.kinds[wholeDay.kind] ?? wholeDay.kind} · ${B.day.allDay}` : !hours && !day.count ? B.day.off : [B.day.visits(day.count), may.stats ? eur(day.totalCents) : null, !hours ? B.day.off : null].filter(Boolean).join(" · ")}
           </p>
-          {specials}
-        </header>
+          {hours && !wholeDay && (
+            <div className="bx-cal-load">
+              <span aria-hidden="true">
+                <i style={{ width: `${load}%` }} />
+              </span>
+              <small>{B.day.busy(load)}</small>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <div ref={gridRef}>
+        <JournalGrid
+          cols={[col]}
+          lo={lo}
+          hi={hi}
+          tz={tz}
+          today={today}
+          now={now}
+          work={() => day.windows}
+          visits={visits}
+          blocks={blocks}
+          special={special}
+          shortMin={SHORT_MIN}
+          step={step}
+          visitLabel={(v) => `${hm(v.start, tz)}–${hm(v.end, tz)}, ${v.clientName}, ${services(v, B.lang)}${v.status !== "booked" ? `, ${B.visit.status[v.status] ?? v.status}` : ""}`}
+          visitBody={(v) => (
+            <>
+              <span className="t">
+                <span>
+                  {hm(v.start, tz)}–{hm(v.end, tz)}
+                </span>
+                <StatusMark status={v.status} size={12} />
+              </span>
+              <span className="bx-cv">
+                <span className="bx-cv-txt">
+                  <b>{v.clientName}</b>
+                  <span className="s">{services(v, B.lang)}</span>
+                </span>
+                <span className="bx-cv-sum">{eur(v.totalCents)}</span>
+              </span>
+            </>
+          )}
+          blockBody={(b) => (
+            <>
+              <b>{B.day.kinds[b.kind] ?? b.kind}</b>
+              <small>
+                {b.note ? `${b.note} · ` : ""}
+                {coversDay(b, sel, tz) ? B.day.allDay : `${hm(b.from, tz)}–${hm(b.to, tz)}`}
+              </small>
+              {b.status === "requested" && <small className="adm-tag">{B.day.requested}</small>}
+            </>
+          )}
+          specialBody={sp}
+          onVisit={(v) => openVisit(v.id)}
+          colExtra={() =>
+            gaps.map((g) => {
+              const top = minutesInDay(g.from, sel, tz) - lo;
+              const len = (g.to - g.from) / MIN;
+              const free = B.day.gap(minsText(Math.round(len), B.h, B.min));
+              return (
+                <button
+                  key={`g${g.from}`}
+                  type="button"
+                  className="cal-free"
+                  style={{ "--t": top, "--m": len } as React.CSSProperties}
+                  aria-label={`${B.book.addAt(hm(g.from, tz))}. ${free}`}
+                  onClick={(e) => tapFree(g.from, g.to, e)}
+                />
+              );
+            })
+          }
+          mark={
+            marked
+              ? {
+                  col: col.key,
+                  min: minutesInDay(marked, sel, tz),
+                  body: (
+                    <>
+                      <PlusIcon size={14} />
+                      <b>{hm(marked, tz)}</b>
+                      <span>{B.day.newSlot}</span>
+                    </>
+                  ),
+                }
+              : null
+          }
+        />
+      </div>
+
+      <WeekStrip
+        days={days.map((d) => d.date)}
+        date={sel}
+        today={today}
+        label={B.day.days}
+        dayName={(d) => cap(dateWords(d, B.lang, { weekday: "short" }))}
+        dayLabel={(d) => `${cap(dateWords(d, B.lang, { weekday: "long", day: "numeric", month: "long" }))}${days.find((x) => x.date === d)?.count ? `, ${B.day.visits(days.find((x) => x.date === d)!.count)}` : ""}`}
+        onPick={choose}
+        onSwipe={(by) => router.replace(`/b?d=${addDays(sel, 7 * by)}`)}
+      />
+      {canBook && (
+        <button type="button" className="cal-add" aria-label={B.book.new} onClick={() => book({})}>
+          <PlusIcon size={24} />
+        </button>
       )}
-
-      {next && <NextCard v={next} now={now} tz={tz} busy={busy} onOpen={() => openVisit(next.id)} onStatus={status} />}
-
-      <Timeline day={day} now={now} tz={tz} step={step} shortest={may.create ? shortest : Infinity} own={own} onOpen={openVisit} onFree={(start) => book({ start })} />
-
-      {canBook &&
-        (own ? (
-          // «+ Запись», as the design board's
-          <button type="button" className="bx-fab bx-fab-pill" aria-label={B.book.new} onClick={() => book({})}>
-            <PlusIcon size={14} />
-            <span>{B.own.add}</span>
-          </button>
-        ) : (
-          <button type="button" className="bx-fab" aria-label={B.book.new} onClick={() => book({})}>
-            <PlusIcon size={26} />
-          </button>
-        ))}
 
       {open && sheet?.kind === "visit" && (
         <VisitSheet
@@ -294,162 +380,6 @@ function Day({ days, date, today, now: serverNow, tz, step, offers, may, own = f
 }
 
 const services = (v: BVisit, lang: Parameters<typeof pick3>[1]) => v.services.map((s) => pick3(s.name, lang)).join(" + ");
-
-function NextCard({ v, now, tz, busy, onOpen, onStatus }: { v: BVisit; now: number; tz: string; busy: boolean; onOpen: () => void; onStatus: (v: BVisit, s: string) => void }) {
-  const B = useB();
-  const may = useMay();
-  const inChair = v.status === "arrived" || v.start <= now;
-  const wait = Math.max(1, Math.round((v.start - now) / MIN));
-  // one tap for «arrived» from half an hour before («Готово» left the app: Dim, decision round 11)
-  const next = v.status === "booked" && v.start - now <= 30 * MIN ? "arrived" : null;
-  const quick = next && may.edit && (!CAME.has(v.status) || may.editCame) ? next : null;
-  const phone = may.call ? v.clientPhone : null;
-  return (
-    <section className={`bx-next${inChair ? " is-now" : ""}`} aria-label={B.day.next}>
-      <p className="bx-next-when">{inChair ? B.day.now : `${B.day.next} · ${B.day.inMin(wait)}`}</p>
-      <button type="button" className="bx-next-main" onClick={onOpen}>
-        <b>
-          {hm(v.start, tz)}–{hm(v.end, tz)}
-        </b>
-        <span>{v.clientName}</span>
-        <small>{services(v, B.lang)}</small>
-      </button>
-      {(phone || quick) && (
-        <div className="adm-bar-row">
-          {phone && (
-            <a className="adm-btn adm-btn-line adm-btn-auto" href={`tel:${phone}`}>
-              {B.visit.call}
-            </a>
-          )}
-          {quick && (
-            <button type="button" className="adm-btn adm-btn-lime adm-btn-auto" disabled={busy} onClick={() => onStatus(v, quick)}>
-              {B.day.quick[quick]}
-            </button>
-          )}
-        </div>
-      )}
-    </section>
-  );
-}
-
-type Item = { at: number; order: number; key: string } & ({ kind: "visit"; v: BVisit } | { kind: "gap"; g: Gap } | { kind: "block"; b: BBlock });
-
-function Timeline({
-  day,
-  now,
-  tz,
-  step,
-  shortest,
-  own,
-  onOpen,
-  onFree,
-}: {
-  day: BDay;
-  now: number;
-  tz: string;
-  step: number;
-  /** his shortest service with its tidy-up, in ms: a gap shorter than that books nothing */
-  shortest: number;
-  /** «Мой день»: a visit is a card in the journal's colours */
-  own: boolean;
-  onOpen: (id: string) => void;
-  onFree: (start: number) => void;
-}) {
-  const B = useB();
-  const d0 = startOfDay(day.date, tz);
-  const d1 = startOfDay(addDays(day.date, 1), tz);
-  const gaps = freeGaps(day, { now, stepMin: step });
-  const items: Item[] = [
-    ...day.visits.map((v) => ({ at: v.start, order: 1, key: v.id, kind: "visit" as const, v })),
-    ...gaps.map((g) => ({ at: g.from, order: 2, key: `g${g.from}`, kind: "gap" as const, g })),
-    ...day.blocks.filter((b) => !coversDay(b, day.date, tz)).map((b) => ({ at: Math.max(b.from, d0), order: 0, key: b.id, kind: "block" as const, b })),
-  ].sort((x, y) => x.at - y.at || x.order - y.order);
-
-  if (!items.length) return <p className="adm-meta bx-empty">{B.day.empty}</p>;
-  return (
-    <>
-      {!day.visits.length && gaps.length > 0 && <p className="adm-meta bx-empty">{B.day.emptyFree}</p>}
-      <ol className="bx-tl">
-        {items.map((it) => {
-          if (it.kind === "visit") {
-            const v = it.v;
-            const live = now >= v.start && now < v.end;
-            // «Мой день»: the strip says who made it, the body its state (src/lib/admin/journal.ts)
-            const look = own ? visitLook(v.status, v.source) : null;
-            return (
-              <li
-                key={it.key}
-                className={`bx-v st-${v.status}${v.extraCents ? " is-sp" : ""}${live ? " is-now" : ""}`}
-                style={look ? ({ "--h": look.strip, "--b": look.body, "--n": look.name } as React.CSSProperties) : undefined}
-              >
-                <button type="button" onClick={() => onOpen(v.id)}>
-                  <span className="bx-t">
-                    <b>{hm(v.start, tz)}</b>
-                    <small>{hm(v.end, tz)}</small>
-                  </span>
-                  <span className="bx-v-main">
-                    <b>{v.clientName}</b>
-                    <small>{services(v, B.lang)}</small>
-                  </span>
-                  <span className="bx-v-side">
-                    <b>{eur(v.totalCents)}</b>
-                    {v.status !== "booked" && <small className={`adm-tag${v.status === "arrived" ? " lime" : v.status === "no_show" ? " warn" : ""}`}>{B.visit.status[v.status] ?? v.status}</small>}
-                  </span>
-                </button>
-              </li>
-            );
-          }
-          if (it.kind === "gap") {
-            const g = it.g;
-            const free = B.day.gap(minsText(Math.round((g.to - g.from) / MIN), B.h, B.min));
-            const inner = (
-              <>
-                <span className="bx-t">
-                  <b>{hm(g.from, tz)}</b>
-                  <small>{hm(g.to, tz)}</small>
-                </span>
-                <span className="bx-gap-main">
-                  {free}
-                  {/* free time has no visit yet: the window's own extra, «+20 €» or «+50 %» */}
-                  {hasExtra(g) && <small> · {extraText(g)}</small>}
-                </span>
-              </>
-            );
-            return (
-              <li key={it.key} className={`bx-gap${hasExtra(g) ? " is-sp" : ""}`}>
-                {g.to - g.from >= shortest ? (
-                  <button type="button" aria-label={`${B.book.addAt(hm(g.from, tz))}. ${free}`} onClick={() => onFree(g.from)}>
-                    {inner}
-                    <span className="bx-gap-add" aria-hidden="true">
-                      <PlusIcon />
-                    </span>
-                  </button>
-                ) : (
-                  // too short for any of his services: free time to see, nothing to book
-                  <div>{inner}</div>
-                )}
-              </li>
-            );
-          }
-          const b = it.b;
-          return (
-            <li key={it.key} className={`bx-blk${b.status === "requested" ? " is-req" : ""}`}>
-              <span className="bx-t">
-                <b>{hm(Math.max(b.from, d0), tz)}</b>
-                <small>{hm(Math.min(b.to, d1), tz)}</small>
-              </span>
-              <span className="bx-blk-main">
-                <b>{B.day.kinds[b.kind] ?? b.kind}</b>
-                {b.note && <small>{b.note}</small>}
-                {b.status === "requested" && <small className="adm-tag">{B.day.requested}</small>}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-    </>
-  );
-}
 
 /** The clock, ticking every half minute (the next client's «in 25 min», the free time). */
 function useNow(initial: number): number {

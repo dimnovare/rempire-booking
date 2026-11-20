@@ -45,7 +45,7 @@ test.describe("a login's rights", () => {
     const openVisit = async () => {
       await his.goto(day);
       await hydrated(his);
-      await his.locator(".bx-v button").first().click();
+      await his.locator(".bx-cal .cal-v").first().click();
       return sheet(his);
     };
     try {

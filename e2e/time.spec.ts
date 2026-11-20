@@ -50,7 +50,7 @@ test.describe("his time", () => {
     await expect(page.getByText("E2E перерыв")).toBeVisible();
 
     await page.goto(`/b?d=${day}`);
-    await expect(page.locator(".bx-blk", { hasText: "E2E перерыв" })).toContainText("19:00");
+    await expect(page.locator(".bx-cal .cal-off", { hasText: "E2E перерыв" })).toContainText("19:00");
 
     await openTime(page);
     await removeAhead(page, T.add.block, /.*19:00/);
@@ -78,7 +78,7 @@ test.describe("his time", () => {
       await expect(mine.getByText(T.waiting, { exact: true })).toBeVisible();
       // a waiting vacation already holds the day
       await page.goto(`/b?d=${day}`);
-      await expect(page.locator(".bx-sum")).toContainText(B.day.kinds.vacation);
+      await expect(page.locator(".bx-cal-sum p")).toContainText(B.day.kinds.vacation);
 
       // Renat: waiting, with the barber's name and his words
       await owner.goto("/admin/requests");
@@ -212,11 +212,12 @@ test.describe("his time", () => {
     const asked = page.locator("section.adm-card", { has: page.getByRole("heading", { name: T.requests }) }).locator(".bx-rows li", { hasText: "06:00–08:00" });
     await expect(asked).toContainText(`${T.add.special} +50 % ·`);
 
-    // his day: the window and its free time say the percent; no money yet
+    // his day: the window says the percent, and that it is still free; no money yet
     await page.goto(`/b?d=${day}`);
     await hydrated(page);
-    await expect(page.locator(".bx-sp", { hasText: "06:00–08:00" })).toContainText("+50 %");
-    await expect(page.locator(".bx-gap.is-sp", { hasText: "06:00" })).toContainText("+50 %");
+    const sp = page.locator(".bx-cal .cal-sp", { hasText: "06:00–08:00" });
+    await expect(sp).toContainText(B.day.spTitle("+50 %"));
+    await expect(sp).toContainText(`06:00–08:00 · ${B.day.spFree}`);
 
     // a visit there: the percent of this service's price, in euros
     await page.getByRole("button", { name: B.book.new }).click();

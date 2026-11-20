@@ -1,6 +1,9 @@
 import { asBarber, B, expect, expectNoSideScroll, hydrated, nextWorkday, sheet, smallTargets, test, toast } from "./helpers";
 
-/** B3: booking, moving and cancelling from his phone, in his own column. Fake names only. */
+/**
+ * B3: booking, moving and cancelling from his phone, in his own column of
+ * the journal's grid (day-view.tsx). Fake names only.
+ */
 test.describe("booking from the phone", () => {
   test.use(asBarber);
   // every test here is on his next working day: the demo visits are there, inside his hours
@@ -24,22 +27,22 @@ test.describe("booking from the phone", () => {
     await expectNoSideScroll(page);
     await book.click();
     await expect(toast(page)).toContainText(B.book.booked("").trim());
-    const row = page.locator(".bx-v", { hasText: who });
+    const row = page.locator(".bx-cal .cal-v", { hasText: who });
     await expect(row).toBeVisible();
-    const was = await row.locator(".bx-t b").innerText();
+    const was = await row.locator(".t span").first().innerText();
 
     // move it to another free time the same day
-    await row.getByRole("button").click();
+    await row.click();
     await sheet(page).getByRole("button", { name: B.book.move }).click();
     const m = sheet(page);
     await expect(m.getByRole("heading", { name: B.book.moveTitle })).toBeVisible();
     await m.getByRole("group", { name: B.book.time }).getByRole("button", { disabled: false }).last().click();
     await m.getByRole("button", { name: /^Перенести на / }).click();
     await expect(toast(page)).toContainText(B.book.moved("").trim());
-    await expect(row.locator(".bx-t b")).not.toHaveText(was);
+    await expect(row.locator(".t span").first()).not.toHaveText(was);
 
     // cancel it: not without a reason
-    await row.getByRole("button").click();
+    await row.click();
     await sheet(page).getByRole("button", { name: B.book.cancel }).click();
     const c = sheet(page);
     await expect(c.getByRole("heading", { name: B.book.cancelTitle })).toBeVisible();
@@ -59,14 +62,18 @@ test.describe("booking from the phone", () => {
     await hydrated(page);
     // «Свободно · 1 ч 15 мин» in minutes
     const minutes = (t: string) => Number(/(\d+)\s*ч/.exec(t)?.[1] ?? 0) * 60 + Number(/(\d+)\s*мин/.exec(t)?.[1] ?? 0);
-    // the first gap with room for a 30-minute service
-    const gaps = page.locator(".bx-gap button");
+    // the first free time with room for a 30-minute service: «Записать на 12:15. Свободно · 1 ч 15 мин»
+    const gaps = page.locator(".bx-cal .cal-free");
     await gaps.first().waitFor();
-    const lens = (await gaps.locator(".bx-gap-main").allInnerTexts()).map(minutes);
-    const gap = gaps.nth(lens.findIndex((n) => n >= 30));
-    const at = (await gap.locator(".bx-t b").innerText()).trim();
-    await gap.click();
+    const labels = await gaps.evaluateAll((els) => els.map((el) => el.getAttribute("aria-label")!));
+    const i = labels.findIndex((t) => minutes(t.split(". ")[1]) >= 30);
+    const gap = gaps.nth(i);
+    const at = /\d\d:\d\d/.exec(labels[i])![0];
+    // a tap at its top is its start
+    await gap.click({ position: { x: 20, y: 2 } });
     const s = sheet(page);
+    // the green «Новый сеанс» bar marks the time on the grid while the sheet is open
+    await expect(page.locator(".bx-cal .jr-slot.is-mark")).toContainText(`${at}${B.day.newSlot}`);
     // the shortest service
     const svcs = s.getByRole("group", { name: B.book.services }).getByRole("button");
     await svcs.first().waitFor();
@@ -76,10 +83,11 @@ test.describe("booking from the phone", () => {
     await s.getByLabel(B.book.name, { exact: true }).fill(who);
     await s.getByRole("button", { name: B.book.book, exact: true }).click();
     await expect(toast(page)).toContainText(at);
-    await expect(page.locator(".bx-v", { hasText: who }).locator(".bx-t b")).toHaveText(at);
+    await expect(page.locator(".bx-cal .cal-v", { hasText: who }).locator(".t span").first()).toHaveText(new RegExp(`^${at}–`));
+    await expect(page.locator(".bx-cal .jr-slot.is-mark")).toHaveCount(0);
   });
 
-  test("free time too short for any of his services shows, with no «+»", async ({ page, barber }) => {
+  test("free time too short for any of his services is no place to tap", async ({ page, barber }) => {
     const day = nextWorkday(barber.slug);
     await page.goto(`/b?d=${day}`);
     await hydrated(page);
@@ -91,12 +99,11 @@ test.describe("booking from the phone", () => {
     const shortest = Math.min(...(await svcs.locator("small").allInnerTexts()).map((t) => minutes(t.split("·")[0])));
     await sheet(page).getByRole("button", { name: B.close }).click();
 
-    // the demo day has a 15-minute gap after the first visit: seen, not tappable
-    const short = page.locator(".bx-gap > div");
-    await expect(short.first()).toBeVisible();
-    await expect(page.locator(".bx-gap > div .bx-gap-add")).toHaveCount(0);
-    // every gap with a «+» holds at least his shortest service
-    for (const t of await page.locator(".bx-gap > button .bx-gap-main").allInnerTexts()) expect(minutes(t)).toBeGreaterThanOrEqual(shortest);
+    // the demo day has a 15-minute gap after the first visit: grey, as any time between visits, with nothing to tap;
+    // every free time that is tapped holds at least his shortest service
+    const labels = await page.locator(".bx-cal .cal-free").evaluateAll((els) => els.map((el) => el.getAttribute("aria-label")!));
+    expect(labels.length).toBeGreaterThan(0);
+    for (const t of labels) expect(minutes(t.split(". ")[1])).toBeGreaterThanOrEqual(shortest);
   });
 
   test("a taken time is refused; outside his hours asks first", async ({ page, barber }) => {
@@ -118,6 +125,6 @@ test.describe("booking from the phone", () => {
     await expect(s.getByRole("alert")).toHaveText(B.book.outsideHours);
     await s.getByRole("button", { name: B.cancel, exact: true }).click();
     await s.getByRole("button", { name: B.close }).click();
-    await expect(page.locator(".bx-v", { hasText: "E2E занято" })).toHaveCount(0);
+    await expect(page.locator(".bx-cal .cal-v", { hasText: "E2E занято" })).toHaveCount(0);
   });
 });

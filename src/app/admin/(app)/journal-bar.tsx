@@ -5,8 +5,10 @@
  * (docs/reference-looks.md, «The journal: built»; laid out on the design
  * board): white, 48px, every control 32px high with 8px corners and a 1px
  * line. Left to right: «Сегодня», ‹ ›, the day as the title; then «Продать»,
- * the day's numbers, «День | Неделя», the status filter, the scale, the
- * panel on the right, and the one yellow button, «Запись».
+ * the day's numbers, «День | Неделя», the status filter, the scale and the
+ * panel on the right. A new visit is a click on the grid (the bar «Новый
+ * сеанс» under the mouse): the bar has no «Запись» of its own (Dim,
+ * 20.11.2026); a phone keeps its button.
  *
  * A login linked to a barber also has «Мой день | Весь салон» before
  * «Продать» (docs/apps.md, «One app for Renat»): a pair, yellow on the
@@ -20,7 +22,7 @@ import type { CalStaff } from "@/lib/admin/calendar";
 import { VISIT_STATES, type DayNumbers, type VisitState } from "@/lib/admin/journal";
 import { amountText } from "@/lib/money";
 import { addDays } from "@/lib/tz";
-import { Ava, CaretIcon, FunnelIcon, NextIcon, PanelIcon, PlusIcon, PrevIcon, TickIcon, ZoomIcon } from "../icons";
+import { Ava, CaretIcon, FunnelIcon, NextIcon, PanelIcon, PrevIcon, TickIcon, ZoomIcon } from "../icons";
 import { useA } from "../lang";
 import { useFrame } from "./frame";
 import { Pop } from "./pop";
@@ -29,6 +31,8 @@ import { Pop } from "./pop";
 export const ZOOMS = ["1", "1.5", "3"] as const;
 export type Zoom = (typeof ZOOMS)[number];
 export const isZoom = (v: unknown): v is Zoom => (ZOOMS as readonly unknown[]).includes(v);
+/** The minutes a 15px line is at each scale: a click, a drag and the bar «Новый сеанс» snap to it. */
+export const ZOOM_STEP: Record<Zoom, number> = { "1": 15, "1.5": 10, "3": 5 };
 
 /** «€ 414», «€ 49,80»: the sign first, as on the bar we follow. */
 export const euro = (cents: number) => `€ ${cents % 100 === 0 ? cents / 100 : amountText(cents)}`;
@@ -50,8 +54,6 @@ export type JournalBarProps = {
   onZoom: (z: Zoom) => void;
   side: boolean;
   onSide: () => void;
-  /** «Запись»; null while there is nothing to book with */
-  onAdd: (() => void) | null;
   /** «Продать» is offered: the login may sell products */
   sell: boolean;
   /**
@@ -65,7 +67,7 @@ export type JournalBarProps = {
   go: (date: string, view?: "day" | "week", staffId?: string | null) => void;
 };
 
-export function JournalBar({ view, date, today, title, dayText, staff, staffId, numbers, hidden, onHidden, zoom, onZoom, side, onSide, onAdd, sell, mine, go }: JournalBarProps) {
+export function JournalBar({ view, date, today, title, dayText, staff, staffId, numbers, hidden, onHidden, zoom, onZoom, side, onSide, sell, mine, go }: JournalBarProps) {
   const A = useA();
   const C = A.cal;
   const frame = useFrame();
@@ -238,13 +240,6 @@ export function JournalBar({ view, date, today, title, dayText, staff, staffId, 
       {!mine?.on && (
         <button type="button" className="jr-btn jr-ibtn" aria-label={C.panel} aria-pressed={side} onClick={onSide}>
           <PanelIcon />
-        </button>
-      )}
-
-      {onAdd && (
-        <button type="button" className="jr-btn jr-main" aria-label={A.visit.new} onClick={onAdd}>
-          <PlusIcon size={12} />
-          <span>{C.add}</span>
         </button>
       )}
     </div>

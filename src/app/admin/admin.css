@@ -477,9 +477,6 @@ button.cal-head:hover b { color: var(--accent); }
 .cal-v:hover { filter: brightness(.96); }
 .cal-ghost { left: 3px; right: 3px; z-index: 4; border: 2px dashed var(--sel); border-radius: 4px; background: rgba(255, 203, 0, .2); color: var(--accent); font-size: 11px; padding: 2px 4px; pointer-events: none; }
 .cal-now { left: 0; right: 0; z-index: 3; height: 0; border-top: 1px solid #2b3134; pointer-events: none; }
-/* a day nobody works and nobody is booked on */
-.jr-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px 16px; text-align: center; }
-.jr-empty h2 { margin: 0; font: 500 20px/24px var(--body); color: var(--fg); }
 @media (max-width: 899px) {
   .cal-v.st-arrived .t::after { content: "✓"; margin-left: auto; font-weight: 700; }
   /* a short visit: the time and the name on one line */
@@ -508,8 +505,10 @@ button.cal-head:hover b { color: var(--accent); }
    of heads (a 24px square photo, the name, the label under it); the time on both sides, 60px each, the hour
    large with a small «00» and the half hour a small grey «30»; 1px a minute, a pale line every 15px and a
    stronger one every hour; a visit as a card 6px in from its column, with a 15px strip. The icons and the
-   words are ours. */
+   words are ours. The barber app (body .adm.bx) shares the grid (journal-grid.tsx) but keeps its phone look at
+   every width, so the block is the salon's alone. */
 @media (min-width: 900px) {
+:where(.adm:not(.bx)) {
   .cal { height: calc(100dvh - var(--head-h)); }
   .cal.has-panel { padding-right: var(--panel-w); }
 
@@ -611,8 +610,6 @@ button.cal-head:hover b { color: var(--accent); }
   /* the status filter: a state without its tick is not on the grid */
   .cal.hide-online .cal-v.k-online, .cal.hide-staff .cal-v.k-staff, .cal.hide-came .cal-v.k-came, .cal.hide-noshow .cal-v.k-noshow { display: none; }
 
-  .jr-empty .adm-btn { min-height: 32px; padding: 0 12px; font: 500 12px/16px var(--body); }
-
   /* the panel on the right: 321px on the page's ground, one tab; an open visit lies over it */
   .jr-side { flex: 0 0 321px; min-height: 0; display: flex; flex-direction: column; background: #f7f9fc; border-left: 1px solid #e0e3eb; color: #2b3134; font: 400 12px/16px var(--body); }
   .cal.has-panel .jr-side { display: none; }
@@ -659,6 +656,7 @@ button.cal-head:hover b { color: var(--accent); }
   .jr-mine-links a::after { content: "›"; margin-left: auto; color: #9aa3b1; }
   .jr-mine-links a:hover { background: #f7f9fc; }
   .jr-mine-links a:focus-visible { outline-offset: -2px; }
+}
 }
 
 /* ---------- sheets: from the bottom on phones, a panel on the right on wide screens ---------- */

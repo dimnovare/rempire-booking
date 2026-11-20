@@ -1,64 +1,104 @@
-import { dateWords } from "../src/app/b/copy.shared";
-import { asBarber, B, expect, expectNoSideScroll, hydrated, nextWorkday, sheet, smallTargets, test } from "./helpers";
+import { cap, dateWords } from "../src/app/b/copy.shared";
+import { asBarber, B, expect, expectNoSideScroll, hydrated, nextWorkday, sheet, smallTargets, tallinnDate, test } from "./helpers";
 
-/** B2: his day and his week. */
+/**
+ * B2: his day and his week. His day is one column of the salon's journal
+ * (board MyDay-Grid): the dark bar with the day, a row with him and the day's
+ * numbers, the grid, the week floating at the bottom.
+ */
 test.describe("his day", () => {
   test.use(asBarber);
 
-  test("today: the next client on top, one tap for «Пришёл»; «Готово» is gone", async ({ page }) => {
+  test("today: his one column of the journal; a tap on a visit opens the visit sheet, «Пришёл» marks it, «Ожидание» back; no «Готово»", async ({ page, barber }) => {
     await page.goto("/b");
     await hydrated(page);
     await expect(page.getByRole("heading", { level: 1, name: B.day.today })).toBeVisible();
-    const next = page.getByRole("region", { name: B.day.next });
-    await expect(next).toBeVisible();
-    // the demo client in 20 minutes: «Дальше · через N мин», a call button, «Пришёл»
-    await expect(next.getByRole("link", { name: B.visit.call })).toHaveAttribute("href", /^tel:\+/);
-    await next.getByRole("button", { name: B.day.quick.arrived }).click();
-    await expect(next.getByText(B.day.now, { exact: true })).toBeVisible();
-    // in the chair: nothing more to tap here (Dim, decision round 11)
-    await expect(next.locator(".adm-btn-lime")).toHaveCount(0);
-    await expect(next.getByRole("button", { name: "Готово" })).toHaveCount(0);
+    // one column, his: his name over it, the day's visits and, on a working day, how full it is
+    // (the demo gives today's visits even on his day off: then the line says «Выходной» instead)
+    await expect(page.locator(".bx-cal .cal-col")).toHaveCount(1);
+    await expect(page.locator(".bx-cal-sum b")).toHaveText(barber.name);
+    await expect(page.locator(".bx-cal-sum p")).toHaveText(/^\d+ запис/);
+    const sumLine = (await page.locator(".bx-cal-sum p").innerText()).trim();
+    if (sumLine.endsWith(B.day.off)) await expect(page.locator(".bx-cal-load")).toHaveCount(0);
+    else await expect(page.locator(".bx-cal-load small")).toHaveText(new RegExp(`^${B.day.busy(0).replace("0", "\\d+")}$`));
+    // today is in the strip: no «Сегодня» in the bar
+    await expect(page.locator(".bx-cal .cal-bar").getByRole("button", { name: B.day.today, exact: true })).toHaveCount(0);
+
+    // a visit still waiting: the app's one visit sheet, its four chips
+    const visit = page.locator(".bx-cal .cal-v.st-booked", { hasText: "Demo client" }).first();
+    const times = (await visit.locator(".t span").first().innerText()).trim();
+    const same = page.locator(".bx-cal .cal-v").filter({ has: page.locator(".t span", { hasText: times }) });
+    await visit.click();
+    const s = sheet(page);
+    await expect(s.locator(".vs-time")).toHaveText(new RegExp(`^${times} · `));
+    const chips = s.getByRole("group", { name: B.vs.status });
+    await expect(chips.getByRole("button")).toHaveText([B.vs.chips.booked, B.vs.chips.arrived, B.vs.chips.no_show, B.vs.chips.confirmed]);
+    await expect(s.getByRole("button", { name: "Готово" })).toHaveCount(0);
+    const arrived = chips.getByRole("button", { name: B.vs.chips.arrived, exact: true });
+    await arrived.click();
+    await expect(arrived).toHaveAttribute("aria-pressed", "true");
+    await expect(same).toHaveClass(/st-arrived/);
+    // «Ожидание» takes it back
+    const waiting = chips.getByRole("button", { name: B.vs.chips.booked, exact: true });
+    await waiting.click();
+    await expect(waiting).toHaveAttribute("aria-pressed", "true");
+    await expect(same).toHaveClass(/st-booked/);
+    await s.getByRole("button", { name: B.close }).click();
+    await expect(s).toHaveCount(0);
     await expectNoSideScroll(page);
     expect(await smallTargets(page)).toEqual([]);
   });
 
-  test("the week strip: another day, then back to today", async ({ page, barber }) => {
+  test("another day: the strip, or the date in the bar for another week; the visits, the lunch break; «Сегодня» back", async ({ page, barber }) => {
     // his next working day: the second day of the demo visits
     const day = nextWorkday(barber.slug);
     await page.goto("/b");
     await hydrated(page);
     const strip = page.getByRole("navigation", { name: B.day.days });
-    // the strip's buttons carry the day's words; `day` may sit in a later week's strip (he may be away for a week)
-    const button = strip.getByRole("button", { name: new RegExp(`^${dateWords(day, "ru")}`) });
-    for (let week = 0; week < 4 && !(await button.count()); week++) {
-      const was = page.url();
-      await strip.getByRole("link", { name: B.day.nextWeek }).click();
-      await page.waitForURL((u) => u.href !== was);
-      await hydrated(page);
-    }
-    await button.click();
+    await expect(strip.getByRole("button")).toHaveCount(7);
+    await expect(strip.getByRole("button", { pressed: true })).toHaveCount(1);
+    // the strip's buttons carry the day's words; `day` may be in a later week (he may be away for a week)
+    const button = strip.getByRole("button", { name: new RegExp(`^${cap(dateWords(day, "ru", { weekday: "long", day: "numeric", month: "long" }))}`) });
+    if (await button.count()) await button.click();
+    else await page.locator(".bx-cal .cal-bar").getByLabel(B.day.pickDate).fill(day);
     await expect(page).toHaveURL(new RegExp(`d=${day}`));
-    // the five demo visits of that day, and the lunch break
-    await expect(page.locator(".bx-v:visible", { hasText: "Demo client" })).toHaveCount(5);
-    await expect(page.locator(".bx-blk", { hasText: B.day.kinds.block })).toBeVisible();
-    await expect(page.locator(".bx-sum")).toContainText("€");
-    await page.getByRole("button", { name: B.day.toToday }).or(page.getByRole("link", { name: B.day.toToday })).click();
+    await expect(page.locator(".bx-cal .cal-bar").getByLabel(B.day.pickDate)).toHaveValue(day);
+    // the five demo visits of that day in his column, and the lunch break
+    const visits = page.locator(".bx-cal .cal-v:visible", { hasText: "Demo client" });
+    await expect(visits).toHaveCount(5);
+    await expect(visits.first().locator(".t span").first()).toHaveText(/^\d\d:\d\d–\d\d:\d\d$/);
+    await expect(visits.first().locator(".bx-cv-sum")).toContainText("€");
+    await expect(page.locator(".bx-cal .cal-off", { hasText: B.day.kinds.block })).toBeVisible();
+    await expect(page.locator(".bx-cal-sum p")).toContainText("€");
+    // back to today: the bar's «Сегодня» when today is in another week, else the strip
+    const toToday = page.locator(".bx-cal .cal-bar").getByRole("button", { name: B.day.today, exact: true });
+    if (await toToday.count()) await toToday.click();
+    else await strip.locator("button.is-today").click();
     await expect(page.getByRole("heading", { level: 1, name: B.day.today })).toBeVisible();
   });
 
-  test("next week and back", async ({ page }) => {
+  test("a swipe on the strip is the next week; the bar's «Сегодня» comes back", async ({ page }) => {
     await page.goto("/b");
     await hydrated(page);
-    await page.getByRole("link", { name: B.day.nextWeek }).click();
-    await expect(page.getByRole("link", { name: B.day.toToday })).toBeVisible();
-    await page.getByRole("link", { name: B.day.toToday }).click();
+    const strip = page.getByRole("navigation", { name: B.day.days });
+    const b = (await strip.boundingBox())!;
+    await page.mouse.move(b.x + b.width * 0.75, b.y + b.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(b.x + b.width * 0.2, b.y + b.height / 2, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForURL((u) => u.searchParams.get("d") === tallinnDate(7));
+    await hydrated(page);
+    const toToday = page.locator(".bx-cal .cal-bar").getByRole("button", { name: B.day.today, exact: true });
+    await expect(toToday).toBeVisible();
+    await toToday.click();
+    await page.waitForURL((u) => u.pathname === "/b" && !u.searchParams.has("d"));
     await expect(page.getByRole("heading", { level: 1, name: B.day.today })).toBeVisible();
   });
 
   test("a visit's sheet: the time, the services, the total, the four chips", async ({ page, barber }) => {
     await page.goto(`/b?d=${nextWorkday(barber.slug)}`);
     await hydrated(page);
-    await page.locator(".bx-v button").first().click();
+    await page.locator(".bx-cal .cal-v").first().click();
     const s = sheet(page);
     await expect(s.locator(".vs-time")).toHaveText(/^\d\d:\d\d–\d\d:\d\d · /);
     await expect(s.locator(".vs-total b")).toContainText("€");
@@ -81,6 +121,8 @@ test.describe("his day", () => {
   test("the bottom bar takes him everywhere", async ({ page }) => {
     await page.goto("/b");
     await hydrated(page);
+    // (the dark bar's «День | Неделя» has the same words: the tabs are the «Разделы» ones)
+    const tabs = page.getByRole("navigation", { name: B.nav.label });
     for (const [name, path] of [
       [B.nav.week, "/b/week"],
       [B.nav.time, "/b/time"],
@@ -88,7 +130,7 @@ test.describe("his day", () => {
       [B.nav.more, "/b/more"],
       [B.nav.day, "/b"],
     ] as const) {
-      await page.getByRole("link", { name, exact: true }).click();
+      await tabs.getByRole("link", { name, exact: true }).click();
       await page.waitForURL((u) => u.pathname === path);
       await expectNoSideScroll(page);
     }

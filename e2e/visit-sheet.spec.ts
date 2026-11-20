@@ -32,11 +32,11 @@ async function book(page: Page, date: string, who: string) {
   await s.getByLabel(B.book.name, { exact: true }).fill(who);
   await s.getByRole("button", { name: B.book.book, exact: true }).click();
   await expect(toast(page)).toContainText(B.book.booked("").trim());
-  await expect(page.locator(".bx-v", { hasText: who })).toBeVisible();
+  await expect(page.locator(".bx-cal .cal-v", { hasText: who })).toBeVisible();
 }
 
 async function openIn(page: Page, who: string) {
-  await page.locator(".bx-v", { hasText: who }).getByRole("button").click();
+  await page.locator(".bx-cal .cal-v", { hasText: who }).click();
   const s = page.getByRole("dialog", { name: who, exact: true });
   await expect(s).toBeVisible();
   return s;
@@ -118,7 +118,7 @@ test.describe("the visit sheet", () => {
     await c.getByRole("group", { name: B.book.reason }).getByRole("button", { name: B.book.reasons[0] }).click();
     await c.getByRole("button", { name: B.book.cancelGo }).click();
     await expect(toast(page)).toContainText(B.book.cancelled);
-    await expect(page.locator(".bx-v", { hasText: who })).toHaveCount(0);
+    await expect(page.locator(".bx-cal .cal-v", { hasText: who })).toHaveCount(0);
   });
 
   test("Renat's phone: the same sheet, a chip and «+» write at once, the barber sees them", async ({ page, browser, barber }, info) => {

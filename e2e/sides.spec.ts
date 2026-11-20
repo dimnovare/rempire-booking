@@ -80,22 +80,22 @@ test.describe("an owner who cuts too, on a phone", () => {
     await page.waitForURL((u) => u.pathname === "/b");
     await hydrated(page);
     await expectOneFrame(page, OWN_BAR, A.nav.mine);
-    // the head of the board: the title, the day with its count and sum, «День | Неделя», «+ Запись»
+    // the board MyDay-Grid: the dark bar with the day and «День | Неделя», a row with him, the day's count and sum, the grid, «+»
     await expect(page.getByRole("heading", { level: 1, name: B.own.title })).toBeVisible();
     await expect(page).toHaveTitle(`${B.own.title} · REMPIRE`);
-    const line = page.locator(".bx-own-line:visible").first();
-    const visits = await page.locator(".bx-v:visible").count();
+    const line = page.locator(".bx-cal-sum p");
+    const visits = await page.locator(".bx-cal .cal-v:visible").count();
     expect(visits).toBeGreaterThan(0);
     await expect(line).toContainText(/\d+ [а-я]+ · /);
     await expect(line).toContainText(/ · \d+([.,]\d\d)? €$/);
-    const seg = page.getByRole("navigation", { name: B.own.view });
+    const seg = page.locator(".bx-cal .cal-bar").getByRole("navigation", { name: B.own.view });
     await expect(seg.getByRole("link")).toHaveText([B.own.day, B.own.week]);
     await expect(seg.getByRole("link", { name: B.own.day })).toHaveAttribute("aria-current", "page");
-    await expect(page.getByRole("button", { name: B.book.new })).toHaveText(B.own.add);
+    await expect(page.getByRole("button", { name: B.book.new })).toBeVisible();
     await expectNoSideScroll(page);
     expect(await smallTargets(page)).toEqual([]);
 
-    // the boards' sizes and colours: the top bar, the bar, the head, a visit's card, «+ Запись»
+    // the boards' sizes and colours: the top bar, the bar, the row, a visit's card, «+»
     expect(await look(page.locator(".adm-top:visible"))).toMatchObject({ h: 56, bg: "rgb(34, 34, 46)" });
     expect(await look(page.locator(".one-mark:visible"))).toMatchObject({ w: 24, h: 24, bg: "rgb(255, 255, 255)", radius: "7px" });
     expect(await look(page.locator(".one-name:visible"))).toMatchObject({ color: "rgb(223, 228, 237)", font: "500 16px/24px" });
@@ -103,12 +103,12 @@ test.describe("an owner who cuts too, on a phone", () => {
     expect(await look(bar(page).locator('a[aria-current="page"]'))).toMatchObject({ color: "rgb(255, 203, 0)", font: "500 11px/14px" });
     expect(await look(bar(page).locator("a:not([aria-current])"))).toMatchObject({ color: "rgb(198, 203, 211)", font: "500 11px/14px" });
     expect(await look(bar(page).locator("svg"))).toMatchObject({ w: 22, h: 22 });
-    expect(await look(page.locator(".bx-own-head:visible h1"))).toMatchObject({ font: "600 22px/28px" });
-    expect(await look(line)).toMatchObject({ color: "rgb(113, 117, 127)", font: "400 13px/18px" });
-    expect(await look(seg.locator('a[aria-current="page"]'))).toMatchObject({ h: 36, bg: "rgb(43, 49, 52)", color: "rgb(255, 255, 255)", font: "500 13px/13px" });
-    expect(await look(page.locator(".bx-v:visible > button"))).toMatchObject({ radius: "8px" });
-    expect(await page.locator(".bx-v:visible > button").first().evaluate((el) => getComputedStyle(el).borderLeftWidth)).toBe("6px");
-    expect(await look(page.getByRole("button", { name: B.book.new }))).toMatchObject({ h: 48, bg: "rgb(255, 203, 0)", radius: "24px", font: "600 15px/15px" });
+    expect(await look(page.locator(".bx-cal .cal-bar"))).toMatchObject({ bg: "rgb(34, 34, 46)" });
+    expect(await look(line)).toMatchObject({ color: "rgb(95, 100, 117)", font: "400 12px/16px" });
+    expect(await look(seg.locator('a[aria-current="page"]'))).toMatchObject({ h: 40, bg: "rgb(255, 203, 0)", color: "rgb(43, 49, 52)", font: "600 14px/14px" });
+    expect(await look(page.locator(".bx-cal .cal-v:visible"))).toMatchObject({ radius: "8px" });
+    expect(await look(page.locator(".bx-cal .cal-v:visible .t"))).toMatchObject({ h: 18 });
+    expect(await look(page.getByRole("button", { name: B.book.new }))).toMatchObject({ w: 58, h: 58, bg: "rgb(255, 203, 0)", radius: "16px" });
     await shot(page, "myday");
 
     // «Журнал»: the salon's calendar, in the same frame
@@ -173,9 +173,9 @@ test.describe("an owner who cuts too, on a phone", () => {
     await page.waitForURL((u) => u.pathname === "/b");
     await hydrated(page);
     // his own visits; one opens as in the barber app
-    const first = page.locator(".bx-v:visible").first();
-    const name = (await first.locator(".bx-v-main b").innerText()).trim();
-    await first.getByRole("button").click();
+    const first = page.locator(".bx-cal .cal-v:visible").first();
+    const name = (await first.locator(".bx-cv-txt b").innerText()).trim();
+    await first.click();
     await expect(sheet(page)).toBeVisible();
     await expect(sheet(page).getByRole("heading", { name })).toBeVisible();
     await sheet(page).getByRole("button", { name: B.close }).click();
@@ -418,7 +418,7 @@ test.describe("an owner who does not cut, on a phone", () => {
     await expect(page.locator(".bx-me b")).toHaveText(barber.name);
     await expect(bar(page).getByRole("link")).toHaveText(BARBER_BAR);
     await expect(page.locator(".one-top")).toHaveCount(0);
-    await expect(page.locator(".bx-v:visible").first()).toBeVisible();
+    await expect(page.locator(".bx-cal .cal-v:visible").first()).toBeVisible();
     await expectNoSwitch(page);
     await expectNoSideScroll(page);
     expect(await smallTargets(page)).toEqual([]);
