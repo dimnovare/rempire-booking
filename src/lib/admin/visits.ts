@@ -52,6 +52,12 @@ export type AdminVisitInput = {
   clientId?: string | null;
   name?: string | null;
   phone?: string | null;
+  /**
+   * a new client's e-mail. It goes on a client this visit adds, never on one
+   * that is already there (picked, or found by the phone): his card is
+   * changed on his card, with its own rights.
+   */
+  email?: string | null;
   comment?: string | null;
   staffNote?: string | null;
   smsReminder?: boolean;
@@ -61,6 +67,8 @@ export type AdminVisitInput = {
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// as the client card and the online booking (src/lib/admin/clients.ts, src/lib/booking.ts)
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const isUuid = (s: unknown): s is string => typeof s === "string" && UUID_RE.test(s);
 const MIN = 60_000;
 // visits still to come; only these get a moved or cancelled letter
@@ -232,6 +240,9 @@ export async function adminCreateVisit(business: Business, input: AdminVisitInpu
   const clientId = input.clientId && isUuid(input.clientId) ? input.clientId : null;
   const name = text(input.name, 120).replace(/\s+/g, " ");
   if (!clientId && !name && !phone) return { ok: false, code: "invalid", field: "name" };
+  const emailRaw = clientId ? "" : String(input.email ?? "").trim();
+  if (emailRaw && (emailRaw.length > 254 || !EMAIL_RE.test(emailRaw))) return { ok: false, code: "invalid", field: "email" };
+  const email = emailRaw ? emailRaw.toLowerCase() : null;
   const start = Math.round(input.start / MIN) * MIN;
   const who = scope.who;
   if (who) {
@@ -267,14 +278,15 @@ export async function adminCreateVisit(business: Business, input: AdminVisitInpu
           const [c] = await tx<{ id: string }>("select id from clients where id = $1 and business_id = $2", [cid, business.id]);
           if (!c) throw new Problem("invalid", "client");
         } else if (phone) {
+          // a phone another client has: the visit is his, and his card (e-mail and all) stays as it is
           const [c] = await tx<{ id: string }>(
-            `insert into clients (business_id, name, phone_e164, source) values ($1, $2, $3, 'admin')
+            `insert into clients (business_id, name, phone_e164, email, source) values ($1, $2, $3, $4, 'admin')
              on conflict (business_id, phone_e164) do update set updated_at = now() returning id`,
-            [business.id, name || phone, phone],
+            [business.id, name || phone, phone, email],
           );
           cid = c.id;
         } else {
-          const [c] = await tx<{ id: string }>("insert into clients (business_id, name, source) values ($1, $2, 'admin') returning id", [business.id, name]);
+          const [c] = await tx<{ id: string }>("insert into clients (business_id, name, email, source) values ($1, $2, $3, 'admin') returning id", [business.id, name, email]);
           cid = c.id;
         }
         const [hasPhone] = await tx<{ phone_e164: string | null }>("select phone_e164 from clients where id = $1", [cid]);

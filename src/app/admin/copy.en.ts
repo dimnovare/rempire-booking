@@ -260,6 +260,28 @@ export const en: typeof ru = {
     by: "Made by",
   },
 
+  newVisit: {
+    services: "Services",
+    specialist: "Specialist",
+    timeLength: "Visit time and length",
+    starts: "Start",
+    ends: "End",
+    length: "Length",
+    clientName: "Client name",
+    namePlaceholder: "John",
+    code: "Country code",
+    number: "Number",
+    email: "Email",
+    found: "Clients found",
+    pickOther: "Pick another",
+    create: "Create visit",
+    timeOff: "Break",
+    smsWill: "The client will get an SMS reminder before the visit.",
+    smsNoPhone: "Without a phone no SMS reminder can be sent.",
+    smsOff: "No SMS reminder will be sent.",
+    statusNotSet: "The visit is made, but its status was not saved. Press «Create visit» again.",
+  },
+
   block: {
     kind: "What it is",
     kinds: { block: "Break / block", vacation: "Vacation", sick: "Sick leave" } as Record<string, string>,

@@ -25,7 +25,8 @@
  *
  * A tapped visit opens in its window (visit-window.tsx): from 900px the
  * three columns of the product we follow, over the dimmed journal; a phone
- * keeps its bottom sheet.
+ * keeps its bottom sheet. So does a new visit (new-visit.tsx): from 900px
+ * the same drawer, whose «Перерыв» opens the time-off form here.
  *
  * One markup for both: every place on the grid is given in minutes (--t,
  * --m) and the styles turn them into pixels (--ppm), so nothing here needs
@@ -53,6 +54,7 @@ import { JournalMine, type MineLinks } from "./journal-mine";
 import { JournalSide } from "./journal-side";
 import { Sheet } from "./sheet";
 import { MINE_KEY, rememberMine, useTabState, useWide } from "./tab-state";
+import { NewVisitDrawer } from "./new-visit";
 import { BarNote, cap, fmt, MayProvider, ServicePicker, StaffPicker, sumOf, timeOf, useMay } from "./visit-parts";
 import { VisitPanel } from "./visit-window";
 
@@ -68,7 +70,8 @@ const at = (t: number, m?: number): React.CSSProperties => {
 };
 
 type Col = { key: string; staffId: string; date: string };
-type Open = { kind: "new"; staffId: string; date: string; min: number } | { kind: "visit"; id: string } | { kind: "block"; id: string } | null;
+/** A new visit, or from 900px its time-off form instead («Перерыв»: `off`). */
+type Open = { kind: "new"; staffId: string; date: string; min: number; off?: boolean } | { kind: "visit"; id: string } | { kind: "block"; id: string } | null;
 type Toast = { text: string; bad?: boolean } | null;
 type Ask = { text: string; yes: string; run: () => void } | null;
 
@@ -317,9 +320,13 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
   const staffById = (id: string) => data.staff.find((s) => s.id === id);
   const visitOpen = sheet?.kind === "visit" ? data.visits.find((v) => v.id === sheet.id) : undefined;
   const blockOpen = sheet?.kind === "block" ? data.blocks.find((b) => b.id === sheet.id) : undefined;
+  // from 900px a new visit is the visit window's drawer (new-visit.tsx); its «Перерыв», and a login
+  // that may only block time, have the sheet's time-off form
+  const newOpen = sheet?.kind === "new" ? sheet : null;
+  const newDrawer = !!newOpen && wide && may.create && !newOpen.off;
   // a sheet is the panel on the right from 900px, and the page gives it room; the visit window
-  // (visit-window.tsx) lies over the dimmed page instead, the right panel and all
-  const panel = !!((sheet && sheet.kind !== "visit") || ask);
+  // (visit-window.tsx) and the new visit's lie over the dimmed page instead, the right panel and all
+  const panel = !!((sheet && sheet.kind !== "visit" && !newDrawer) || ask);
 
   const dayFmt = (d: string, o: Intl.DateTimeFormatOptions) => fmt(A.intl, tz, { ...o, timeZone: "UTC" }).format(noon(d));
   const dayText = dayFmt(date, { day: "numeric", month: "long" });
@@ -629,20 +636,38 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
         {mineOn && mine ? <JournalMine today={mine.today} links={mine.links} now={now} tz={tz} /> : side && <JournalSide tz={tz} />}
       </div>
 
-      {sheet?.kind === "new" && (
-        <NewSheet
-          key={`${sheet.staffId}:${sheet.date}:${sheet.min}`}
-          data={data}
-          staffId={sheet.staffId}
-          date={sheet.date}
-          min={sheet.min}
-          onClose={() => setSheet(null)}
-          onDone={(text) => {
-            setSheet(null);
-            setToast({ text });
-          }}
-        />
-      )}
+      {newOpen &&
+        (newDrawer ? (
+          <NewVisitDrawer
+            key={`${newOpen.staffId}:${newOpen.date}:${newOpen.min}`}
+            data={data}
+            staffId={newOpen.staffId}
+            date={newOpen.date}
+            min={newOpen.min}
+            onClose={() => setSheet(null)}
+            onDone={(text) => {
+              setSheet(null);
+              setToast({ text });
+            }}
+            onTimeOff={may.schedule ? () => setSheet({ ...newOpen, off: true }) : null}
+          />
+        ) : (
+          <NewSheet
+            key={`${newOpen.staffId}:${newOpen.date}:${newOpen.min}:${newOpen.off ? "off" : ""}`}
+            data={data}
+            staffId={newOpen.staffId}
+            date={newOpen.date}
+            min={newOpen.min}
+            off={!!newOpen.off}
+            // from 900px «Запись» is the drawer again
+            onVisit={wide ? () => setSheet({ ...newOpen, off: false }) : null}
+            onClose={() => setSheet(null)}
+            onDone={(text) => {
+              setSheet(null);
+              setToast({ text });
+            }}
+          />
+        ))}
       {visitOpen && (
         <VisitPanel
           key={visitOpen.id}
@@ -710,11 +735,35 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step, goods
 
 /* ---------- sheets ---------- */
 
-function NewSheet({ data, staffId, date, min, onClose, onDone }: { data: CalendarData; staffId: string; date: string; min: number; onClose: () => void; onDone: (t: string) => void }) {
+/**
+ * A new visit or blocked time: a phone's bottom sheet. From 900px the new
+ * visit is the drawer (new-visit.tsx) and this sheet is only its time-off
+ * form (`off`), where «Запись» goes back to the drawer (`onVisit`).
+ */
+function NewSheet({
+  data,
+  staffId,
+  date,
+  min,
+  off = false,
+  onVisit = null,
+  onClose,
+  onDone,
+}: {
+  data: CalendarData;
+  staffId: string;
+  date: string;
+  min: number;
+  off?: boolean;
+  onVisit?: (() => void) | null;
+  onClose: () => void;
+  onDone: (t: string) => void;
+}) {
   const A = useA();
   const may = useMay();
   const tz = data.tz;
-  const [tab, setTab] = useState<"visit" | "block">(may.create ? "visit" : "block");
+  const [tab, setTabRaw] = useState<"visit" | "block">(may.create && !off ? "visit" : "block");
+  const setTab = (t: "visit" | "block") => (t === "visit" && onVisit ? onVisit() : setTabRaw(t));
   const [sid, setSid] = useState(staffId);
   const [day, setDay] = useState(date);
   const [time, setTime] = useState(hhmm(min));

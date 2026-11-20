@@ -23,7 +23,9 @@
  *   foot    «Запись», and «Сохранить изменения» once something changed,
  *           with the «anyway» question above it.
  * What the columns show beside the visit is read when it opens
- * (visitWindowAction → src/lib/admin/visit-window.ts).
+ * (visitWindowAction → src/lib/admin/visit-window.ts). The frame, the chips,
+ * the tiles and the service cards are visit-parts.tsx's: «Новая запись»
+ * (new-visit.tsx) is the same window.
  *
  * **On a phone** it stays the bottom sheet it was (barbers and Renat use it
  * at that width): the time, the phone, the marks, the lines, «Перенести»,
@@ -33,14 +35,14 @@
  * has no right to is not drawn, and the actions ask the same rights again.
  */
 import Link from "next/link";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CalendarData, CalMay, CalVisit } from "@/lib/admin/calendar";
 import { momentAt } from "@/lib/admin/grid";
 import type { RecordMaker } from "@/lib/admin/records";
 import type { VisitExtras, WindowLog } from "@/lib/admin/visit-window";
 import { euroText } from "@/lib/money";
 import { eur } from "../copy";
-import { Ava, BinIcon, CaretIcon, NextIcon, PencilIcon, PlusIcon } from "../icons";
+import { Ava, BinIcon, CaretIcon, PencilIcon, PlusIcon } from "../icons";
 import { useA } from "../lang";
 import { cancelVisit, setVisitStatus, updateVisit, visitWindowAction } from "./actions";
 import { addCommentAction } from "./clients/actions";
@@ -50,7 +52,30 @@ import { euro } from "./journal-bar";
 import { newRef } from "./sale-drawer";
 import { Sheet } from "./sheet";
 import { useWide } from "./tab-state";
-import { BarNote, CAME, cap, dayOf, fmt, MayProvider, MIN, minutesOf, offered, ServicePicker, StaffPicker, timeOf, useMay } from "./visit-parts";
+import {
+  BarNote,
+  CAME,
+  Cards,
+  cap,
+  CHIP,
+  Chips,
+  dayOf,
+  fmt,
+  initials,
+  MayProvider,
+  MIN,
+  minutesOf,
+  ServicePicker,
+  Slide,
+  StaffPicker,
+  svg,
+  Tiles,
+  timeOf,
+  useMay,
+  VwFrame,
+  type Chip,
+  type Tile,
+} from "./visit-parts";
 
 type PanelProps = {
   v: CalVisit;
@@ -86,49 +111,11 @@ export function VisitPanel(props: PanelProps) {
 
 /* ---------- the window from 900px ---------- */
 
-type Chip = "booked" | "arrived" | "no_show" | "confirmed";
-type Tile = "fields" | "notify" | "log";
 type Look = "idle" | "looking" | "nothing" | "shop_down" | "not_configured";
-/** The service cards drawn before a search: his last visit's first. */
-const CARDS = 6;
 const DELAY = 300;
 
 /** Which chip a visit's status and flag are. «done» shows as «Клиент пришёл»: the client came. */
 const chipOf = (status: string, confirmed: boolean): Chip => (CAME.has(status) ? "arrived" : status === "no_show" ? "no_show" : confirmed ? "confirmed" : "booked");
-/** The status and flag a chip writes. */
-const CHIP: Record<Chip, [string, boolean]> = { booked: ["booked", false], confirmed: ["booked", true], arrived: ["arrived", false], no_show: ["no_show", false] };
-
-const initials = (name: string) =>
-  name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w.charAt(0))
-    .join("")
-    .toUpperCase() || "?";
-
-const svg = (size: number) => ({ viewBox: "0 0 24 24", width: size, height: size, fill: "none", stroke: "currentColor", strokeWidth: 1.8, "aria-hidden": true }) as const;
-const ChipIcon = ({ chip }: { chip: Chip }) => (
-  <svg {...svg(14)} strokeWidth={2}>
-    {chip === "booked" ? (
-      <>
-        <circle cx="12" cy="12" r="8.5" />
-        <path d="M12 7.5v4.8l3 1.8" />
-      </>
-    ) : chip === "arrived" ? (
-      <path d="M12 6v12M6 12h12" />
-    ) : chip === "no_show" ? (
-      <path d="M6 12h12" />
-    ) : (
-      <path d="M5 12.5l4.5 4.5L19 7.5" />
-    )}
-  </svg>
-);
-const TILE_ICON: Record<Tile, string> = {
-  fields: "M5 7h14M5 12h14M5 17h8",
-  notify: "M6 17V11a6 6 0 0112 0v6l1.5 2h-15zM10 21h4",
-  log: "M12 7v5l3 2M4 12a8 8 0 108-8 8 8 0 00-6 3M4 4v4h4",
-};
 
 function VisitDrawer({ v, data, onClose, onMove, onDone, onChanged }: PanelProps) {
   const A = useA();
@@ -136,7 +123,6 @@ function VisitDrawer({ v, data, onClose, onMove, onDone, onChanged }: PanelProps
   const may = useMay();
   const frame = useFrame();
   const tz = data.tz;
-  const box = useRef<HTMLDivElement>(null);
 
   // the status as it is now: written here at once, and taken anew when the journal's data comes again
   const [st, setSt] = useState({ status: v.status, confirmed: v.confirmed });
@@ -191,25 +177,12 @@ function VisitDrawer({ v, data, onClose, onMove, onDone, onChanged }: PanelProps
     onChanged?.();
   };
 
-  // Escape closes a menu first, then the whole window, without asking (as the tool we follow)
-  useEffect(() => {
-    const k = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if (menu) setMenu(false);
-      else onClose();
-    };
-    window.addEventListener("keydown", k);
-    return () => window.removeEventListener("keydown", k);
-  }, [menu, onClose]);
-  // the keyboard starts inside the window, and goes back to what opened it
-  useLayoutEffect(() => {
-    const back = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const el = box.current;
-    if (el && !el.contains(document.activeElement)) el.focus();
-    return () => {
-      if (back?.isConnected) back.focus();
-    };
-  }, []);
+  // Escape closes a menu first, then the whole window, without asking (as the tool we follow: VwFrame)
+  const escape = () => {
+    if (!menu) return false;
+    setMenu(false);
+    return true;
+  };
 
   /* ---- the visit as the form has it ---- */
   const bookedIds = v.services.map((s) => s.serviceId);
@@ -307,496 +280,387 @@ function VisitDrawer({ v, data, onClose, onMove, onDone, onChanged }: PanelProps
   const current = chipOf(st.status, st.confirmed);
   const K = A.clients.card;
 
-  return (
-    <div className="vw-wrap" onClick={onClose}>
-      <div ref={box} className="vw" role="dialog" aria-modal="true" aria-label={v.clientName} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
-        <button type="button" className="vw-seam" aria-label={W.close} onClick={onClose}>
-          <NextIcon size={16} />
+  const acts = warn ? (
+    <>
+      <BarNote problem={problem} warn={warn} />
+      <button type="button" className="vw-btn" onClick={() => setWarn(null)}>
+        {A.cancel}
+      </button>
+      <button type="button" className="vw-btn vw-btn-main" disabled={busy} onClick={() => void save(true)}>
+        {A.visit.anywayMove}
+      </button>
+    </>
+  ) : (
+    <>
+      <BarNote problem={problem} warn={null} />
+      {!gone && canMove && (
+        <button type="button" className="vw-btn" onClick={onMove}>
+          {A.visit.move}
         </button>
-        <div className="vw-body">
-          {/* ---------------- left: the barber and the time ---------------- */}
-          <section className="vw-col vw-left" aria-label={W.cols.visit}>
-            <div className="vw-main" inert={tile !== null}>
-              <div className="vw-who">
-                <Ava src={staff?.photoUrl} name={staff?.name ?? "?"} />
-                <span className="txt">
-                  <b>{staff?.name}</b>
-                  <small>{A.pick(staff?.role)}</small>
-                </span>
-                {canCancel && (
-                  <button type="button" className="vw-ibtn" aria-label={A.visit.cancelVisit} aria-expanded={asking} onClick={() => setAsking(!asking)}>
-                    <BinIcon />
-                  </button>
-                )}
-              </div>
-              {asking && (
-                <div className="vw-ask" role="alert">
-                  <p>{A.visit.cancelSure}</p>
-                  <button type="button" className="vw-btn vw-btn-warn" disabled={busy} onClick={() => void cancel()}>
-                    {A.visit.cancelYes}
-                  </button>
-                  <button type="button" className="vw-btn" onClick={() => setAsking(false)}>
-                    {A.visit.keep}
-                  </button>
-                </div>
-              )}
-              <div className="vw-when">
-                <svg {...svg(18)} className="ic">
-                  <rect x="4" y="5" width="16" height="15" rx="2" />
-                  <path d="M4 10h16M9 3v4M15 3v4" />
-                </svg>
-                <span className="txt">
-                  <b>{dayText}</b>
-                  <small>
-                    {timeOf(tz, start)}–{timeOf(tz, start + length * MIN)} · {A.mins(length)}
-                  </small>
-                </span>
-              </div>
-              {canEdit && may.moveWindow &&
-                (editing ? (
-                  <div className="vw-move">
-                    <label className="vw-field">
-                      <span>{W.barber}</span>
-                      <select value={sid} onChange={(e) => setSid(e.target.value)}>
-                        {data.staff
-                          .filter((s) => s.active || s.id === v.staffId)
-                          .map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.name}
-                            </option>
-                          ))}
-                      </select>
-                    </label>
-                    <label className="vw-field">
-                      <span>{A.visit.date}</span>
-                      <input type="date" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} />
-                    </label>
-                    <label className="vw-field">
-                      <span>{A.visit.time}</span>
-                      <input type="time" value={time} step={300} onChange={(e) => setTime(e.target.value)} />
-                    </label>
-                  </div>
-                ) : (
-                  <button type="button" className="vw-btn vw-wide" onClick={() => setEditing(true)}>
-                    <PencilIcon size={14} />
-                    {W.edit}
-                  </button>
-                ))}
+      )}
+      {!gone && canEdit && (
+        <button type="button" className="vw-btn vw-btn-main" disabled={busy || !dirty || !picked.length} onClick={() => void save(false)}>
+          {A.visit.saveChanges}
+        </button>
+      )}
+    </>
+  );
 
-              <p className="vw-dim vw-pinned">{W.pinned}</p>
-              <label className="vw-field">
-                <span>{W.staffNote}</span>
-                <textarea rows={4} value={note} maxLength={2000} readOnly={!canEdit || !may.note} onChange={(e) => setNote(e.target.value)} />
-              </label>
-
-              <div className="vw-tiles">
-                {(["fields", "notify", "log"] as const).map((t) => (
-                  <button key={t} type="button" className="vw-tile" aria-expanded={tile === t} onClick={() => setTile(t)}>
-                    <svg {...svg(16)}>
-                      <path d={TILE_ICON[t]} />
-                    </svg>
-                    <span>{W.tiles[t]}</span>
-                  </button>
-                ))}
-              </div>
+  return (
+    <VwFrame label={v.clientName} title={W.title} acts={acts} onClose={onClose} onEscape={escape}>
+      {/* ---------------- left: the barber and the time ---------------- */}
+      <section className="vw-col vw-left" aria-label={W.cols.visit}>
+        <div className="vw-main" inert={tile !== null}>
+          <div className="vw-who">
+            <Ava src={staff?.photoUrl} name={staff?.name ?? "?"} />
+            <span className="txt">
+              <b>{staff?.name}</b>
+              <small>{A.pick(staff?.role)}</small>
+            </span>
+            {canCancel && (
+              <button type="button" className="vw-ibtn" aria-label={A.visit.cancelVisit} aria-expanded={asking} onClick={() => setAsking(!asking)}>
+                <BinIcon />
+              </button>
+            )}
+          </div>
+          {asking && (
+            <div className="vw-ask" role="alert">
+              <p>{A.visit.cancelSure}</p>
+              <button type="button" className="vw-btn vw-btn-warn" disabled={busy} onClick={() => void cancel()}>
+                {A.visit.cancelYes}
+              </button>
+              <button type="button" className="vw-btn" onClick={() => setAsking(false)}>
+                {A.visit.keep}
+              </button>
             </div>
-
-            {tile && (
-              <div className="vw-slide" role="region" aria-label={W.tiles[tile]}>
-                <div className="vw-slide-head">
-                  <h3>{W.tiles[tile]}</h3>
-                  <button type="button" className="vw-btn" onClick={() => setTile(null)}>
-                    {W.hide}
-                  </button>
-                </div>
-                {tile === "fields" && (
-                  <>
-                    <div className="vw-pair">
-                      <span className="vw-dim">{W.clientComment}</span>
-                      <p>{v.comment || W.none}</p>
-                    </div>
-                    <label className="vw-field">
-                      <span>{W.staffNote}</span>
-                      <textarea rows={6} value={note} maxLength={2000} readOnly={!canEdit || !may.note} onChange={(e) => setNote(e.target.value)} />
-                    </label>
-                  </>
-                )}
-                {tile === "notify" && (
-                  <>
-                    <p>{v.reminder ? W.reminderOn : W.reminderOff}</p>
-                    {!x ? (
-                      <p className="vw-dim">{extras === "failed" ? A.error : A.loading}</p>
-                    ) : x.messages.length ? (
-                      <ul className="vw-list">
-                        {x.messages.map((m) => (
-                          <li key={m.id}>
-                            <b>{K.kinds[m.kind] ?? m.kind}</b>
-                            <small>
-                              {K.channels[m.channel] ?? m.channel} · {K.statuses[m.status] ?? m.status} · {stamp(m.at)}
-                            </small>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="vw-dim">{W.noMessages}</p>
-                    )}
-                  </>
-                )}
-                {tile === "log" &&
-                  (!x ? (
-                    <p className="vw-dim">{extras === "failed" ? A.error : A.loading}</p>
-                  ) : x.log.length ? (
-                    <ul className="vw-list">
-                      {x.log.map((r, i) => (
-                        <li key={i}>
-                          <b>{logText(r)}</b>
-                          <small>
-                            {stamp(r.at)} · {maker(r.by)}
-                          </small>
-                        </li>
+          )}
+          <div className="vw-when">
+            <svg {...svg(18)} className="ic">
+              <rect x="4" y="5" width="16" height="15" rx="2" />
+              <path d="M4 10h16M9 3v4M15 3v4" />
+            </svg>
+            <span className="txt">
+              <b>{dayText}</b>
+              <small>
+                {timeOf(tz, start)}–{timeOf(tz, start + length * MIN)} · {A.mins(length)}
+              </small>
+            </span>
+          </div>
+          {canEdit && may.moveWindow &&
+            (editing ? (
+              <div className="vw-move">
+                <label className="vw-field">
+                  <span>{W.barber}</span>
+                  <select value={sid} onChange={(e) => setSid(e.target.value)}>
+                    {data.staff
+                      .filter((s) => s.active || s.id === v.staffId)
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
                       ))}
-                    </ul>
-                  ) : (
-                    <p className="vw-dim">{W.noLog}</p>
-                  ))}
+                  </select>
+                </label>
+                <label className="vw-field">
+                  <span>{A.visit.date}</span>
+                  <input type="date" value={day} onChange={(e) => e.target.value && setDay(e.target.value)} />
+                </label>
+                <label className="vw-field">
+                  <span>{A.visit.time}</span>
+                  <input type="time" value={time} step={300} onChange={(e) => setTime(e.target.value)} />
+                </label>
               </div>
-            )}
-          </section>
-
-          {/* ---------------- centre: the status, the services, the products ---------------- */}
-          <section className="vw-col vw-mid" aria-label={W.cols.services}>
-            {gone ? (
-              <p className="vw-gone">
-                <span className="adm-tag warn">{A.visit.status.cancelled}</span>
-              </p>
             ) : (
-              <div className="vw-chips" role="group" aria-label={W.status}>
-                {(["booked", "arrived", "no_show", "confirmed"] as const).map((c) => (
-                  <button key={c} type="button" className="vw-chip" aria-pressed={current === c} disabled={busy || !canEdit} onClick={() => void chip(c)}>
-                    <ChipIcon chip={c} />
-                    {W.chips[c]}
-                  </button>
-                ))}
-              </div>
-            )}
+              <button type="button" className="vw-btn vw-wide" onClick={() => setEditing(true)}>
+                <PencilIcon size={14} />
+                {W.edit}
+              </button>
+            ))}
 
-            <ul className="vw-lines">
-              {lines.map((l) => (
-                <li key={l.id} className={openLine === l.id ? "is-open" : undefined}>
-                  <button type="button" aria-expanded={openLine === l.id} aria-label={W.serviceOf(A.pick(l.name))} onClick={() => setOpenLine(openLine === l.id ? null : l.id)}>
-                    <span className="n">{A.pick(l.name)}</span>
-                    <span className="p">
-                      {euro(l.cents)}
-                      <CaretIcon />
-                    </span>
-                  </button>
-                  {openLine === l.id && (
-                    <div className="vw-line-more">
-                      <span className="vw-dim">
-                        {A.mins(l.minutes)} · {staff?.name}
-                      </span>
-                      {svcEdit && picked.length > 1 && (
-                        <button type="button" className="vw-btn" onClick={() => toggle(l.id)}>
-                          {W.removeService}
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </li>
-              ))}
-              {v.extraCents > 0 && (
-                <li className="is-sp">
-                  <div>
-                    <span className="n">{A.visit.special}</span>
-                    <span className="p">+{euro(v.extraCents)}</span>
-                  </div>
-                </li>
-              )}
-            </ul>
+          <p className="vw-dim vw-pinned">{W.pinned}</p>
+          <label className="vw-field">
+            <span>{W.staffNote}</span>
+            <textarea rows={4} value={note} maxLength={2000} readOnly={!canEdit || !may.note} onChange={(e) => setNote(e.target.value)} />
+          </label>
 
-            {/* «Оплатить» and the «Платёжная политика» banner are not drawn: payments wait for Renat's answer on finance */}
-            <div className="vw-pay">
-              <span className="vw-dim">{W.toPay}</span>
-              <b>{euro(toPay)}</b>
-            </div>
+          <Tiles tiles={TILES} open={tile} onOpen={setTile} />
+        </div>
 
-            {!gone && may.sell && (
-              <div className="vw-tabs" role="group" aria-label={W.tabs}>
-                <button type="button" aria-pressed={tab === "services"} onClick={() => setTab("services")}>
-                  {W.tabServices}
-                </button>
-                <button type="button" aria-pressed={tab === "goods"} onClick={() => setTab("goods")}>
-                  {W.tabGoods}
-                </button>
-              </div>
-            )}
-            {tab === "goods" && !gone && may.sell ? (
-              <Goods v={v} onSold={changed} />
-            ) : (
-              <Cards
-                data={data}
-                sid={sid}
-                picked={picked}
-                last={client?.lastServiceIds ?? []}
-                find={find}
-                onFind={setFind}
-                disabled={!svcEdit}
-                onToggle={toggle}
-              />
-            )}
-          </section>
-
-          {/* ---------------- right: the client ---------------- */}
-          <section className="vw-col vw-right" aria-label={W.cols.client}>
-            <div className="vw-who">
-              <span className="vw-ini" aria-hidden="true">
-                {initials(v.clientName)}
-              </span>
-              <span className="txt">
-                <b>{v.clientName}</b>
-                {phone && <small>{phone}</small>}
-              </span>
-              {client?.card && (
-                <Link className="vw-txt" href={cardHref} prefetch={false} aria-label={W.editClient}>
-                  <PencilIcon size={14} />
-                  {W.edit}
-                </Link>
-              )}
-            </div>
-
-            {digits && (
-              <div className="vw-write">
-                <span className="vw-dim">{W.write}</span>
-                <a className="vw-round wa" href={`https://wa.me/${digits}`} target="_blank" rel="noopener noreferrer" aria-label={W.whatsapp}>
-                  <svg {...svg(14)} strokeWidth={2}>
-                    <path d="M4 20l1.5-4A8 8 0 1112 20a8 8 0 01-4-1z" />
-                  </svg>
-                </a>
-                <a className="vw-round tg" href={`https://t.me/+${digits}`} target="_blank" rel="noopener noreferrer" aria-label={W.telegram}>
-                  <svg {...svg(14)} strokeWidth={2}>
-                    <path d="M21 4L3 11l6 2 2 6 3-4 4 3z" />
-                  </svg>
-                </a>
-              </div>
-            )}
-
-            {client?.card && (
-              <div className="vw-cards3">
-                <Link className="vw-tile" href={cardHref} prefetch={false}>
-                  {W.profile}
-                </Link>
-                {client.card.history && (
-                  <Link className="vw-tile" href={`${cardHref}?tab=history`} prefetch={false}>
-                    {W.history}
-                  </Link>
-                )}
-                <div className="vw-menu-wrap">
-                  <button type="button" className="vw-tile" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>
-                    {W.more}
-                  </button>
-                  {menu && (
-                    <div className="vw-menu" role="menu" aria-label={W.more}>
-                      <Link role="menuitem" href={`${cardHref}?tab=messages`} prefetch={false}>
-                        {K.tabs.messages}
-                      </Link>
-                      {client.card.notify && (
-                        <Link role="menuitem" href={`${cardHref}?tab=notify`} prefetch={false}>
-                          {K.tabs.notify}
-                        </Link>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {client?.awayDays != null && <span className="vw-tag">{W.away(client.awayDays)}</span>}
-
-            <div className="vw-pair">
-              <span className="vw-dim">{W.clientNote}</span>
-              <p>{v.clientNote || W.none}</p>
-            </div>
-
-            {client && (client.comments.length > 0 || client.commentAdd) && (
+        {tile && (
+          <Slide tile={tile} onHide={() => setTile(null)}>
+            {tile === "fields" && (
               <>
-                <h3 className="vw-h">{W.extra}</h3>
-                {client.comments.length > 0 && (
+                <div className="vw-pair">
+                  <span className="vw-dim">{W.clientComment}</span>
+                  <p>{v.comment || W.none}</p>
+                </div>
+                <label className="vw-field">
+                  <span>{W.staffNote}</span>
+                  <textarea rows={6} value={note} maxLength={2000} readOnly={!canEdit || !may.note} onChange={(e) => setNote(e.target.value)} />
+                </label>
+              </>
+            )}
+            {tile === "notify" && (
+              <>
+                <p>{v.reminder ? W.reminderOn : W.reminderOff}</p>
+                {!x ? (
+                  <p className="vw-dim">{extras === "failed" ? A.error : A.loading}</p>
+                ) : x.messages.length ? (
                   <ul className="vw-list">
-                    {client.comments.map((c) => (
-                      <li key={c.id}>
-                        <p>{c.text}</p>
+                    {x.messages.map((m) => (
+                      <li key={m.id}>
+                        <b>{K.kinds[m.kind] ?? m.kind}</b>
                         <small>
-                          {stamp(c.at)}
-                          {c.author ? ` · ${c.author}` : ""}
+                          {K.channels[m.channel] ?? m.channel} · {K.statuses[m.status] ?? m.status} · {stamp(m.at)}
                         </small>
                       </li>
                     ))}
                   </ul>
+                ) : (
+                  <p className="vw-dim">{W.noMessages}</p>
                 )}
-                {client.commentAdd && <AddNote clientId={v.clientId} onAdded={changed} />}
               </>
             )}
-
-            {client?.stats && (
-              <>
-                <h3 className="vw-h">{W.stats}</h3>
-                <dl className="vw-grid">
-                  <div>
-                    <dt>{W.statLast}</dt>
-                    <dd>{client.stats.lastVisit == null ? W.none : stamp(client.stats.lastVisit)}</dd>
-                  </div>
-                  <div>
-                    <dt>{W.statVisits}</dt>
-                    <dd>{client.stats.visits}</dd>
-                  </div>
-                  <div>
-                    <dt>{W.statNoShow}</dt>
-                    <dd>{client.stats.noShows}</dd>
-                  </div>
-                  <div>
-                    <dt>{W.statSold}</dt>
-                    <dd>{euro(client.stats.soldCents)}</dd>
-                  </div>
-                </dl>
-              </>
-            )}
-
-            <h3 className="vw-h">{W.data}</h3>
-            {x ? (
-              <dl className="vw-grid">
-                <div>
-                  <dt>{W.created}</dt>
-                  <dd>{stamp(x.createdAt)}</dd>
-                </div>
-                <div>
-                  <dt>{W.source}</dt>
-                  <dd>{A.records.sources[x.source] ?? x.source}</dd>
-                </div>
-                <div>
-                  <dt>{W.by}</dt>
-                  <dd>{maker(x.by)}</dd>
-                </div>
-              </dl>
-            ) : (
-              <p className="vw-dim" role="status">
-                {extras === "failed" ? A.error : A.loading}
-              </p>
-            )}
-          </section>
-        </div>
-
-        <footer className="vw-foot">
-          <h2>{W.title}</h2>
-          <div className="vw-acts">
-            <BarNote problem={problem} warn={warn} />
-            {warn ? (
-              <>
-                <button type="button" className="vw-btn" onClick={() => setWarn(null)}>
-                  {A.cancel}
-                </button>
-                <button type="button" className="vw-btn vw-btn-main" disabled={busy} onClick={() => void save(true)}>
-                  {A.visit.anywayMove}
-                </button>
-              </>
-            ) : (
-              !gone && (
-                <>
-                  {canMove && (
-                    <button type="button" className="vw-btn" onClick={onMove}>
-                      {A.visit.move}
-                    </button>
-                  )}
-                  {canEdit && (
-                    <button type="button" className="vw-btn vw-btn-main" disabled={busy || !dirty || !picked.length} onClick={() => void save(false)}>
-                      {A.visit.saveChanges}
-                    </button>
-                  )}
-                </>
-              )
-            )}
-          </div>
-        </footer>
-      </div>
-    </div>
-  );
-}
-
-/** «Поиск по услугам», the cards three in a row, and «Все услуги» → «Услуга ▾». */
-function Cards({
-  data,
-  sid,
-  picked,
-  last,
-  find,
-  onFind,
-  disabled,
-  onToggle,
-}: {
-  data: CalendarData;
-  sid: string;
-  picked: string[];
-  last: string[];
-  find: string;
-  onFind: (s: string) => void;
-  disabled: boolean;
-  onToggle: (id: string) => void;
-}) {
-  const A = useA();
-  const W = A.win;
-  const all = offered(data.services, sid);
-  const q = find.trim().toLocaleLowerCase();
-  // a search finds among all of his; without one, his last visit's first and a few more
-  const cards = q ? all.filter((s) => A.pick(s.name).toLocaleLowerCase().includes(q)) : [...all.filter((s) => last.includes(s.id)), ...all.filter((s) => !last.includes(s.id))].slice(0, CARDS);
-  return (
-    <>
-      <label className="vw-search">
-        <span className="sr">{W.searchServices}</span>
-        <input type="search" placeholder={W.searchServices} value={find} onChange={(e) => onFind(e.target.value)} />
-      </label>
-      {cards.length ? (
-        <div className="vw-cards" role="group" aria-label={A.visit.services}>
-          {cards.map((s) => {
-            const [price, minutes] = s.offers[sid];
-            return (
-              <button key={s.id} type="button" className="vw-card" aria-pressed={picked.includes(s.id)} disabled={disabled} onClick={() => onToggle(s.id)}>
-                <span className="n">{A.pick(s.name)}</span>
-                <span className="vw-tag" style={{ visibility: last.includes(s.id) ? "visible" : "hidden" }} aria-hidden={!last.includes(s.id)}>
-                  {W.lastVisit}
-                </span>
-                <span>{euro(price)}</span>
-                <span className="vw-dim">{A.mins(minutes)}</span>
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="vw-dim">{W.noServices}</p>
-      )}
-      {!disabled && (
-        <>
-          <p className="vw-dim">{W.allServices}</p>
-          <select
-            className="vw-pick"
-            aria-label={W.allServices}
-            value=""
-            onChange={(e) => {
-              if (e.target.value) onToggle(e.target.value);
-            }}
-          >
-            <option value="">{W.pickService}</option>
-            {all
-              .filter((s) => !picked.includes(s.id))
-              .map((s) => (
-                <option key={s.id} value={s.id}>
-                  {A.pick(s.name)} · {euro(s.offers[sid][0])}
-                </option>
+            {tile === "log" &&
+              (!x ? (
+                <p className="vw-dim">{extras === "failed" ? A.error : A.loading}</p>
+              ) : x.log.length ? (
+                <ul className="vw-list">
+                  {x.log.map((r, i) => (
+                    <li key={i}>
+                      <b>{logText(r)}</b>
+                      <small>
+                        {stamp(r.at)} · {maker(r.by)}
+                      </small>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="vw-dim">{W.noLog}</p>
               ))}
-          </select>
-        </>
-      )}
-    </>
+          </Slide>
+        )}
+      </section>
+
+      {/* ---------------- centre: the status, the services, the products ---------------- */}
+      <section className="vw-col vw-mid" aria-label={W.cols.services}>
+        {gone ? (
+          <p className="vw-gone">
+            <span className="adm-tag warn">{A.visit.status.cancelled}</span>
+          </p>
+        ) : (
+          <Chips current={current} disabled={() => busy || !canEdit} onPick={(c) => void chip(c)} />
+        )}
+
+        <ul className="vw-lines">
+          {lines.map((l) => (
+            <li key={l.id} className={openLine === l.id ? "is-open" : undefined}>
+              <button type="button" aria-expanded={openLine === l.id} aria-label={W.serviceOf(A.pick(l.name))} onClick={() => setOpenLine(openLine === l.id ? null : l.id)}>
+                <span className="n">{A.pick(l.name)}</span>
+                <span className="p">
+                  {euro(l.cents)}
+                  <CaretIcon />
+                </span>
+              </button>
+              {openLine === l.id && (
+                <div className="vw-line-more">
+                  <span className="vw-dim">
+                    {A.mins(l.minutes)} · {staff?.name}
+                  </span>
+                  {svcEdit && picked.length > 1 && (
+                    <button type="button" className="vw-btn" onClick={() => toggle(l.id)}>
+                      {W.removeService}
+                    </button>
+                  )}
+                </div>
+              )}
+            </li>
+          ))}
+          {v.extraCents > 0 && (
+            <li className="is-sp">
+              <div>
+                <span className="n">{A.visit.special}</span>
+                <span className="p">+{euro(v.extraCents)}</span>
+              </div>
+            </li>
+          )}
+        </ul>
+
+        {/* «Оплатить» and the «Платёжная политика» banner are not drawn: payments wait for Renat's answer on finance */}
+        <div className="vw-pay">
+          <span className="vw-dim">{W.toPay}</span>
+          <b>{euro(toPay)}</b>
+        </div>
+
+        {!gone && may.sell && (
+          <div className="vw-tabs" role="group" aria-label={W.tabs}>
+            <button type="button" aria-pressed={tab === "services"} onClick={() => setTab("services")}>
+              {W.tabServices}
+            </button>
+            <button type="button" aria-pressed={tab === "goods"} onClick={() => setTab("goods")}>
+              {W.tabGoods}
+            </button>
+          </div>
+        )}
+        {tab === "goods" && !gone && may.sell ? (
+          <Goods v={v} onSold={changed} />
+        ) : (
+          <Cards
+            data={data}
+            sid={sid}
+            picked={picked}
+            last={client?.lastServiceIds ?? []}
+            find={find}
+            onFind={setFind}
+            disabled={!svcEdit}
+            onToggle={toggle}
+          />
+        )}
+      </section>
+
+      {/* ---------------- right: the client ---------------- */}
+      <section className="vw-col vw-right" aria-label={W.cols.client}>
+        <div className="vw-who">
+          <span className="vw-ini" aria-hidden="true">
+            {initials(v.clientName)}
+          </span>
+          <span className="txt">
+            <b>{v.clientName}</b>
+            {phone && <small>{phone}</small>}
+          </span>
+          {client?.card && (
+            <Link className="vw-txt" href={cardHref} prefetch={false} aria-label={W.editClient}>
+              <PencilIcon size={14} />
+              {W.edit}
+            </Link>
+          )}
+        </div>
+
+        {digits && (
+          <div className="vw-write">
+            <span className="vw-dim">{W.write}</span>
+            <a className="vw-round wa" href={`https://wa.me/${digits}`} target="_blank" rel="noopener noreferrer" aria-label={W.whatsapp}>
+              <svg {...svg(14)} strokeWidth={2}>
+                <path d="M4 20l1.5-4A8 8 0 1112 20a8 8 0 01-4-1z" />
+              </svg>
+            </a>
+            <a className="vw-round tg" href={`https://t.me/+${digits}`} target="_blank" rel="noopener noreferrer" aria-label={W.telegram}>
+              <svg {...svg(14)} strokeWidth={2}>
+                <path d="M21 4L3 11l6 2 2 6 3-4 4 3z" />
+              </svg>
+            </a>
+          </div>
+        )}
+
+        {client?.card && (
+          <div className="vw-cards3">
+            <Link className="vw-tile" href={cardHref} prefetch={false}>
+              {W.profile}
+            </Link>
+            {client.card.history && (
+              <Link className="vw-tile" href={`${cardHref}?tab=history`} prefetch={false}>
+                {W.history}
+              </Link>
+            )}
+            <div className="vw-menu-wrap">
+              <button type="button" className="vw-tile" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu(!menu)}>
+                {W.more}
+              </button>
+              {menu && (
+                <div className="vw-menu" role="menu" aria-label={W.more}>
+                  <Link role="menuitem" href={`${cardHref}?tab=messages`} prefetch={false}>
+                    {K.tabs.messages}
+                  </Link>
+                  {client.card.notify && (
+                    <Link role="menuitem" href={`${cardHref}?tab=notify`} prefetch={false}>
+                      {K.tabs.notify}
+                    </Link>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {client?.awayDays != null && <span className="vw-tag">{W.away(client.awayDays)}</span>}
+
+        <div className="vw-pair">
+          <span className="vw-dim">{W.clientNote}</span>
+          <p>{v.clientNote || W.none}</p>
+        </div>
+
+        {client && (client.comments.length > 0 || client.commentAdd) && (
+          <>
+            <h3 className="vw-h">{W.extra}</h3>
+            {client.comments.length > 0 && (
+              <ul className="vw-list">
+                {client.comments.map((c) => (
+                  <li key={c.id}>
+                    <p>{c.text}</p>
+                    <small>
+                      {stamp(c.at)}
+                      {c.author ? ` · ${c.author}` : ""}
+                    </small>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {client.commentAdd && <AddNote clientId={v.clientId} onAdded={changed} />}
+          </>
+        )}
+
+        {client?.stats && (
+          <>
+            <h3 className="vw-h">{W.stats}</h3>
+            <dl className="vw-grid">
+              <div>
+                <dt>{W.statLast}</dt>
+                <dd>{client.stats.lastVisit == null ? W.none : stamp(client.stats.lastVisit)}</dd>
+              </div>
+              <div>
+                <dt>{W.statVisits}</dt>
+                <dd>{client.stats.visits}</dd>
+              </div>
+              <div>
+                <dt>{W.statNoShow}</dt>
+                <dd>{client.stats.noShows}</dd>
+              </div>
+              <div>
+                <dt>{W.statSold}</dt>
+                <dd>{euro(client.stats.soldCents)}</dd>
+              </div>
+            </dl>
+          </>
+        )}
+
+        <h3 className="vw-h">{W.data}</h3>
+        {x ? (
+          <dl className="vw-grid">
+            <div>
+              <dt>{W.created}</dt>
+              <dd>{stamp(x.createdAt)}</dd>
+            </div>
+            <div>
+              <dt>{W.source}</dt>
+              <dd>{A.records.sources[x.source] ?? x.source}</dd>
+            </div>
+            <div>
+              <dt>{W.by}</dt>
+              <dd>{maker(x.by)}</dd>
+            </div>
+          </dl>
+        ) : (
+          <p className="vw-dim" role="status">
+            {extras === "failed" ? A.error : A.loading}
+          </p>
+        )}
+      </section>
+    </VwFrame>
   );
 }
+
+/** The visit's tiles: its extra fields, its messages, its history. */
+const TILES = ["fields", "notify", "log"] as const satisfies readonly Tile[];
 
 /**
  * «Товары»: the shop's products by a name or a barcode, through the shop

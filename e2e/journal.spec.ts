@@ -105,13 +105,17 @@ async function mark(page: Page, card: Locator, chip: "arrived" | "no_show" | "co
   await expect(dialog).toHaveCount(0);
 }
 
-/** Book a walk-in from the open «Новая запись» sheet: a name, the first service. Returns the price shown. */
+/**
+ * Book a walk-in from the open «Новая запись»: a name, the first service. Returns the price shown.
+ * From 900px it is the visit window's drawer (new-visit.tsx), on a phone the bottom sheet.
+ */
 async function bookFromSheet(page: Page, name: string): Promise<string> {
   const dialog = page.getByRole("dialog", { name: A.visit.new });
-  await dialog.getByLabel(A.visit.name, { exact: true }).fill(name);
+  const wide = (page.viewportSize()?.width ?? 0) >= 900;
+  await dialog.getByLabel(wide ? A.newVisit.clientName : A.visit.name, { exact: true }).fill(name);
   await dialog.getByRole("group", { name: A.visit.services }).getByRole("button").first().click();
-  const price = (await dialog.locator(".adm-bar .sum b").innerText()).trim();
-  await dialog.getByRole("button", { name: A.visit.book, exact: true }).click();
+  const price = (await dialog.locator(wide ? ".vw-sum b" : ".adm-bar .sum b").innerText()).trim();
+  await dialog.getByRole("button", { name: wide ? A.newVisit.create : A.visit.book, exact: true }).click();
   await expect(calToast(page)).toContainText(C.booked);
   await expect(dialog).toHaveCount(0);
   return price;
@@ -287,8 +291,8 @@ test.describe("the journal", () => {
       await expect(bar(page).getByRole("heading", { level: 1 })).toHaveText(titleOf(day));
       await bar(page).getByRole("button", { name: A.visit.new }).click();
       const form = page.getByRole("dialog", { name: A.visit.new });
-      await expect(form.getByLabel(A.visit.date)).toHaveValue(day);
-      await expect(form.getByRole("group", { name: A.visit.barber }).getByRole("button")).toHaveCount(DEMO.staff.length);
+      await expect(form.getByLabel(A.visit.date, { exact: true })).toHaveValue(day);
+      await expect(form.getByRole("combobox", { name: A.newVisit.specialist, exact: true }).locator("option")).toHaveCount(DEMO.staff.length);
       await page.keyboard.press("Escape");
       await expect(form).toHaveCount(0);
       await expectNoSideScroll(page);
@@ -421,9 +425,9 @@ test.describe("the journal", () => {
       // a free time: the form opens at the time that was tapped, on his column
       await tapTime(page, col, 12 * 60);
       const form = page.getByRole("dialog", { name: A.visit.new });
-      await expect(form.getByLabel(A.visit.time)).toHaveValue("12:00");
-      await expect(form.getByLabel(A.visit.date)).toHaveValue(day);
-      await expect(form.getByRole("group", { name: A.visit.barber }).getByRole("button", { pressed: true })).toHaveText("Slava");
+      await expect(form.getByLabel(A.newVisit.starts, { exact: true })).toHaveValue("12:00");
+      await expect(form.getByLabel(A.visit.date, { exact: true })).toHaveValue(day);
+      await expect(form.getByRole("combobox", { name: A.newVisit.specialist, exact: true }).locator("option:checked")).toHaveText("Slava");
       await bookFromSheet(page, who);
       const card = col.locator(".cal-v", { hasText: who });
       await expect(card).toHaveCount(1);
@@ -699,7 +703,7 @@ test.describe("the journal", () => {
       await col.scrollIntoViewIfNeeded();
       await tapTime(page, col, free);
       const form = page.getByRole("dialog", { name: A.visit.new });
-      await expect(form.getByLabel(A.visit.time)).toHaveValue(hhmm(free));
+      await expect(form.getByLabel(A.newVisit.starts, { exact: true })).toHaveValue(hhmm(free));
       await page.keyboard.press("Escape");
       await expect(form).toHaveCount(0);
 
@@ -746,7 +750,8 @@ test.describe("the journal", () => {
       await expect(hits.first()).toBeVisible();
       expect(await hits.count()).toBeGreaterThan(1);
       for (const text of await hits.locator("b").allInnerTexts()) expect(text.toLowerCase()).toContain("demo client 2");
-      await expect(hits.first().locator("small")).toHaveText(/^\d+ визит(а|ов)?( · последний \d\d\.\d\d\.\d{4})?$/);
+      // only visits already past are counted: before his demo visit of today (about 11:00) the first may have none yet
+      await expect(hits.first().locator("small")).toHaveText(/^(\d+ визит(а|ов)?( · последний \d\d\.\d\d\.\d{4})?|визитов нет)$/);
       await shot(page, "panel");
       // what was typed is not in the address
       expect(page.url()).not.toContain("demo");

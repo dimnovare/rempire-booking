@@ -216,6 +216,55 @@ gets it → send.
        «Оплачено» (payments wait for Renat's answer on finance);
        «Повторение записи» and «Списание расходников» (no such function
        here); «Записывает другого посетителя» (a visit has one client).
+     - **The new visit: built 20.11.2026** (`new-visit.tsx`; the design
+       board «Новая запись»). A tap on a free time or the bar's «Запись»
+       opens it from 900 px, in the same frame, chips, tiles, cards and
+       foot (`visit-parts.tsx`: one copy of each); the journal does not
+       make room for it. A phone keeps its bottom sheet.
+       - **Left:** «Специалист» (a select with his picture: the active
+         barbers, and the one tapped), «Дата», «Время и длительность
+         записи»: the start is typed, the end and the length are the
+         chosen services' at this barber's own length, shown, not typed
+         (a visit has no length of its own). «Закреплённые поля» →
+         «Комментарий к записи» (the staff note), and two tiles:
+         «Расширенные поля» (the staff note again) and «Уведомления о
+         визите» (the SMS switch and a line: sent before the visit, not
+         sent, or no phone to send to).
+       - **Centre:** the four chips, «Ожидание» chosen. The chip is
+         written right after the visit is made, with the window's own
+         status action («Подтвердил» is the flag); the chips other than
+         «Ожидание» need «Изменять записи». If that write fails the window
+         stays open and says so, and «Создать запись» again finds the same
+         visit (one key per window) and writes the chip. Then the chosen
+         services (name, his price, ×), «Итого» with the sum and length,
+         the search, his services' cards three in a row (96 px, the chosen
+         ones with the board's 2 px yellow line, now also in the visit
+         window) and «Все услуги» → «Услуга ▾».
+       - **Right:** «Имя клиента» («Иван»), «Телефон» as a «+372» code
+         select (Estonia first, then the neighbours) and the number; a
+         number typed with its own «+» or «00» keeps it. «Email» for a new
+         client only: `createVisit` now takes it, checked as the card
+         checks it, and puts it on a client the visit adds, never on one
+         that is there (picked, or found by the phone). The clients found
+         show under the field being typed (initials, name, phone, visits);
+         a picked one is his initials, name, phone and «Выбрать другого»,
+         sent by his id alone. Without the right to add clients the fields
+         only look one up («Новых клиентов добавлять нельзя…»). Then the
+         «SMS-напоминание» switch, green as on the board.
+       - **Foot:** «Новая запись» and, for a login that may block time,
+         «Перерыв»: the journal's own time-off form (the side sheet), whose
+         «Запись» comes back to the drawer. The sum with the length and
+         the times, and the yellow «Создать запись», live once there is a
+         service and a client; the «anyway» question and errors in the
+         foot. A field being typed in has the board's 2 px yellow line.
+       - **Not built:** «Сохранить пустую запись» (a visit always has a
+         service here); the end and the length as fields (no custom
+         length); «Технический перерыв» and «Повторение записи» (no such
+         function); categories and colour in «Расширенные поля» (none
+         here); «Записывает другого посетителя»; «Товары» (nothing to sell
+         before the visit is there) and the «Платёжная политика» banner;
+         the onboarding hints; the phone in the «+372 5550 0117» spacing
+         (the admin shows E.164 everywhere).
 2. **Invoices: built 19.11.2026, in Isolta's own frame since 20.11.2026**
    (the owner: «Счета» wears the invoicing tool's frame, with a way back;
    `src/app/admin/(app)/invoices/`, `src/lib/billing/`, the «Счета» block

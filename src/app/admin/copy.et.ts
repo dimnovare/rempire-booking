@@ -262,6 +262,28 @@ export const et: typeof ru = {
     by: "Lõi",
   },
 
+  newVisit: {
+    services: "Teenused",
+    specialist: "Spetsialist",
+    timeLength: "Broneeringu aeg ja kestus",
+    starts: "Algus",
+    ends: "Lõpp",
+    length: "Kestus",
+    clientName: "Kliendi nimi",
+    namePlaceholder: "Jaan",
+    code: "Riigikood",
+    number: "Number",
+    email: "E-post",
+    found: "Leitud kliendid",
+    pickOther: "Vali teine",
+    create: "Loo broneering",
+    timeOff: "Paus",
+    smsWill: "Klient saab enne külastust SMS-meeldetuletuse.",
+    smsNoPhone: "Telefonita ei saa SMS-meeldetuletust saata.",
+    smsOff: "SMS-meeldetuletust ei saadeta.",
+    statusNotSet: "Broneering on loodud, kuid staatust ei salvestatud. Vajutage uuesti «Loo broneering».",
+  },
+
   block: {
     kind: "Mis see on",
     kinds: { block: "Paus / blokk", vacation: "Puhkus", sick: "Haigusleht" } as Record<string, string>,

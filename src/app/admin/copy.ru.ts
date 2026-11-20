@@ -275,6 +275,32 @@ export const ru = {
     by: "Создал",
   },
 
+  /**
+   * «Новая запись» from 900px (new-visit.tsx; docs/reference-looks.md, «The
+   * visit window: built»): the visit window's frame with a new visit's fields.
+   */
+  newVisit: {
+    services: "Услуги",
+    specialist: "Специалист",
+    timeLength: "Время и длительность записи",
+    starts: "Начало",
+    ends: "Конец",
+    length: "Длительность",
+    clientName: "Имя клиента",
+    namePlaceholder: "Иван",
+    code: "Код страны",
+    number: "Номер",
+    email: "Email",
+    found: "Найденные клиенты",
+    pickOther: "Выбрать другого",
+    create: "Создать запись",
+    timeOff: "Перерыв",
+    smsWill: "Клиенту придёт SMS-напоминание перед визитом.",
+    smsNoPhone: "Без телефона SMS-напоминание не отправить.",
+    smsOff: "SMS-напоминание не будет отправлено.",
+    statusNotSet: "Запись создана, но статус не записан. Нажмите «Создать запись» ещё раз.",
+  },
+
   block: {
     kind: "Что это",
     kinds: { block: "Перерыв / блок", vacation: "Отпуск", sick: "Больничный" } as Record<string, string>,

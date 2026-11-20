@@ -31,6 +31,7 @@ const visit = (o: Partial<AdminVisitInput> & { staff?: string; services?: string
   clientId: o.clientId ?? null,
   name: o.name === undefined ? "Walk In" : o.name,
   phone: o.phone === undefined ? "+372 5555 0201" : o.phone,
+  email: o.email,
   smsReminder: o.smsReminder ?? true,
   idempotencyKey: o.idempotencyKey ?? `admin-key-${++n}-${Math.random()}`,
   force: o.force,
@@ -111,6 +112,25 @@ describe("admin: new visit", () => {
     expect(rows).toEqual([{ name: "Known" }]);
     expect(await adminCreateVisit(demo.business, visit({ phone: "12", name: "" }), ACTOR)).toMatchObject({ ok: false, field: "phone" });
     expect(await adminCreateVisit(demo.business, visit({ phone: null, name: "" }), ACTOR)).toMatchObject({ ok: false, field: "name" });
+  });
+
+  it("keeps a new client's e-mail, refuses a wrong one, and never writes one on a client who is there", async () => {
+    const mail = async (where: string, v: string) => (await query<{ email: string | null }>(`select email from clients where ${where} = $1`, [v]))[0]?.email;
+    expect((await adminCreateVisit(demo.business, visit({ phone: "+372 5555 0311", name: "Mail New", email: " Mail.New@Example.com " }), ACTOR)).ok).toBe(true);
+    expect(await mail("phone_e164", "+37255550311")).toBe("mail.new@example.com");
+    // a walk-in with no phone keeps it too
+    expect((await adminCreateVisit(demo.business, visit({ time: "14:00", phone: null, name: "Mail Walk", email: "walk@example.com" }), ACTOR)).ok).toBe(true);
+    expect(await mail("name", "Mail Walk")).toBe("walk@example.com");
+    // not an e-mail: nothing is booked
+    expect(await adminCreateVisit(demo.business, visit({ time: "16:00", phone: "+372 5555 0312", email: "not-an-email" }), ACTOR)).toEqual({ ok: false, code: "invalid", field: "email" });
+    expect(await mail("phone_e164", "+37255550312")).toBeUndefined();
+    // the same phone again: the visit is his, and his e-mail stays his
+    expect((await adminCreateVisit(demo.business, visit({ time: "16:00", phone: "+372 5555 0311", name: "Other", email: "other@example.com" }), ACTOR)).ok).toBe(true);
+    expect(await mail("phone_e164", "+37255550311")).toBe("mail.new@example.com");
+    // a picked client: what the form had in the e-mail field is not read, not even checked
+    const [known] = await query<{ id: string }>("select id from clients where phone_e164 = '+37255550311'");
+    expect((await adminCreateVisit(demo.business, visit({ time: "17:00", clientId: known.id, name: null, phone: null, email: "x" }), ACTOR)).ok).toBe(true);
+    expect(await mail("phone_e164", "+37255550311")).toBe("mail.new@example.com");
   });
 
   it("a visit that starts in special time carries that window's extra", async () => {

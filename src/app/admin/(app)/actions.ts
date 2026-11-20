@@ -37,6 +37,8 @@ export type NewVisit = {
   clientId: string | null;
   name: string;
   phone: string;
+  /** a new client's e-mail (the wide «Новая запись»); left out or empty: none */
+  email?: string;
   comment: string;
   staffNote: string;
   smsReminder: boolean;
@@ -56,6 +58,7 @@ export async function createVisit(v: NewVisit): Promise<AdminOutcome> {
       // a picked client is his id: what the form shows of him (a masked phone, maybe) is not read
       name: v?.clientId ? null : str(v?.name),
       phone: v?.clientId ? null : str(v?.phone),
+      email: v?.clientId ? null : str(v?.email),
       comment: str(v?.comment),
       staffNote: str(v?.staffNote),
       smsReminder: v?.smsReminder === true,

@@ -1835,7 +1835,9 @@ th.n .iv-sort { flex-direction: row-reverse; }
 :where(.adm) .vw :is(input, select, textarea) { min-height: 32px; height: 32px; padding: 0 10px; border-color: #e0e3eb; background: #fff; color: #2b3134; font-size: 12px; line-height: 16px; }
 :where(.adm) .vw textarea { height: auto; padding: 8px; resize: none; }
 :where(.adm) .vw textarea[readonly] { background: #f7f9fc; }
-.vw :is(input, select, textarea):focus-visible { outline: none; }
+/* the field being typed in has the board's 2px yellow line (the switch keeps the outline below) */
+:where(.adm) .vw :is(input, select, textarea):not(.adm-sw):focus { border-color: #ffcb00; box-shadow: inset 0 0 0 1px #ffcb00; }
+.vw :is(input, select, textarea):not(.adm-sw):focus-visible { outline: none; }
 
 /* the tiles: 64px, the icon over the words; two in a row on the left, three on the right */
 .vw-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -1883,7 +1885,10 @@ th.n .iv-sort { flex-direction: row-reverse; }
 .vw-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .vw-card { min-height: 112px; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px; border: 1px solid #e0e3eb; border-radius: 8px; background: #fff; color: #2b3134; text-align: left; }
 .vw-card:hover { border-color: #c6cbd3; }
-.vw-card[aria-pressed="true"] { border-color: #2b3134; box-shadow: inset 0 0 0 1px #2b3134; }
+/* a chosen service: the board's 2px yellow line («Новая запись»), in both windows */
+.vw-card[aria-pressed="true"] { border-color: #ffcb00; box-shadow: inset 0 0 0 1px #ffcb00; }
+.vw-card[aria-pressed="true"]:hover { border-color: #ffcb00; }
+.vw-cards.no-tags .vw-card { min-height: 96px; }
 :where(.adm) .vw-card:disabled { opacity: 1; cursor: default; }
 .vw-card .n { min-height: 32px; font-weight: 500; overflow-wrap: anywhere; }
 .vw-tag { align-self: flex-start; display: inline-block; padding: 0 6px; border-radius: 4px; background: #eeebfe; color: #583cf1; font: 500 11px/16px var(--body); white-space: nowrap; }
@@ -1906,10 +1911,37 @@ th.n .iv-sort { flex-direction: row-reverse; }
 .vw-grid dd { font-weight: 500; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .vw-note { display: flex; flex-direction: column; gap: 8px; }
 
-/* the foot: «Запись» on the left, the question and the buttons on the right, the yellow one last */
+/* the new visit (new-visit.tsx): the barber's select with his picture, the time from the start to the end
+   the services make, the lines' ×, the phone's code, the clients found under the field, the green switch */
+.vw-sel { position: relative; display: block; }
+.vw-sel .adm-ava { position: absolute; top: 6px; left: 8px; width: 20px; height: 20px; border-radius: 5px; font-size: 10px; pointer-events: none; }
+:where(.adm) .vw .vw-sel select { padding-left: 36px; font-weight: 500; }
+.vw-span { display: flex; align-items: center; gap: 4px; color: #71757f; }
+.vw-span > :is(input, output) { flex: 1 1 0; min-width: 0; }
+.vw-out { height: 32px; display: flex; align-items: center; padding: 0 10px; border: 1px solid #e0e3eb; border-radius: 8px; background: #f7f9fc; color: #2b3134; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; }
+.vw-x { flex: none; width: 24px; height: 24px; display: grid; place-items: center; margin-right: -6px; border-radius: 6px; color: #9aa3b1; }
+.vw-x:hover { color: var(--warn); background: #f7f9fc; }
+.vw-tel { display: flex; gap: 4px; }
+:where(.adm) .vw .vw-tel select { flex: 0 0 76px; width: 76px; padding: 0 4px 0 8px; }
+.vw-hits { list-style: none; padding: 4px 0; border: 1px solid #e0e3eb; border-radius: 8px; background: #fff; box-shadow: 0 4px 20px rgba(0, 0, 0, .1); }
+.vw-hits button { width: 100%; min-height: 40px; display: flex; align-items: center; gap: 8px; padding: 6px 10px; text-align: left; }
+.vw-hits button:hover { background: #f7f9fc; }
+.vw-hits button:focus-visible { outline-offset: -2px; }
+.vw-ini.is-sm { width: 28px; height: 28px; font-size: 10px; }
+.vw-switch { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #2b3134; cursor: pointer; }
+:where(.adm) .vw input.adm-sw { width: 32px; height: 18px; min-height: 18px; padding: 0; border: 0; border-radius: 9px; background: #c6cbd3; box-shadow: none; }
+.vw .adm-sw::after { top: 2px; left: 2px; width: 14px; height: 14px; background: #fff; }
+:where(.adm) .vw input.adm-sw:checked { background: #1ab394; }
+.vw .adm-sw:checked::after { left: 16px; background: #fff; }
+.vw .adm-sw:focus-visible { outline: 2px solid #2b3134; outline-offset: 2px; }
+.vw-sum { min-width: 0; display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
+.vw-sum b { font-variant-numeric: tabular-nums; }
+
+/* the foot: «Запись» on the left (a new visit's «Перерыв» beside it), the question and the buttons on the right,
+   the yellow one last */
 .vw-foot { flex: 0 0 64px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 16px; background: #fff; border-top: 1px solid #e0e3eb; }
 .vw-foot h2 { flex: none; font: 500 16px/24px var(--body); }
-.vw-acts { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.vw-acts { min-width: 0; margin-left: auto; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .vw-acts .adm-err { min-width: 0; font-size: 12px; line-height: 16px; text-align: right; }
 
 /* a window narrower than three columns with 360px in the middle: the client goes under the services, the body scrolls */
