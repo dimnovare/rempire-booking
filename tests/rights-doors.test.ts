@@ -622,8 +622,17 @@ describe("Настройки", () => {
     expect(await settingsActs.addPhotoAction(png())).toEqual(no);
     expect(await settingsActs.removePhotoAction("/x.svg")).toEqual(no);
     expect(await settingsActs.orderPhotosAction([])).toEqual(no);
+    // «Найти» asks the geocoder for nobody without it
+    expect(await settingsActs.geocodeAction("Mardi 1, Tallinn", "EE")).toEqual({ ok: false, why: "failed" });
     await grant(c.me, "settings.location", true);
     expect(await settingsActs.addPhotoAction(png())).toMatchObject({ ok: true });
+    // with it, the e2e server's stand-in answers: nothing goes out from a test
+    process.env.GEOCODER = "fake";
+    try {
+      expect(await settingsActs.geocodeAction("Mardi 1, Tallinn", "EE")).toMatchObject({ ok: true, hit: { lat: 59.430883, lng: 24.761967, postcode: "10145" } });
+    } finally {
+      delete process.env.GEOCODER;
+    }
     const [row] = await query<{ name: string }>("select name from locations where business_id = $1", [c.demo.business.id]);
     expect(row.name).toBe("REMPIRE");
   });

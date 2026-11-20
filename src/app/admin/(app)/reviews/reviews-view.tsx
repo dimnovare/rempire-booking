@@ -18,6 +18,11 @@
  * page and the barber's average, and stays here, pale, to be shown again.
  * The filters are a draft until «Показать»; every question after the
  * page's own first is asked by an action.
+ *
+ * A review a client sent from the salon's page (salon-review.tsx) waits
+ * here, first in the list with «Новый», until it is looked at: «Одобрить»
+ * puts it on the booking page, «Скрыть» keeps it off. Over the list, «N
+ * новых отзывов ждут проверки» and «Показать новые» while any wait.
  */
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -30,6 +35,7 @@ import { useFrame } from "../frame";
 import { Sheet } from "../sheet";
 import { StarShape, Titled } from "../star";
 import { listReviewsAction, setReviewHiddenAction } from "./actions";
+import "./moderation.css";
 
 type Asked = Required<ReviewQuery>;
 type Option = { id: string; name: string };
@@ -122,8 +128,13 @@ export function ReviewsView({ initial, first, tz, may, staff }: ReviewsViewProps
     try {
       const res = await setReviewHiddenAction(v.id, hidden);
       if (res.ok) {
-        setData((cur) => ({ ...cur, rows: cur.rows.map((x) => (x.id === v.id ? { ...x, hidden: res.hidden } : x)) }));
-        frame.say(res.hidden ? V.hidden : V.unhidden);
+        // a new one looked at is new no more, either way
+        setData((cur) => ({
+          ...cur,
+          waiting: v.pending ? Math.max(0, cur.waiting - 1) : cur.waiting,
+          rows: cur.rows.map((x) => (x.id === v.id ? { ...x, hidden: res.hidden, pending: false } : x)),
+        }));
+        frame.say(v.pending ? (res.hidden ? V.declined : V.approved) : res.hidden ? V.hidden : V.unhidden);
       } else frame.say(res.code === "forbidden" ? A.rights.none : A.error, true);
     } catch {
       frame.say(A.error, true);
@@ -169,6 +180,35 @@ export function ReviewsView({ initial, first, tz, may, staff }: ReviewsViewProps
     </select>
   );
   const dateField = (key: "from" | "to") => <input type="date" aria-label={key === "from" ? V.fromLabel : V.toLabel} value={draft[key]} onChange={(e) => set({ [key]: e.target.value })} />;
+
+  // the new ones alone, from the line over the list
+  const showWaiting = () => {
+    setDraft((cur) => ({ ...cur, shown: "pending" }));
+    setAsked({ ...asked, shown: "pending", page: 1 });
+  };
+  const tagOf = (v: ReviewRow) =>
+    v.pending ? <small className="rv-tag rv-new">{V.newTag}</small> : v.hidden ? <small className="rv-tag">{V.hiddenTag}</small> : null;
+  const rowClass = (v: ReviewRow) => (v.pending ? "is-new" : v.hidden ? "is-hidden" : "");
+  /** A new one: «Одобрить» and «Скрыть»; any other: «Скрыть» or «Показать». `wide` is the table's look, else a phone's. */
+  const actsOf = (v: ReviewRow, at: string, wide: boolean) => {
+    const line = wide ? "jr-btn" : "adm-btn adm-btn-line adm-btn-sm";
+    if (!v.pending)
+      return (
+        <button type="button" className={line} aria-label={v.hidden ? V.unhideFor(nameOf(v), at) : V.hideFor(nameOf(v), at)} disabled={turning === v.id} onClick={() => void hide(v, !v.hidden)}>
+          {v.hidden ? V.unhide : V.hide}
+        </button>
+      );
+    return (
+      <span className="rv-acts">
+        <button type="button" className={wide ? "jr-btn jr-main" : "adm-btn adm-btn-lime adm-btn-sm"} aria-label={V.approveFor(nameOf(v), at)} disabled={turning === v.id} onClick={() => void hide(v, false)}>
+          {V.approve}
+        </button>
+        <button type="button" className={line} aria-label={V.declineFor(nameOf(v), at)} disabled={turning === v.id} onClick={() => void hide(v, true)}>
+          {V.hide}
+        </button>
+      </span>
+    );
+  };
 
   const clientOf = (v: ReviewRow) =>
     v.clientId ? (
@@ -310,6 +350,15 @@ export function ReviewsView({ initial, first, tz, may, staff }: ReviewsViewProps
         )}
       </div>
 
+      {!failed && data.waiting > 0 && asked.shown !== "pending" && (
+        <p className="rv-waiting" role="status">
+          <span>{V.waiting(data.waiting)}</span>
+          <button type="button" className="adm-link" onClick={showWaiting}>
+            {V.showWaiting}
+          </button>
+        </p>
+      )}
+
       {data.total === 0 ? (
         <p className="adm-meta rc-none">{V.none}</p>
       ) : (
@@ -331,7 +380,7 @@ export function ReviewsView({ initial, first, tz, may, staff }: ReviewsViewProps
                 {data.rows.map((v) => {
                   const at = day.format(v.createdAt);
                   return (
-                    <tr key={v.id} data-id={v.id} className={v.hidden ? "is-hidden" : undefined}>
+                    <tr key={v.id} data-id={v.id} className={rowClass(v) || undefined}>
                       <td data-col="date">
                         <span>{at}</span>
                         <small>{V.sources[v.source] ?? v.source}</small>
@@ -344,24 +393,12 @@ export function ReviewsView({ initial, first, tz, may, staff }: ReviewsViewProps
                       <td data-col="staff">{v.staffName ? <b>{v.staffName}</b> : <span>{V.company}</span>}</td>
                       <td data-col="rating">
                         <Stars n={v.rating} label={V.rated(v.rating)} />
-                        {v.hidden && <small className="rv-tag">{V.hiddenTag}</small>}
+                        {tagOf(v)}
                       </td>
                       <td data-col="text" className="rv-text">
                         {v.body ? <span>{v.body}</span> : <small>{V.noText}</small>}
                       </td>
-                      {may.hide && (
-                        <td className="rv-act">
-                          <button
-                            type="button"
-                            className="jr-btn"
-                            aria-label={v.hidden ? V.unhideFor(nameOf(v), at) : V.hideFor(nameOf(v), at)}
-                            disabled={turning === v.id}
-                            onClick={() => void hide(v, !v.hidden)}
-                          >
-                            {v.hidden ? V.unhide : V.hide}
-                          </button>
-                        </td>
-                      )}
+                      {may.hide && <td className="rv-act">{actsOf(v, at, true)}</td>}
                     </tr>
                   );
                 })}
@@ -373,28 +410,18 @@ export function ReviewsView({ initial, first, tz, may, staff }: ReviewsViewProps
             {data.rows.map((v) => {
               const at = day.format(v.createdAt);
               return (
-                <li key={v.id} data-id={v.id} className={`rv-item${v.hidden ? " is-hidden" : ""}`}>
+                <li key={v.id} data-id={v.id} className={`rv-item ${rowClass(v)}`.trim()}>
                   <div className="rv-line">
                     <Stars n={v.rating} label={V.rated(v.rating)} />
                     <small>{at}</small>
-                    {v.hidden && <small className="rv-tag">{V.hiddenTag}</small>}
+                    {tagOf(v)}
                   </div>
                   <p className="rv-who">
                     <b>{clientOf(v)}</b> <small>{aboutOf(v)}</small>
                   </p>
                   {v.clientPhone && <small>{v.clientPhone}</small>}
                   {v.body && <p className="rv-body">{v.body}</p>}
-                  {may.hide && (
-                    <button
-                      type="button"
-                      className="adm-btn adm-btn-line adm-btn-sm"
-                      aria-label={v.hidden ? V.unhideFor(nameOf(v), at) : V.hideFor(nameOf(v), at)}
-                      disabled={turning === v.id}
-                      onClick={() => void hide(v, !v.hidden)}
-                    >
-                      {v.hidden ? V.unhide : V.hide}
-                    </button>
-                  )}
+                  {may.hide && actsOf(v, at, false)}
                 </li>
               );
             })}

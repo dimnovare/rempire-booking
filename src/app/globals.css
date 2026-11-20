@@ -281,10 +281,9 @@ a.ab-row { align-self: flex-start; }
 .ab-photos img { flex: none; width: 240px; max-width: 72%; height: 200px; border-radius: 16px; object-fit: cover; background: var(--fill); scroll-snap-align: start; }
 /* no min-height: through the ratio it would become a min-width, wider than a 360 px phone */
 .ab-map { position: relative; margin-top: 8px; aspect-ratio: 568 / 227; border-radius: 16px; overflow: hidden; background: var(--fill); }
-.ab-map iframe { display: block; width: 100%; height: 100%; border: 0; pointer-events: none; }
-/* the pill top left: the frame's zoom buttons sit top right, its credits along the bottom */
-.ab-map a { position: absolute; inset: 0; display: flex; align-items: flex-start; justify-content: flex-start; padding: 8px; text-decoration: none; }
-.ab-map a span { padding: 4px 12px; border-radius: 100px; background: var(--surface); box-shadow: 0 1px 4px rgba(6, 15, 7, .2); font-size: 12px; line-height: 20px; font-weight: 500; }
+/* the pill top left; «© OpenStreetMap» bottom right, above it (src/app/[locale]/salon-page.css) */
+.ab-map-open { position: absolute; inset: 0; display: flex; align-items: flex-start; justify-content: flex-start; padding: 8px; text-decoration: none; }
+.ab-map-open span { padding: 4px 12px; border-radius: 100px; background: var(--surface); box-shadow: 0 1px 4px rgba(6, 15, 7, .2); font-size: 12px; line-height: 20px; font-weight: 500; }
 .ab-reviews { scroll-margin-top: calc(var(--hd) + 8px); }
 .ab-reviews > .sub { margin: 2px 0 0; }
 .ab-reviews .wait { padding: 16px 0; min-height: 0; }

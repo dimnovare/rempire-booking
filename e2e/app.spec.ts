@@ -238,16 +238,22 @@ test.describe("the salon's page", () => {
   const shown = DEMO_REVIEWS.filter((r) => !r.hidden);
   const salon = (page: Page) => page.locator("main.ab-app");
   /**
-   * For the picture only: the map scrolled into view and its frame loaded
-   * (or 8 s gone by, on a machine that cannot reach OpenStreetMap), then
-   * back to the top. Nothing is asserted about the map's own content.
+   * For the picture only: the map scrolled into view and its tiles loaded
+   * or failed (or 8 s gone by, on a machine that cannot reach
+   * OpenStreetMap), then back to the top. Nothing is asserted about the
+   * tiles themselves.
    */
   const mapShown = async (page: Page) => {
-    const frame = salon(page).locator(".ab-map iframe");
-    const loaded = frame.evaluate((el) => new Promise<void>((done) => (el.addEventListener("load", () => done()), setTimeout(done, 8000))));
-    await frame.scrollIntoViewIfNeeded();
-    await loaded;
-    await page.waitForTimeout(1500); // its tiles come after the frame
+    const map = salon(page).locator(".ab-map .osm");
+    await map.scrollIntoViewIfNeeded();
+    await map.evaluate(
+      (el) =>
+        new Promise<void>((done) => {
+          setTimeout(done, 8000);
+          const wait = [...el.querySelectorAll("img")].map((i) => (i.complete ? null : new Promise((ok) => (i.addEventListener("load", ok), i.addEventListener("error", ok)))));
+          void Promise.all(wait).then(() => done());
+        }),
+    );
     await page.evaluate(() => window.scrollTo(0, 0));
     await expect(salon(page).locator(".ab-bar")).not.toHaveClass(/\bsolid\b/);
     await page.waitForTimeout(300); // the bar's name has faded out
@@ -274,7 +280,14 @@ test.describe("the salon's page", () => {
     await expect(s.getByRole("link", { name: "www.rempire.ee" })).toHaveAttribute("href", "https://www.rempire.ee");
     await expect(s.getByText(/^Барберы из Эстонии/)).toBeVisible();
     await expect(s.locator(".ab-photos img")).toHaveCount(1);
-    await expect(s.locator(".ab-map iframe")).toHaveAttribute("src", /^https:\/\/www\.openstreetmap\.org\/export\/embed\.html\?bbox=.*&marker=59\.430883%2C24\.761967$/);
+    // our own map of OpenStreetMap's tiles, the pin where the salon is, the copyright line a link of its own
+    const map = s.locator(".ab-map .osm");
+    await expect(map.locator(".osm-pin")).toHaveAttribute("data-lat", "59.430883");
+    await expect(map.locator(".osm-pin")).toHaveAttribute("data-lng", "24.761967");
+    await expect(map.locator(".osm-tiles img").first()).toHaveAttribute("src", /^https:\/\/tile\.openstreetmap\.org\/16\/\d+\/\d+\.png$/);
+    await expect(map.getByRole("link", { name: "© OpenStreetMap" })).toHaveAttribute("href", "https://www.openstreetmap.org/copyright");
+    // «Отзывы» opens with the card to write one
+    await expect(s.getByRole("region", { name: c.salon.rate }).getByRole("button", { name: c.salon.rateN(5) })).toBeVisible();
     await expect(s.getByRole("link", { name: new RegExp(`^${c.salon.openMap}`) })).toHaveAttribute("href", /google\.com\/maps\/search\/\?api=1&query=59\.430883,24\.761967$/);
 
     // «★ 8 отзывов» leads down to them: six, the newest first, the hidden one never

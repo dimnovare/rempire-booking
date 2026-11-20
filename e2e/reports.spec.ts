@@ -9,8 +9,9 @@ import { A, asOwner, expect, expectNoSideScroll, hydrated, test } from "./helper
  * feed) and «Отзывы»; then «Сообщения» (every message the app sent) and
  * «Изменения данных» (the change log, the owner's), decision 29. The owner
  * opens each on a phone and on a wide screen; the page has its title and its
- * cards, and nothing scrolls sideways. The demo has no reviews, so «Отзывы»
- * says there are none; the two logs hold whatever the other specs did, so
+ * cards, and nothing scrolls sideways. The demo has no reviews in the last
+ * twelve months, so «Отзывы» says there are none unless salon-review.spec.ts
+ * has sent one; it and the two logs hold whatever the other specs did, so
  * they show their count, and a change unfolds when there is one.
  */
 const D = A.dash;
@@ -49,9 +50,13 @@ const checks = (wide: boolean) => {
     await shot(page, "visits", wide);
   });
 
-  test("«Отзывы»: none yet in the demo", async ({ page }) => {
+  test("«Отзывы»: none in the demo's last twelve months, or the ones salon-review.spec.ts sent", async ({ page }) => {
     await open(page, "/admin/reviews", A.reviews.title);
-    await expect(page.getByText(A.reviews.none)).toBeVisible();
+    const found = page.locator(".rc-found:visible");
+    await expect(found).toBeVisible();
+    const n = Number(await found.locator("b").textContent());
+    if (n > 0) await expect(page.locator(wide ? ".rv-table tbody tr:visible" : ".rv-rows li:visible").first()).toBeVisible();
+    else await expect(page.getByText(A.reviews.none)).toBeVisible();
     await expectNoSideScroll(page);
     await shot(page, "reviews", wide);
   });
