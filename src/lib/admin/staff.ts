@@ -6,8 +6,9 @@
  * Rights (src/lib/auth/rights.ts): saveStaffProfile asks them when it is
  * handed a login: a new barber is «Создание сотрудников», a change
  * «Редактирование сотрудников», and switching a barber off or on again
- * «Увольнение сотрудников» (nobody is deleted here). The schedule and a
- * barber's services are asked by the actions (staff/actions.ts).
+ * «Увольнение сотрудников» (nobody is deleted here). The schedule is asked
+ * by the actions (staff/actions.ts). Which services he does, at what price
+ * and time, is only shown here: it is set in the service's window.
  */
 import { can, type Holder } from "../auth/rights";
 import type { Business } from "../availability";
@@ -40,7 +41,8 @@ export async function listStaff(q: Querier, businessId: string): Promise<StaffRo
   return rows.map((r) => ({ id: r.id, slug: r.slug, name: r.display_name, role: r.role, bio: r.bio, photoUrl: r.photo_url, bookable: r.bookable, active: r.active, sort: r.sort, services: r.services }));
 }
 
-export type Offer = { serviceId: string; name: L10n; defaultMin: number; defaultCents: number; active: boolean; offered: boolean; durationMin: number | null; priceCents: number | null };
+/** A service on the barber page, read only: his own numbers (null = the service's) are set in the service's window (/admin/services?open=<id>). */
+export type Offer = { serviceId: string; name: L10n; defaultMin: number; defaultCents: number; defaultMaxCents: number | null; active: boolean; offered: boolean; durationMin: number | null; priceCents: number | null; priceMaxCents: number | null };
 export type HoursDay = { weekday: number; spans: [string, string][] };
 export type DayOverride = { date: string; spans: [string, string][]; note: string };
 export type TimeOffRow = { id: string; from: number; to: number; kind: string; note: string };
@@ -65,9 +67,9 @@ export async function staffDetail(q: Querier, business: Business, staffId: strin
   if (!base) return null;
   const now = startOfDay(today, business.timezone);
   const [offers, hours, overrides, off, special] = await Promise.all([
-    q<{ id: string; name: L10n; duration_min: number; price_cents: number; active: boolean; ss_active: boolean | null; ss_min: number | null; ss_cents: number | null }>(
-      `select sv.id, sv.name, sv.duration_min, sv.price_cents, sv.active,
-              ss.active as ss_active, ss.duration_min as ss_min, ss.price_cents as ss_cents
+    q<{ id: string; name: L10n; duration_min: number; price_cents: number; price_max_cents: number | null; active: boolean; ss_active: boolean | null; ss_min: number | null; ss_cents: number | null; ss_max: number | null }>(
+      `select sv.id, sv.name, sv.duration_min, sv.price_cents, sv.price_max_cents, sv.active,
+              ss.active as ss_active, ss.duration_min as ss_min, ss.price_cents as ss_cents, ss.price_max_cents as ss_max
          from services sv left join staff_services ss on ss.service_id = sv.id and ss.staff_id = $2
         where sv.business_id = $1 order by sv.active desc, sv.sort, sv.slug`,
       [business.id, staffId],
@@ -97,10 +99,12 @@ export async function staffDetail(q: Querier, business: Business, staffId: strin
       name: o.name,
       defaultMin: o.duration_min,
       defaultCents: o.price_cents,
+      defaultMaxCents: o.price_max_cents,
       active: o.active,
       offered: o.ss_active === true,
       durationMin: o.ss_min,
       priceCents: o.ss_cents,
+      priceMaxCents: o.ss_max,
     })),
     hours: [1, 2, 3, 4, 5, 6, 7].map((weekday) => ({ weekday, spans: hours.filter((h) => h.weekday === weekday).map((h) => [h.starts, h.ends] as [string, string]) })),
     overrides: overrides.map((o) => ({ date: o.day, spans: o.intervals, note: o.note })),
@@ -204,32 +208,8 @@ export async function saveStaffProfile(business: Business, id: string | null, in
   });
 }
 
-export type OfferInput = { serviceId: string; offered: boolean; priceCents: number | null; durationMin: number | null };
-
-/** Which services the barber does, at his own price and time (null = the service's default). */
-export async function saveStaffOffers(business: Business, staffId: string, offers: OfferInput[], actor: string): Promise<{ ok: true } | { ok: false; field: string }> {
-  if (!isUuid(staffId)) return { ok: false, field: "staff" };
-  for (const o of offers) {
-    if (!isUuid(o.serviceId)) return { ok: false, field: "service" };
-    if (o.priceCents !== null && !(Number.isInteger(o.priceCents) && o.priceCents >= 0 && o.priceCents <= 1_000_000)) return { ok: false, field: `price:${o.serviceId}` };
-    if (o.durationMin !== null && !(Number.isInteger(o.durationMin) && o.durationMin >= 5 && o.durationMin <= 720)) return { ok: false, field: `duration:${o.serviceId}` };
-  }
-  return withTx(async (tx) => {
-    const [st] = await tx<{ id: string }>("select id from staff where id = $1 and business_id = $2 for update", [staffId, business.id]);
-    if (!st) return { ok: false as const, field: "staff" };
-    const known = new Set((await tx<{ id: string }>("select id from services where business_id = $1", [business.id])).map((r) => r.id));
-    for (const o of offers) {
-      if (!known.has(o.serviceId)) continue;
-      await tx(
-        `insert into staff_services (staff_id, service_id, price_cents, duration_min, active) values ($1, $2, $3, $4, $5)
-         on conflict (staff_id, service_id) do update set price_cents = excluded.price_cents, duration_min = excluded.duration_min, active = excluded.active`,
-        [staffId, o.serviceId, o.priceCents, o.durationMin, !!o.offered],
-      );
-    }
-    await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'staff', $2, 'offers', $3::jsonb)`, [actor, staffId, JSON.stringify(offers)]);
-    return { ok: true as const };
-  });
-}
+// Which services a barber does, at his own price and time, is set in the service's window:
+// src/lib/admin/services.ts saveService({ barbers }).
 
 /** Replace the weekly template. days[weekday] = spans; a missing or empty day is a day off. */
 export async function saveWeeklyHours(business: Business, staffId: string, days: Record<number, unknown>, actor: string): Promise<{ ok: true } | { ok: false; field: string }> {

@@ -1,0 +1,225 @@
+/* ---------- «Услуги» as a table, and one service's window (table.tsx, window.tsx; Dim, decisions round 11) ----------
+   To the boards «Услуги, таблица» and «Услуга, окно», in the admin's new-style controls: 32px fields and buttons,
+   8px corners, a 1px #e0e3eb line, 12px/500 on buttons, yellow for the one main action. From 900px: a white card
+   with 12px corners holds the categories, each a grey 56px head and a table of 52px rows; a service opens in a
+   900px drawer from the right over the dimmed page, a round «›» on its seam. On a phone: a row per service with
+   its price and time under the name, and the window as a full-screen sheet. Its own classes (sv-). */
+
+.sv-page { gap: 14px; }
+.sv-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.sv-titles { min-width: 0; }
+.sv-crumb { margin: 2px 0 0; color: #9aa3b1; font-size: 12px; line-height: 16px; }
+.sv-searchrow { display: flex; flex-wrap: wrap; gap: 8px; }
+.sv-search { position: relative; flex: 1 1 240px; display: flex; align-items: center; min-width: 0; }
+.sv-search > svg { position: absolute; left: 12px; color: #9aa3b1; pointer-events: none; }
+:where(.adm) .sv-search input { width: 100%; padding-left: 38px; }
+
+/* buttons: a white one with a line, the main one yellow, a text one without a frame */
+.sv-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 16px; border: 1px solid #e0e3eb; border-radius: 8px; background: #fff; color: #2b3134; font: 500 14px/16px var(--body); white-space: nowrap; }
+.sv-btn-main { border-color: #ffcb00; background: #ffcb00; color: #2b3134; }
+.sv-btn-text { border-color: transparent; background: none; padding: 0 4px; color: #71757f; }
+.sv-btn-text:hover { color: #2b3134; }
+.sv-ibtn { flex: none; display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: #71757f; }
+.sv-ibtn:hover { background: #eaeef4; color: #2b3134; }
+.sv-chev > svg { transition: transform .15s ease-out; }
+.sv-chev.is-open > svg { transform: rotate(180deg); }
+
+/* the card, the categories */
+.sv-card { min-width: 0; background: var(--raise); border: 1px solid var(--line-2); border-radius: 12px; padding: 8px; container-type: inline-size; }
+.sv-empty { padding: 12px 8px; }
+.sv-group + .sv-group { margin-top: 12px; }
+.sv-ghead { display: flex; align-items: center; gap: 4px; min-height: 52px; padding: 0 4px 0 12px; border-radius: 8px; background: #f0f3f8; }
+.sv-gfold { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 12px 0; text-align: left; }
+.sv-gname { font-size: 15px; line-height: 20px; font-weight: 500; overflow-wrap: anywhere; }
+.sv-gcount { flex: none; color: #71757f; font-size: 13px; line-height: 20px; }
+:where(.adm) input.sv-gname-in { flex: 1; min-width: 0; min-height: 36px; height: 36px; padding: 0 10px; border-color: #ffcb00; box-shadow: 0 0 0 3px rgba(255, 203, 0, .25); font-size: 16px; }
+
+/* a row: on a phone the name with its price and time under it, and the switch */
+.sv-row { display: flex; align-items: center; gap: 12px; min-height: 60px; padding: 8px 4px; border-bottom: 1px solid #eef0f4; cursor: pointer; }
+.sv-row.is-off .sv-name { color: var(--dim); }
+.sv-row.is-open { border-radius: 8px; box-shadow: inset 0 0 0 2px #ffcb00; }
+.sv-c-name { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
+.sv-c-name small { flex-basis: 100%; color: #71757f; font-size: 13px; line-height: 18px; }
+.sv-name { min-width: 0; min-height: 24px; color: #262626; font-size: 16px; line-height: 22px; text-align: left; overflow-wrap: anywhere; }
+.sv-c-online { flex: none; }
+.sv-c-edit { display: none; }
+.sv-onl { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; color: #71757f; font-size: 13px; line-height: 20px; cursor: pointer; }
+
+/* the switches: 42 × 24 in the window, 36 × 20 in the table, yellow when on */
+:where(.adm) input.sv-sw { appearance: none; -webkit-appearance: none; position: relative; flex: none; width: 42px; height: 24px; min-height: 24px; margin: 0; padding: 0; border: 0; border-radius: 12px; background: #d5d9e2; cursor: pointer; transition: background .15s ease-out; }
+.sv-sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .22); transition: left .15s ease-out; }
+.sv-sw:checked { background: #ffcb00; }
+.sv-sw:checked::after { left: 20px; }
+:where(.adm) input.sv-sw:disabled { cursor: default; opacity: .5; }
+:where(.adm) input.sv-sw-sm { width: 36px; height: 20px; min-height: 20px; border-radius: 10px; }
+.sv-sw-sm::after { width: 16px; height: 16px; }
+.sv-sw-sm:checked::after { left: 18px; }
+
+/* the price in place, and the tiles */
+.sv-price { min-height: 24px; color: #262626; font-size: 14px; line-height: 20px; white-space: nowrap; border-bottom: 1px dashed #c6cbd3 !important; font-variant-numeric: tabular-nums; }
+.sv-price:hover { border-bottom-color: #2b3134 !important; }
+.sv-price-plain { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sv-pin { display: inline-flex; align-items: center; width: 96px; height: 32px; padding: 0 10px; border: 1px solid #ffcb00; border-radius: 8px; background: #fff; box-shadow: 0 0 0 3px rgba(255, 203, 0, .25); color: #71757f; font-size: 14px; line-height: 20px; }
+.sv-pin.is-bad { border-color: var(--warn); box-shadow: 0 0 0 3px rgba(217, 45, 32, .18); }
+:where(.adm) .sv-pin input { flex: 1; min-width: 0; height: 30px; min-height: 30px; padding: 0; border: 0; background: none; color: #2b3134; font-size: 14px; box-shadow: none; font-variant-numeric: tabular-nums; }
+.sv-tiles { display: inline-flex; align-items: center; }
+.sv-tile { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border: 2px solid #fff; border-radius: 4px; background: #3a3a46; color: #fff; font: 600 10px/1 var(--body); }
+.sv-tile + .sv-tile { margin-left: -9px; }
+.sv-tile-more { background: #eaeef4; color: #71757f; }
+.sv-nobody { color: #9aa3b1; }
+
+/* ---------- the window ---------- */
+.sv-wrap { position: fixed; inset: 0; z-index: 55; display: flex; justify-content: flex-end; background: rgba(43, 49, 52, .45); }
+.sv-win { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; background: #fff; color: #2b3134; outline: none; }
+.sv-win :is(h2, h3, p) { margin: 0; }
+.sv-whead { flex: none; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: max(14px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 0 max(16px, env(safe-area-inset-left, 0px)); }
+.sv-wtitles { min-width: 0; }
+.sv-wtitles h2 { font: 500 20px/24px var(--body); overflow-wrap: anywhere; }
+.sv-wtitles p { margin-top: 2px; color: #71757f; font-size: 13px; line-height: 16px; }
+.sv-x { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin: -8px -10px 0 0; border-radius: 8px; color: #71757f; }
+.sv-tabs { flex: none; display: flex; margin-top: 8px; padding: 0 8px; border-bottom: 1px solid #e0e3eb; overflow-x: auto; scrollbar-width: none; }
+.sv-tab { position: relative; flex: none; min-height: 48px; padding: 14px 8px; color: #71757f; font: 500 14px/20px var(--body); white-space: nowrap; }
+.sv-tab[aria-selected="true"] { color: #2b3134; }
+.sv-tab[aria-selected="true"]::after { content: ""; position: absolute; left: 8px; right: 8px; bottom: -1px; height: 3px; border-radius: 2px; background: #ffcb00; }
+.sv-wbody { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px max(16px, env(safe-area-inset-right, 0px)) 20px max(16px, env(safe-area-inset-left, 0px)); }
+.sv-panel { display: flex; flex-direction: column; gap: 16px; }
+.sv-offnote { margin-bottom: 16px !important; padding: 10px 12px; border-radius: 8px; background: #fff6cf; font-size: 13px; line-height: 18px; }
+.sv-grid2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.sv-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sv-field > span, .sv-field > label, .sv-buffer > span { color: #71757f; font-size: 13px; line-height: 16px; }
+.sv-field > input + input, .sv-field > select + input { margin-top: 4px; }
+:where(.adm) .sv-in { min-height: 44px; height: 44px; padding: 0 10px; border: 1px solid #e0e3eb; border-radius: 8px; background: #fff; color: #2b3134; }
+:where(.adm) .sv-in:focus { border-color: #ffcb00; box-shadow: 0 0 0 1px #ffcb00; }
+:where(.adm) .sv-in:disabled, :where(.adm) .sv-in[readonly] { background: #f7f9fc; color: #b4b9c3; }
+:where(.adm) .sv-in[readonly] { color: #71757f; }
+:where(.adm) select.sv-sel { appearance: none; -webkit-appearance: none; padding-right: 28px; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371757f' stroke-width='2.2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center; text-overflow: ellipsis; }
+:where(.adm) select.sv-sel:disabled { background-color: #f7f9fc; }
+.sv-prices { display: flex; align-items: center; gap: 8px; }
+.sv-dash { flex: none; color: #71757f; }
+.sv-money { display: inline-flex; flex: none; width: 116px; }
+.sv-money.is-wide { flex: 1; width: auto; min-width: 0; }
+:where(.adm) .sv-money .sv-in { flex: 1; min-width: 0; border-right: 0; border-radius: 8px 0 0 8px; font-variant-numeric: tabular-nums; }
+.sv-money > span { flex: none; width: 36px; display: grid; place-items: center; border: 1px solid #e0e3eb; border-radius: 0 8px 8px 0; background: #f7f9fc; color: #71757f; font-size: 13px; }
+.sv-check { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; color: #2b3134; font-size: 13px; line-height: 16px; cursor: pointer; }
+:where(.adm) .sv-check input { width: 18px; height: 18px; min-height: 18px; }
+.sv-dur { display: flex; gap: 8px; }
+.sv-dur > select { flex: 1; min-width: 0; }
+.sv-buffer { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.sv-h3 { margin-top: 6px !important; font: 600 16px/20px var(--body); }
+.sv-note { margin-top: -12px !important; color: #71757f; font-size: 13px; line-height: 17px; }
+.sv-own { flex: none; height: 20px; padding: 0 6px; border-radius: 4px; background: #efecfe; color: #583cf1; font: 500 11px/20px var(--body); }
+
+/* a barber's row: on a phone his name and the switch, his price and time under them */
+.sv-staff { display: flex; flex-direction: column; }
+.sv-srow { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "who does" "price time"; align-items: center; gap: 8px 12px; padding: 12px 0; border-bottom: 1px solid #eef0f4; }
+.sv-who { grid-area: who; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sv-who .txt { min-width: 0; display: flex; flex-direction: column; }
+.sv-who b { font-size: 14px; line-height: 18px; font-weight: 500; overflow-wrap: anywhere; }
+.sv-who small { color: #71757f; font-size: 12px; line-height: 16px; }
+.sv-pic { flex: none; width: 32px; height: 32px; display: grid; place-items: center; overflow: hidden; border-radius: 4px; background: #3a3a46; color: #fff; font: 600 12px/1 var(--body); }
+.sv-pic img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 22%; display: block; }
+.sv-sprice { grid-area: price; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sv-stime { grid-area: time; display: flex; align-items: center; gap: 8px; min-width: 0; justify-content: flex-end; }
+:where(.adm) .sv-stime select { width: 120px; }
+.sv-sdoes { grid-area: does; justify-self: end; }
+.sv-sdoes label { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; color: #71757f; font-size: 12px; line-height: 16px; cursor: pointer; }
+.sv-srow.is-off .sv-who { opacity: .55; }
+.sv-sum { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 24px; padding: 10px 14px; border-radius: 8px; background: #f7f9fc; }
+.sv-sum > div { display: flex; flex-direction: column; }
+.sv-sum small { color: #71757f; font-size: 11px; line-height: 14px; }
+.sv-sum b { font-size: 14px; line-height: 20px; font-weight: 600; white-space: nowrap; }
+.sv-sum p { flex: 1 1 240px; display: flex; align-items: flex-start; gap: 8px; color: #71757f; font-size: 12px; line-height: 16px; }
+.sv-sum p svg { flex: none; margin-top: 0; }
+.sv-online { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1px solid #e0e3eb; border-radius: 8px; cursor: pointer; }
+.sv-online .txt { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sv-online b { font-size: 14px; line-height: 20px; font-weight: 500; }
+.sv-online small { color: #71757f; font-size: 13px; line-height: 17px; }
+
+.sv-wfoot { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 64px; padding: 8px max(16px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); border-top: 1px solid #e0e3eb; background: #fff; }
+.sv-wfoot-l { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.sv-wfoot-l .adm-err { font-size: 13px; line-height: 16px; }
+.sv-wfoot-r { flex: none; display: flex; gap: 8px; }
+.sv-seam { position: absolute; z-index: 2; top: 22px; left: -18px; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: #fff; color: #2b3134; box-shadow: 0 2px 10px rgba(0, 0, 0, .18); }
+.sv-seam:hover { background: #eaeef4; }
+
+/* the question before closing with changes that are not saved */
+.sv-ask-wrap { position: fixed; inset: 0; z-index: 65; display: grid; place-items: center; padding: 16px; background: rgba(34, 34, 46, .45); }
+.sv-ask { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 12px; padding: 20px; border-radius: 12px; background: #fff; color: #2b3134; box-shadow: rgba(6, 19, 51, .24) 0 12px 48px; }
+.sv-ask h2 { margin: 0; font: 500 18px/24px var(--body); }
+.sv-ask p { margin: 0; font-size: 14px; line-height: 20px; }
+.sv-ask-btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+@media (min-width: 900px) {
+  .adm-page.adm-wide.sv-page { padding: 20px 24px 32px; gap: 16px; color: #2b3134; font: 400 13px/18px var(--body); }
+  .sv-page .adm-h1 { font: 500 20px/24px var(--body); }
+  .sv-page .adm-titled { min-height: 28px; }
+  .sv-btn { min-height: 32px; height: 32px; padding: 0 12px; font-size: 12px; }
+  .sv-btn-text { padding: 0 4px; }
+  :where(.adm) .sv-search input { height: 32px; min-height: 32px; padding: 0 10px 0 34px; border-color: #e0e3eb; font-size: 13px; }
+  .sv-search > svg { left: 10px; }
+  .sv-card { padding: 12px; border-color: #eef0f4; }
+  .sv-scroll { overflow-x: auto; }
+  .sv-group { min-width: 680px; }
+  .sv-ghead { height: 56px; min-height: 56px; gap: 2px; padding: 0 8px 0 12px; }
+  .sv-gfold { gap: 10px; min-height: 40px; padding: 0; }
+  .sv-gname { font-size: 14px; line-height: 20px; }
+  :where(.adm) input.sv-gname-in { height: 32px; min-height: 32px; font-size: 14px; }
+
+  /* the table: Название · Онлайн-запись · Цена · Длительность · Сотрудники · the pencil */
+  .sv-cols, .sv-row { display: grid; grid-template-columns: minmax(200px, 1fr) 140px 130px 150px 140px 48px; align-items: center; gap: 0; padding: 0 8px; }
+  .sv-cols { height: 36px; border-bottom: 1px solid #eef0f4; color: #71757f; font-size: 12px; line-height: 16px; font-weight: 500; }
+  .sv-row { height: 52px; min-height: 52px; }
+  .sv-row:hover { background: #f7f9fc; }
+  .sv-c-name { flex-wrap: nowrap; padding-right: 12px; }
+  .sv-name { min-height: 20px; overflow: hidden; font-size: 14px; line-height: 20px; white-space: nowrap; text-overflow: ellipsis; }
+  .sv-name:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .sv-onl { min-height: 32px; }
+  .sv-c-time { color: #262626; font-size: 14px; line-height: 20px; white-space: nowrap; }
+  .sv-c-time.is-each { color: #71757f; }
+  .sv-c-edit { display: flex; justify-content: flex-end; }
+
+  /* the window: 900px from the right, the board's sizes */
+  .sv-win { width: 900px; max-width: calc(100vw - 40px); box-shadow: rgba(6, 19, 51, .24) -12px 0 48px; font: 400 12px/16px var(--body); }
+  .sv-whead { padding: 20px 24px 0 32px; }
+  .sv-wtitles p { font-size: 12px; }
+  .sv-tabs { padding: 0 24px 0 20px; }
+  .sv-tab { min-height: 48px; padding: 14px 12px; }
+  .sv-tab[aria-selected="true"]::after { left: 12px; right: 12px; }
+  .sv-wbody { padding: 20px 24px 20px 32px; }
+  .sv-panel { gap: 0; }
+  .sv-panel > * + * { margin-top: 16px; }
+  .sv-grid2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sv-field > span, .sv-field > label, .sv-buffer > span { font-size: 12px; }
+  :where(.adm) .sv-in { min-height: 32px; height: 32px; font-size: 14px; }
+  .sv-money > span { width: 32px; }
+  .sv-check { min-height: 24px; margin-top: 4px; font-size: 12px; }
+  :where(.adm) .sv-check input { width: 16px; height: 16px; min-height: 16px; }
+  .sv-dur > select { flex: none; width: 120px; }
+  .sv-h3 { margin-top: 22px !important; }
+  .sv-panel > .sv-note { margin-top: 4px !important; font-size: 12px; line-height: 16px; }
+  .sv-panel > .sv-staff { margin-top: 12px; }
+  .sv-offnote { font-size: 12px; line-height: 16px; }
+
+  .sv-shead, .sv-srow { display: grid; grid-template-columns: 250px 190px 220px minmax(0, 1fr); grid-template-areas: "who price time does"; align-items: center; gap: 0; padding: 0 12px; }
+  .sv-shead { height: 32px; border-radius: 8px; background: #f0f3f8; color: #71757f; font-size: 12px; line-height: 16px; font-weight: 500; }
+  .sv-shead > :last-child { text-align: right; }
+  .sv-srow { height: 52px; }
+  .sv-who b { font-size: 13px; line-height: 18px; }
+  .sv-money { width: 100px; }
+  .sv-stime { justify-content: flex-start; }
+  :where(.adm) .sv-stime select { width: 112px; }
+  .sv-sdoes label { min-height: 32px; }
+  .sv-panel > .sv-sum { margin-top: 12px; }
+
+  .sv-online { padding: 12px 14px; }
+  .sv-wfoot { min-height: 64px; padding: 0 24px; }
+}
+
+/* a laptop beside the sidebar: the table's columns give way before it scrolls inside its card */
+@container (max-width: 860px) {
+  .sv-cols, .sv-row { grid-template-columns: minmax(160px, 1fr) 124px 104px 132px 120px 40px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sv-sw::after, .sv-chev > svg { transition: none; }
+}
