@@ -1,22 +1,25 @@
 "use client";
 
 /**
- * The barber page's parts. Profile, prices and the week save by themselves
+ * The barber page's parts. Profile and the week save by themselves
  * (autosave.tsx). The lists (special days, time off, special time) add a
- * record with one «Добавить» and remove one with one tap.
+ * record with one «Добавить» and remove one with one tap. His services and
+ * prices are only shown: they are set in each service's window.
  */
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { hhmm, momentAt } from "@/lib/admin/grid";
+import { effective, ownPrice, ownTime, sumUp } from "@/lib/admin/service-board";
 import type { DayOverride, HoursDay, Offer, SpecialRow, TimeOffRow } from "@/lib/admin/staff";
 import { extraText, MAX_EXTRA_PCT } from "@/lib/slots";
 import { addDays } from "@/lib/tz";
-import { eur } from "../../../copy";
 import { useA } from "../../../lang";
-import { Ava, XIcon } from "../../../icons";
+import { Ava, NextIcon, XIcon } from "../../../icons";
 import { SaveState, useAutoSave } from "../../autosave";
 import { shrinkPhoto } from "../../photo-shrink";
-import { addOff, addSpecial, removeOff, removeSpecial, saveDay, saveHours, saveOffers, saveProfile, uploadPhoto } from "../actions";
+import { priceText } from "../../services/labels";
+import { addOff, addSpecial, removeOff, removeSpecial, saveDay, saveHours, saveProfile, uploadPhoto } from "../actions";
 
 type Msg = { ok: boolean; text: string } | null;
 
@@ -177,86 +180,76 @@ export function ProfileForm({ id, initial, onDone }: { id: string | null; initia
   );
 }
 
-type OfferRow = Offer & { price: string; dur: string };
-const num = (s: string) => Number(s.replace(",", "."));
+/** A service as this barber does it: his price and time (the service's when he has none of his own). */
+export function offerEff(o: Offer) {
+  const base = { priceCents: o.defaultCents, priceMaxCents: o.defaultMaxCents, durationMin: o.defaultMin };
+  const e = effective(base, o);
+  return { e, price: sumUp(base, [e]).price, own: ownPrice(base, e) || ownTime(base, e) };
+}
 
-export function OffersForm({ staffId, offers, onDone }: { staffId: string; offers: Offer[]; onDone?: () => void }) {
+/**
+ * «Услуги и цены», read only: the services he does, at his price and time.
+ * They are set in the service's window, so each one links there when the
+ * login may open «Услуги» (`link`).
+ */
+export function OffersList({ offers, link }: { offers: Offer[]; link: boolean }) {
   const A = useA();
-  const [rows, setRows] = useState<OfferRow[]>(() => offers.map((o) => ({ ...o, price: o.priceCents == null ? "" : String(o.priceCents / 100), dur: o.durationMin == null ? "" : String(o.durationMin) })));
-  const set = (i: number, patch: Partial<OfferRow>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
-  const auto = useAutoSave<OfferRow[]>(
-    rows,
-    setRows,
-    (v) =>
-      saveOffers(
-        staffId,
-        v.map((r) => ({
-          serviceId: r.serviceId,
-          offered: r.offered,
-          priceCents: r.price.trim() === "" ? null : Math.round(num(r.price) * 100),
-          durationMin: r.dur.trim() === "" ? null : Number(r.dur),
-        })),
-      ),
-    {
-      label: A.staff.offersRow,
-      // a half-typed price or time is not sent («4» on the way to «45» minutes)
-      check: (v) => {
-        for (const r of v) {
-          if (r.price.trim() !== "" && !(num(r.price) >= 0)) return A.visit.invalid("priceCents");
-          if (r.dur.trim() !== "" && !(Number.isInteger(Number(r.dur)) && Number(r.dur) >= 5 && Number(r.dur) <= 720)) return A.visit.invalid("durationMin");
-        }
-        return null;
-      },
-    },
-  );
+  const mine = offers.filter((o) => o.offered);
   return (
-    <form
-      className="adm-form"
-      onBlur={auto.flush}
-      onSubmit={(e) => {
-        e.preventDefault();
-        auto.flush();
-      }}
-    >
-      <p className="adm-meta">{A.staff.offersHint}</p>
-      <table className="adm-ptable">
-        <thead>
-          <tr>
-            <th>
-              <span className="sr">{A.staff.offered}</span>
-            </th>
-            <th>{A.staff.service}</th>
-            <th className="r">{A.staff.price}</th>
-            <th className="r">{A.staff.min}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={r.serviceId} className={r.offered ? "" : "is-off"}>
-              <td>
-                <input type="checkbox" aria-label={`${A.staff.offered}: ${A.pick(r.name)}`} checked={r.offered} onChange={(e) => set(i, { offered: e.target.checked })} />
-              </td>
-              <td className="n">
-                {A.pick(r.name)}
-                {!r.active && <span className="adm-tag">{A.services.inactive}</span>}
-                <small>
-                  {A.mins(r.defaultMin)} · {eur(r.defaultCents)}
-                </small>
-              </td>
-              <td>
-                <input type="number" inputMode="decimal" min={0} step="0.5" aria-label={`${A.staff.price}: ${A.pick(r.name)}`} placeholder={String(r.defaultCents / 100)} value={r.price} onChange={(e) => set(i, { price: e.target.value })} />
-              </td>
-              <td>
-                <input type="number" inputMode="numeric" min={5} max={720} step={5} aria-label={`${A.staff.duration}: ${A.pick(r.name)}`} placeholder={String(r.defaultMin)} value={r.dur} onChange={(e) => set(i, { dur: e.target.value })} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <SaveBar>
-        <SaveState auto={auto} onDone={onDone} />
-      </SaveBar>
-    </form>
+    <div className="adm-form">
+      <p className="adm-meta">{A.services.onStaff.hint}</p>
+      {mine.length ? (
+        <ul className="adm-list">
+          {mine.map((o) => {
+            const { e, price, own } = offerEff(o);
+            const body = (
+              <>
+                <span className="txt">
+                  <span className="plain">{A.pick(o.name)}</span>
+                  <small>
+                    {A.mins(e.durationMin)}
+                    {own && (
+                      <>
+                        {" · "}
+                        <span className="adm-tag lime">{A.services.onStaff.own}</span>
+                      </>
+                    )}
+                    {!o.active && (
+                      <>
+                        {" · "}
+                        <span className="adm-tag">{A.services.inactive}</span>
+                      </>
+                    )}
+                  </small>
+                </span>
+                <span className="end price">{priceText(A, price)}</span>
+              </>
+            );
+            return (
+              <li key={o.serviceId}>
+                {link ? (
+                  <Link className={`adm-item${o.active ? "" : " is-off"}`} href={`/admin/services?open=${o.serviceId}`}>
+                    {body}
+                    <span className="adm-chev">
+                      <NextIcon />
+                    </span>
+                  </Link>
+                ) : (
+                  <div className={`adm-item${o.active ? "" : " is-off"}`}>{body}</div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="adm-meta">{A.staff.none}</p>
+      )}
+      {link && (
+        <Link className="adm-link" href="/admin/services">
+          {A.services.onStaff.all}
+        </Link>
+      )}
+    </div>
   );
 }
 

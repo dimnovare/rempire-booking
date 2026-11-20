@@ -6,11 +6,12 @@
  * Rights (src/lib/auth/rights.ts): the profile is asked by
  * src/lib/admin/staff.ts (it is handed the login); the portrait is
  * «Редактирование сотрудников»; hours, single days, time off and special
- * time are «Редактирование графика работы»; a barber's services, prices
- * and times are «Изменять услуги сотрудников и их длительность».
+ * time are «Редактирование графика работы». A barber's services, prices
+ * and times («Изменять услуги сотрудников и их длительность») are set in
+ * the service's window: services/actions.ts saveServiceAction.
  */
 import { refresh } from "next/cache";
-import { PHOTO_MAX_BYTES, addSpecialTime, removeSpecialTime, saveStaffOffers, saveStaffPhoto, saveStaffProfile, saveWeeklyHours, setDayOverride, type OfferInput } from "@/lib/admin/staff";
+import { PHOTO_MAX_BYTES, addSpecialTime, removeSpecialTime, saveStaffPhoto, saveStaffProfile, saveWeeklyHours, setDayOverride } from "@/lib/admin/staff";
 import { addTimeOff, removeTimeOff } from "@/lib/admin/visits";
 import { requireAdmin } from "@/lib/auth/current";
 import { can } from "@/lib/auth/rights";
@@ -44,20 +45,6 @@ export async function uploadPhoto(staffId: string, form: FormData): Promise<{ ok
   const file = form?.get?.("photo");
   if (!(file instanceof Blob) || file.size < 1 || file.size > PHOTO_MAX_BYTES) return { ok: false, field: "photo" };
   const r = await saveStaffPhoto(business, String(staffId), new Uint8Array(await file.arrayBuffer()), user.id);
-  if (r.ok) refresh();
-  return r;
-}
-
-export async function saveOffers(staffId: string, offers: OfferInput[]): Promise<Result> {
-  const { user, business } = await requireAdmin();
-  if (!can(user, "services.staff")) return NO;
-  const list = (Array.isArray(offers) ? offers : []).slice(0, 200).map((o) => ({
-    serviceId: str(o?.serviceId),
-    offered: o?.offered === true,
-    priceCents: o?.priceCents == null ? null : Number(o.priceCents),
-    durationMin: o?.durationMin == null ? null : Number(o.durationMin),
-  }));
-  const r = await saveStaffOffers(business, String(staffId), list, user.id);
   if (r.ok) refresh();
   return r;
 }
