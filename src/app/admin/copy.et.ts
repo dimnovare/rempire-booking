@@ -862,6 +862,7 @@ export const et: typeof ru = {
         time_off: "Paus või puhkus",
         staff_request: "Meistri taotlus",
         service: "Teenus",
+        service_category: "Teenuste kategooria",
         user: "Konto",
         product_sale: "Toote müük",
         invoice_receiver: "Arvete saaja",

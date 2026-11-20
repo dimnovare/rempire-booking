@@ -863,6 +863,7 @@ export const en: typeof ru = {
         time_off: "Break or vacation",
         staff_request: "Barber's request",
         service: "Service",
+        service_category: "Service category",
         user: "Login",
         product_sale: "Product sale",
         invoice_receiver: "Invoice receiver",

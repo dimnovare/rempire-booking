@@ -919,6 +919,7 @@ export const ru = {
         time_off: "Перерыв или отпуск",
         staff_request: "Запрос барбера",
         service: "Услуга",
+        service_category: "Категория услуг",
         user: "Вход",
         product_sale: "Продажа товара",
         invoice_receiver: "Получатель счетов",
