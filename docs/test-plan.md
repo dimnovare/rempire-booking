@@ -307,6 +307,12 @@ only. 15 minutes.
 The e2e runs on emulated phones (Chromium and WebKit on Windows). That is
 not real Safari or a real installed app, so a real-phone pass is needed.
 
+**BrowserStack for the test month** (Dim, round 14): Claude walks §§ 3–6
+on real iPhones and Androids in the cloud through its connector (several
+models, current and older iOS, Samsung Internet). It cannot install the app
+on a home screen or show push with the screen locked: those two stay on
+Dim's own phone (about 10 minutes).
+
 | Device | Who | What |
 |---|---|---|
 | iPhone, current iOS, Safari | Dim | client booking; visit page; install the staff app; push with the screen locked; tap the push opens the visit |

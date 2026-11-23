@@ -14,11 +14,14 @@ that must pass first: `docs/test-plan.md`.*
   unanswered since 20.11).
 - **Dim chose one more month of Altegio** (round 13, 23.11): Altegio renews
   on 02.12 as usual. Dim is away **30.11–13.12** without internet, so the
-  switch comes after that: day one Monday 04.01 (Altegio one more month as
-  the fallback) or Monday 21.12 (round 14). In Altegio's schedule nobody
-  works on Sundays: the import runs on the Sunday before day one.
+  switch comes after that: **day one is Monday 04.01.2027** (round 14),
+  the import runs on Sunday 03.01 (nobody works on Sundays in Altegio).
+  Altegio renews on 02.12 and 02.01 as the fallback, to 04.02.
+- While Dim is away, Renat tries the admin on staging and reports with
+  «Сообщить о проблеме» (round 14; message 2 of
+  `docs/renat-before-30-11.ru.md`).
 
-## Blockers: none of these is done yet
+## Blockers: none is fully done yet
 
 | # | What | Who | Why it blocks |
 |---|---|---|---|
@@ -27,7 +30,7 @@ that must pass first: `docs/test-plan.md`.*
 | B3 | **Two addresses:** `book.rempire.ee` for clients, `staff.rempire.ee` for staff (round 13); routing by host is not built | Claude builds | On Android only one of the two apps installs while they share an address (`docs/apps.md`) |
 | B4 | **Messaggio:** project login and the sender code «REMPIRE» | Renat → Dim puts them into Vercel | No SMS reminders. A new sender name takes 1–5 working days |
 | B5 | **Production database** on Railway, empty, its own URL and CA | Dim creates it; Claude sets the CA | Staging's database holds demo data |
-| B6 | **Privacy policy** page in RU, ET, EN | Claude drafts, Dim and Renat approve | Google needs it to publish the login; we hold clients' phones and e-mails (GDPR) |
+| B6 | **Privacy policy** page in RU, ET, EN | **Drafted 23.11:** `/ru/privacy`, text in `src/lib/privacy-content.ts` with 16 «[to confirm]» marks. Still: Dim and Renat settle the marks; an «anonymise client» action for erasure requests (clients with visits can't be deleted today) | Google needs it to publish the login; we hold clients' phones and e-mails (GDPR) |
 | B7 | **Error page and monitoring:** a friendly error page with the salon's phone, an uptime check that alerts Dim, database backups | **Built 23.11:** the error pages and `/api/health`, `/api/health/cron`. Still: Dim opens the UptimeRobot account; Claude copies the shop's backup workflow | Today an error shows Next's bare page; nobody would know the booking is down |
 | B8 | **The full test pass** in `docs/test-plan.md`, all green, on the production build | Claude runs it; Dim and Renat do the real-phone part | «The booking can never go down» |
 
@@ -45,9 +48,12 @@ setup from staging (no clients, no visits), then the Altegio import;
 staging's redirected letters keep going to the shop inbox; one more month
 of Altegio.
 
-Round 14 (artifact `1dwcFR6gRYqkwAF23iVkiA`, 23.11): the day one, what
-happens while Dim is away, the accounts (`docs/accounts-plan.md`), and
-testing on a cloud of real phones.
+Round 14 (artifact `1dwcFR6gRYqkwAF23iVkiA`, answered 23.11): day one
+Monday 04.01; Renat tests on staging while Dim is away; two free Resend
+accounts; BrowserStack for the test month plus 10 minutes on a real phone.
+Left to Renat: rempire.ee's Cloudflare account, the salon's Google
+account, whether he gets the down alert, which company pays
+(`docs/renat-before-30-11.ru.md`).
 
 ## The move, in order
 
@@ -79,7 +85,7 @@ testing on a cloud of real phones.
 
 **Day one and the week after**
 - Claude watches errors, the outbox and the cron every few hours.
-- Altegio stays open read-only to 04.12; Renat cancels its renewal.
+- Altegio stays open read-only to 04.02; Renat cancels its renewal before 02.02.
 - Isolta is cancelled a month before its renewal, once invoices run here.
 
 ## Going back
