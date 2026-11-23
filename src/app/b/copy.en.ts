@@ -74,7 +74,7 @@ export const en: Copy = {
     android: "Android",
     iphoneSteps: [
       "Open this page in Safari.",
-      "Tap «Share»: the square with an arrow at the bottom.",
+      "Tap «Share»: the square with an arrow at the bottom. On iOS 26 it is under «•••».",
       "Scroll down and choose «Add to Home Screen».",
       "Tap «Add», then open REMPIRE Team from the home screen and log in.",
     ],
@@ -120,6 +120,7 @@ export const en: Copy = {
     title: "My time",
     modeTime: { now: "Breaks, days off and hours change at once.", ask: "Breaks, days off and hours wait for Renat's answer." },
     modePrice: { now: "Prices change at once.", ask: "New prices wait for Renat's answer." },
+    modeAll: { now: "Breaks, days off, hours and prices change at once.", ask: "Breaks, days off, hours and new prices wait for Renat's answer." },
     add: { block: "Break", vacation: "Vacation", sick: "Sick days", special: "Special time" },
     ahead: "Ahead",
     nothingAhead: "Nothing planned.",

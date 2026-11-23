@@ -74,7 +74,7 @@ export const et: Copy = {
     android: "Android",
     iphoneSteps: [
       "Ava see leht Safaris.",
-      "Vajuta «Jaga»: ruut noolega üles ekraani all.",
+      "Vajuta «Jaga»: ruut noolega üles ekraani all. iOS 26-s on see «•••» all.",
       "Keri alla ja vali «Lisa avaekraanile».",
       "Vajuta «Lisa», ava REMPIRE Team avaekraanilt ja logi sisse.",
     ],
@@ -120,6 +120,7 @@ export const et: Copy = {
     title: "Minu aeg",
     modeTime: { now: "Pausid, vabad päevad ja tööaeg muutuvad kohe.", ask: "Pausid, vabad päevad ja tööaeg ootavad Renati vastust." },
     modePrice: { now: "Hinnad muutuvad kohe.", ask: "Uued hinnad ootavad Renati vastust." },
+    modeAll: { now: "Pausid, vabad päevad, tööaeg ja hinnad muutuvad kohe.", ask: "Pausid, vabad päevad, tööaeg ja uued hinnad ootavad Renati vastust." },
     add: { block: "Paus", vacation: "Puhkus", sick: "Haigus", special: "Eriaeg" },
     ahead: "Ees ootamas",
     nothingAhead: "Midagi pole plaanis.",

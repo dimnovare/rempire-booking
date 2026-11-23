@@ -134,7 +134,7 @@ export function TimeView({ data, tz, today, viewing }: { data: MyTime; tz: strin
     <main className="adm-page bx-time">
       <h1 className="adm-h1">{T.title}</h1>
       <p className="adm-meta">
-        {T.modeTime[timeMode]} {T.modePrice[priceMode]}
+        {timeMode === priceMode ? T.modeAll[timeMode] : `${T.modeTime[timeMode]} ${T.modePrice[priceMode]}`}
       </p>
 
       <div className="bx-time-add" role="group" aria-label={T.title}>

@@ -328,9 +328,12 @@ export function HoursForm({ staffId, hours, onDone }: { staffId: string; hours: 
           );
         })}
       </div>
-      <button type="button" className="adm-btn adm-btn-ghost adm-btn-sm" style={{ alignSelf: "flex-start" }} onClick={() => setDays({ ...days, 2: days[1] ?? [], 3: days[1] ?? [], 4: days[1] ?? [], 5: days[1] ?? [] })}>
-        {A.staff.copyMon}
-      </button>
+      {/* only while Monday has hours: copying a day off would close Tue–Fri at once, and the week saves itself */}
+      {(days[1] ?? []).length > 0 && (
+        <button type="button" className="adm-btn adm-btn-ghost adm-btn-sm" style={{ alignSelf: "flex-start" }} onClick={() => setDays({ ...days, 2: days[1], 3: days[1], 4: days[1], 5: days[1] })}>
+          {A.staff.copyMon}
+        </button>
+      )}
       <SaveBar>
         <SaveState auto={auto} onDone={onDone} />
       </SaveBar>
