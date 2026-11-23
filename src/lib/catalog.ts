@@ -130,7 +130,7 @@ function l10n(v: unknown): L10n {
 }
 
 /** A photo the page may load: one of this site's own files, or an https address. */
-const photoOk = (u: unknown): u is string => typeof u === "string" && (/^\/(?!\/)\S+$/.test(u) || /^https:\/\/\S+$/.test(u));
+export const photoOk = (u: unknown): u is string => typeof u === "string" && (/^\/(?!\/)\S+$/.test(u) || /^https:\/\/\S+$/.test(u));
 
 function locationOf(r: LocationRow, reviews: { count: number; rating: number | null }): CatalogLocation {
   const lat = r.lat == null ? null : Number(r.lat);

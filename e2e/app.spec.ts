@@ -186,6 +186,12 @@ test.describe("moving a visit", () => {
     await page.locator(".slots .slot:not([disabled])").first().click();
     await expectNoSideScroll(page);
     await shot(page, "move");
+    // someone else takes that time first: «только что заняли», and it goes with the next pick (real phones, 23.11)
+    await page.route("**/api/visit/*/move", (r) => r.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({ error: "slot_taken" }) }), { times: 1 });
+    await page.getByRole("button", { name: c.moveHere }).click();
+    await expect(page.getByText(c.taken)).toBeVisible();
+    await page.locator(".slots .slot:not([disabled])").first().click();
+    await expect(page.getByText(c.taken)).toHaveCount(0);
     await page.getByRole("button", { name: c.moveHere }).click();
 
     // back on the visit's page, at the new time
@@ -196,8 +202,9 @@ test.describe("moving a visit", () => {
     await expectNoSideScroll(page);
     await shot(page, "moved");
 
-    // and it can still be cancelled
+    // and it can still be cancelled; the question comes up into view, not below the fold
     await page.getByRole("button", { name: c.cancel }).click();
+    await expect(page.getByRole("button", { name: c.cancelYes })).toBeInViewport();
     await page.getByRole("button", { name: c.cancelYes }).click();
     await expect(page.getByRole("heading", { level: 1, name: c.cancelled })).toBeVisible();
   });
@@ -223,6 +230,8 @@ test.describe("the booking path", () => {
     await page.goto("/ru");
     await hydrated(page);
     await expect(cont(page)).toBeDisabled();
+    // solid over the list: the rows never show through its words (real phones, 23.11)
+    expect(await cont(page).evaluate((b) => getComputedStyle(b).backgroundColor)).toBe("rgb(240, 240, 240)");
     await page.getByRole("radio", { name: c.anyBarber }).click();
     await cont(page).click();
     await page.getByRole("checkbox").first().click();

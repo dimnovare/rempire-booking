@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 function Confirm({ yes }: { yes: string }) {
@@ -15,6 +15,15 @@ function Confirm({ yes }: { yes: string }) {
 /** Two taps: «Cancel the visit», then «Yes, cancel». */
 export function CancelButton({ action, label, sure, yes, keep }: { action: () => Promise<void>; label: string; sure: string; yes: string; keep: string }) {
   const [asking, setAsking] = useState(false);
+  const box = useRef<HTMLFormElement>(null);
+  // The question opens below the fold on a phone, under the browser's own
+  // bar (real iPhone and Galaxy, 23.11): bring it up, or the first tap
+  // seems to do nothing.
+  useEffect(() => {
+    if (!asking) return;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    box.current?.scrollIntoView({ block: "center", behavior: still ? "auto" : "smooth" });
+  }, [asking]);
   if (!asking) {
     return (
       <button type="button" className="btn btn-danger" onClick={() => setAsking(true)}>
@@ -23,7 +32,7 @@ export function CancelButton({ action, label, sure, yes, keep }: { action: () =>
     );
   }
   return (
-    <form action={action} className="taken">
+    <form ref={box} action={action} className="taken">
       <h3>{sure}</h3>
       <Confirm yes={yes} />
       <button type="button" className="btn btn-primary" onClick={() => setAsking(false)}>

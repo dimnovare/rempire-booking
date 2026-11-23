@@ -8,7 +8,7 @@ import { randomBytes } from "node:crypto";
 import type { Business } from "./availability";
 import { hashToken } from "./booking";
 import { withTx, type Querier } from "./db";
-import type { L10n } from "./catalog";
+import { photoOk, type L10n } from "./catalog";
 import { pushVisitChange } from "./push";
 
 export type VisitView = {
@@ -21,6 +21,8 @@ export type VisitView = {
   extraCents: number;
   staffId: string;
   staffName: string;
+  /** the barber's photo, as the booking screen shows it; null without one */
+  staffPhoto?: string | null;
   anyStaff: boolean;
   clientName: string;
   locale: string;
@@ -69,6 +71,7 @@ async function loadVisit(q: Querier, where: string, params: unknown[]): Promise<
     extra_cents: number;
     staff_id: string;
     staff_name: string;
+    staff_photo: string | null;
     any_staff: boolean;
     client_name: string;
     locale: string;
@@ -78,7 +81,7 @@ async function loadVisit(q: Querier, where: string, params: unknown[]): Promise<
     phone: string;
   }>(
     `select a.id, a.status, a.starts_at, a.ends_at, a.total_cents, a.extra_cents, a.staff_id, s.display_name as staff_name,
-            a.any_staff, c.name as client_name, a.locale, a.reminder_min,
+            s.photo_url as staff_photo, a.any_staff, c.name as client_name, a.locale, a.reminder_min,
             l.name as loc_name, l.address, l.phone
        from appointments a
        join staff s on s.id = a.staff_id
@@ -101,6 +104,7 @@ async function loadVisit(q: Querier, where: string, params: unknown[]): Promise<
     extraCents: row.extra_cents,
     staffId: row.staff_id,
     staffName: row.staff_name,
+    staffPhoto: photoOk(row.staff_photo) ? row.staff_photo : null,
     anyStaff: row.any_staff,
     clientName: row.client_name,
     locale: row.locale,
