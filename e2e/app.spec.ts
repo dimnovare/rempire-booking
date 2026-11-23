@@ -58,7 +58,15 @@ async function bookMilena(page: Page, phone: string, dayIndex = 3, snap: (name: 
   await page.locator("#f-phone").fill(phone);
   await page.getByRole("button", { name: c.book, exact: true }).click();
   await expect(page.getByText(c.errConsent)).toBeVisible();
+  // the policy's link opens the policy in a new tab and leaves the tick and the form as they were
+  const policy = page.locator("#f-consent-words a");
+  await expect(policy).toHaveAttribute("href", "/ru/privacy");
+  const [tab] = await Promise.all([page.context().waitForEvent("page"), policy.click()]);
+  await tab.close();
+  await expect(page.locator("#f-consent")).toHaveAttribute("aria-checked", "false");
+  await expect(page.locator("#f-name")).toHaveValue("App Test Client");
   await page.locator("#f-consent").click();
+  await expect(page.locator("#f-consent")).toHaveAttribute("aria-checked", "true");
   await snap("4-details");
   await page.getByRole("button", { name: c.book, exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: c.booked })).toBeVisible();

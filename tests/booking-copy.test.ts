@@ -57,6 +57,21 @@ describe("the reminder's time", () => {
       expect(c.byeTitle("")).not.toContain("undefined");
     }
   });
+
+  it("the tick's words: before the link, the privacy policy's link, after it; all three filled in", () => {
+    for (const l of LOCALES) {
+      const [before, link, after] = COPY[l].consent;
+      expect(COPY[l].consent, l).toHaveLength(3);
+      expect(before.trim(), `${l} before`).not.toBe("");
+      expect(link.trim(), `${l} link`).not.toBe("");
+      expect(after.trim(), `${l} after`).not.toBe("");
+      // one sentence: the words run into the link with a space, and it ends with a full stop
+      expect(before.endsWith(" "), l).toBe(true);
+      expect(`${before}${link}${after}`.endsWith("."), l).toBe(true);
+      // the salon page's foot names the same page
+      expect(COPY[l].policy, l).toBeTruthy();
+    }
+  });
 });
 
 describe("a client moves or cancels at any time (Renat, 19.11.2026)", () => {

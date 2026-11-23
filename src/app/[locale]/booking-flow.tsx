@@ -1026,6 +1026,10 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
 
   const detailsScreen = () => {
     if (!slot) return null;
+    const tickConsent = () => {
+      setConsent((v) => !v);
+      if (errors.consent) setErrors(({ consent: _drop, ...rest }) => rest);
+    };
     return (
       <form id="bf" noValidate onSubmit={submit}>
         <div className="blk top">
@@ -1072,23 +1076,23 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
               </select>
               <ChevronIcon dir="right" />
             </label>
+            {/* the tick is the button, named by its words; a tap on the words ticks it too, as before, but the
+                policy's link only opens the policy, in a new tab, so the form stays as filled in */}
             <div className={`field${errors.consent ? " err" : ""}`}>
-              <button
-                type="button"
-                id="f-consent"
-                className="consent"
-                role="checkbox"
-                aria-checked={consent}
-                onClick={() => {
-                  setConsent((v) => !v);
-                  if (errors.consent) setErrors(({ consent: _drop, ...rest }) => rest);
-                }}
-              >
-                <span className="check">
-                  <CheckIcon size={14} width={3.2} />
+              <div className="consent">
+                <button type="button" id="f-consent" role="checkbox" aria-checked={consent} aria-labelledby="f-consent-words" onClick={tickConsent}>
+                  <span className="check">
+                    <CheckIcon size={14} width={3.2} />
+                  </span>
+                </button>
+                <span id="f-consent-words" onClick={(e) => !(e.target as Element).closest("a") && tickConsent()}>
+                  {c.consent[0]}
+                  <a className="link" href={`/${lang}/privacy`} target="_blank" rel="noopener">
+                    {c.consent[1]}
+                  </a>
+                  {c.consent[2]}
                 </span>
-                <span>{c.consent}</span>
-              </button>
+              </div>
               {errors.consent && <span className="ferr">{errors.consent}</span>}
             </div>
             {formError && (
@@ -1407,6 +1411,12 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
               </>
             )}
           </section>
+          {/* the page's foot: the privacy policy, in a new tab, so this page stays where it was */}
+          <p className="ab-label">
+            <a className="link" href={`/${lang}/privacy`} target="_blank" rel="noopener">
+              {c.policy}
+            </a>
+          </p>
         </div>
         {rateWith > 0 && (
           <ReviewSheet
