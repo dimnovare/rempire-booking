@@ -426,7 +426,8 @@ describe("«Отменить выбранные»", () => {
     );
     const before = await query("select 1 from notifications where appointment_id = $1 and kind = 'cancelled'", [v.anna]);
     expect(before).toHaveLength(0);
-    await query("update appointments set starts_at = now() + interval '2 days', ends_at = now() + interval '2 days 1 hour', blocked_until = now() + interval '2 days 1 hour' where id = $1", [v.anna]);
+    // far ahead: two days out lands on another demo visit at some hours of the day
+    await query("update appointments set starts_at = now() + interval '400 days', ends_at = now() + interval '400 days 1 hour', blocked_until = now() + interval '400 days 1 hour' where id = $1", [v.anna]);
     expect(await cancelRecords(demo.business, owner, [v.anna])).toMatchObject({ ok: true, cancelled: 1 });
     expect(await query("select 1 from notifications where appointment_id = $1 and kind = 'cancelled'", [v.anna])).toHaveLength(1);
   });

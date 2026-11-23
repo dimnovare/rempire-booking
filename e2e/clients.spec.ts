@@ -1169,7 +1169,9 @@ test.describe("clients", () => {
       const row = file.rows.find((r) => r[0] === two[0])!;
       expect(row[1]).toMatch(/^\+3725555\d{4}$/);
       expect(typeof row[2]).toBe("number");
-      expect(row[3]).toBeGreaterThanOrEqual(1);
+      // a count, not ≥ 1: only visits already started count, and the demo's
+      // visits today start from 10:00, so before its time this client has 0
+      expect(Number.isInteger(row[3]) && (row[3] as number) >= 0).toBe(true);
       expect(row[4]).toBe(0);
       // with a search the file has only what the list has
       await search.fill("Demo client 3");

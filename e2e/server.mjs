@@ -34,6 +34,23 @@ const env = {
   SEED_BUSY: "",
   EMAIL_TRANSPORT: "console",
   SMS_TRANSPORT: "console",
+  // Blank on purpose: `next dev` also reads .env.development.local, and a
+  // key set there would win over EMAIL_TRANSPORT=console (src/lib/email.ts)
+  // or call the live shop. Next never fills a variable that is already set,
+  // even to "", so these stay off whatever the local files hold.
+  RESEND_API_KEY: "",
+  EMAIL_FROM: "",
+  RESEND_WEBHOOK_SECRET: "",
+  TEST_MAIL_TO: "",
+  MESSAGGIO_LOGIN: "",
+  MESSAGGIO_SENDER: "",
+  SMS_TEST_TO: "",
+  SHOP_API_URL: "",
+  SHOP_API_SECRET: "",
+  SHOP_SALES: "",
+  GOOGLE_CLIENT_ID: "",
+  GOOGLE_CLIENT_SECRET: "",
+  CRON_SECRET: "",
   // «Найти» in «Контакты» answers from src/lib/geocode.ts itself: the e2e server never calls OpenStreetMap's geocoder
   GEOCODER: "fake",
   // no push keys: the e2e server must never call a push service

@@ -1,8 +1,10 @@
 # Accounts in use (booking)
 
-*17.11.2026, at Dim's request: every outside account the booking app uses
-today, how it is signed in, which env var names it fills, and what has to
-switch at the move to rempire.ee. The shop's own registry is
+*First written 17.11.2026. Rewritten 23.11.2026 at Dim's request: every
+outside account the booking app uses, how it is signed in, which env var
+names it fills, its state today, and what has to happen at the launch on
+rempire.ee. The launch order itself is `docs/launch.md`; the tests before
+it are `docs/test-plan.md`. The shop's own registry is
 `rempire-web/docs/accounts.md`; this file covers the booking app only.*
 
 ## Rules
@@ -13,53 +15,79 @@ switch at the move to rempire.ee. The shop's own registry is
 - **One business identity:** the shop's Google account
   rempireshopinfo@gmail.com, with 2FA on Renat's phone. GitHub user
   `rempireshop` signs in to Vercel and Railway.
-- The staff login addresses (`ADMIN_BOOTSTRAP_EMAIL`) are in Vercel only,
-  not here.
-- Which Chrome profile holds which account: Rempire's browser has the shop's
-  accounts (Vercel, Railway, Resend); Dim's own has GitHub `dimnovare` and
-  Cloudflare `diipsolutions.eu`.
+- Staff login addresses (`ADMIN_BOOTSTRAP_EMAIL`) are in Vercel only.
+- **Which browser holds what:** Rempire's Chrome profile (`ec8c7d97`) has
+  the shop's accounts (Vercel, Railway, Resend, Google Cloud) and Renat's
+  Altegio and Isolta logins, used read-only. Dim's own profile (`dc8ea0e6`)
+  has GitHub `dimnovare` and Cloudflare `diipsolutions.eu`.
+
+## The deadline
+
+Altegio costs 92,99 € a month and **renews itself on 02.12.2026** (paid
+to 04.12; `docs/port-check.md`). Isolta costs 94,80 € + VAT a year, renews
+itself, and must be cancelled a month before; its renewal date is only on
+Renat's last Isolta invoice (asked on his page, `switch.isolta`).
 
 ## Registry
 
-| Service | What it does for booking | Account / sign-in | Holds (names only) | Pays | At the move |
-|---|---|---|---|---|---|
-| **GitHub** repo `dimnovare/rempire-booking` (private) | The code. Actions `ci.yml`: check → deploy → noindex | Dim's GitHub `dimnovare` | secret `VERCEL_TOKEN`; variables `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` | free | Who owns the repo is still open (kickoff §9). If it moves to `rempireshop`, check that the secret and the variables came along. In `ci.yml`: change `DOMAIN` and drop `SEED_DEMO=yes` from the deploy line |
-| **Vercel** team «Rempire» (Pro), project `rempire-booking` | Hosting (`fra1`), the 5-minute cron (`vercel.json`) | GitHub `rempireshop`. Dim's own Vercel login is not a member; CI deploys with token `rempire-booking-ci` (this project only, expires **17.11.2027**) | the env vars below | Dim's card (the team's Pro, $20 a month, shared with the shop) | Add the booking host on rempire.ee, set `SITE_URL` and `ALLOW_INDEXING=yes`. Decide whether `rempire-booking.diipsolutions.eu` stays as staging |
-| **Railway**, the shop's workspace «rempireshop's Projects» (Hobby), project `rempire-booking-staging` | Postgres 18, EU West. Demo data only | GitHub `rempireshop` | fills `DATABASE_URL` (its `DATABASE_PUBLIC_URL`) and `DATABASE_SSL_CA` (the CA expires **14.02.2029**) | Dim's card today, then the company card (the shop's card plan) | A production database without demo data (a new project or service), with its own `DATABASE_URL` and CA. Production never points at the staging database |
-| **Cloudflare**, Dim's account, zone `diipsolutions.eu` | Staging DNS: CNAME `rempire-booking` → Vercel, TXT `_vercel` (`docs/staging-setup.md`). Resend, added 17.11: CNAME `send.rempire-booking` → `send.forge.rmta.net`, CNAME `rsend.rempire-booking` → `rsend-euw1.forge.rmta.net` (both DNS only), TXT `resend._domainkey.rempire-booking` (DKIM). No MX: inbound mail is not needed, and an MX on `rempire-booking` would clash with its CNAME | Dim's browser | — | free | The records stay while staging lives. The `send.`/`rsend.` records of the zone itself belong to Dim's own Resend; leave them alone |
-| **Cloudflare**, zone `rempire.ee` | DNS of Renat's site (nameservers `vicky` / `ligia`; mail MX at zone.ee) | **Renat has access** (Dim, 17.11); not the shop's Cloudflare, not Dim's | — | ? | Needed for the booking CNAME (`broneeri.` or `book.`) and for Resend on rempire.ee. Not needed before the move |
-| **Resend**, booking account (free) | Staff login codes; later the booking confirmations | rempireshopinfo+booking@gmail.com, made 17.11 | `RESEND_API_KEY`, `EMAIL_FROM` (`booking@rempire-booking.diipsolutions.eu`, Dim, 17.11) | free: 1 domain, 100 a day, 3 000 a month | Domain `rempire-booking.diipsolutions.eu` added 17.11 (region Ireland, eu-west-1, no click or open tracking); DNS in Dim's Cloudflare, see the row above. The free plan has one domain: at the move, remove the staging domain, add rempire.ee and change `EMAIL_FROM` (or pay for more). The shop's own Resend (`@rempireshop.com`) is a separate account and stays untouched |
-| **Google Cloud**, project «REMPIRE Booking» (ID `rempire-booking`) | Staff «Войти через Google» | rempireshopinfo@gmail.com (2FA on Renat's phone), the project's only Owner; made 17.11 in Rempire's browser | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | free, no billing account | Details and hand-over below (§ Google Cloud). Its own project, not inside the shop's `rempire-shop` project, which runs the shop's live customer login |
-| **Vercel cron** | Runs `/api/cron/outbox` every 5 minutes | — | `CRON_SECRET` (set by Dim 17.11; without it a call answers 401) | — | Stays as it is |
-| **Staff logins** (the app's own) | Owner logins to `/admin` | — | `ADMIN_BOOTSTRAP_EMAIL` (5 addresses, set by Dim), `ADMIN_BOOTSTRAP_PASSWORD` (Sensitive) | — | On staging all 5 have the shared password since 17.11. A fresh production database gets them again on its first deploy. Delete both vars once everyone is in |
-| **SMS provider** | 2-hour reminders (A6), client login codes (A8) | **Not chosen yet:** Dim asks Renat whether he has his own Messaggio account (17.11); otherwise Messente | names added with the provider | prepaid | The sender name «REMPIRE» stays the same |
-| **Messaggio** | Renat's SMS today | Renat's login. Whether he uses it directly or through Altegio is not known yet | — | Renat | A candidate to keep; see the round-2 page |
-| **Altegio** | The live booking system: Renat's clients and visits | Renat's login | — | Renat (amount not recorded) | A7 imports staff, services, clients and future visits. Then the rempire.ee «book» buttons point to the new app. Altegio stays read-only for a few weeks, then Renat cancels it |
-| **Isolta** (Finago) | Invoices to the barbers | Renat's login | — | Renat | Replaced by the app. Export the receivers and the invoice history first |
-| **rempire.ee website** | Renat's React site; its «book» buttons go to Altegio | whoever runs it (unknown, like the DNS) | GA4 `G-FZ84GVRXZ4`, GTM `GTM-T43NKNP` | ? | Point the buttons at the booking host |
-| **Telegram** | `@rempireshop_bot` is the shop's order pings: **never touch**. Renat is making a new bot for tattoo booking | Renat (BotFather) | — | free | An optional channel later |
-| **Web Push** (VAPID) | The barber PWA (Phase B): pushes to barbers' and Renat's phones | no account: a key pair Dim made on 17.11 with `npx web-push generate-vapid-keys`; it lives only in Vercel | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (`mailto:rempireshopinfo@gmail.com`, Dim, 17.11: an inbox someone reads, where Apple, Google or Mozilla can write if pushes go wrong) | free | Keep the same two keys: new keys cut off every subscribed phone. The subject can stay; changing it is safe and needs only a redeploy |
-| **Montonio** | Only if deposits or prepayments are wanted (decision 15) | Renat's contract | — | Renat | — |
+«Since 17.11» says what changed against the first version of this file.
 
-## Env vars in Vercel (`rempire-booking`, Production)
+| Service | What it does for booking | Account / sign-in | Env var names | Pays | State on 23.11 | At the launch | Since 17.11 |
+|---|---|---|---|---|---|---|---|
+| **GitHub** `dimnovare/rempire-booking` (private) | The code; Actions `ci.yml`: check → deploy → noindex check | Dim's `dimnovare`; commits use his noreply address | secret `VERCEL_TOKEN` (token `rempire-booking-ci`, this project only, expires **17.11.2027**); variables `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`; `DOMAIN` is written in `ci.yml` | free | set up | `ci.yml`: change `DOMAIN`; drop `SEED_DEMO`, `SEED_BUSY` and `DB_DRIVER=auto` from the deploy line (with `auto` and no `DATABASE_URL`, production would quietly run on an in-memory demo database); keep the noindex check for staging only. Who owns the repo is still open | `SEED_BUSY=yes` added to the deploy line (c60169d) |
+| **Vercel** team «Rempire» (Pro), project `rempire-booking`, region `fra1` | Hosting; the cron (`vercel.json`, every 5 minutes) | GitHub `rempireshop`; CI deploys with the project token | see «Env vars» | Dim's card; Pro ($20 a month) shared with the shop | set up | Add the booking host(s), set `SITE_URL`, production database vars, then `ALLOW_INDEXING=yes` last. The shop wants to go back to Hobby; the 5-minute cron needs Pro | `SHOP_API_URL`, `SHOP_API_SECRET` set 18.11 |
+| **Vercel cron** `/api/cron/outbox` | Sends every message; since 17.11 also sends barber sales to the shop and makes the month's invoice drafts | — | `CRON_SECRET` | — | runs | stays | does more |
+| **Railway**, workspace «rempireshop's Projects» (Hobby), project `rempire-booking-staging` | Postgres 18, EU West: demo, generated and masked data | GitHub `rempireshop`; the local `railway` CLI cannot see it | `DATABASE_URL` (its `DATABASE_PUBLIC_URL`), `DATABASE_SSL_CA` (the CA expires **14.02.2029**) | Dim's card | set up | A production Postgres of its own, without demo data, with its own URL and CA. Staging never becomes production. Open: what carries over (`docs/launch.md`, decision «data») | — |
+| **Cloudflare**, Dim's zone `diipsolutions.eu` | Staging DNS: CNAME `rempire-booking` → Vercel, TXT `_vercel`; Resend: CNAME `send.rempire-booking`, CNAME `rsend.rempire-booking`, TXT `resend._domainkey.rempire-booking` (all DNS only, no MX) | Dim's browser | — | free | set up | Stays while staging lives. The zone's own `send.`/`rsend.` records are Dim's Resend: leave them | — |
+| **Cloudflare**, zone `rempire.ee` | Will hold the booking CNAME(s) and the Resend records | **Unknown who.** Renat «has access» (17.11); it is in neither browser. Nameservers on Cloudflare, mail MX at zone.ee | — | ? | **no access yet** | Needed before the DNS, Resend and Google steps. **On the critical path for 2.12** | now urgent |
+| **Resend**, booking account (free) | Staff login codes, client letters, invoice PDFs; the «Открыт» mark from its webhook | rempireshopinfo+booking@gmail.com | `RESEND_API_KEY`, `EMAIL_FROM` (`booking@rempire-booking.diipsolutions.eu`), `RESEND_WEBHOOK_SECRET` | free: 1 domain, 100 a day, 3 000 a month | sends. Webhook secret: not recorded as set (the route answers 503 without it). Open tracking is off on the staging domain, so no «Открыт» arrives | The free plan holds one domain: remove the staging one (or pay), add a rempire.ee sending subdomain with its 3 records, change `EMAIL_FROM`, add the webhook `https://<host>/api/webhooks/resend` (event `email.opened`) with its secret. Altegio sends about 1 100 e-mails a month: inside the cap, but staging and production would share it | webhook added (514e424) |
+| **Messaggio** | 2-hour SMS reminder, birthday SMS, no-show invitation (`src/lib/sms.ts`) | **Renat's own account** (decision 30). Altegio sends its SMS through it today. Dim has no login | `MESSAGGIO_LOGIN` (Sensitive), `MESSAGGIO_SENDER`, `SMS_TEST_TO` (staging only) | Renat, prepaid; about 600 SMS a month | code built and tested; **never run against the live account**; vars not recorded as set | Renat gives the project login and the sender code of «REMPIRE» (a new sender takes Messaggio 1–5 working days). Test on staging with `SMS_TEST_TO`. **Switch Altegio's own SMS off at the cut-over**, or imported visits get two reminders | chosen 19.11 (was «not chosen») |
+| **Google Cloud**, project «REMPIRE Booking» (`rempire-booking`) | Staff «Войти через Google» | rempireshopinfo@gmail.com, the only Owner; consent screen in **Testing**, 3 test users | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | free | set up. A staging sign-in failed on 18.11 (Google answered 400); logging improved (ab0848b); cause not recorded | Redirect URI per staff host; Branding needs the **privacy policy page (not built)**; then «Publish app». Details below | open bug |
+| **Shop partner API** (`rempire-web`) | Product lookup, search, photo match; later the barbers' sales into shop stock | — | booking: `SHOP_API_URL` (`https://rempireshop.com`), `SHOP_API_SECRET`, `SHOP_SALES`; shop: `BOOKING_API_SECRET` (Production, Sensitive) | photo match runs on the shop's OpenAI account (fractions of a cent a photo) | **read half live** since 18.11; both secrets set. The sales half (barber-sales, purchase prices, shop migration `230_partner_api.sql`) is on the local shop branch `booking-partner-api`, **not pushed** (as of 18.11) | Merge into the shop's `main` only with Dim's OK: it runs migration 230 on the shop's live database. Then `SHOP_SALES=on`; Renat enters purchase prices | new row |
+| **Web Push** (VAPID) | Pushes to the staff app; since 18.11 also clients' reminder notifications | no account: one key pair, only in Vercel | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (`mailto:rempireshopinfo@gmail.com`) | free | set up | Keep the same two keys: new keys cut off every subscribed phone | clients use it too |
+| **Staff logins** (the app's own) | Owner, admin and barber logins | — | `ADMIN_BOOTSTRAP_EMAIL`, `ADMIN_BOOTSTRAP_PASSWORD` | — | staging: the owners, plus the barber test login rempireshopinfo+barber@gmail.com | A fresh production database gets the owners on its first deploy. Barbers need their e-mails from Renat. Delete both vars once everyone is in | — |
+| **Altegio** | The live booking system; source of the import | Renat's login, read-only in Rempire's browser | — | Renat, 92,99 € a month | read access since 19.11. **The client and visit import (A7) is not built.** Its Excel exports e-mail a link to Renat's address; never pressed from here | Renat forwards the clients, visits and services exports. Reviews: `scripts/import-reviews.ts` (`--no-mask` at the move). Freeze Altegio during the import, switch off its client notifications, cancel before 02.12 | — |
+| **Isolta** (Finago) | Invoices to the barbers today; history to import | Renat's login, read-only | — | Renat, 94,80 € + VAT a year | read access; importer built (`scripts/import-isolta-invoices.ts`) | Isolta's data export zip from Renat; import the 422 issued invoices; numbering goes on at 423 | importer built |
+| **Google Business Profile** | Altegio's «Записаться» on Google Maps is on today; ours replaces it | rempireshopinfo@gmail.com | — | free | not yet | Set the booking link to the client host. How Altegio's button is wired is not known | new row |
+| **OpenStreetMap** (tiles and Nominatim) | Map on the salon page; «Найти» in «Настройки → Контакты» (`src/lib/geocode.ts`) | no account; its usage policy kept (1 request a second, own User-Agent) | `GEOCODER` (`fake` in e2e only) | free | built | nothing | new row |
+| **rempire.ee website** | Its «book» buttons go to Altegio | **unknown who runs it** | GA4 and GTM live on that site only; booking has no analytics | ? | — | Point the buttons at the client host | — |
+| **Renat's questions page** `/ru/q/<token>` | Renat's answers, autosaved | token only with Dim; stored in the staging database | — | — | live on staging; set 3 (10 questions, 20.11) **not answered yet** | Save the answers before staging is ever torn down | new row |
+| **Telegram** | **Not used.** Renat (18.11): barber notifications in the app. Never touch `@rempireshop_bot` | — | — | — | — | — | dropped |
+| Montonio | Not used: no deposits (decision 15) | Renat | — | — | — | — | — |
 
-Read from the Vercel dashboard on 17.11.2026, names only.
+Plain links with no account behind them: Google Maps, WhatsApp, Instagram,
+Facebook (salon page, letters, visit window). Fonts are self-hosted.
 
-| Name | Set | By | Note |
+## Env vars
+
+«Staging» says whether a doc or commit records the value as set in
+Vercel's Production environment of `rempire-booking`; «?» = not recorded.
+On staging «Настройки → Уведомления → Каналы отправки» shows which
+channels are live, without values.
+
+| Name | Production | Staging | Note |
 |---|---|---|---|
-| `DATABASE_URL` | yes | Dim | Secret; Railway's `DATABASE_PUBLIC_URL` |
-| `DATABASE_SSL_CA` | yes | Claude | the database's CA, public |
-| `ADMIN_BOOTSTRAP_EMAIL` | yes | Dim | 5 addresses |
-| `ADMIN_BOOTSTRAP_PASSWORD` | yes | Dim | Sensitive |
-| `RESEND_API_KEY` | yes | Dim | Sensitive |
-| `EMAIL_FROM` | yes | Dim | `booking@rempire-booking.diipsolutions.eu`; its domain is in Resend since 17.11 |
-| `DB_DRIVER`, `SEED_DEMO` | per deploy | CI | `auto`, `yes`; `SEED_DEMO` must go at the move |
-| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | yes | Dim | 17.11; client `rempire-booking` in Google Cloud. Mark the secret Sensitive (Vercel shows «Needs Attention») |
-| `CRON_SECRET` | yes | Dim | 17.11; Sensitive |
-| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | yes | Dim | 17.11; one pair, never the shop's; the private key Sensitive. Staging's «Ещё» shows push as ready |
-| `SHOP_API_URL`, `SHOP_API_SECRET` | no | Dim | Phase C shop link. Unset = the fake shop. Set only after the shop branch `booking-partner-api` is live; the shop gets the same secret as `BOOKING_API_SECRET`. Mark the secret Sensitive |
-| `SITE_URL`, `ALLOW_INDEXING` | no | — | only at the move |
-| SMS names | no | — | with the provider |
+| `ALLOW_INDEXING` | `yes`, set **last** | unset | Also ends the test run (`src/lib/test-run.ts`): the mail guard, the `SMS_TEST_TO` filter, `TEST-` invoice numbers and the banner go. From then on real clients get real SMS and e-mails. Never on staging |
+| `SITE_URL` | yes | unset | unset falls back to the staging URL |
+| `DATABASE_URL` | yes | yes (Dim) | Railway's public URL |
+| `DATABASE_SSL_CA` | yes | yes | the database's CA, public |
+| `DATABASE_SSL_NO_VERIFY`, `DATABASE_POOL_MAX` | no | ? | last resort / tuning |
+| `DB_DRIVER` | `pg` or unset | `auto`, by CI | |
+| `SEED_DEMO`, `SEED_BUSY` | **must be unset** | `yes`, by CI | `SEED_BUSY` is not in `.env.example` yet |
+| `DEMO_LOGINS`, `PGLITE_PATH`, `SALES_MINUTE_MS`, `GEOCODER` | never | — | local, tests, e2e |
+| `BUSINESS_SLUG` | optional (`rempire`) | ? | |
+| `ADMIN_BOOTSTRAP_EMAIL`, `ADMIN_BOOTSTRAP_PASSWORD` | first deploy only | yes (Dim) | delete once everyone is in |
+| `RESEND_API_KEY`, `EMAIL_FROM` | yes; `EMAIL_FROM` on rempire.ee | yes | |
+| `RESEND_WEBHOOK_SECRET` | if «Открыт» is wanted | ? | one per webhook endpoint |
+| `EMAIL_TRANSPORT`, `SMS_TRANSPORT` | **must be unset** | ? | `console` silently stops sending, even with the Resend or Messaggio keys set (e-mail since 23.11) |
+| `TEST_MAIL_TO` | no | ? | where staging redirects letters to non-staff; default rempireshopinfo@gmail.com. Proposed (round 13): Dim's inbox before the full test pass |
+| `MESSAGGIO_LOGIN`, `MESSAGGIO_SENDER` | yes | ? | the login Sensitive |
+| `SMS_TEST_TO` | no (ignored once indexing is on) | ? | the testers' own numbers, E.164 |
+| `CRON_SECRET` | yes | yes (Dim) | Sensitive |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | yes | yes (Dim) | the same client can stay |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | yes, the same keys | yes (Dim) | private key Sensitive |
+| `SHOP_API_URL`, `SHOP_API_SECRET` | yes | yes (18.11) | the secret equals the shop's `BOOKING_API_SECRET` |
+| `SHOP_SALES` | `on` once the shop's sales half is live | off | |
 
 The full list with comments is `.env.example`.
 
@@ -68,77 +96,34 @@ The full list with comments is `.env.example`.
 Set up 17.11.2026 by Dim, with Claude filling the forms in Rempire's
 browser.
 
-- **Account:** the shop's Google account rempireshopinfo@gmail.com. It is
-  the only principal (Owner) in IAM. No organization, no billing account
-  (OAuth login is free).
+- **Account:** the shop's Google account rempireshopinfo@gmail.com, the
+  only principal (Owner) in IAM. No organization, no billing account.
 - **Project:** «REMPIRE Booking», ID `rempire-booking`.
 - **Google Auth Platform → Branding:** app name «REMPIRE»; support and
-  developer contact rempireshopinfo@gmail.com. No logo (a logo would require
-  Google's verification). Home page, privacy policy and authorized domains
-  are empty.
-- **Audience:** External, publishing status **Testing**.
-  - Only test users can sign in with Google; the cap is 100.
-  - Today there are 3: Dim's, Renat's and the shop's Google accounts. The
-    addresses are in the console, not here.
-  - Every new staff member who wants the Google button has to be added
-    under Audience → Test users until the app is published.
-  - Google accepts only addresses that are Google accounts. Staff without
-    one log in with the password or the e-mail code.
+  developer contact rempireshopinfo@gmail.com. No logo (a logo would
+  require Google's verification). Home page, privacy policy and authorized
+  domains are empty.
+- **Audience:** External, publishing status **Testing**. Only test users
+  can sign in with Google (cap 100); today 3: Dim's, Renat's and the shop's
+  Google accounts. New staff who want the Google button are added under
+  Audience → Test users until the app is published. Staff without a Google
+  account log in with the password or the e-mail code.
 - **Exact addresses:** the app compares the address from Google exactly,
-  dots included. Renat's Google account has no dot, so `ADMIN_BOOTSTRAP_EMAIL`
-  lists it that way (Dim, 17.11). The owner made earlier from the dotted
-  spelling had never logged in; it is switched off under «Доступ» (17.11).
-- **Clients:** one, «rempire-booking», Web application, created 17.11. Its
-  redirect URIs:
-  - `https://rempire-booking.diipsolutions.eu/api/auth/google/callback`
-  - `http://localhost:3400/api/auth/google/callback`
-- **Secret:** Google showed the client secret once, at creation. It is only
-  in Vercel. If it is lost, add a new secret on the client in Google Cloud,
-  put it in Vercel and redeploy, then delete the old one.
+  dots included. Renat's Google account has no dot, so
+  `ADMIN_BOOTSTRAP_EMAIL` lists it that way.
+- **Client:** «rempire-booking», Web application. Redirect URIs:
+  `https://rempire-booking.diipsolutions.eu/api/auth/google/callback` and
+  `http://localhost:3400/api/auth/google/callback`.
+- **Secret:** shown once, at creation; only in Vercel. If lost: add a new
+  secret on the client, put it in Vercel, redeploy, delete the old one.
 
-**To hand it over** to another Google account (Renat's company account, or
-someone else):
+**To hand it over** to another Google account: IAM → Grant access → the
+new account as Owner; they accept; change the support and contact
+e-mails under Branding; remove rempireshopinfo@gmail.com if wanted. The
+client ID and secret stay, so Vercel needs no change.
 
-1. IAM → Grant access → the new account as **Owner**.
-2. The new owner accepts the invitation from the e-mail.
-3. Change the support and contact e-mails under Branding.
-4. Remove rempireshopinfo@gmail.com from IAM, if wanted.
-
-The client ID and the secret stay the same, so Vercel needs no change.
-
-**At the move to rempire.ee:**
-
-1. Add the redirect URI `https://<booking host>/api/auth/google/callback`.
-2. Under Branding:
-   - Home page: the booking host.
-   - Privacy policy: a page on rempire.ee.
-   - Authorized domain: `rempire.ee`.
-3. Audience → **Publish app**. With the scopes `openid email` alone, no
-   review by Google is needed. After that, any staff Google account can
-   sign in without being a test user. The app still lets in only users who
-   exist under «Доступ».
-4. Remove the staging and localhost URIs once staging is gone.
-
-## The move to rempire.ee, in order
-
-1. **Get the rempire.ee Cloudflare login** from whoever runs Renat's site.
-2. **Production database** on Railway, without demo data; set its
-   `DATABASE_URL` and `DATABASE_SSL_CA`.
-3. **CI:** drop `SEED_DEMO=yes` from the deploy line and set `DOMAIN` to the
-   booking host. Decide whether staging stays as a second environment.
-4. **Vercel domain:** add the booking host (`broneeri.rempire.ee` or
-   `book.rempire.ee`) and its CNAME on rempire.ee. Set `SITE_URL`.
-5. **Resend:** add rempire.ee and its 3 DNS records, then change `EMAIL_FROM`.
-   Keep both VAPID keys as they are.
-6. **Google:** add the new redirect URI, the home page, the privacy policy
-   and `rempire.ee`, then publish the app (§ Google Cloud).
-7. **SMS:** check that the sender name is approved for the live account.
-8. **Altegio import (A7);** no changes in Altegio while it runs.
-9. **The rempire.ee «book» buttons** point to the booking host.
-10. **Indexing:** `ALLOW_INDEXING=yes` (`src/lib/indexing.ts`).
-11. **Afterwards:**
-    - Altegio stays read-only for a few weeks, then Renat cancels it.
-    - Isolta goes once the invoices run in the app.
-    - Delete `ADMIN_BOOTSTRAP_*` once everyone is in.
-    - Renew the Vercel token before 17.11.2027.
-    - Move Railway and Vercel to the company card.
+**At the move to rempire.ee:** add the redirect URI
+`https://<staff host>/api/auth/google/callback`; under Branding the home
+page, the privacy policy on rempire.ee and the authorized domain
+`rempire.ee`; then Audience → Publish app (scopes `openid email` need no
+review). Remove the staging and localhost URIs once staging is gone.

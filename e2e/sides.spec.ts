@@ -87,7 +87,9 @@ test.describe("an owner who cuts too, on a phone", () => {
     const visits = await page.locator(".bx-cal .cal-v:visible").count();
     expect(visits).toBeGreaterThan(0);
     await expect(line).toContainText(/\d+ [а-я]+ · /);
-    await expect(line).toContainText(/ · \d+([.,]\d\d)? €$/);
+    // «· Выходной» follows on a day he doesn't work: the demo's visits are
+    // seeded today whatever the day is, and the salon is closed on some days
+    await expect(line).toContainText(new RegExp(` · \\d+([.,]\\d\\d)? €( · ${B.day.off})?$`));
     const seg = page.locator(".bx-cal .cal-bar").getByRole("navigation", { name: B.own.view });
     await expect(seg.getByRole("link")).toHaveText([B.own.day, B.own.week]);
     await expect(seg.getByRole("link", { name: B.own.day })).toHaveAttribute("aria-current", "page");

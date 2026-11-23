@@ -131,7 +131,9 @@ test.describe("schedule", () => {
       // a shift says its start and its end; a day of the demo's visits has their number at its foot
       const shift = root(page).locator(".sc-cell.k-work").first();
       expect((await shift.locator(".sc-shift > span").allInnerTexts()).slice(0, 2).join(" ")).toMatch(/^\d{2}:\d{2} \d{2}:\d{2}$/);
-      await expect(root(page).locator(`.sc-cell[data-date="${TODAY}"] .sc-n`).filter({ hasText: /^\d+$/ }).first()).toHaveCSS("color", "rgb(41, 194, 53)");
+      // any working day with visits: today may be a day the salon is closed (the demo's
+      // visits are seeded today whatever the day is, and a day off shows no count)
+      await expect(root(page).locator(".sc-cell.k-work .sc-n").filter({ hasText: /^\d+$/ }).first()).toHaveCSS("color", "rgb(41, 194, 53)");
       // «Итого»: his shifts and hours of the month, and how many work each day in the head
       const renat = rowOf(page, "renat");
       const worked = await renat.locator(".sc-cell.k-work").count();

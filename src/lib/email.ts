@@ -31,8 +31,10 @@ export type LetterBody = { text: string; html?: string; attachments?: Attachment
 type Env = Record<string, string | undefined>;
 
 export function emailTransport(env: Env = process.env): EmailTransport {
-  if (env.RESEND_API_KEY && env.EMAIL_FROM) return "resend";
+  // console first, as .env.example promises: it must win over Resend keys
+  // that a local .env file or a test server happens to carry
   if (env.EMAIL_TRANSPORT === "console") return "console";
+  if (env.RESEND_API_KEY && env.EMAIL_FROM) return "resend";
   if (env.NODE_ENV !== "production") return "console";
   return "disabled";
 }

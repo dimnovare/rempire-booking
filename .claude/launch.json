@@ -17,7 +17,19 @@
         "SEED_DEMO": "yes",
         "DEMO_LOGINS": "yes",
         "EMAIL_TRANSPORT": "console",
-        "SMS_TRANSPORT": "console"
+        "SMS_TRANSPORT": "console",
+        "RESEND_API_KEY": "",
+        "EMAIL_FROM": "",
+        "TEST_MAIL_TO": "",
+        "MESSAGGIO_LOGIN": "",
+        "MESSAGGIO_SENDER": "",
+        "SHOP_API_URL": "",
+        "SHOP_API_SECRET": "",
+        "SHOP_SALES": "",
+        "VAPID_PUBLIC_KEY": "",
+        "VAPID_PRIVATE_KEY": "",
+        "GEOCODER": "fake",
+        "DATABASE_URL": ""
       }
     }
   ]

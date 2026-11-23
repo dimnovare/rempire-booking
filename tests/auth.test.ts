@@ -312,6 +312,8 @@ describe("e-mail transport", () => {
     expect(emailTransport({ NODE_ENV: "development" })).toBe("console");
     expect(emailTransport({ NODE_ENV: "production" })).toBe("disabled");
     expect(emailTransport({ NODE_ENV: "production", EMAIL_TRANSPORT: "console" })).toBe("console");
+    // console wins over a key: a test server never sends because a local .env holds one
+    expect(emailTransport({ RESEND_API_KEY: "x", EMAIL_FROM: "REMPIRE <noreply@example.test>", NODE_ENV: "production", EMAIL_TRANSPORT: "console" })).toBe("console");
     await expect(sendEmail("a@b.test", "s", "t", { NODE_ENV: "production" })).rejects.toBeInstanceOf(EmailDisabled);
   });
 });
