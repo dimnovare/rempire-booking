@@ -398,7 +398,9 @@ export async function seedDemoVisits(db, now = Date.now()) {
   let added = 0;
   // First one client in 20 minutes for each barber, so «Дальше» (and its
   // «Пришёл», from 30 minutes before) shows whenever the app starts; the
-  // fixed visits below leave its time alone. His shortest service.
+  // fixed visits below leave its time alone. His shortest service. Late in
+  // the evening it would fall on tomorrow, a day whose demo visits the
+  // tests count: then there is none (e2e run of 23.11, 23:40).
   const soon = Math.ceil((now + 20 * 60_000) / 300_000) * 300_000;
   let j = 2 * DEMO.staff.length * DEMO_VISITS.length;
   const lines = {};
@@ -408,6 +410,7 @@ export async function seedDemoVisits(db, now = Date.now()) {
     lines[st.slug] = await demoLines(db, staffId);
     const [line] = [...lines[st.slug]].sort((a, b) => a.dur - b.dur);
     if (!line) continue;
+    if (localNow(soon + line.dur * 60_000 - 1, tz).today !== today) continue;
     const [client] = (
       await db.query(
         "insert into clients (business_id, name, phone_e164, source) values ($1, $2, $3, 'admin') on conflict (business_id, phone_e164) do update set updated_at = now() returning id",

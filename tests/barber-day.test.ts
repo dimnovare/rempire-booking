@@ -151,6 +151,17 @@ describe("the demo day (a local run and e2e, tools/seed-demo.mjs)", () => {
     });
   }
 
+  it("started at 23:45: no client «in 20 minutes» after midnight, on the next day whose five demo visits the tests count", async () => {
+    await seedDemoVisits(db, at(TUE, "23:45"));
+    for (const slug of ["renat", "jevgeni"]) {
+      const date = demoWorkday(slug, "2026-11-18");
+      expect(date, slug).toBe("2026-11-18");
+      const [day] = await loadBarberDays(query, demo.business, demo.staff[slug], date, 1);
+      expect(day.visits, slug).toHaveLength(5);
+      expect(day.visits[0].start, slug).toBe(at(date, "10:00"));
+    }
+  });
+
   it("the second demo day is the next day the barber works, whatever the weekday: five visits and lunch inside his hours, two hours free after them", async () => {
     // Valentin is away 17–23.11 and back on Tuesday 24.11; Jevgeni's next day is Wednesday 18.11, 10:00–16:00;
     // Milena works Mondays, Thursdays and Fridays

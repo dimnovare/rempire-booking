@@ -109,7 +109,10 @@ test.describe("an owner who cuts too, on a phone", () => {
     expect(await look(line)).toMatchObject({ color: "rgb(95, 100, 117)", font: "400 12px/16px" });
     expect(await look(seg.locator('a[aria-current="page"]'))).toMatchObject({ h: 40, bg: "rgb(255, 203, 0)", color: "rgb(43, 49, 52)", font: "600 14px/14px" });
     expect(await look(page.locator(".bx-cal .cal-v:visible"))).toMatchObject({ radius: "8px" });
-    expect(await look(page.locator(".bx-cal .cal-v:visible .t"))).toMatchObject({ h: 18 });
+    // the time line of a card tall enough for it: late at night the first card is the short demo visit «in 20 minutes» (24.11, 00:25)
+    const cards = page.locator(".bx-cal .cal-v:visible");
+    const tallest = await cards.evaluateAll((els) => els.reduce((best, el, i) => (el.getBoundingClientRect().height > els[best].getBoundingClientRect().height ? i : best), 0));
+    expect(await look(cards.nth(tallest).locator(".t"))).toMatchObject({ h: 18 });
     expect(await look(page.getByRole("button", { name: B.book.new }))).toMatchObject({ w: 58, h: 58, bg: "rgb(255, 203, 0)", radius: "16px" });
     await shot(page, "myday");
 
