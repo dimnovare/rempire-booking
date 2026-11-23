@@ -44,3 +44,5 @@ next-env.d.ts
 
 # e2e: the server log, logins, results and report (playwright.config.ts)
 /e2e/.out/
+# the BrowserStack SDK's own logs (e2e/browserstack.mjs)
+/log/

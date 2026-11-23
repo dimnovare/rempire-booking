@@ -63,7 +63,10 @@ const env = {
   ...(prod ? { NODE_ENV: "production" } : {}),
 };
 
-const child = spawn(process.execPath, [next, prod ? "start" : "dev", "--port", port], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
+// E2E_HOST=bs-local.com (e2e/browserstack.mjs): `next dev` serves its own
+// scripts only to the host it was started with, besides localhost
+const host = process.env.E2E_HOST && process.env.E2E_HOST !== "localhost" ? ["--hostname", process.env.E2E_HOST] : [];
+const child = spawn(process.execPath, [next, prod ? "start" : "dev", "--port", port, ...host], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
 child.stdout.pipe(log);
 child.stderr.pipe(log);
 child.stderr.pipe(process.stderr);
