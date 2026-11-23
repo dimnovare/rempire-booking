@@ -51,7 +51,7 @@ export type ChangeRow = {
   entityId: string | null;
   action: string;
   author: { kind: ChangeAuthorKind; name: string | null };
-  /** the object as it is now: a name (a client's, a barber's, a service's, a login's, a product's), a moment (a visit's start, a review's day), a number (an invoice's); all null when it is gone */
+  /** the object as it is now: a name (a client's, a barber's, a service's, a login's, a product's), a moment (a visit's start, a review's day), a number (an invoice's); all null when it is gone, the name also for an anonymised client */
   object: { name: string | null; at: number | null; number: string | null };
   /** what changed: a field per key of the row's before and after */
   fields: ChangeField[];
@@ -203,7 +203,7 @@ export async function listChanges(
   }>(
     `select au.id::text as id, au.at, au.actor, au.entity, au.entity_id, au.action, au.before, au.after,
             u.name as author_name, u.email as author_email,
-            ap.starts_at as visit_at, cl.name as client_name, st.display_name as staff_name,
+            ap.starts_at as visit_at, case when cl.anonymised_at is null then cl.name end as client_name, st.display_name as staff_name,
             coalesce(sv.name->>${lang}::text, sv.name->>'ru', sv.name->>'et', sv.name->>'en') as service_name,
             ou.name as login_name, ou.email as login_email,
             rv.created_at as review_at, rv.author_name as review_name, ps.name as sale_name,

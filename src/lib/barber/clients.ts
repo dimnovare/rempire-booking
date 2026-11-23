@@ -90,7 +90,8 @@ export async function setClientNote(business: Business, staffId: string, actor: 
   const text = clean(note);
   return withTx(async (tx) => {
     if (!(await isMyClient(tx, business.id, staffId, clientId))) return false;
-    const [c] = await tx<{ staff_note: string }>("select staff_note from clients where id = $1 and business_id = $2 for update", [clientId, business.id]);
+    // an anonymised client gets no note again (src/lib/admin/clients.ts, anonymiseClient)
+    const [c] = await tx<{ staff_note: string }>("select staff_note from clients where id = $1 and business_id = $2 and anonymised_at is null for update", [clientId, business.id]);
     if (!c) return false;
     if (c.staff_note === text) return true;
     await tx("update clients set staff_note = $2, updated_at = now() where id = $1", [clientId, text]);

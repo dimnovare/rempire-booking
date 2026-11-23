@@ -574,15 +574,19 @@ test.describe("clients", () => {
       await expect(list).toContainText("E2E: просил звонить после шести");
       // the numbers nobody types, and the way to the history
       await expect(card.locator(".cc-sums dt")).toHaveText([K.sold, C.cols.first, C.cols.last]);
-      // «Удалить» asks first; he has a visit, so he is refused, plainly, and stays
+      // «Удалить» asks first; he has a visit, so he is not deleted: «Обезличить» is asked instead, saying why; cancelled, he stays
       await remove.click();
       const del = page.getByRole("alertdialog", { name: K.deleteTitle });
       await expect(del).toContainText(K.deleteAsk(name));
       await del.getByRole("button", { name: K.deleteYes }).click();
-      await expect(del.getByRole("alert")).toHaveText(K.deleteRefused);
-      await expect(del.getByRole("button", { name: K.deleteYes })).toHaveCount(0);
-      await del.getByRole("button", { name: A.close }).click();
+      await expect(del).toBeHidden();
+      const instead = page.getByRole("alertdialog", { name: K.anonTitle });
+      await expect(instead).toContainText(K.anonAsk(name));
+      await expect(instead.getByRole("button", { name: K.anonYes })).toBeVisible();
+      await instead.getByRole("button", { name: A.cancel }).click();
+      await expect(instead).toBeHidden();
       await expect(card).toBeVisible();
+      await expect(title).toBeVisible();
       await pc("card");
 
       // his photo: made a small JPEG in the browser, kept at once, shown by a route of the admin's own; then taken off
@@ -787,6 +791,56 @@ test.describe("clients", () => {
       await expect(temp).toBeHidden();
       await search.fill("E2E Udalit");
       await expect(page.getByText(C.nothing)).toBeVisible();
+    });
+
+    test("«Обезличить»: a client who bought something is not deleted but anonymised, after a question; then nobody finds him", async ({ page }, info) => {
+      test.skip(info.project.name !== "android", "one wide run is enough");
+      // a client of his own, with one product sold to him and no visit ahead (his phone is free again once he is anonymised)
+      const who = "E2E Obezlichit";
+      const phone = "5555 0711";
+      await page.goto("/admin/clients");
+      await hydrated(page);
+      await page.getByRole("button", { name: C.add }).click();
+      const sheet = page.getByRole("dialog", { name: A.visit.newClient });
+      await sheet.getByRole("textbox", { name: A.visit.name }).fill(who);
+      await sheet.getByRole("textbox", { name: A.visit.phone }).fill(phone);
+      await sheet.getByRole("button", { name: C.add }).click();
+      await page.waitForURL(CARD_URL);
+      await page.goto("/admin");
+      await hydrated(page);
+      await page.getByRole("group", { name: A.frame.tiles }).getByRole("button", { name: A.sale.title }).click();
+      const sale = page.getByRole("dialog", { name: A.sale.title });
+      await sale.getByLabel(A.sale.seller).selectOption({ label: "Milena" });
+      await sale.getByPlaceholder(A.sale.search).fill("matte");
+      await sale.getByRole("list", { name: A.sale.product }).getByRole("button").first().click();
+      await sale.getByPlaceholder(A.visit.searchHint).fill(who);
+      await sale.getByRole("list", { name: A.sale.client }).getByRole("button", { name: new RegExp(who) }).click();
+      await sale.getByRole("button", { name: A.save, exact: true }).click();
+      await expect(sale).toHaveCount(0);
+
+      // «Удалить» is not for him: «Обезличить» is asked, saying what stays and what goes; yes
+      await page.goto("/admin/clients");
+      await hydrated(page);
+      const search = page.getByRole("searchbox", { name: C.search });
+      await search.fill(phone);
+      await page.locator(".cl-table tbody tr").getByRole("link", { name: who, exact: true }).click();
+      await page.waitForURL(CARD_URL);
+      await hydrated(page);
+      const card = cardOf(page, who);
+      await card.getByRole("button", { name: A.remove, exact: true }).click();
+      await page.getByRole("alertdialog", { name: K.deleteTitle }).getByRole("button", { name: K.deleteYes }).click();
+      const anon = page.getByRole("alertdialog", { name: K.anonTitle });
+      await expect(anon).toContainText(K.anonAsk(who));
+      await expect(anon.getByRole("button", { name: A.cancel })).toBeFocused();
+      await anon.getByRole("button", { name: K.anonYes }).click();
+      await page.waitForURL(LIST_URL);
+      await expect(page.locator(".adm-frame-toast")).toHaveText(K.anonDone);
+      await expect(card).toBeHidden();
+      // by his phone or his name: nobody
+      for (const q of [phone, who]) {
+        await search.fill(q);
+        await expect(page.getByText(C.nothing)).toBeVisible();
+      }
     });
 
     test("the client base in full: its layout, a segment, conditions with «Найти» and the bin, the columns, a sort, a category and a message for the ticked rows, the export, deleting", async ({ page, browser }, info) => {

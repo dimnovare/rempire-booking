@@ -19,6 +19,10 @@
  * first: the cross, Escape, the way back on a phone, and any link of the
  * page (another client's row, the sidebar, a visit's day in the calendar);
  * closing or reloading the browser tab gets the browser's own question.
+ *
+ * An anonymised client's card is named «Обезличенный клиент» and keeps only
+ * the tabs that show what stays: the card with his numbers, his history,
+ * the statistics and the messages that went.
  */
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -61,7 +65,12 @@ export type DrawerProps = {
   notify: NotifyFields;
   files: ClientFile[];
   fileRules: FileRules;
+  /** when he was anonymised, ms; null: he was not. Then the card has nothing to change and his name is the placeholder */
+  anonymisedAt: number | null;
 };
+
+/** What an anonymised client's card still has: nothing to send, to switch or to keep (src/lib/admin/clients.ts, anonymiseClient). */
+const ANON_TABS: readonly TabKey[] = ["card", "history", "stats", "messages"];
 
 const LIST = "/admin/clients";
 
@@ -73,9 +82,11 @@ export function ClientDrawer(p: DrawerProps) {
   // the open tab is the address's (?tab=…): go() below changes it there
   const asked = useSearchParams().get("tab");
   // the tabs this login has: history and statistics, files, a message and the notification settings each need a right
+  const anonymised = p.anonymisedAt != null;
   const tabs = useMemo(
-    () => TABS.filter((t) => ((t === "history" || t === "stats") ? p.may.history : t === "files" ? p.may.files : t === "send" ? p.may.send : t === "notify" ? p.may.edit : true)),
-    [p.may],
+    () =>
+      TABS.filter((t) => (!anonymised || ANON_TABS.includes(t)) && ((t === "history" || t === "stats") ? p.may.history : t === "files" ? p.may.files : t === "send" ? p.may.send : t === "notify" ? p.may.edit : true)),
+    [p.may, anonymised],
   );
   const tab: TabKey = isTab(asked) && tabs.includes(asked) ? asked : "card";
   // the tabs drawn so far: each stays once it has been opened
@@ -86,12 +97,13 @@ export function ClientDrawer(p: DrawerProps) {
   const [unsaved, setUnsaved] = useState(false);
   const [ask, setAsk] = useState<{ go: () => void } | null>(null);
   // the name on top follows what «Сохранить» kept, before the page is asked for again
-  const [name, setName] = useState(p.name);
+  const [kept, setName] = useState(p.name);
   const [sent, setSent] = useState(p.name);
   if (sent !== p.name) {
     setSent(p.name);
     setName(p.name);
   }
+  const name = anonymised ? A.clients.anonName : kept;
 
   const guard = useCallback((key: string, on: boolean, reset?: () => void) => {
     if (on) dirty.current.set(key, reset ?? (() => {}));
@@ -218,7 +230,7 @@ export function ClientDrawer(p: DrawerProps) {
           </div>
         </header>
 
-        {panel("card", <CardTab initial={p.card} used={p.used} limits={p.limits} photoV={p.photoV} comments={p.comments} numbers={p.numbers} today={p.today} onSaved={setName} />)}
+        {panel("card", <CardTab initial={p.card} used={p.used} limits={p.limits} photoV={p.photoV} comments={p.comments} numbers={p.numbers} today={p.today} onSaved={setName} anonymisedAt={p.anonymisedAt} />)}
         {panel("history", <HistoryTab visits={p.history} capped={p.capped} />)}
         {panel("stats", <StatsTab initial={p.stats} today={p.today} />)}
         {panel("messages", <MessagesTab messages={p.messages} />)}

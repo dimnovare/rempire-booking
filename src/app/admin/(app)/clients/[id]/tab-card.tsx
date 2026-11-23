@@ -13,7 +13,11 @@
  * note), and his numbers, which nobody types.
  *
  * «Удалить» asks first; a client with visits or purchases is refused,
- * plainly, and stays.
+ * plainly, and stays. Then the card offers «Обезличить» instead (a client
+ * who asked to be erased): its question says what stays and what goes, and
+ * that it cannot be undone. A client with a visit ahead is refused until
+ * the salon cancels or moves it. An anonymised client's card has no form:
+ * only the line saying so, his numbers and the way to his history.
  */
 import Link from "next/link";
 import { useCallback, useId, useRef, useState } from "react";
@@ -26,7 +30,7 @@ import { PlusIcon, XIcon } from "../../../icons";
 import { useA } from "../../../lang";
 import { useFrame } from "../../frame";
 import { shrinkPhoto } from "../../photo-shrink";
-import { addCommentAction, deleteClientAction, deleteCommentAction, removeClientPhotoAction, saveCardAction, uploadClientPhotoAction } from "../actions";
+import { addCommentAction, anonymiseClientAction, deleteClientAction, deleteCommentAction, removeClientPhotoAction, saveCardAction, uploadClientPhotoAction } from "../actions";
 import { CLIENTS_CHANGED, type CardFields } from "../card-fields";
 import { Ask, Switch, useCard, useFmt, useForgetOnLeave, useGuard } from "./parts";
 
@@ -47,6 +51,7 @@ export function CardTab({
   numbers,
   today,
   onSaved,
+  anonymisedAt,
 }: {
   initial: CardFields;
   used: string[];
@@ -56,12 +61,15 @@ export function CardTab({
   numbers: CardNumbers;
   today: string;
   onSaved: (name: string) => void;
+  /** when he was anonymised, ms; null: he was not */
+  anonymisedAt: number | null;
 }) {
   const A = useA();
   const C = A.clients;
   const K = C.card;
   const card = useCard();
   const frame = useFrame();
+  const fmt = useFmt(card.tz);
   const form = useId();
   // what is saved, and what is in the fields
   const [base, setBase] = useState(initial);
@@ -71,6 +79,8 @@ export function CardTab({
   // what to fix; with `other`, the client who has this phone already
   const [err, setErr] = useState<{ text: string; other?: string } | null>(null);
   const [asking, setAsking] = useState(false);
+  // «Обезличить», asked once «Удалить» was refused for his history
+  const [anon, setAnon] = useState(false);
   const baseRef = useRef(base);
   baseRef.current = base;
   const reset = useCallback(() => {
@@ -80,6 +90,23 @@ export function CardTab({
   const changed = !same(d, base);
   useGuard("card", changed, reset);
   useForgetOnLeave(() => setDone(false));
+
+  if (anonymisedAt != null)
+    return (
+      <div className="cc-scroll">
+        <div className="cc-cols">
+          <div className="cc-left">
+            <p className="cc-meta">{K.anonNote(fmt.long(anonymisedAt))}</p>
+          </div>
+          <div className="cc-right">
+            <Numbers n={numbers} />
+            <button type="button" className="cc-link" onClick={() => card.go("history")}>
+              {K.seeHistory}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
 
   const set = (patch: Partial<CardFields>) => {
     setD((cur) => ({ ...cur, ...patch }));
@@ -127,9 +154,23 @@ export function CardTab({
 
   const remove = async () => {
     const r = await deleteClientAction(card.id);
-    if (!r.ok) return r.code === "has_history" ? { refused: K.deleteRefused } : A.error;
+    if (!r.ok) {
+      if (r.code !== "has_history") return A.error;
+      // his history stays: this question closes and «Обезличить» is asked instead, saying why
+      setAnon(true);
+      return null;
+    }
     frame.say(K.deleted);
     window.dispatchEvent(new Event(CLIENTS_CHANGED));
+    card.gone();
+  };
+
+  const anonymise = async () => {
+    const r = await anonymiseClientAction(card.id);
+    if (!r.ok) return r.code === "upcoming" ? { refused: K.anonUpcoming } : r.code === "already" ? { refused: K.anonAlready } : A.error;
+    frame.say(K.anonDone);
+    window.dispatchEvent(new Event(CLIENTS_CHANGED));
+    // he is in the list no more: back to it, as after «Удалить»
     card.gone();
   };
 
@@ -260,6 +301,7 @@ export function CardTab({
         </div>
       </footer>
       {asking && <Ask title={K.deleteTitle} text={K.deleteAsk(base.name)} yes={K.deleteYes} onYes={remove} onClose={() => setAsking(false)} />}
+      {anon && <Ask title={K.anonTitle} text={K.anonAsk(base.name)} yes={K.anonYes} onYes={anonymise} onClose={() => setAnon(false)} />}
     </>
   );
 }

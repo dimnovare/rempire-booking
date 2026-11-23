@@ -41,6 +41,7 @@ import type { CalendarData, CalMay, CalVisit } from "@/lib/admin/calendar";
 import { momentAt } from "@/lib/admin/grid";
 import type { RecordMaker } from "@/lib/admin/records";
 import type { VisitExtras, WindowLog } from "@/lib/admin/visit-window";
+import { shownName } from "@/lib/client-anon";
 import { euroText } from "@/lib/money";
 import { Ava, BinIcon, CaretIcon, PencilIcon, PlusIcon } from "../icons";
 import { useA } from "../lang";
@@ -306,7 +307,7 @@ function VisitDrawer({ v, data, onClose, onMove, onDone, onChanged }: PanelProps
   );
 
   return (
-    <VwFrame label={v.clientName} title={W.title} acts={acts} onClose={onClose} onEscape={escape}>
+    <VwFrame label={shownName(v.clientName, A.clients.anonName)} title={W.title} acts={acts} onClose={onClose} onEscape={escape}>
       {/* ---------------- left: the barber and the time ---------------- */}
       <section className="vw-col vw-left" aria-label={W.cols.visit}>
         <div className="vw-main" inert={tile !== null}>
@@ -521,10 +522,10 @@ function VisitDrawer({ v, data, onClose, onMove, onDone, onChanged }: PanelProps
       <section className="vw-col vw-right" aria-label={W.cols.client}>
         <div className="vw-who">
           <span className="vw-ini" aria-hidden="true">
-            {initials(v.clientName)}
+            {initials(shownName(v.clientName, A.clients.anonName))}
           </span>
           <span className="txt">
-            <b>{v.clientName}</b>
+            <b>{shownName(v.clientName, A.clients.anonName)}</b>
             {phone && <small>{phone}</small>}
           </span>
           {client?.card && (
@@ -932,7 +933,7 @@ function VisitSheet({ v, data, onClose, onMove, onDone, onChanged }: PanelProps)
       w={A.vs}
       intl={A.intl}
       tz={tz}
-      clientName={v.clientName}
+      clientName={shownName(v.clientName, A.clients.anonName)}
       start={v.start}
       end={st.end}
       staffName={staff?.name}
@@ -1043,7 +1044,7 @@ function MoveForm({
   };
   return (
     <Sheet
-      title={v.clientName}
+      title={shownName(v.clientName, A.clients.anonName)}
       onClose={onClose}
       bar={
         <>

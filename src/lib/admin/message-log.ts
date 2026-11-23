@@ -45,9 +45,9 @@ export type MessageRow = {
   status: string;
   /** the status's own time: sent, opened, or due (still to go); null for the others */
   statusAt: number | null;
-  /** the phone or the address it went to, masked without the right; null for a notification */
+  /** the phone or the address it went to, masked without the right; null for a notification, and for an anonymised client's */
   contact: string | null;
-  /** who it went to: the client's name, or the login's for a notification to the salon's app */
+  /** who it went to: the client's name, or the login's for a notification to the salon's app; null for an anonymised client */
   name: string | null;
   /** the client's card, when the login sees him */
   clientId: string | null;
@@ -225,7 +225,7 @@ export async function listMessageLog(q: Querier, business: Pick<Business, "id" |
     `select n.id, n.created_at, n.channel, n.kind, n.status, n.send_at, n.sent_at, n.opened_at, n.recipient, n.locale,
             n.payload, n.provider, n.segments, n.user_id,
             a.starts_at as visit_at, s.display_name as staff_name,
-            c.id as client_id, c.name as client_name, (c.id is not null${seenClientsSql(who, p)}) as client_seen,
+            c.id as client_id, case when c.anonymised_at is null then c.name end as client_name, (c.id is not null${seenClientsSql(who, p)}) as client_seen,
             u.name as user_name, u.email as user_email,
             i.number as invoice_number, i.kind as invoice_kind
        from ${FROM}
@@ -243,7 +243,8 @@ export async function listMessageLog(q: Querier, business: Pick<Business, "id" |
       const opened = r.status === "sent" && r.opened_at != null;
       const status = opened ? "opened" : r.status;
       const statusAt = opened ? ms(r.opened_at) : r.status === "sent" ? ms(r.sent_at) : r.status === "queued" || r.status === "sending" ? ms(r.send_at) : null;
-      const contact = r.channel === "sms" ? (phones ? r.recipient : maskPhone(r.recipient)) : r.channel === "email" ? (phones ? r.recipient : maskEmail(r.recipient)) : null;
+      // '' is no contact: the client was anonymised (src/lib/admin/clients.ts, anonymiseClient)
+      const contact = !r.recipient ? null : r.channel === "sms" ? (phones ? r.recipient : maskPhone(r.recipient)) : r.channel === "email" ? (phones ? r.recipient : maskEmail(r.recipient)) : null;
       const toStaff = r.user_id != null;
       const visitAt = ms(r.visit_at);
       return {

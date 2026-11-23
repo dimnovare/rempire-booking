@@ -52,6 +52,7 @@ import type { CalBlock, CalendarData, CalMay, CalVisit } from "@/lib/admin/calen
 import { daySpan, hhmm, minutesInDay, momentAt, snap, weekStart } from "@/lib/admin/grid";
 import { dayNumbers, dayStaff, isVisitState, visitLook, type MineToday } from "@/lib/admin/journal";
 import type { AdminOutcome } from "@/lib/admin/visits";
+import { shownName } from "@/lib/client-anon";
 import { extraText } from "@/lib/slots";
 import { addDays } from "@/lib/tz";
 import { eur } from "../copy";
@@ -483,7 +484,7 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step: bookS
       />
       {moving && (
         <div className="cal-moving" role="status">
-          <span>{A.cal.moving(moving.clientName)}</span>
+          <span>{A.cal.moving(shownName(moving.clientName, A.clients.anonName))}</span>
           <button type="button" onClick={() => setMoving(null)}>
             {A.cancel}
           </button>
@@ -518,7 +519,7 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step: bookS
             target={!!moving}
             head={view === "week" ? weekHead : dayHead}
             visitClass={(v) => `${moving?.id === v.id ? "is-moving" : ""}${visitOpen?.id === v.id ? " is-open" : ""}`}
-            visitLabel={(v) => `${timeOf(tz, v.start)}–${timeOf(tz, v.end)}, ${v.clientName}, ${A.visit.status[v.status] ?? v.status}`}
+            visitLabel={(v) => `${timeOf(tz, v.start)}–${timeOf(tz, v.end)}, ${shownName(v.clientName, A.clients.anonName)}, ${A.visit.status[v.status] ?? v.status}`}
             visitBody={(v) => (
               <>
                 <span className="t">
@@ -528,7 +529,7 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step: bookS
                   {v.source === "online" && <i className="dot" title={A.visit.source.online} />}
                   <StatusMark status={v.status} confirmed={v.confirmed} />
                 </span>
-                <b>{v.clientName}</b>
+                <b>{shownName(v.clientName, A.clients.anonName)}</b>
                 {/* the phone is on the card from 900px only, for the logins that already see it in the visit */}
                 {v.clientPhone && <span className="p">{v.clientPhone}</span>}
                 <span className="s">{v.services.map((x) => A.pick(x.name)).join(", ")}</span>

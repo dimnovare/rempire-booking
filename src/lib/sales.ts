@@ -153,7 +153,7 @@ const saleOf = (r: SaleRow): Sale => ({
 });
 
 const SALE_SQL = `select p.*, (select r.id from product_sales r where r.reverses_id = p.id) as reversed_by,
-                         (select c.name from clients c where c.id = p.client_id) as client_name
+                         (select c.name from clients c where c.id = p.client_id and c.anonymised_at is null) as client_name
                     from product_sales p`;
 
 export const isRef = (v: unknown): v is string => typeof v === "string" && /^[A-Za-z0-9_-]{8,64}$/.test(v);
@@ -230,7 +230,7 @@ export async function recordSale(
   // the barber saw a price: if the shop's moved since, he sees the new one first
   if (input.expectCents != null && Number(input.expectCents) !== q.unitCents) return { ok: false, code: "price_changed", unitCents: q.unitCents };
   if (clientId !== null) {
-    const [c] = await query("select 1 from clients where id = $1 and business_id = $2 and merged_into is null", [clientId, business.id]);
+    const [c] = await query("select 1 from clients where id = $1 and business_id = $2 and merged_into is null and anonymised_at is null", [clientId, business.id]);
     if (!c) return { ok: false, code: "invalid", field: "client" };
   }
 

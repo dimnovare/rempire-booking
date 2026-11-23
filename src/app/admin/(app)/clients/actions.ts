@@ -26,7 +26,19 @@ import { addComment, cleanStatsPeriod, clientStats, deleteComment, deleteFile, q
 import { bulkAddLabel, bulkDelete, cleanTarget, massPreview, queueMassMessage, type BulkDeleted, type BulkLabeled, type MassPreview, type MassQueued } from "@/lib/admin/client-bulk";
 import { setClientColumns, type ClientColumn } from "@/lib/admin/client-columns";
 import { clientSeen } from "@/lib/admin/client-scope";
-import { clientDetail, deleteClient, listClients, PAGE_SIZE, saveClient, type ClientDeleted, type ClientInput, type ClientList, type ClientSaved } from "@/lib/admin/clients";
+import {
+  anonymiseClient,
+  clientDetail,
+  deleteClient,
+  listClients,
+  PAGE_SIZE,
+  saveClient,
+  type ClientAnonymised,
+  type ClientDeleted,
+  type ClientInput,
+  type ClientList,
+  type ClientSaved,
+} from "@/lib/admin/clients";
 import { PHOTO_MAX_BYTES } from "@/lib/admin/staff";
 import { requireAdmin } from "@/lib/auth/current";
 import { can, canGroup } from "@/lib/auth/rights";
@@ -189,6 +201,17 @@ export async function saveNotifyAction(id: string, f: NotifyFields): Promise<{ o
 export async function deleteClientAction(id: string): Promise<ClientDeleted> {
   const { user, business } = await requireAdmin();
   return deleteClient(business, str(id), user.id, user);
+}
+
+/**
+ * «Обезличить»: offered where «Удалить» is refused because he has a
+ * history. The right is «Удалять клиентов». No refresh, as for «Удалить»:
+ * he leaves the list, so the card goes back to it, and the list asks for
+ * its page again.
+ */
+export async function anonymiseClientAction(id: string): Promise<ClientAnonymised> {
+  const { user, business } = await requireAdmin();
+  return anonymiseClient(business, str(id), user.id, user);
 }
 
 export async function addCommentAction(id: string, text: string): Promise<{ ok: true } | { ok: false; field: string }> {

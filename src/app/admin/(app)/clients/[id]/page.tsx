@@ -12,6 +12,10 @@
  * By the login's rights (src/lib/auth/rights.ts): a client it does not see
  * is «not found»; comments, files, the visit history and the statistics
  * come only with their rights, and the card gets what it may offer as `may`.
+ *
+ * An anonymised client (src/lib/admin/clients.ts, anonymiseClient) is in no
+ * list, but his card still opens from his visits: his numbers, his history
+ * and statistics, the messages that went to him, and nothing to change.
  */
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -89,6 +93,7 @@ async function Detail({ params }: Pick<PageProps<"/admin/clients/[id]">, "params
       notify={notifyFieldsOf(d)}
       files={files}
       fileRules={{ exts: [...FILE_EXTS], maxBytes: FILE_MAX_BYTES, max: FILES_MAX }}
+      anonymisedAt={d.anonymisedAt}
     />
   );
 }
