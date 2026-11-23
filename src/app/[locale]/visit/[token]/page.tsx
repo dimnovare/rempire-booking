@@ -100,8 +100,14 @@ async function Visit({ params, searchParams }: Pick<PageProps<"/[locale]/visit/[
         <h1 className="t1">{cancelled ? c.cancelled : moved ? c.movedTitle : c.yourVisit}</h1>
         <p className="lead">{cancelled ? c.cancelledLead : past ? c.past : c.seeYou(longDate, time(start))}</p>
         <div className="sum-row">
+          {/* the barber's face as on the booking screen; the initials without a photo */}
           <span className="ava" aria-hidden="true">
-            {v.staffName.slice(0, 2).toUpperCase()}
+            {v.staffPhoto ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={v.staffPhoto} alt="" width={96} height={96} decoding="async" />
+            ) : (
+              v.staffName.slice(0, 2).toUpperCase()
+            )}
           </span>
           <span className="cell-txt">
             <span>{v.staffName}</span>

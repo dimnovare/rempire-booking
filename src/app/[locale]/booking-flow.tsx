@@ -445,6 +445,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
     setDay(d);
     setSlot(null);
     setTaken(null);
+    setMoveError(""); // «just taken» was about the time before
     setCalMonth(d.slice(0, 7));
   };
 
@@ -452,6 +453,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
     setDay(d);
     setSlot({ t, staffId, extra: x });
     setTaken(null);
+    setMoveError("");
     setFormError("");
     key.current = newKey();
   };

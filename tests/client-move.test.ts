@@ -175,3 +175,15 @@ describe("the routes behind «Перенести»", () => {
     expect((await moveSlotsRoute(new Request("http://x/api/visit/nope/slots"), ctx("nope"))).status).toBe(404);
   });
 });
+
+describe("the visit page", () => {
+  it("shows the barber's photo, as the booking screen does; a bad address or none gives the initials", async () => {
+    const token = await booked((await free("2026-11-17"))[0]);
+    await query("update staff set photo_url = $1 where id = $2", ["/staff/slava.jpg", demo.staff.slava]);
+    expect((await findVisit(query, demo.business.id, token))!.staffPhoto).toBe("/staff/slava.jpg");
+    for (const bad of ["javascript:alert(1)", "//evil.example/x.jpg", "http://plain.example/x.jpg", null]) {
+      await query("update staff set photo_url = $1 where id = $2", [bad, demo.staff.slava]);
+      expect((await findVisit(query, demo.business.id, token))!.staffPhoto, String(bad)).toBeNull();
+    }
+  });
+});

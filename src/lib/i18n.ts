@@ -37,7 +37,7 @@ export function ruPlural(n: number, one: string, few: string, many: string): str
 }
 
 const en = {
-  loc: "Mardi 1 · Tallinn",
+  loc: "Mardi 1, Tallinn",
   title: "Book a visit",
   barber: "Barber",
   service: "Service",
@@ -243,7 +243,7 @@ const en = {
 export type Copy = typeof en;
 
 const ru: Copy = {
-  loc: "Марди 1 · Таллинн",
+  loc: "Mardi 1, Tallinn",
   title: "Запись",
   barber: "Барбер",
   service: "Услуга",
@@ -437,7 +437,7 @@ const ru: Copy = {
 };
 
 const et: Copy = {
-  loc: "Mardi 1 · Tallinn",
+  loc: "Mardi 1, Tallinn",
   title: "Broneeri aeg",
   barber: "Meister",
   service: "Teenus",

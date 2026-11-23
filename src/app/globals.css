@@ -124,6 +124,9 @@ a { color: inherit; }
 .cta { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; display: flex; justify-content: center; pointer-events: none; }
 .cta-in { width: 100%; max-width: 600px; padding: 0 var(--gut-r) calc(24px + var(--safe-b)) var(--gut-l); }
 .cta .btn { pointer-events: auto; }
+/* over the list the see-through --fill let the rows show through the words
+   (real phones, 23.11): the same grey, solid, as --fill and --ink-3 on white */
+.cta .btn-primary:disabled { background: #f0f0f0; color: #8b8b8b; }
 
 /* 2. the services */
 .pg-title { padding: 16px var(--gut-r) 16px var(--gut-l); }

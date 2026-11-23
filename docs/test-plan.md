@@ -326,6 +326,61 @@ Each device also: dark mode, the largest font, landscape, a slow network,
 phone locked for an hour then opened (still logged in, data fresh).
 `docs/phase-b-phone-test.md` is the barber's half, step by step.
 
+### Run 1: client side on staging, 23.11.2026
+
+BrowserStack Device Control, build «real phones 23.11» in the project
+«REMPIRE booking». A fake client «BrowserStack Test» with a +372 5555 04xx
+number and no e-mail booked Milena on each phone. Every test visit was
+cancelled at the end, so staging holds none of them.
+
+| Phone | Browser | Walked | Result |
+|---|---|---|---|
+| iPhone 17, iOS 26 | Safari | § 3 all steps; policy link (tick stays off, form kept); § 4 visit page, move, cancel; EN switch; `/ru/privacy` | passed |
+| Galaxy S24, Android 14 | Chrome | § 3; § 4 move and cancel; the salon page («REMPIRE ▾») | passed |
+| iPhone 13, iOS 17 | Safari | § 3; § 4 visit page and cancel | passed |
+| Galaxy S24, Android 14 | Samsung Internet | § 3 (the missing tick is caught: «Отметьте согласие.»); § 4 visit page and cancel | passed |
+
+The iPhone 17 and the Galaxy moved to the same free time at the same
+moment: one moved, the other got «Это время только что заняли» and kept its
+visit. Prices with the evening surcharge (+20 €) matched on the details,
+the confirmation and the visit page.
+
+Fixed after the run (branch `claude/real-phone-fixes`):
+- the visit page showed the barber's initials, not the photo the booking
+  screen shows;
+- the disabled «Продолжить» over the barber list was see-through: the rows
+  showed through its words (iOS 17, iOS 26, Samsung Internet);
+- «Отменить визит» opened its question below the fold, under the browser's
+  bar, so the tap seemed to do nothing (iPhone and Galaxy);
+- on the move page «Это время только что заняли» stayed after picking
+  another day;
+- `/privacy` named the street «Марди 1 · Таллинн»; the other pages say
+  «Mardi 1, Tallinn».
+
+Seen, not changed:
+- iOS: a tapped row, tick or slot gets a black square outline. It may come
+  from the test driver's taps; check on a real iPhone by hand.
+- iOS 26: the install steps say «Поделиться: квадрат со стрелкой». In
+  iOS 26's compact Safari bar «Поделиться» sits under «•••». Check on
+  Dim's phone before rewording.
+- The policy link's new tab cannot be seen through the driver; the e2e
+  covers it.
+
+Not run yet:
+- **The staff app (`/admin`, `/b`) on real phones.** It needs a login, and
+  login codes are never typed on staging. The plan: Playwright on
+  BrowserStack Automate (it takes a real iPhone 17 Pro Max with iOS 26 and
+  the Galaxy S24) against the e2e server with fake data, through
+  BrowserStack Local. Needs from Dim: `BROWSERSTACK_USERNAME` and
+  `BROWSERSTACK_ACCESS_KEY` as env vars, and an OK to add
+  `browserstack-node-sdk`, which downloads the Local binary. Once
+  `claude/hopeful-gauss-ce3e8f` is merged, the run includes «Визиты»
+  (`/admin/dashboard`) at phone width: its two tabs and the long day
+  heading wrap cleanly, the 44px «Подтвердить» / «Отменить» buttons, and
+  nothing scrolls sideways. WebKit has not run it yet.
+- **On Dim's own phone (about 10 minutes):** install both apps on the home
+  screen; a push with the screen locked; tapping it opens the visit.
+
 ## 11. Can it go down?
 
 Each case is forced on staging or a local production build, and the
