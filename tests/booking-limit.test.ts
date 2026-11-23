@@ -12,7 +12,7 @@ import { POST as bookRoute } from "@/app/api/bookings/route";
 import { POST as moveRoute } from "@/app/api/visit/[token]/move/route";
 import { loadAvailability } from "@/lib/availability";
 import { book } from "@/lib/booking";
-import { BOOKING_LIMITS, noteBooking, withinBookingLimit } from "@/lib/booking-limit";
+import { BOOKING_LIMITS, releaseBooking, reserveBooking } from "@/lib/booking-limit";
 import { closeDb, query } from "@/lib/db";
 import { localParts } from "@/lib/tz";
 import { freshDemo, zonedToUtc, type Demo } from "./helpers";
@@ -28,12 +28,20 @@ beforeEach(async () => {
 });
 afterAll(closeDb);
 
+/** `n` bookings (or moves) that went through: each takes its place and keeps it. */
 const note = (n: number, o: { ip?: string; kind?: "book" | "move"; at?: number; step?: number } = {}) =>
   (async () => {
-    for (let i = 0; i < n; i++) await noteBooking(query, demo.business, o.kind ?? "book", o.ip ?? IP, (o.at ?? NOW) + i * (o.step ?? MIN));
+    for (let i = 0; i < n; i++) {
+      const r = await reserveBooking(demo.business, o.kind ?? "book", o.ip ?? IP, { now: (o.at ?? NOW) + i * (o.step ?? MIN) });
+      if (!r.ok) throw new Error(`note ${i + 1} of ${n} refused`);
+    }
   })();
-const within = (o: { ip?: string; kind?: "book" | "move"; now?: number; idempotencyKey?: string } = {}) =>
-  withinBookingLimit(query, demo.business, o.kind ?? "book", o.ip ?? IP, { now: o.now ?? NOW + 30 * MIN, idempotencyKey: o.idempotencyKey });
+/** Would one more go through now? Asked without keeping the place. */
+const within = async (o: { ip?: string; kind?: "book" | "move"; now?: number; idempotencyKey?: string } = {}) => {
+  const r = await reserveBooking(demo.business, o.kind ?? "book", o.ip ?? IP, { now: o.now ?? NOW + 30 * MIN, idempotencyKey: o.idempotencyKey });
+  if (r.ok) await releaseBooking(r.id);
+  return r.ok;
+};
 
 describe("the count", () => {
   it(`lets ${BOOKING_LIMITS.bookPerHour} bookings an hour through from one address, then says no; another address is free`, async () => {
@@ -79,6 +87,18 @@ describe("the count", () => {
     expect(row.whole).not.toContain(IP);
     await note(1, { ip: "198.51.100.4", at: NOW + 2 * 24 * 60 * MIN + MIN });
     expect(await query("select id from booking_limit")).toHaveLength(1);
+  });
+
+  it("takes the place before the booking: sent at once, only the first ones get it; a place given back is free again", async () => {
+    const all = await Promise.all(Array.from({ length: 10 }, () => reserveBooking(demo.business, "book", IP, { now: NOW })));
+    const held = all.filter((r) => r.ok);
+    expect(held).toHaveLength(BOOKING_LIMITS.bookPerHour);
+    expect(await query("select id from booking_limit")).toHaveLength(BOOKING_LIMITS.bookPerHour);
+    expect(await within({ now: NOW + MIN })).toBe(false);
+    // a booking that did not go through gives its place back
+    const first = held[0];
+    if (first.ok) await releaseBooking(first.id);
+    expect(await within({ now: NOW + MIN })).toBe(true);
   });
 
   it("lets the same tap again through at the limit: its key already booked a visit", async () => {
@@ -142,6 +162,9 @@ describe("POST /api/bookings and POST /api/visit/<token>/move", () => {
     // from another address, the free time books
     expect((await post(starts[BOOKING_LIMITS.bookPerHour], { ip: "198.51.100.4", i: 51 })).status).toBe(201);
     // counted: the visits booked; not the refusal, not the same tap again
+    expect(await query("select id from booking_limit")).toHaveLength(BOOKING_LIMITS.bookPerHour + 1);
+    // a time already taken gives its place back
+    expect((await post(starts[1], { ip: "192.0.2.9", i: 52 })).status).toBe(409);
     expect(await query("select id from booking_limit")).toHaveLength(BOOKING_LIMITS.bookPerHour + 1);
   });
 

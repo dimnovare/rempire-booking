@@ -135,6 +135,33 @@ describe.skipIf(!URL_)("on Postgres (PG_TEST_URL)", () => {
     expect(staffIds.every((id) => rows.some((r) => r.staff_id === id))).toBe(true);
   });
 
+  it("ten bookings at once from one address, each at its own free time: six go through, four are «too many»", async () => {
+    const now = Date.now();
+    const look = await loadAvailability(query, { business, serviceIds: [services.clip], staffId: staff.jevgeni, from: localParts(now, TZ).date, days: 28, now });
+    // his free starts, 90 minutes apart or more: one booked takes none of the others
+    const starts: number[] = [];
+    for (const d of look.days.slice(1)) {
+      let last = -Infinity;
+      for (const s of d.slots) if (s.start - last >= 90 * 60_000 && starts.length < 10) starts.push((last = s.start));
+    }
+    expect(starts).toHaveLength(10);
+    const ip = "203.0.113.50";
+    const answers = await Promise.all(
+      starts.map((start) =>
+        bookRoute(
+          new Request("http://x/api/bookings", {
+            method: "POST",
+            headers: { "idempotency-key": `pg-race-burst-${++n}-${Math.random()}`, "x-real-ip": ip },
+            body: JSON.stringify({ serviceIds: [services.clip], staffId: staff.jevgeni, startsAt: new Date(start).toISOString(), name: "Race Test Client", phone: `+372 5555 09${String(n % 100).padStart(2, "0")}`, locale: "ru", smsReminder: false }),
+          }),
+        ),
+      ),
+    );
+    const codes = answers.map((r) => r.status).sort();
+    expect(codes).toEqual([201, 201, 201, 201, 201, 201, 429, 429, 429, 429]);
+    expect(await query("select id from booking_limit")).toHaveLength(6);
+  });
+
   it("the same tap sent three times at once: one visit, and each answer is that visit", async () => {
     const { start } = await freeStart(staff.slava);
     const key = `pg-race-same-${Math.random()}`;
@@ -143,6 +170,6 @@ describe.skipIf(!URL_)("on Postgres (PG_TEST_URL)", () => {
     expect(answers.filter((r) => r.status === 201)).toHaveLength(1);
     const ids = new Set(await Promise.all(answers.map(async (r) => ((await r.json()) as { visit: { id: string } }).visit.id)));
     expect(ids.size).toBe(1);
-    expect(await visitsAt(start)).toHaveLength(1);
+    expect((await visitsAt(start)).filter((v) => v.staff_id === staff.slava)).toHaveLength(1);
   });
 });

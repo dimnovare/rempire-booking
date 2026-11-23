@@ -17,7 +17,7 @@ import { after } from "next/server";
 import { requestAddress } from "@/lib/address-hash";
 import { loadAvailability } from "@/lib/availability";
 import { book, type BookingInput } from "@/lib/booking";
-import { noteBooking, withinBookingLimit } from "@/lib/booking-limit";
+import { releaseBooking, reserveBooking } from "@/lib/booking-limit";
 import { currentBusiness } from "@/lib/business";
 import { dbConfigured, query } from "@/lib/db";
 import { isLocale } from "@/lib/i18n";
@@ -57,17 +57,23 @@ export async function POST(request: Request) {
     smsReminder: body.smsReminder !== false,
     idempotencyKey: request.headers.get("idempotency-key") || "",
   };
-  const ip = requestAddress(request);
-  if (!(await withinBookingLimit(query, business, "book", ip, { idempotencyKey: input.idempotencyKey }))) {
-    return Response.json({ error: "too_many" }, { status: 429, headers: NO_STORE });
+  // the place in the limit is taken first, so requests sent at once are counted one by one
+  const held = await reserveBooking(business, "book", requestAddress(request), { idempotencyKey: input.idempotencyKey });
+  if (!held.ok) return Response.json({ error: "too_many" }, { status: 429, headers: NO_STORE });
+  const giveBack = () => releaseBooking(held.id).catch((err) => console.error("booking limit release failed:", err instanceof Error ? err.message : err));
+  let r: Awaited<ReturnType<typeof book>>;
+  try {
+    r = await book(query, business, input, { source: "online" });
+  } catch (err) {
+    await giveBack();
+    throw err;
   }
-  const r = await book(query, business, input, { source: "online" });
+  // only a visit booked now stays counted
+  if (!r.ok || r.replay) await giveBack();
 
   if (r.ok) {
     // the confirmation letter and the barber's push (Phase B), right after the response
     if (!r.replay) {
-      // the count never fails a visit already booked
-      await noteBooking(query, business, "book", ip).catch((err) => console.error("booking limit count failed:", err instanceof Error ? err.message : err));
       const id = r.visit.id;
       after(async () => {
         try {

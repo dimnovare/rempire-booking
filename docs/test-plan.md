@@ -477,7 +477,7 @@ answer must be calm, clear and recoverable.
 | The shop down | «Продать» says so; booking untouched |
 | A deploy during a booking | the booking finishes or fails clearly; never half a visit |
 | A deploy with a bad migration | caught on staging first; Vercel's Instant Rollback; migrations only add |
-| Spam bookings | a limit per address (built 23.11, `src/lib/booking-limit.ts`): 6 online bookings an hour and 15 a day, 10 moves an hour; past it 429 and «call the salon» with the call button; the same tap again still gets its visit; the address kept only as a code, two days. Renat can cancel many at once |
+| Spam bookings | a limit per address (built 23.11, `src/lib/booking-limit.ts`): 6 online bookings an hour and 15 a day, 10 moves an hour; past it 429 and «call the salon» with the call button; the same tap again still gets its visit; the address kept only as a code, two days. The place is taken before the booking, under a lock on the address, and given back if it fails: ten sent at once from one address on Postgres give six visits and four 429 (`tests/pg-race.test.ts`). Renat can cancel many at once |
 | Two people, one time | one visit; the other sees other times (§ 2 item 2; on Postgres, `tests/pg-race.test.ts`) |
 | Backups | a nightly backup (Railway's, if the plan has them, or a dump of our own) restored once into a scratch database; counts match |
 
