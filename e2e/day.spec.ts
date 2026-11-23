@@ -114,6 +114,10 @@ test.describe("his day", () => {
     await page.goto("/b/week");
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     await expect(page.getByText(B.week.total)).toBeVisible();
+    // no tab of its own (Dim, round 13): «День | Неделя» is on the page, and «День» in the bar stays lit
+    const seg = page.locator("main:visible").getByRole("navigation", { name: B.own.view });
+    await expect(seg.getByRole("link", { name: B.own.week })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("navigation", { name: B.nav.label }).getByRole("link", { name: B.nav.day, exact: true })).toHaveAttribute("aria-current", "page");
     await expectNoSideScroll(page);
     expect(await smallTargets(page)).toEqual([]);
   });
@@ -123,8 +127,9 @@ test.describe("his day", () => {
     await hydrated(page);
     // (the dark bar's «День | Неделя» has the same words: the tabs are the «Разделы» ones)
     const tabs = page.getByRole("navigation", { name: B.nav.label });
+    // four tabs: the week is «День | Неделя» in the dark bar, not a tab (Dim, round 13)
+    await expect(tabs.getByRole("link")).toHaveText([B.nav.day, B.nav.time, B.nav.sell, B.nav.more]);
     for (const [name, path] of [
-      [B.nav.week, "/b/week"],
       [B.nav.time, "/b/time"],
       [B.nav.sell, "/b/sell"],
       [B.nav.more, "/b/more"],

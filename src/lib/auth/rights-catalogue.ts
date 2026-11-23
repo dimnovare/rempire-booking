@@ -1,7 +1,7 @@
 /**
  * Every access right, as data (the owner, 19.11.2026: «add all switches»).
  * The list is the one in docs/altegio-rights.md: 209 rights in 13 groups and
- * 4 single rights, each with its place in the tree, its words in three
+ * 4 single rights (210 with «Доступ к разделу Типы уведомлений», from its help), each with its place in the tree, its words in three
  * languages and the roles that have it on by default.
  *
  *   key     stable; code asks for a right by it (src/lib/auth/rights.ts)
@@ -56,7 +56,7 @@ export const GROUPS: Record<GroupKey, Words & { size: number; on: string; built:
   goods: { ru: "Товары", et: "Tooted", en: "Products", size: 39, on: "SM VW AD CC AC MG OW", built: false },
   staff: { ru: "Сотрудники", et: "Töötajad", en: "Team", size: 8, on: "SM MG OW", built: true },
   services: { ru: "Услуги", et: "Teenused", en: "Services", size: 12, on: "SM MG OW", built: true },
-  notify: { ru: "Уведомления", et: "Teavitused", en: "Notifications", size: 2, on: "SM MG OW", built: true },
+  notify: { ru: "Уведомления", et: "Teavitused", en: "Notifications", size: 3, on: "SM MG OW", built: true },
   settings: { ru: "Настройки", et: "Seaded", en: "Settings", size: 10, on: "SM AD CC MG OW", built: true },
   clients: { ru: "Клиентская база", et: "Kliendibaas", en: "All clients", size: 26, on: "SM VW AD CC MG OW", built: true },
   reports: { ru: "Отчёты", et: "Aruanded", en: "Reports", size: 25, on: "SM VW AD MG OW", built: true },
@@ -75,7 +75,8 @@ export const GROUP_TOTALS: Record<GroupKey, Record<RoleCode, number>> = {
   goods: { SM: 17, VW: 10, SP: 0, AD: 26, CC: 26, AC: 39, MG: 39, OW: 39 },
   staff: { SM: 7, VW: 0, SP: 0, AD: 0, CC: 0, AC: 0, MG: 8, OW: 8 },
   services: { SM: 0, VW: 0, SP: 0, AD: 0, CC: 0, AC: 0, MG: 12, OW: 12 },
-  notify: { SM: 2, VW: 0, SP: 0, AD: 0, CC: 0, AC: 0, MG: 2, OW: 2 },
+  // «Типы уведомлений» (the help article's third right) goes with the other two
+  notify: { SM: 3, VW: 0, SP: 0, AD: 0, CC: 0, AC: 0, MG: 3, OW: 3 },
   settings: { SM: 6, VW: 0, SP: 0, AD: 0, CC: 0, AC: 0, MG: 8, OW: 10 },
   clients: { SM: 10, VW: 10, SP: 0, AD: 18, CC: 18, AC: 0, MG: 24, OW: 26 },
   reports: { SM: 24, VW: 21, SP: 0, AD: 6, CC: 0, AC: 0, MG: 25, OW: 25 },
@@ -240,7 +241,7 @@ const ROWS = [
   ["services.create", null, TOP, 1, "Создание услуг", "Create services", "Teenuste loomine"],
   ["services.edit", null, TOP, 1, "Редактирование услуг", "Edit services", "Teenuste muutmine"],
   ["services.edit.name", "services.edit", TOP, 1, "Название услуги и Название для онлайн-записи", "The name of service and Name for online booking", "Teenuse nimi ja nimi veebibroneeringus"],
-  ["services.edit.category", "services.edit", TOP, 0, "Категория услуги", "Service category", "Teenuse kategooria"],
+  ["services.edit.category", "services.edit", TOP, 1, "Категория услуги", "Service category", "Teenuse kategooria"],
   ["services.edit.price", "services.edit", TOP, 1, "Цена услуги", "Service price", "Teenuse hind"],
   ["services.edit.images", "services.edit", TOP, 0, "Загрузка и изменение изображений", "Uploading and changing images", "Piltide üleslaadimine ja muutmine"],
   ["services.edit.online", "services.edit", TOP, 1, "Отображение услуги в виджете", "Displaying the service in the booking widget", "Teenuse näitamine broneerimisvidinas"],
@@ -250,8 +251,10 @@ const ROWS = [
   ["services.materials", null, TOP, 0, "Изменять технологические карты", "Modify bills of materials", "Muuta tehnoloogilisi kaarte"],
   ["services.delete", null, TOP, 1, "Удаление услуг", "Delete services", "Teenuste kustutamine"],
 
-  // ---- 7. Уведомления (2)
-  // «Настройки → Уведомления» (settings/notifications/, src/lib/admin/notification-store.ts): either opens it; each changes its own channel
+  // ---- 7. Уведомления (3)
+  // the page «Уведомления» (notifications/, src/lib/admin/notification-store.ts): «Типы уведомлений» opens it
+  // (Dim, round 13: the third right of the list's help, as the page's door); SMS and e-mail each change their own channel
+  ["notify.types", null, ADM3, 1, "Доступ к разделу Типы уведомлений", "Access to the Notification types section", "Ligipääs jaotisele «Teavituste tüübid»"],
   ["notify.sms", null, ADM3, 1, "Доступ к разделу SMS-уведомления", "Access to the SMS Notifications section", "Ligipääs jaotisele «SMS-teavitused»"],
   ["notify.email", null, ADM3, 1, "Доступ к разделу Email-уведомления", "Access to the Email Notifications section", "Ligipääs jaotisele «E-kirja teavitused»"],
 

@@ -228,7 +228,8 @@ describe("the letters' look", () => {
     for (const locale of ["ru", "et", "en"] as const) {
       const l = reviewLetter(visit({ status: "done", clientName: "Stored Name" }), { business, origin: ORIGIN, locale });
       expect(l.subject).toBe(letterSubject("review", locale));
-      expect(l.html.match(new RegExp(`href="${ORIGIN}/${locale}/about"`, "g"))?.length).toBe(6);
+      expect(letterSubject("review_request", locale)).toBe(l.subject);
+      expect(l.html.match(new RegExp(`href="${ORIGIN}/${locale}/about#ab-reviews"`, "g"))?.length).toBe(6);
       expect(l.html.match(/star-fill\.png/g)).toHaveLength(5);
       expect(l.html).toContain("Renat");
       expect(l.html).not.toContain("Stored Name");

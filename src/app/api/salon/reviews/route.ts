@@ -1,8 +1,9 @@
 /**
  * GET /api/salon/reviews?before=<review id>&limit=6
- * → { rows: [{ id, at, rating, body, name }], more }
+ * → { rows: [{ id, at, rating, body, name, staff }], more }
  *
- * The reviews about the salon itself on show, newest first, for its page on
+ * Every review on show, the barbers' (staff: his name) and the salon's own
+ * (staff: null), as the widget we follow lists them (Dim, round 12), newest first, for its page on
  * the booking site («REMPIRE ▾», src/app/[locale]/booking-flow.tsx): the
  * first six when it opens, the next six after the last one given for «Ещё
  * отзывы». The name as the review was signed; no client and no phone go out

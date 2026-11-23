@@ -357,6 +357,7 @@ export const ru = {
       own_client: "Клиент отменил запись",
       own_barber: "Барбер отменил или перенёс запись",
       own_request: "Запрос барбера (отпуск, цены)",
+      own_review: "Новый отзыв клиента",
       own_plan: "Завтра в салоне, в 20:00",
     } as Record<string, string>,
   },

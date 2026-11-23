@@ -21,8 +21,8 @@ import { checkTemplate, isSmsType, smsCount, smsWords, type SmsVar } from "@/lib
 import { typeDef, type NChannel, type Timing, type TypeChange } from "@/lib/admin/notifications";
 import { LOCALES, type Locale } from "@/lib/i18n";
 import { EXTRA_MARK, extraBlock } from "@/lib/letter-kit";
-import { PrevIcon } from "../../../../icons";
-import { useA } from "../../../../lang";
+import { PrevIcon } from "../../../icons";
+import { useA } from "../../../lang";
 import { saveTypeAction } from "../actions";
 import { timingText } from "../words";
 import "../notifications.css";
@@ -93,7 +93,7 @@ export function TypeView({ detail: d, sample, previews }: { detail: TypeDetail; 
   const smsBad = smsCheck && !smsCheck.ok ? (smsCheck.code === "unknown" ? N.bad.unknown(smsCheck.token ?? "") : N.bad[smsCheck.code]) : null;
 
   // the SMS as it would go now, with the made-up visit
-  const values = { ...sample.values, link: d.key === "reminder" ? sample.visitLink : sample.bookLink };
+  const values = { ...sample.values, link: d.key === "reminder" ? sample.visitLink : d.key === "review_request" ? sample.reviewLink : sample.bookLink };
   const words = smsType ? (smsWords(smsType, values, draft.sms) ?? "") : "";
 
   /** When a channel goes, from what is on the page now (not yet saved). */
@@ -103,6 +103,7 @@ export function TypeView({ detail: d, sample, previews }: { detail: TypeDetail; 
     if (draft.at && now.kind === "at") return { kind: "at", time: draft.at };
     if (draft.at && now.kind === "fallback") return { ...now, time: draft.at };
     if (draft.delay !== null && now.kind === "delay") return { kind: "delay", min: draft.delay };
+    if (draft.delay !== null && now.kind === "delayFallback") return { ...now, min: draft.delay };
     return now;
   };
 
@@ -135,13 +136,14 @@ export function TypeView({ detail: d, sample, previews }: { detail: TypeDetail; 
     }
   };
 
-  const later = d.key === "reminder" ? N.later.reminder : change.at !== undefined ? N.later.at : change.delay !== undefined ? N.later.delay : N.later.default;
+  const later =
+    d.key === "reminder" ? N.later.reminder : change.at !== undefined ? N.later.at : change.delay !== undefined ? (d.key === "review_request" ? N.later.delayReview : N.later.delay) : N.later.default;
   const head = (ch: NChannel) => (ch === "push" ? N.pushTo[d.audience] : N.ch[ch]);
   const sub = (ch: NChannel) => (ch === "sms" ? (draft.sms ? N.chSub.smsOwn : N.chSub.sms) : ch === "email" ? N.chSub.email : d.audience === "client" ? N.chSub.pushClient : N.chSub.pushStaff);
 
   return (
     <div className="ntf ntf-type">
-      <Link className="adm-back ntf-back" href="/admin/settings/notifications" prefetch={false}>
+      <Link className="adm-back ntf-back" href="/admin/notifications" prefetch={false}>
         <PrevIcon />
         {N.back}
       </Link>

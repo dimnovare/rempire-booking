@@ -1,8 +1,8 @@
 /**
- * «Настройки → Уведомления» (Dim, decision page round 11): every message
+ * «Уведомления» (Dim, decision page round 11): every message
  * the system sends by itself, grouped by who gets it, with the salon's
  * switch, channels, timing and SMS text for each. The page is
- * src/app/admin/(app)/settings/notifications/; the senders
+ * src/app/admin/(app)/notifications/; the senders
  * (src/lib/outbox.ts) ask here at send time.
  *
  * **Where the settings live: businesses.settings, one place.** What was a
@@ -20,9 +20,11 @@
  * Everything new is one object under the key `notifications`:
  *   off    the types and the channels of a type that are off:
  *          «confirmation», «reminder.sms», «own_barber» …
+ *   on     the types that are off until switched on (OFF_BY_DEFAULT,
+ *          today «review_request») and are switched on
  *   sms    the salon's own SMS text per type (notification-text.ts)
  *   at     the hour of a daily message: birthday, day_plan, own_plan
- *   delay  minutes after the event: no_show
+ *   delay  minutes after the event: no_show, review_request
  *   email  the salon's own text in a client's letter, per type
  *          («Дополнительная информация в Email», as Altegio has it; Dim,
  *          round 13): plain text, shown under the visit's details in
@@ -30,9 +32,11 @@
  * **Nothing stored is today's behaviour, exactly**: every reader falls back
  * to the default below, which is what the code did before the page.
  *
- * Which messages have a switch here: the client's six (the kinds of
- * src/lib/client-notify.ts), the salon's five and the barbers' five push
- * kinds (src/lib/push-kinds.ts). Not switchable, so not listed as types: a
+ * Which messages have a switch here: the client's seven (the kinds of
+ * src/lib/client-notify.ts), the salon's six and the barbers' five push
+ * kinds (src/lib/push-kinds.ts). Round 13 (Dim) added two: the request
+ * for a review after a visit («Запрос отзыва после визита»: off, as at
+ * REMPIRE today; 3 hours after) and the salon's push about a new review. Not switchable, so not listed as types: a
  * login code, an invoice letter, a message written on a client's card and
  * a mass message (somebody sends each of those by hand).
  *
@@ -62,11 +66,13 @@ export const TYPE_KEYS = [
   "cancelled",
   "birthday",
   "no_show",
+  "review_request",
   // the salon's
   "own_online",
   "own_client",
   "own_barber",
   "own_request",
+  "own_review",
   "own_plan",
   // a barber's
   "visit_new",
@@ -82,6 +88,17 @@ export const isTypeKey = (v: unknown): v is TypeKey => typeof v === "string" && 
 export const AT_TYPES = ["birthday", "day_plan", "own_plan"] as const;
 export type AtType = (typeof AT_TYPES)[number];
 const isAtType = (t: string): t is AtType => (AT_TYPES as readonly string[]).includes(t);
+/** The types that go so many minutes after their event. */
+export const DELAY_TYPES = ["no_show", "review_request"] as const;
+export type DelayType = (typeof DELAY_TYPES)[number];
+export const isDelayType = (t: string): t is DelayType => (DELAY_TYPES as readonly string[]).includes(t);
+/**
+ * The types that are off until the salon switches them on: the review
+ * request, switched off at REMPIRE in the tool we follow (Dim, round 13).
+ * Every other type is on until switched off.
+ */
+export const OFF_BY_DEFAULT: readonly TypeKey[] = ["review_request"];
+const offByDefault = (t: string) => (OFF_BY_DEFAULT as readonly string[]).includes(t);
 
 export type TypeDef = {
   key: TypeKey;
@@ -101,10 +118,12 @@ export const TYPES: readonly TypeDef[] = [
   { key: "cancelled", audience: "client", channels: ["email"], kinds: { email: "cancelled" } },
   { key: "birthday", audience: "client", channels: ["email", "push", "sms"], kinds: { email: "birthday", push: "birthday", sms: "birthday" } },
   { key: "no_show", audience: "client", channels: ["email", "push", "sms"], kinds: { email: "no_show", push: "no_show", sms: "no_show" } },
+  { key: "review_request", audience: "client", channels: ["email", "push", "sms"], kinds: { email: "review_request", push: "review_request", sms: "review_request" } },
   push1("own_online", "salon"),
   push1("own_client", "salon"),
   push1("own_barber", "salon"),
   push1("own_request", "salon"),
+  push1("own_review", "salon"),
   push1("own_plan", "salon"),
   push1("visit_new", "staff"),
   push1("visit_moved", "staff"),
@@ -156,6 +175,10 @@ export const NOTIFY_DEFAULTS = {
   movedDelayMin: 2,
   /** the birthday SMS waits this long for the letter or the notification */
   birthdaySmsAfterMin: 40,
+  /** a visit marked «Пришёл» → the request for a review, this long after its end (the tool's 3 h) */
+  reviewDelayMin: 180,
+  /** the review request's SMS waits this long for the letter or the notification, as the birthday's */
+  reviewSmsAfterMin: 40,
 };
 
 /** What the page offers. A value stored by other means is offered too (optionsWith). */
@@ -166,6 +189,9 @@ export const AT_OPTIONS: Record<AtType, readonly string[]> = {
   own_plan: ["17:00", "18:00", "19:00", "20:00", "21:00", "22:00"],
 };
 export const DELAY_OPTIONS = [2, 30, 60, 180, 1440] as const;
+/** The review request's: from an hour after the visit to the next day. */
+export const REVIEW_DELAY_OPTIONS = [60, 120, 180, 360, 720, 1440] as const;
+export const delayOptions = (t: DelayType): readonly number[] => (t === "review_request" ? REVIEW_DELAY_OPTIONS : DELAY_OPTIONS);
 
 /** A lead within what src/lib/settings.ts takes for reminder_min and reminder_email_min. */
 export const LEAD_LIMITS = [15, 48 * 60] as const;
@@ -181,20 +207,23 @@ export function optionsWith<T extends string | number>(options: readonly T[], cu
 
 export type Stored = {
   off: string[];
+  /** the types of OFF_BY_DEFAULT that are switched on */
+  on: string[];
   sms: Partial<Record<SmsType, string>>;
   at: Partial<Record<AtType, string>>;
-  delay: { no_show?: number };
+  delay: Partial<Record<DelayType, number>>;
   email: Partial<Record<TypeKey, string>>;
 };
 
 const OFF_KEYS = new Set<string>([...TYPES.map((t) => t.key as string), ...TYPES.flatMap((t) => t.channels.map((c) => `${t.key}.${c}`))]);
-/** Kept elsewhere (the flat keys above), so never in `off`. */
-const NOT_IN_OFF = new Set(["birthday", "no_show", "reminder.email"]);
+/** Kept elsewhere (the flat keys above, or `on`), so never in `off`. */
+const NOT_IN_OFF = new Set<string>(["birthday", "no_show", "reminder.email", ...OFF_BY_DEFAULT]);
 
 /** The `notifications` object as it may be stored: known keys only, each value of its kind. */
 export function cleanStored(raw: unknown): Stored {
   const o = (raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {}) as Record<string, unknown>;
   const off = Array.isArray(o.off) ? [...new Set(o.off.map(String))].filter((k) => OFF_KEYS.has(k) && !NOT_IN_OFF.has(k)).sort() : [];
+  const on = Array.isArray(o.on) ? [...new Set(o.on.map(String))].filter(offByDefault).sort() : [];
   const sms: Stored["sms"] = {};
   const rawSms = (o.sms && typeof o.sms === "object" ? o.sms : {}) as Record<string, unknown>;
   for (const t of SMS_TYPES) {
@@ -205,15 +234,18 @@ export function cleanStored(raw: unknown): Stored {
   const rawAt = (o.at && typeof o.at === "object" ? o.at : {}) as Record<string, unknown>;
   for (const t of AT_TYPES) if (typeof rawAt[t] === "string" && AT_RE.test(rawAt[t] as string)) at[t] = rawAt[t] as string;
   const delay: Stored["delay"] = {};
-  const d = ((o.delay && typeof o.delay === "object" ? o.delay : {}) as Record<string, unknown>).no_show;
-  if (typeof d === "number" && Number.isInteger(d) && d >= DELAY_LIMITS[0] && d <= DELAY_LIMITS[1]) delay.no_show = d;
+  const rawDelay = (o.delay && typeof o.delay === "object" ? o.delay : {}) as Record<string, unknown>;
+  for (const t of DELAY_TYPES) {
+    const d = rawDelay[t];
+    if (typeof d === "number" && Number.isInteger(d) && d >= DELAY_LIMITS[0] && d <= DELAY_LIMITS[1]) delay[t] = d;
+  }
   const email: Stored["email"] = {};
   const rawEmail = (o.email && typeof o.email === "object" ? o.email : {}) as Record<string, unknown>;
   for (const t of EMAIL_TEXT_TYPES) {
     const c = cleanEmailText(rawEmail[t]);
     if (c.ok && c.value) email[t] = c.value;
   }
-  return { off, sms, at, delay, email };
+  return { off, on, sms, at, delay, email };
 }
 
 /* ---------- what is in force ---------- */
@@ -234,6 +266,7 @@ export function readNotify(raw: unknown): NotifySettings {
 export function typeOn(ns: NotifySettings, type: TypeKey): boolean {
   if (type === "birthday") return ns.base.birthday_on;
   if (type === "no_show") return ns.base.no_show_on;
+  if (offByDefault(type)) return ns.stored.on.includes(type);
   return !ns.stored.off.includes(type);
 }
 
@@ -266,6 +299,11 @@ export function sendsKind(ns: NotifySettings, kind: string, channel: NChannel): 
 export const atOf = (ns: NotifySettings, type: AtType): string => ns.stored.at[type] ?? NOTIFY_DEFAULTS.at[type];
 /** How long after «Не пришёл» the invitation goes. */
 export const noShowDelay = (ns: NotifySettings): number => ns.stored.delay.no_show ?? NOTIFY_DEFAULTS.noShowDelayMin;
+/** How long after the visit's end the review request goes. */
+export const reviewDelay = (ns: NotifySettings): number => ns.stored.delay.review_request ?? NOTIFY_DEFAULTS.reviewDelayMin;
+/** A delay type's delay in force, and the one nothing stored gives. */
+export const delayOf = (ns: NotifySettings, type: DelayType): number => (type === "review_request" ? reviewDelay(ns) : noShowDelay(ns));
+const delayDefault = (type: DelayType): number => (type === "review_request" ? NOTIFY_DEFAULTS.reviewDelayMin : NOTIFY_DEFAULTS.noShowDelayMin);
 /** The salon's own SMS text of a type, or null: the standard one. */
 export const smsTemplate = (ns: NotifySettings, type: SmsType): string | null => ns.stored.sms[type] ?? null;
 /** The salon's own text in this type's letter, or null. */
@@ -283,7 +321,9 @@ export type Timing =
   /** at an hour of the day */
   | { kind: "at"; time: string }
   /** the birthday SMS: so much after the hour, only if the letter and the push did not go */
-  | { kind: "fallback"; time: string; min: number };
+  | { kind: "fallback"; time: string; min: number }
+  /** the review request's SMS: `after` minutes after the others' delay, only if the letter and the push did not go */
+  | { kind: "delayFallback"; min: number; after: number };
 
 export function timing(ns: NotifySettings, type: TypeKey, channel: NChannel): Timing {
   switch (type) {
@@ -297,6 +337,8 @@ export function timing(ns: NotifySettings, type: TypeKey, channel: NChannel): Ti
       return channel === "sms" ? { kind: "fallback", time: atOf(ns, "birthday"), min: NOTIFY_DEFAULTS.birthdaySmsAfterMin } : { kind: "at", time: atOf(ns, "birthday") };
     case "no_show":
       return { kind: "delay", min: noShowDelay(ns) };
+    case "review_request":
+      return channel === "sms" ? { kind: "delayFallback", min: reviewDelay(ns), after: NOTIFY_DEFAULTS.reviewSmsAfterMin } : { kind: "delay", min: reviewDelay(ns) };
     case "day_plan":
     case "own_plan":
       return { kind: "at", time: atOf(ns, type) };
@@ -318,7 +360,7 @@ export type TypeChange = {
   lead?: { sms?: number; email?: number };
   /** birthday, day_plan, own_plan: «HH:MM» */
   at?: string;
-  /** no_show: minutes */
+  /** no_show, review_request: minutes */
   delay?: number;
   /** the reminder: SMS, push or both (src/lib/settings.ts client_reminder) */
   mode?: ReminderChannel;
@@ -359,7 +401,7 @@ export function applyChange(raw: unknown, type: TypeKey, c: TypeChange): ChangeR
   const def = typeDef(type);
   const ns = readNotify(raw);
   const flat: Record<string, unknown> = {};
-  const next: Stored = { off: [...ns.stored.off], sms: { ...ns.stored.sms }, at: { ...ns.stored.at }, delay: { ...ns.stored.delay }, email: { ...ns.stored.email } };
+  const next: Stored = { off: [...ns.stored.off], on: [...ns.stored.on], sms: { ...ns.stored.sms }, at: { ...ns.stored.at }, delay: { ...ns.stored.delay }, email: { ...ns.stored.email } };
   const changed: string[] = [];
   const setOff = (key: string, on: boolean) => {
     const has = next.off.includes(key);
@@ -373,6 +415,7 @@ export function applyChange(raw: unknown, type: TypeKey, c: TypeChange): ChangeR
       changed.push("on");
       if (type === "birthday") flat.birthday_on = c.on;
       else if (type === "no_show") flat.no_show_on = c.on;
+      else if (offByDefault(type)) next.on = c.on ? [...next.on, type].sort() : next.on.filter((k) => k !== type);
       else setOff(type, c.on);
     }
   }
@@ -407,10 +450,10 @@ export function applyChange(raw: unknown, type: TypeKey, c: TypeChange): ChangeR
     }
   }
   if (c.delay !== undefined) {
-    if (type !== "no_show" || !whole(c.delay) || c.delay < DELAY_LIMITS[0] || c.delay > DELAY_LIMITS[1]) return { ok: false, field: "delay" };
-    if (c.delay !== noShowDelay(ns)) {
-      if (c.delay === NOTIFY_DEFAULTS.noShowDelayMin) delete next.delay.no_show;
-      else next.delay.no_show = c.delay;
+    if (!isDelayType(type) || !whole(c.delay) || c.delay < DELAY_LIMITS[0] || c.delay > DELAY_LIMITS[1]) return { ok: false, field: "delay" };
+    if (c.delay !== delayOf(ns, type)) {
+      if (c.delay === delayDefault(type)) delete next.delay[type];
+      else next.delay[type] = c.delay;
       changed.push("delay");
     }
   }

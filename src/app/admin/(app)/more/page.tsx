@@ -7,12 +7,14 @@
  *     product sale, his sums. These are the barber app's own pages (/b),
  *     which open in this same frame with «Ещё» lit;
  *   - «Салон»: the sections that have no tab of their own, «Запросы» with
- *     how many wait (the red dot on «Ещё» says the same), and «Продажа
- *     товара», which a wide screen has as a tile of its sidebar;
+ *     how many wait (the red dot on «Ещё» says the same), the salon's
+ *     «Уведомления», and «Продажа товара», which a wide screen has as a
+ *     tile of its sidebar;
  *   - «Настройки»: the salon's page on the booking site, «Бренд»,
  *     «Контакты», «Галерея» (the sidebar's group of the same name);
- *   - «Аккаунт»: the logins and rights, this device's notifications, the
- *     language, the way out.
+ *   - «Аккаунт»: the logins and rights, his own «Уведомления» (this
+ *     device's pushes), the language, the way out. Both «Уведомления»
+ *     keep the one name, as in the admin we follow (Dim, round 13).
  *
  * A wide screen has every section in the sidebar and no link to this page.
  */
@@ -43,6 +45,7 @@ const SALON: Record<Exclude<SalonRow, "sale" | "requests">, string> = {
   messages: "/admin/messages",
   changes: "/admin/changes",
   invoices: "/admin/invoices",
+  notifications: "/admin/notifications",
 };
 
 export default function MorePage() {

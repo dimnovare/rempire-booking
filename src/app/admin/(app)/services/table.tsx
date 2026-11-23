@@ -131,7 +131,7 @@ export function ServicesTable({ board, initialOpen, may }: { board: ServicesBoar
                     name={g.name}
                     count={g.total}
                     shut={shut}
-                    canRename={!!g.cat && may.edit}
+                    canRename={!!g.cat && may.category}
                     onFold={() => fold(g.key, !shut)}
                     onError={(t) => setErr(t || null)}
                   />

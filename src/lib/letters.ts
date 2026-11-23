@@ -426,9 +426,14 @@ const REVIEW: Record<Locale, ReviewCopy> = {
 
 type InviteOptions = { business: Pick<Business, "name" | "timezone">; origin: string; locale: Locale; extra?: string | null };
 
+/** Where a review is written: the salon's page, at its card «Оцените и напишите отзыв» (src/app/[locale]/booking-flow.tsx). */
+export const reviewFormUrl = (origin: string, locale: Locale) => `${origin}/${locale}/about#ab-reviews`;
+
 /**
  * After a visit: who served him and when, five stars and the button, all
- * to the review form on the salon's page. No client name.
+ * to the review form on the salon's page. No client name. The outbox
+ * sends it as «review_request» (src/lib/outbox.ts), off until the salon
+ * switches it on in «Уведомления».
  */
 export function reviewLetter(v: VisitView, o: InviteOptions): Letter {
   const L = o.locale;
@@ -436,7 +441,7 @@ export function reviewLetter(v: VisitView, o: InviteOptions): Letter {
   const salon = o.business.name || "REMPIRE";
   const { dayLong, foot } = visitParts(v, L, o.origin, o.business.timezone, salon);
   const services = v.services.map((x) => pick(x.name, L)).join(" + ");
-  const url = `${o.origin}/${L}/about`;
+  const url = reviewFormUrl(o.origin, L);
   const extra = (o.extra ?? "").trim();
   const text = [k.title(salon), "", k.lead, "", `${v.staffName} · ${dayLong} · ${services}`, "", `${k.write}: ${url}`, ...(extra ? ["", extra] : [])].join("\n");
   const body = [
@@ -737,7 +742,7 @@ export function letterSubject(kind: string, locale: Locale, o: { startsAt?: stri
   const L: Locale = locale === "et" || locale === "en" ? locale : "ru";
   if (kind === "birthday") return BIRTHDAY[L].subject;
   if (kind === "no_show") return NO_SHOW[L].subject;
-  if (kind === "review") return REVIEW[L].subject;
+  if (kind === "review" || kind === "review_request") return REVIEW[L].subject;
   if (kind === "invoice") return o.number ? (INVOICE[L] ?? INVOICE.et).subject(o.number, o.credit === true) : null;
   const copy = kind === "confirmation" ? CONFIRM[L] : kind === "moved" ? MOVED[L] : kind === "cancelled" ? CANCELLED[L] : kind === "reminder_email" ? REMINDER[L] : null;
   if (!copy || !o.startsAt || Number.isNaN(Date.parse(o.startsAt))) return null;

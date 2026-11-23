@@ -58,7 +58,7 @@ test.describe("clients", () => {
     await expect(page.getByRole("heading", { level: 1, name: A.more.title })).toBeVisible();
     const others = page.locator(".adm-more .adm-item:visible");
     // (the last one is the sidebar's tile on a wide screen: e2e/frame.spec.ts); «Запросы» is a row, «Основные показатели» the tab «Отчёты»
-    await expect(others.locator("b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.sale.title]);
+    await expect(others.locator("b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.nav.notifications, A.sale.title]);
     await expect(bar(page).getByRole("link", { name: A.nav.more })).toHaveAttribute("aria-current", "page");
     await expect(bar(page).locator('a[aria-current="page"]:visible')).toHaveCount(1);
     await expect(page).toHaveTitle(`${A.nav.more} · REMPIRE`);
@@ -372,7 +372,7 @@ test.describe("clients", () => {
       await hydrated(page);
       // opened on this page, the sidebar is the menu (e2e/frame.spec.ts): every section and no «Ещё»;
       // «Клиенты» is a group, open on its page «Клиентская база»; «Отчёты», «Сотрудники» and «Товары» are the other groups, shut
-      await expect(bar(page).getByRole("link")).toHaveText([A.nav.clientBase, A.nav.services, A.nav.requests, A.nav.invoices, A.nav.account]);
+      await expect(bar(page).getByRole("link")).toHaveText([A.nav.clientBase, A.nav.services, A.nav.requests, A.nav.invoices, A.nav.notifications, A.nav.account]);
       await expect(bar(page).getByRole("button")).toHaveText([A.nav.reports, A.nav.team, A.nav.clients, A.nav.goods, A.nav.settings]);
       await expect(bar(page).getByRole("link", { name: A.nav.clientBase })).toHaveAttribute("aria-current", "page");
       const cols = BASE.cols;
@@ -416,7 +416,7 @@ test.describe("clients", () => {
       // «Ещё» by its address still works here: the same rows
       await page.goto("/admin/more");
       await hydrated(page);
-      await expect(page.locator(".adm-more .adm-item:visible b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.sale.title]);
+      await expect(page.locator(".adm-more .adm-item:visible b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.nav.notifications, A.sale.title]);
     });
 
     test("a client's card is a 900px drawer over the list: its seven tabs, «Сохранить», the question before leaving, a comment, a file, a message", async ({ page, browser }, info) => {
@@ -690,8 +690,8 @@ test.describe("clients", () => {
       await expect(channels).toHaveCount(3);
       for (const c of await channels.all()) await expect(c).toBeChecked();
       const kinds = notify.getByRole("group", { name: K.kindsTitle }).getByRole("switch");
-      // confirmation, reminder, moved, cancelled, and since 20.11 the birthday greeting and the no-show invitation
-      await expect(kinds).toHaveCount(6);
+      // confirmation, reminder, moved, cancelled, since 20.11 the birthday greeting and the no-show invitation, since round 13 the review request
+      await expect(kinds).toHaveCount(7);
       for (const k of await kinds.all()) await expect(k).toBeChecked();
       await expect(kinds.first()).toHaveCSS("background-color", "rgb(255, 203, 0)");
       await pc("notify");

@@ -212,9 +212,10 @@ export const ru = {
     headMenu: (name: string) => `${name}: график на день`,
     headDay: (day: string, hours: string) => `${day} ${hours}`,
     headToday: "Сегодня",
-    changeHours: (today: boolean): string => (today ? "Изменить часы на сегодня" : "Изменить часы на этот день"),
-    makeOff: "Сделать выходным",
-    openSchedule: "Открыть график работы",
+    // the head menu in the words of the admin we follow, the same on every day (Dim, round 13)
+    changeHours: "Изменить рабочее время",
+    makeOff: "Отменить рабочий день",
+    openSchedule: "Настроить график работы",
     hoursSaved: "Часы сохранены",
     offSaved: "Выходной сохранён",
     timeFrom: "с",
@@ -491,7 +492,8 @@ export const ru = {
    * (Dim, decisions round 11; the boards «Услуги, таблица», «Услуга, окно»).
    */
   services: {
-    title: "Услуги",
+    // the page is its categories, the breadcrumb the section (Dim, round 13: as the admin we follow)
+    title: "Категории услуг",
     crumb: "Услуги",
     search: "Название услуги",
     add: "Добавить услугу",
@@ -805,7 +807,7 @@ export const ru = {
       monthSum: (month: string, sum: string) => `${month}: ${sum}`,
       // «Сообщения»
       msgCols: { text: "Сообщение", at: "Отправлено", kind: "Тип", status: "Статус", channel: "Канал" },
-      kinds: { confirmation: "Подтверждение записи", reminder: "Напоминание о визите", client_reminder: "Напоминание о визите", moved: "Перенос записи", cancelled: "Отмена записи", manual: "Сообщение вручную", mass: "Рассылка", reminder_email: "Напоминание о визите", birthday: "Поздравление с днём рождения", no_show: "Приглашение недошедших" } as Record<string, string>,
+      kinds: { confirmation: "Подтверждение записи", reminder: "Напоминание о визите", client_reminder: "Напоминание о визите", moved: "Перенос записи", cancelled: "Отмена записи", manual: "Сообщение вручную", mass: "Рассылка", reminder_email: "Напоминание о визите", birthday: "Поздравление с днём рождения", no_show: "Приглашение недошедших", review_request: "Запрос отзыва после визита" } as Record<string, string>,
       about: (when: string) => `Визит ${when}`,
       statuses: { queued: "в очереди", sending: "отправляется", sent: "отправлено", failed: "не доставлено", cancelled: "отменено", skipped: "не отправлено" } as Record<string, string>,
       channels: { sms: "SMS", email: "E-mail", push: "Push" } as Record<string, string>,
@@ -829,7 +831,7 @@ export const ru = {
       adsNo: "Не отправлять",
       chTitle: "Доступные каналы",
       kindsTitle: "Типы уведомлений",
-      switches: { confirmation: "Подтверждение записи", reminder: "Напоминание о визите", moved: "Перенос записи салоном", cancelled: "Отмена записи салоном", birthday: "Поздравление с днём рождения", no_show: "Приглашение недошедших" } as Record<string, string>,
+      switches: { confirmation: "Подтверждение записи", reminder: "Напоминание о визите", moved: "Перенос записи салоном", cancelled: "Отмена записи салоном", birthday: "Поздравление с днём рождения", no_show: "Приглашение недошедших", review_request: "Запрос отзыва после визита" } as Record<string, string>,
       // «Файлы»
       filesNote: (types: string, mb: number, max: number) => `Можно загрузить файлы: ${types}. Не больше ${mb} МБ каждый и не больше ${max} файлов.`,
       upload: "Загрузить файлы",
@@ -914,6 +916,7 @@ export const ru = {
       moved: "Перенос записи",
       cancelled: "Отмена записи",
       no_show: "Приглашение недошедших",
+      review_request: "Запрос отзыва после визита",
       birthday: "Поздравление с днём рождения",
       manual: "Сообщение из карточки клиента",
       mass: "Рассылка",
@@ -926,6 +929,7 @@ export const ru = {
       own_client: "Салону: клиент перенёс или отменил",
       own_barber: "Салону: барбер перенёс или отменил",
       own_request: "Салону: запрос барбера",
+      own_review: "Салону: новый отзыв",
       own_plan: "Салону: план на завтра",
       invoice: "Счёт барберу",
       login_code: "Код для входа",
@@ -1146,7 +1150,7 @@ export const ru = {
       note: "Заметка",
       invoices: "Счетов",
       client_reminder: "Напоминание клиенту",
-      // «Настройки → Уведомления» (src/lib/admin/notification-store.ts)
+      // «Уведомления» (src/lib/admin/notification-store.ts)
       notification: "Уведомление",
       channel_sms: "SMS",
       channel_email: "E-mail",
@@ -1295,9 +1299,9 @@ export const ru = {
       yes: "Удалить",
     },
   },
-  /** «Настройки → Уведомления» (settings/notifications/, decision page round 11): every message the system sends by itself. */
+  /** «Уведомления» (notifications/; decision page round 11, its own section since round 13): every message the system sends by itself. */
   notif: {
-    crumb: "Настройки · Уведомления",
+    crumb: "Уведомления",
     tabs: { types: "Типы уведомлений", channels: "Каналы отправки" },
     groups: { client: "Клиенту", salon: "Администратору", staff: "Сотруднику" } as Record<string, string>,
     count: (on: number, all: number) => `включено ${on} из ${all}`,
@@ -1310,10 +1314,12 @@ export const ru = {
       cancelled: "Запись отменена",
       birthday: "Поздравление с днём рождения",
       no_show: "Приглашение после неявки",
+      review_request: "Запрос отзыва после визита",
       own_online: "Новая онлайн-запись",
       own_client: "Клиент перенёс или отменил",
       own_barber: "Барбер перенёс или отменил",
       own_request: "Запрос барбера",
+      own_review: "Новый отзыв",
       own_plan: "План салона на завтра",
       visit_new: "Новая запись",
       visit_moved: "Запись перенесена",
@@ -1328,10 +1334,12 @@ export const ru = {
       cancelled: "Письмо, когда салон отменил запись.",
       birthday: "Поздравление в день рождения клиента: письмо и push. SMS — только если ни письмо, ни push не ушли.",
       no_show: "После отметки «Не пришёл» клиент получает приглашение записаться снова. Пока приглашение не ушло, отметку можно снять.",
+      review_request: "После визита с отметкой «Пришёл» клиент получает просьбу оценить его, со ссылкой на отзывы на странице салона. SMS — только если ни письмо, ни push не ушли. Клиенту, который уже оставил отзыв, не уходит.",
       own_online: "Push администратору, когда клиент записался онлайн.",
       own_client: "Push администратору, когда клиент сам перенёс или отменил запись.",
       own_barber: "Push администратору, когда барбер перенёс или отменил запись.",
       own_request: "Push администратору, когда барбер просит изменить график или цены.",
+      own_review: "Push администратору, когда клиент оставил отзыв на странице салона: отзыв ждёт проверки в «Отзывах».",
       own_plan: "Push администратору вечером: сколько записей завтра у каждого барбера.",
       visit_new: "Push барберу о новой записи к нему.",
       visit_moved: "Push барберу, когда его запись перенесли.",
@@ -1349,8 +1357,10 @@ export const ru = {
       moved: (d: string) => `через ${d}, одно письмо на все переносы`,
       birthday: (t: string) => `в ${t} в день рождения`,
       noShow: (d: string) => `через ${d} после отметки «Не пришёл»`,
+      review: (d: string) => `через ${d} после визита с отметкой «Пришёл»`,
       plan: (t: string) => `в ${t}, план на завтра`,
       smsFallback: (t: string, d: string) => `в ${t} + ${d}, если письмо и push не ушли`,
+      smsAfterFallback: (d: string, a: string) => `через ${d} + ${a}, если письмо и push не ушли`,
       at: (t: string) => `в ${t}`,
       after: (d: string) => `через ${d}`,
       off: "выключено",
@@ -1415,6 +1425,7 @@ export const ru = {
       reminder: "Изменения коснутся напоминаний, которые ещё не отправлены: их время пересчитается в течение 5 минут.",
       at: "Новое время — для сообщений, которые запланируются после сохранения. Уже запланированные уйдут в прежнее время.",
       delay: "Новая задержка — для отметок «Не пришёл» после сохранения. Уже запланированные приглашения уйдут в прежнее время.",
+      delayReview: "Новая задержка — для визитов, по которым запрос ещё не запланирован. Уже запланированные запросы уйдут в прежнее время.",
     },
     cancel: "Отменить",
     save: "Сохранить",

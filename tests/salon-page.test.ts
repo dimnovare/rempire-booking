@@ -1,7 +1,8 @@
 /**
  * The salon's own page on the booking site («REMPIRE ▾», docs/client-flow.md):
- * its reviews (only the ones about the salon, on show, newest first, six at
- * a time, nothing private), what the catalog carries for it, migration 028
+ * its reviews (every one on show, the barbers' and the salon's own, as the
+ * widget we follow counts them, Dim round 12; newest first, six at a time,
+ * nothing private), what the catalog carries for it, migration 028
  * filling REMPIRE's public details in a database that has REMPIRE already,
  * and the local demo's made-up reviews. Fake people only.
  */
@@ -36,26 +37,29 @@ async function add(staff: string | null, rating: number, at: string, opts: { hid
 }
 
 describe("the salon's reviews", () => {
-  it("only the ones about the salon itself and on show, newest first", async () => {
+  it("every one on show, the barbers' and the salon's own, newest first, each with the barber it is about", async () => {
     const a = await add(null, 5, "2026-05-18T10:00:00Z", { name: "Anna T." });
     const b = await add(null, 4, "2026-02-09T10:00:00Z", { body: "Hea." });
     await add(null, 1, "2026-06-01T10:00:00Z", { hidden: true });
-    await add("valentin", 5, "2026-07-01T10:00:00Z");
+    const v = await add("valentin", 5, "2026-07-01T10:00:00Z");
+    await add("valentin", 2, "2026-07-02T10:00:00Z", { hidden: true });
     const c = await add(null, 5, "2025-07-31T10:00:00Z", { body: "Coolest guys in town" });
+    const [val] = await query<{ display_name: string }>("select display_name from staff where id = $1", [demo.staff.valentin]);
 
-    expect(await salonReviewCount(query, demo.business.id)).toBe(3);
+    expect(await salonReviewCount(query, demo.business.id)).toBe(4);
     const page = await salonReviews(query, demo.business.id);
-    expect(page.rows.map((r) => r.id)).toEqual([a, b, c]);
+    expect(page.rows.map((r) => r.id)).toEqual([v, a, b, c]);
     expect(page.more).toBe(false);
-    expect(page.rows[0]).toEqual({ id: a, at: Date.parse("2026-05-18T10:00:00Z"), rating: 5, body: "", name: "Anna T." });
-    expect(page.rows[1]).toMatchObject({ rating: 4, body: "Hea." });
+    expect(page.rows[0]).toMatchObject({ id: v, staff: val.display_name });
+    expect(page.rows[1]).toEqual({ id: a, at: Date.parse("2026-05-18T10:00:00Z"), rating: 5, body: "", name: "Anna T.", staff: null });
+    expect(page.rows[2]).toMatchObject({ rating: 4, body: "Hea.", staff: null });
   });
 
   it("gives nothing private: the name as signed, never the client's card or phone", async () => {
     const [client] = await query<{ id: string }>("insert into clients (business_id, name, phone_e164, source) values ($1, 'Real Name Elsewhere', '+37255500999', 'admin') returning id", [demo.business.id]);
     await add(null, 5, "2026-05-18T10:00:00Z", { name: "R.", client: client.id });
     const { rows } = await salonReviews(query, demo.business.id);
-    expect(Object.keys(rows[0]).sort()).toEqual(["at", "body", "id", "name", "rating"]);
+    expect(Object.keys(rows[0]).sort()).toEqual(["at", "body", "id", "name", "rating", "staff"]);
     expect(JSON.stringify(rows)).not.toMatch(/37255500999|Real Name|clientId|phone/);
     expect(rows[0].name).toBe("R.");
   });
@@ -116,13 +120,13 @@ describe("the catalog carries the salon's page", () => {
     expect(l.reviewCount).toBe(0);
   });
 
-  it("the salon's review count is fresh: the shown ones about the salon, not a barber's", async () => {
+  it("the salon's review count is fresh: every one on show, a barber's too", async () => {
     await add(null, 5, "2026-05-18T10:00:00Z");
     const hidden = await add(null, 5, "2026-05-19T10:00:00Z");
     await add("valentin", 5, "2026-05-20T10:00:00Z");
-    expect((await loadCatalog(query, demo.business.id)).location.reviewCount).toBe(2);
+    expect((await loadCatalog(query, demo.business.id)).location.reviewCount).toBe(3);
     await query("update reviews set hidden = true where id = $1", [hidden]);
-    expect((await loadCatalog(query, demo.business.id)).location.reviewCount).toBe(1);
+    expect((await loadCatalog(query, demo.business.id)).location.reviewCount).toBe(2);
   });
 
   it("leaves out what the page must not load or show: a photo that is no address, a half pin, stray keys", async () => {

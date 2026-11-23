@@ -338,6 +338,7 @@ export const et: Copy = {
       own_client: "Klient tühistas broneeringu",
       own_barber: "Barber tühistas või muutis broneeringut",
       own_request: "Barberi taotlus (puhkus, hinnad)",
+      own_review: "Kliendi uus arvustus",
       own_plan: "Homme salongis, kell 20:00",
     },
   },

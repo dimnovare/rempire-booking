@@ -1,7 +1,7 @@
 "use server";
 
 /**
- * «Настройки → Уведомления»: the one change, a type's switch from the list
+ * «Уведомления»: the one change, a type's switch from the list
  * or its page's «Сохранить». The arguments are copied by name; the store
  * (src/lib/admin/notification-store.ts) checks the login's rights for each
  * channel the change touches and every value itself.

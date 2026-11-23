@@ -19,6 +19,7 @@ import {
   EMAIL_TEXT_TYPES,
   emailText,
   NOTIFY_DEFAULTS,
+  OFF_BY_DEFAULT,
   noShowDelay,
   readNotify,
   sends,
@@ -97,19 +98,25 @@ const rows = (kind: string) =>
 describe("nothing stored is today's behaviour", () => {
   const ns = readNotify({});
 
-  it("every type and channel on, the settings' defaults, the hours and delays of before", () => {
+  it("every type and channel on but the review request, the settings' defaults, the hours and delays of before", () => {
     for (const t of TYPES) {
-      expect(typeOn(ns, t.key), t.key).toBe(true);
+      // «Запрос отзыва после визита» waits to be switched on, as at REMPIRE today (Dim, round 13)
+      expect(typeOn(ns, t.key), t.key).toBe(!OFF_BY_DEFAULT.includes(t.key));
       for (const ch of t.channels) expect(channelOn(ns, t.key, ch), `${t.key}.${ch}`).toBe(true);
     }
     expect(ns.base).toEqual(DEFAULT_SETTINGS);
-    expect(ns.stored).toEqual({ off: [], sms: {}, at: {}, delay: {}, email: {} });
+    expect(ns.stored).toEqual({ off: [], on: [], sms: {}, at: {}, delay: {}, email: {} });
+    expect(OFF_BY_DEFAULT).toEqual(["review_request"]);
+    for (const ch of ["email", "push", "sms"] as const) expect(sends(ns, "review_request", ch), ch).toBe(false);
     expect(timing(ns, "reminder", "sms")).toEqual({ kind: "lead", min: 120 });
     expect(timing(ns, "reminder", "email")).toEqual({ kind: "lead", min: 720 });
     expect(timing(ns, "reminder", "push")).toEqual({ kind: "withSms", min: 120 });
     expect(timing(ns, "birthday", "email")).toEqual({ kind: "at", time: "10:00" });
     expect(timing(ns, "birthday", "sms")).toEqual({ kind: "fallback", time: "10:00", min: 40 });
     expect(timing(ns, "no_show", "sms")).toEqual({ kind: "delay", min: 2 });
+    // three hours after the visit; the SMS 40 minutes later, if the letter and the push did not go
+    expect(timing(ns, "review_request", "email")).toEqual({ kind: "delay", min: 180 });
+    expect(timing(ns, "review_request", "sms")).toEqual({ kind: "delayFallback", min: 180, after: 40 });
     expect(timing(ns, "moved", "email")).toEqual({ kind: "delay", min: 2 });
     expect(timing(ns, "day_plan", "push")).toEqual({ kind: "at", time: "20:00" });
     expect(timing(ns, "visit_new", "push")).toEqual({ kind: "now" });
@@ -231,7 +238,7 @@ describe("the salon's own SMS text", () => {
 
 describe("«Дополнительная информация в Email»: the salon's text in a letter", () => {
   it("each client type with a letter has one; the others none", () => {
-    expect([...EMAIL_TEXT_TYPES]).toEqual(["reminder", "confirmation", "moved", "cancelled", "birthday", "no_show"]);
+    expect([...EMAIL_TEXT_TYPES]).toEqual(["reminder", "confirmation", "moved", "cancelled", "birthday", "no_show", "review_request"]);
     const may = { open: true, sms: true, email: true, push: true, system: true };
     expect(typeDetail(readNotify({}), may, "confirmation").email).toEqual({ text: "", max: EMAIL_TEXT_MAX });
     expect(typeDetail(readNotify({ notifications: { email: { birthday: "Hi" } } }), may, "birthday").email).toEqual({ text: "Hi", max: EMAIL_TEXT_MAX });
@@ -250,7 +257,7 @@ describe("«Дополнительная информация в Email»: the sa
   it("a change writes only what differs; refused for a type with no letter or a text too long", () => {
     expect(applyChange({}, "confirmation", { email: " Parking in the yard " })).toEqual({
       ok: true,
-      patch: { notifications: { off: [], sms: {}, at: {}, delay: {}, email: { confirmation: "Parking in the yard" } } },
+      patch: { notifications: { off: [], on: [], sms: {}, at: {}, delay: {}, email: { confirmation: "Parking in the yard" } } },
       changed: ["email"],
     });
     const raw = { notifications: { email: { confirmation: "Parking in the yard" } } };
@@ -309,7 +316,7 @@ const bookingInput = (o: { email?: string | null } = {}): BookingInput => ({
 describe("a change from the page", () => {
   it("writes only what differs, each in its one place", () => {
     const off = applyChange({}, "confirmation", { on: false });
-    expect(off).toEqual({ ok: true, patch: { notifications: { off: ["confirmation"], sms: {}, at: {}, delay: {}, email: {} } }, changed: ["on"] });
+    expect(off).toEqual({ ok: true, patch: { notifications: { off: ["confirmation"], on: [], sms: {}, at: {}, delay: {}, email: {} } }, changed: ["on"] });
     // back on: the key goes
     const back = applyChange({ notifications: { off: ["confirmation"] } }, "confirmation", { on: true });
     expect(back).toMatchObject({ ok: true, patch: { notifications: { off: [] } } });
@@ -322,6 +329,12 @@ describe("a change from the page", () => {
     // the default hour or delay again: nothing of its own stored
     expect(applyChange({ notifications: { at: { day_plan: "21:00" } } }, "day_plan", { at: "20:00" })).toMatchObject({ ok: true, patch: { notifications: { at: {} } } });
     expect(applyChange({}, "no_show", { delay: 30 })).toMatchObject({ ok: true, patch: { notifications: { delay: { no_show: 30 } } } });
+    // the review request is off until switched on: «on» holds it, never «off»
+    expect(applyChange({}, "review_request", { on: true })).toMatchObject({ ok: true, patch: { notifications: { on: ["review_request"], off: [] } }, changed: ["on"] });
+    expect(applyChange({ notifications: { on: ["review_request"] } }, "review_request", { on: false })).toMatchObject({ ok: true, patch: { notifications: { on: [] } }, changed: ["on"] });
+    expect(applyChange({}, "review_request", { on: false })).toEqual({ ok: true, patch: {}, changed: [] });
+    expect(applyChange({}, "review_request", { delay: 360 })).toMatchObject({ ok: true, patch: { notifications: { delay: { review_request: 360 } } }, changed: ["delay"] });
+    expect(applyChange({ notifications: { delay: { review_request: 360 } } }, "review_request", { delay: 180 })).toMatchObject({ ok: true, patch: { notifications: { delay: {} } } });
     // nothing changes: nothing written
     expect(applyChange({}, "reminder", { on: true, lead: { sms: 120 }, mode: "both", sms: DEFAULT_SMS.reminder })).toEqual({ ok: true, patch: {}, changed: [] });
   });
@@ -345,11 +358,16 @@ describe("a change from the page", () => {
   it("anything else stored is dropped when read", () => {
     expect(cleanStored({ off: ["confirmation", "birthday", "nope", "reminder.email", "reminder.sms", 3], sms: { reminder: "", birthday: "Hi {date}", no_show: "Hi {client}" }, at: { birthday: "9:00", day_plan: "21:30" }, delay: { no_show: 0.5 }, email: { confirmation: " Parking ", visit_new: "x", reminder: 3, moved: "   " } })).toEqual({
       off: ["confirmation", "reminder.sms"],
+      on: [],
       sms: { no_show: "Hi {client}" },
       at: { day_plan: "21:30" },
       delay: {},
       email: { confirmation: "Parking" },
     });
+  });
+
+  it("«on» keeps only the types that are off until switched on; «off» never holds them", () => {
+    expect(cleanStored({ on: ["review_request", "confirmation", 3, "review_request"], off: ["review_request", "own_review"] })).toMatchObject({ on: ["review_request"], off: ["own_review"] });
   });
 
   it("is saved with one audit row; a save that changes nothing writes nothing", async () => {
@@ -469,11 +487,12 @@ describe("the outbox follows the page", () => {
 /* ---------------------------------------------------------------- the pages' data */
 
 describe("what the pages show", () => {
-  it("sixteen types in three groups, each with its channels and timing", () => {
+  it("eighteen types in three groups, each with its channels and timing", () => {
     const list = typeRows(readNotify({}), { open: true, sms: true, email: true, push: true, system: true });
     expect(list.map((r) => r.key)).toEqual([...TYPE_KEYS]);
-    expect(list.filter((r) => r.audience === "client")).toHaveLength(6);
-    expect(list.filter((r) => r.audience === "salon")).toHaveLength(5);
+    expect(list).toHaveLength(18);
+    expect(list.filter((r) => r.audience === "client")).toHaveLength(7);
+    expect(list.filter((r) => r.audience === "salon")).toHaveLength(6);
     expect(list.filter((r) => r.audience === "staff")).toHaveLength(5);
     expect(list.find((r) => r.key === "own_barber")?.loginsOff).toBe(true);
     expect(list.find((r) => r.key === "visit_new")?.loginsOff).toBe(false);
@@ -505,6 +524,15 @@ describe("what the pages show", () => {
     expect(p.push.en?.body).toMatch(/^Reminder: your visit on 17\.11 at 14:30/);
     expect(previews("visit_new", sample, b, ORIGIN).push.ru).toMatchObject({ title: "Новая запись" });
     expect(previews("own_request", sample, b, ORIGIN).push.ru?.title).toBeTruthy();
+    // the review request: the letter's button and the SMS go to the salon's page at its review card
+    expect(sample.reviewLink).toBe(`${ORIGIN}/en/about#ab-reviews`);
+    const review = previews("review_request", sample, b, ORIGIN);
+    expect(review.email.ru?.html).toContain(`${ORIGIN}/ru/about#ab-reviews`);
+    expect(review.email.en?.html).not.toContain("Demo client");
+    expect(review.push.et?.url).toBe("/et/about#ab-reviews");
+    expect(previews("own_review", sample, b, ORIGIN).push.ru?.title).toBe("Новый отзыв");
+    expect(typeDetail(readNotify({}), may, "review_request").delay).toMatchObject({ value: 180 });
+    expect(typeDetail(readNotify({}), may, "review_request").delay?.options).toEqual([60, 120, 180, 360, 720, 1440]);
     expect(previews("day_plan", sample, b, ORIGIN).push.ru?.body).toMatch(/^6 записей/);
     expect(previews("confirmation", sample, b, ORIGIN).push).toEqual({});
   });

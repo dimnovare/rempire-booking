@@ -5,7 +5,7 @@
  * `timing`); no hooks, the dictionary is handed in.
  */
 import type { NChannel, Timing, TypeKey } from "@/lib/admin/notifications";
-import type { Copy } from "../../../copy";
+import type { Copy } from "../../copy";
 
 type N = Copy["notif"];
 
@@ -24,6 +24,8 @@ export function timingText(N: N, t: Timing, long = false): string {
       return N.sub.at(t.time);
     case "fallback":
       return N.sub.smsFallback(t.time, N.dur(t.min));
+    case "delayFallback":
+      return N.sub.smsAfterFallback(N.dur(t.min), N.dur(t.after));
   }
 }
 
@@ -43,6 +45,8 @@ export function summary(N: N, key: TypeKey, channels: { ch: NChannel; on: boolea
       return first?.kind === "at" ? N.sub.birthday(first.time) : N.sub.now;
     case "no_show":
       return first?.kind === "delay" ? N.sub.noShow(N.dur(first.min)) : N.sub.now;
+    case "review_request":
+      return first?.kind === "delay" ? N.sub.review(N.dur(first.min)) : N.sub.now;
     case "day_plan":
     case "own_plan":
       return first?.kind === "at" ? N.sub.plan(first.time) : N.sub.now;

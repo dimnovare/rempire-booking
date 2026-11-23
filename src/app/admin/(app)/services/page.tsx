@@ -1,6 +1,7 @@
 /**
- * /admin/services: «Услуги» as the table of the admin we follow (Dim,
- * decisions round 11; the boards «Услуги, таблица» and «Услуга, окно»).
+ * /admin/services: «Категории услуг» (breadcrumb «Услуги»; Dim, round 13)
+ * as the table of the admin we follow (Dim, decisions round 11; the boards
+ * «Услуги, таблица» and «Услуга, окно»).
  * The categories fold, each service is a row, and a service opens in a
  * 900px window from the right (a full-screen sheet on a phone), where each
  * barber's own price and time are set.
@@ -60,6 +61,8 @@ async function Loaded({ searchParams }: Pick<PageProps<"/admin/services">, "sear
         create: can(user, "services.create") && edit,
         edit,
         name: edit && can(user, "services.edit.name"),
+        // «Категория услуги»: a service's category, a new one, a category's pencil
+        category: edit && can(user, "services.edit.category"),
         price: edit && can(user, "services.edit.price"),
         online: edit && can(user, "services.edit.online"),
         off: edit && can(user, "services.delete"),

@@ -12,10 +12,10 @@ import Link from "next/link";
 import { useState } from "react";
 import type { Transport, TypeRow } from "@/lib/admin/notification-store";
 import type { Audience } from "@/lib/admin/notifications";
-import { InfoIcon, NextIcon } from "../../../icons";
-import { useA } from "../../../lang";
-import { useAutoSave } from "../../autosave";
-import { Titled } from "../../star";
+import { InfoIcon, NextIcon } from "../../icons";
+import { useA } from "../../lang";
+import { useAutoSave } from "../autosave";
+import { Titled } from "../star";
 import { saveTypeAction } from "./actions";
 import { summary } from "./words";
 import "./notifications.css";
@@ -130,7 +130,7 @@ function Row({ row, onChange }: { row: TypeRow; onChange: (on: boolean) => void 
         onChange={(e) => set(e.target.checked)}
         onBlur={auto.flush}
       />
-      <Link className="ntf-link" href={`/admin/settings/notifications/${row.key}`} prefetch={false}>
+      <Link className="ntf-link" href={`/admin/notifications/${row.key}`} prefetch={false}>
         <span className="ntf-name">
           <b>{name}</b>
           {/* what happened to the switch, in its own row: a phone has no box at the bottom (autosave.tsx) */}

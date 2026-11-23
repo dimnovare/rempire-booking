@@ -1,7 +1,7 @@
 /**
  * /b/week: the barber's week (B2), Monday to Sunday: each day's hours, its
  * visits in one line each, the day's and the week's money. A day opens
- * in «День».
+ * in «День». No tab of its own: «День | Неделя» on the day and here.
  * /b/week?d=2026-11-17   the week of that day
  */
 import Link from "next/link";
@@ -62,6 +62,12 @@ async function Week({ searchParams }: { searchParams: PageProps<"/b/week">["sear
           </div>
           <OwnSeg view="week" date={isThis ? today : from} today={today} words={B.own} />
         </header>
+      )}
+      {/* a barber's way back to his day: the week has no tab of its own (Dim, round 13) */}
+      {!own && (
+        <div className="bx-week-seg">
+          <OwnSeg view="week" date={isThis ? today : from} today={today} words={B.own} />
+        </div>
       )}
       <nav className="bx-wnav" aria-label={B.week.title}>
         <Link href={`/b/week?d=${addDays(from, -7)}`} className="adm-ibtn" aria-label={B.day.prevWeek} prefetch={false} replace>

@@ -231,7 +231,7 @@ test.describe("the booking path", () => {
     await hydrated(page);
     await expect(cont(page)).toBeDisabled();
     // solid over the list: the rows never show through its words (real phones, 23.11)
-    expect(await cont(page).evaluate((b) => getComputedStyle(b).backgroundColor)).toBe("rgb(240, 240, 240)");
+    await expect.poll(() => cont(page).evaluate((b) => getComputedStyle(b).backgroundColor)).toBe("rgb(240, 240, 240)");
     await page.getByRole("radio", { name: c.anyBarber }).click();
     await cont(page).click();
     await page.getByRole("checkbox").first().click();

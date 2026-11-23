@@ -11,7 +11,7 @@ import { normalizeRights } from "@/lib/auth/rights";
 import { GROUP_KEYS, GROUP_TOTALS, GROUPS, groupKey, presetRights, PRESETS, RIGHTS, rightDef, rightsOf, ROLE_CODES, type GroupKey, type RoleCode } from "@/lib/auth/rights-catalogue";
 
 /** The list's sizes: 13 groups and the 4 single rights. */
-const SIZES: Record<GroupKey, number> = { journal: 8, visit: 31, finance: 38, goods: 39, staff: 8, services: 12, notify: 2, settings: 10, clients: 26, reports: 25, loyalty: 8, licence: 1, online: 1, single: 4 };
+const SIZES: Record<GroupKey, number> = { journal: 8, visit: 31, finance: 38, goods: 39, staff: 8, services: 12, notify: 3, settings: 10, clients: 26, reports: 25, loyalty: 8, licence: 1, online: 1, single: 4 };
 
 type DocRight = { n: number; depth: number; ru: string; on: RoleCode[] | null };
 
@@ -39,13 +39,13 @@ function docRights(): DocRight[][] {
 }
 
 describe("the catalogue is the list", () => {
-  it("has the list's counts: 8, 31, 38, 39, 8, 12, 2, 10, 26, 25, 8, 1, 1, and the 4 single rights", () => {
+  it("has the list's counts: 8, 31, 38, 39, 8, 12, 3, 10, 26, 25, 8, 1, 1, and the 4 single rights", () => {
     for (const g of GROUP_KEYS) {
       expect(rightsOf(g).length, g).toBe(SIZES[g]);
       expect(GROUPS[g].size, g).toBe(SIZES[g]);
     }
-    expect(RIGHTS.length).toBe(213);
-    expect(RIGHTS.filter((r) => r.group !== "single").length).toBe(209);
+    expect(RIGHTS.length).toBe(214);
+    expect(RIGHTS.filter((r) => r.group !== "single").length).toBe(210);
   });
 
   it("every key is there once, and a nested right follows its parent in its own group", () => {
@@ -86,13 +86,14 @@ describe("the catalogue is the list", () => {
     });
   });
 
-  it("the built ones are the 68 our system has a function for", () => {
+  it("the built ones are the 70 our system has a function for", () => {
     const built = (g: GroupKey) => rightsOf(g).filter((r) => r.built).length;
     // settings: «Доступ к настройкам локации» since «Бренд», «Контакты», «Галерея» (20.11.2026)
-    // notify: «SMS-» and «Email-уведомления» since «Настройки → Уведомления» (20.11.2026)
+    // notify: «SMS-» and «Email-уведомления» since «Уведомления» (20.11.2026), «Типы уведомлений» its door (round 13)
+    // services: «Категория услуги» its own since round 13
     // reports: «Записи» (3), «Отзывы» (2), «Основные показатели» and «Визиты» with its phones (3), «Сообщения» with its phones (2)
-    expect(Object.fromEntries(GROUP_KEYS.map((g) => [g, built(g)]))).toEqual({ journal: 6, visit: 15, finance: 0, goods: 0, staff: 4, services: 7, notify: 2, settings: 7, clients: 16, reports: 10, loyalty: 0, licence: 0, online: 0, single: 1 });
-    expect(RIGHTS.filter((r) => r.built).length).toBe(68);
+    expect(Object.fromEntries(GROUP_KEYS.map((g) => [g, built(g)]))).toEqual({ journal: 6, visit: 15, finance: 0, goods: 0, staff: 4, services: 8, notify: 3, settings: 7, clients: 16, reports: 10, loyalty: 0, licence: 0, online: 0, single: 1 });
+    expect(RIGHTS.filter((r) => r.built).length).toBe(70);
     // a group's switch does something exactly where a right inside it works
     for (const g of GROUP_KEYS) expect(GROUPS[g].built, g).toBe(built(g) > 0);
   });

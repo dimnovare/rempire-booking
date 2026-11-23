@@ -14,6 +14,9 @@
  * One change since: Renat, 18.11.2026, a barber changes his prices and
  * times himself too, so with the price switch not set they apply at once.
  */
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { can, seenClients, seenStaff, type Holder, type RightKey, type Scope } from "@/lib/auth/rights";
 import { RIGHTS } from "@/lib/auth/rights-catalogue";
@@ -21,6 +24,7 @@ import { backfillRights, legacyHolder, legacyRights, loadRights } from "@/lib/au
 import { createSession, readSession } from "@/lib/auth/sessions";
 import { createUser } from "@/lib/auth/login";
 import { closeDb, query } from "@/lib/db";
+import { migrate, migrationFiles, newPglite } from "../tools/migrate.mjs";
 import { freshDemo, type Demo } from "./helpers";
 
 type Role = "owner" | "admin" | "staff";
@@ -74,6 +78,7 @@ const WAS: { right: RightKey; scope?: Scope; what: string; was: (role: Role, sw:
   { right: "services.edit.name", what: "…its name", was: desk },
   { right: "services.edit.price", what: "…its price", was: desk },
   { right: "services.edit.online", what: "…«online»", was: desk },
+  { right: "services.edit.category", what: "…its category, a new one, a category's name", was: desk },
   { right: "services.delete", what: "…switching it off", was: desk },
   { right: "services.staff", what: "a barber's services, prices and times (requireAdmin); his own at once by barber_self_price", was: (r, s) => desk(r) || priceNow(s) },
   // ---- settings
@@ -85,6 +90,7 @@ const WAS: { right: RightKey; scope?: Scope; what: string; was: (role: Role, sw:
   { right: "settings.location", what: "the salon's page: only by SQL before, then the owner's (OWNER_ONLY)", was: owner },
   { right: "notify.sms", what: "«Уведомления»: the reminder's switch on «Запросы» was the owner's (OWNER_ONLY, with settings.location)", was: owner },
   { right: "notify.email", what: "«Уведомления»: likewise", was: owner },
+  { right: "notify.types", what: "«Уведомления» itself: the owner's (OWNER_ONLY)", was: owner },
   { right: "settings.categories", what: "a new category word on a card or on many clients: requireAdmin", was: desk },
   // ---- the client base
   { right: "clients.list_contacts", what: "phones and e-mails in the list: requireAdmin (a barber has no list)", was: desk },
@@ -234,5 +240,38 @@ describe("the one-time backfill", () => {
     await backfillRights(query, demo.business.id);
     const rows = await query<{ role: string; rights_preset: string }>("select role, rights_preset from users where business_id = $1", [demo.business.id]);
     for (const r of rows) expect(r.rights_preset).toBe(r.role === "owner" ? "OW" : r.role === "admin" ? "AD" : "SP");
+  });
+});
+
+describe("migration 038: «Категория услуги» and «Типы уведомлений» come alive", () => {
+  it("a login that could do it the day before keeps it; nobody else gets it; one audit row each", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "booking-038-"));
+    const pg = await newPglite();
+    try {
+      for (const m of migrationFiles()) if (m.name < "038") writeFileSync(path.join(dir, m.name), m.sql);
+      await migrate(pg, { dir });
+      const [biz] = (await pg.query<{ id: string }>("insert into businesses (slug, name) values ('rights-038', 'Test Salon') returning id")).rows;
+      const add = async (email: string, role: string, rights: string[] | null) =>
+        (await pg.query<{ id: string }>("insert into users (business_id, email, role, rights_preset, rights) values ($1, $2, $3, 'AD', $4) returning id", [biz.id, email, role, rights])).rows[0].id;
+      const desk = await add("desk-038@example.test", "admin", ["group:services", "services.edit", "services.edit.name", "group:notify", "notify.email"]);
+      const noGroup = await add("nogroup-038@example.test", "admin", ["services.edit"]);
+      const barber = await add("barber-038@example.test", "staff", ["group:journal"]);
+      const unset = await add("unset-038@example.test", "admin", null);
+      expect(await migrate(pg)).toContain("038_category_and_notify_types_rights.sql");
+
+      const rights = async (id: string) => (await pg.query<{ rights: string[] | null }>("select rights from users where id = $1", [id])).rows[0].rights;
+      expect(await rights(desk)).toEqual(["group:notify", "group:services", "notify.email", "notify.types", "services.edit", "services.edit.category", "services.edit.name"]);
+      expect(await rights(noGroup)).toEqual(["services.edit"]);
+      expect(await rights(barber)).toEqual(["group:journal"]);
+      expect(await rights(unset)).toBeNull();
+      const audit = (await pg.query<{ entity_id: string; after: { on: string[] } }>("select entity_id, after from audit where actor = 'migration' and entity = 'user' order by id")).rows;
+      expect(audit.map((a) => [a.entity_id, a.after.on])).toEqual([
+        [desk, ["services.edit.category"]],
+        [desk, ["notify.types"]],
+      ]);
+    } finally {
+      await pg.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

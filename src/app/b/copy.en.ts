@@ -338,6 +338,7 @@ export const en: Copy = {
       own_client: "A client cancelled",
       own_barber: "A barber cancelled or moved a visit",
       own_request: "A barber's request (days off, prices)",
+      own_review: "A client's new review",
       own_plan: "Tomorrow at the salon, at 20:00",
     },
   },

@@ -19,9 +19,11 @@ vi.mock("next/server", () => ({ connection: async () => {} }));
 import { POST as postReview } from "@/app/api/salon/reviews/route";
 import { cleanReviews, defaultReviews } from "@/lib/admin/review-filter";
 import type { Holder } from "@/lib/auth/rights";
-import { legacyHolder } from "@/lib/auth/rights-store";
+import { backfillRights, legacyHolder } from "@/lib/auth/rights-store";
 import { loadCatalog } from "@/lib/catalog";
 import { closeDb, query } from "@/lib/db";
+import { saveSubscription, setNotify } from "@/lib/push";
+import { pushText } from "@/lib/push-kinds";
 import { cleanReviewInput, listReviews, REVIEW_LIMITS, REVIEW_MIN_MS, salonRating, salonReviews, setReviewHidden, staffRatings, submitReview, type ReviewInput } from "@/lib/reviews";
 import { migrate, migrationFiles, newPglite } from "../tools/migrate.mjs";
 import { freshDemo, type Demo } from "./helpers";
@@ -152,6 +154,39 @@ describe("a review sent", () => {
     const rows = await ours();
     expect(rows[0].ip_hash).toBeNull();
     expect(rows[1].ip_hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+describe("«Новый отзыв»: a push to the salon (own_review; Dim, round 13)", () => {
+  async function login(email: string, role: string, staff: string | null) {
+    const [u] = await query<{ id: string }>("insert into users (business_id, email, role, staff_id, locale) values ($1, $2, $3, $4, 'ru') returning id", [demo.business.id, email, role, staff]);
+    await saveSubscription(query, u.id, { endpoint: `https://push.example.test/${email}`, p256dh: "p256", auth: "auth", label: "test" });
+    return u.id;
+  }
+  const pushes = () => query<{ user_id: string; payload: Record<string, unknown>; status: string }>("select user_id, payload, status from notifications where kind = 'own_review' order by created_at");
+
+  it("each new one, to the logins that see «Отзывы», never its words; each login's own switch on top", async () => {
+    const owner = await login("owner-review@example.test", "owner", null);
+    const desk = await login("desk-review@example.test", "admin", null);
+    const blind = await login("blind-review@example.test", "admin", null);
+    await login("barber-review@example.test", "staff", demo.staff.valentin);
+    await backfillRights(query, demo.business.id);
+    await query("update users set rights = array_remove(rights, 'reports.reviews') where id = $1", [blind]);
+
+    expect(await send({ staffId: demo.staff.valentin, rating: 4 })).toEqual({ ok: true });
+    const [made] = await ours();
+    const told = await pushes();
+    expect(told.map((p) => p.user_id).sort()).toEqual([owner, desk].sort());
+    const [val] = await query<{ display_name: string }>("select display_name from staff where id = $1", [demo.staff.valentin]);
+    expect(told[0].payload).toEqual({ reviewId: made.id, rating: 4, staff: val.display_name });
+    expect(JSON.stringify(told)).not.toContain("Всё понравилось");
+    expect(pushText("own_review", told[0].payload, "ru")).toMatchObject({ title: "Новый отзыв", url: "/admin/reviews", tag: `review-${made.id}` });
+    expect(pushText("own_review", { ...told[0].payload, staff: null }, "en")?.body).toMatch(/^★★★★☆ · /);
+
+    // the owner turned «Новый отзыв» off on his phone
+    await setNotify(query, demo.business.id, owner, "own_review", false);
+    expect(await send({}, { ip: "192.0.2.40" })).toEqual({ ok: true });
+    expect((await pushes()).map((p) => p.user_id)).toEqual([...told.map((p) => p.user_id), desk]);
   });
 });
 

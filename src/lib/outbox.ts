@@ -75,11 +75,20 @@
  *     every channel, OUTBOX.noShowDelayMin later so a mis-tap put right
  *     sends nothing. Once per visit and channel; the status back from «Не
  *     пришёл» before it went drops it.
+ *   - «review_request»: «Запрос отзыва после визита» (Dim, round 13; the
+ *     tool's types 6 / 20), off until the salon switches it on. Planned by
+ *     every run for a visit marked «Пришёл» whose end is reviewDelay ago
+ *     (3 h unless «Уведомления» says another), at most reviewLateMaxMin
+ *     late: the letter and the notification at once, the SMS
+ *     reviewSmsAfterMin later and only if neither went. Not for a client
+ *     who has written a review already. Once per visit and channel
+ *     (039_review_request.sql). It links the salon's page at its review
+ *     card.
  * SMS are in English for everyone and one part (decision 30, docs/kickoff.md);
  * the reminder too. Letters and notifications are in the visit's or the
  * client's language.
  *
- * «Настройки → Уведомления» (src/lib/admin/notifications.ts; Dim, round
+ * «Уведомления» (src/lib/admin/notifications.ts; Dim, round
  * 11): the salon's switch per type and per channel, the leads, hours and
  * delays, its own SMS texts and the text in each letter (read when the
  * letter is built, so a change reaches letters not sent yet). Nothing
@@ -99,7 +108,7 @@
  * the words are built at send time.
  */
 import { after } from "next/server";
-import { atOf, emailText, NOTIFY_DEFAULTS, noShowDelay, readNotify, sends, sendsKind, smsTemplate, type NotifySettings } from "./admin/notifications";
+import { atOf, emailText, NOTIFY_DEFAULTS, noShowDelay, readNotify, reviewDelay, sends, sendsKind, smsTemplate, type NotifySettings } from "./admin/notifications";
 import { smsWords, tokensIn, type SmsType, type SmsValues } from "./admin/notification-text";
 import { getBusinessById, type Business } from "./availability";
 import { birthdayMatch } from "./birthday";
@@ -107,7 +116,7 @@ import { clientTakes, refusesSql, takesSql } from "./client-notify";
 import { sendPushToClient } from "./client-push";
 import { query, type Querier } from "./db";
 import { emailTransport, sendEmail, type LetterBody } from "./email";
-import { birthdayLetter, confirmationLetter, noShowLetter, visitLetter } from "./letters";
+import { birthdayLetter, confirmationLetter, noShowLetter, reviewFormUrl, reviewLetter, visitLetter } from "./letters";
 import { pushConfigured, sendPushToUser, type PushSendResult } from "./push";
 import { DEFAULT_ON, clientPushText, pushText, type PushText } from "./push-kinds";
 import { siteUrl } from "./site";
@@ -143,6 +152,10 @@ export const OUTBOX = {
   noShowDelayMin: NOTIFY_DEFAULTS.noShowDelayMin,
   /** a visit marked «Не пришёл» this long after its start is not invited any more */
   noShowWithinDays: 7,
+  /** the review request's SMS waits this long for the letter or the notification */
+  reviewSmsAfterMin: NOTIFY_DEFAULTS.reviewSmsAfterMin,
+  /** a review request this late (a visit marked «Пришёл» long after) is not sent */
+  reviewLateMaxMin: 6 * 60,
 };
 
 export type OutboxRow = {
@@ -432,6 +445,55 @@ export async function planNoShow(q: Querier, business: Pick<Business, "id" | "se
   return rows.length;
 }
 
+/**
+ * «Запрос отзыва после визита» (Altegio's types 6 / 20), from every run: a
+ * row per visit and channel once the visit is marked «Пришёл» (arrived or
+ * done) and ended reviewDelay ago, not more than reviewLateMaxMin later
+ * than that (switching it on, or marking yesterday's visits, asks nobody
+ * about an old visit). Nobody who has a review on his card already.
+ *   e-mail  to the address this visit's confirmation went to, else his card's;
+ *   push    to the phones turned on for this visit;
+ *   SMS     reviewSmsAfterMin later, sent only if neither of the two went.
+ * Every channel as the client accepts the kind, and as «Уведомления» has
+ * it on (off until switched on).
+ */
+export async function planReviewRequests(q: Querier, now = Date.now()): Promise<number> {
+  let added = 0;
+  for (const b of await businessesWithNotify(q)) {
+    const on = { email: sends(b.ns, "review_request", "email"), push: sends(b.ns, "review_request", "push"), sms: sends(b.ns, "review_request", "sms") };
+    if (!on.email && !on.push && !on.sms) continue;
+    const delay = reviewDelay(b.ns);
+    const rows = await q<{ id: string }>(
+      `insert into notifications (business_id, appointment_id, client_id, channel, kind, recipient, locale, payload, send_at)
+       select a.business_id, a.id, c.id, ch.channel, 'review_request', ch.recipient, ch.locale, '{}'::jsonb,
+              case when ch.channel = 'sms' and (f.email or f.push) then $4::timestamptz else $3::timestamptz end
+         from appointments a
+         join clients c on c.id = a.client_id
+         left join lateral (select n.recipient, n.locale from notifications n
+                             where n.appointment_id = a.id and n.kind = 'confirmation' and n.channel = 'email' and n.status = 'sent'
+                             order by n.created_at limit 1) conf on true
+         cross join lateral (select $6::boolean and coalesce(conf.recipient, c.email) is not null and ${takesSql("c", "email", "review_request")} as email,
+                                    $7::boolean and ${takesSql("c", "push", "review_request")}
+                                      and exists (select 1 from client_push_subscriptions p where p.appointment_id = a.id and p.retired_at is null) as push,
+                                    $8::boolean and c.phone_e164 is not null and ${takesSql("c", "sms", "review_request")} as sms) f
+         cross join lateral (values
+           ('email', coalesce(conf.recipient, c.email), coalesce(conf.locale, a.locale), f.email),
+           ('push', a.id::text, a.locale, f.push),
+           ('sms', c.phone_e164, a.locale, f.sms)
+         ) ch(channel, recipient, locale, fits)
+        where a.business_id = $1 and a.status in ('arrived', 'done') and ch.fits and c.merged_into is null
+          and a.ends_at + make_interval(mins => $2::int) <= $3::timestamptz
+          and a.ends_at + make_interval(mins => $2::int) > $5::timestamptz
+          and not exists (select 1 from reviews r where r.client_id = c.id)
+       on conflict (appointment_id, channel) where kind = 'review_request' and status <> 'cancelled' do nothing
+       returning id`,
+      [b.id, delay, new Date(now), new Date(now + OUTBOX.reviewSmsAfterMin * 60_000), new Date(now - OUTBOX.reviewLateMaxMin * 60_000), on.email, on.push, on.sms],
+    );
+    added += rows.length;
+  }
+  return added;
+}
+
 /** Claim due rows of the given channels for this run, or for one visit only. */
 export async function claimDue(
   q: Querier,
@@ -504,7 +566,7 @@ function smsValues(p: { startsAt?: string; staff?: string; business?: string; ad
   return v;
 }
 
-const OUR_SMS = new Set<string>(["reminder", "birthday", "no_show"]);
+const OUR_SMS = new Set<string>(["reminder", "birthday", "no_show", "review_request"]);
 
 /**
  * The text of an SMS, built at send time from its payload. The ones we
@@ -612,7 +674,7 @@ async function ourSms(q: Querier, ns: NotifySettings, row: OutboxRow, payload: R
 const LIVE = new Set(["booked", "pending"]);
 
 /** Push kinds that go to the phones of a client's visit, not to a staff login. */
-const TO_CLIENT_PHONE = new Set(["client_reminder", "manual", "mass", "birthday", "no_show"]);
+const TO_CLIENT_PHONE = new Set(["client_reminder", "manual", "mass", "birthday", "no_show", "review_request"]);
 
 /**
  * The birthday greeting and the no-show invitation, built now from the
@@ -622,7 +684,7 @@ const TO_CLIENT_PHONE = new Set(["client_reminder", "manual", "mass", "birthday"
  * (Switched off on «Уведомления» is asked before, in compose.)
  */
 async function composeClientMessage(q: Querier, row: OutboxRow, now: number, env: Env, ns: NotifySettings): Promise<Composed> {
-  const kind = row.kind as "birthday" | "no_show";
+  const kind = row.kind as "birthday" | "no_show" | "review_request";
   if (row.channel === "push" && now - new Date(row.send_at).getTime() > OUTBOX.pushStaleMin * 60_000) return { skip: "stale" };
   const business = await getBusinessById(q, row.business_id);
   if (!business) return { skip: "business gone" };
@@ -659,6 +721,27 @@ async function composeClientMessage(q: Querier, row: OutboxRow, now: number, env
   }
   const v = row.appointment_id ? await visitById(q, row.appointment_id) : null;
   if (!v) return { skip: "visit gone" };
+  if (kind === "review_request") {
+    if (v.status !== "arrived" && v.status !== "done") return { skip: `visit ${v.status}` };
+    const [wrote] = await q<{ id: string }>("select id from reviews where client_id = $1 limit 1", [row.client_id]);
+    if (wrote) return { skip: "the client wrote a review" };
+    if (row.channel === "email") {
+      const letter = reviewLetter(v, { business, origin, locale: row.locale, extra: emailText(ns, "review_request") });
+      return { subject: letter.subject, body: letter };
+    }
+    const seen = { business: business.name, startsAt: v.startsAt, tz: business.timezone, visitId: v.id };
+    if (row.channel === "push") {
+      const text = clientPushText("review_request", seen, row.locale);
+      return text ? { push: text } : { skip: "no text" };
+    }
+    const [went] = await q<{ channel: string }>(
+      "select channel from notifications where appointment_id = $1 and kind = 'review_request' and channel <> 'sms' and status = 'sent' limit 1",
+      [v.id],
+    );
+    if (went) return { skip: `sent by ${went.channel}` };
+    // the SMS is in English: the salon's page in English
+    return ourSms(q, ns, row, { ...seen, staff: v.staffName, client: nameOnly(v.clientName) }, reviewFormUrl(origin, "en"));
+  }
   if (v.status !== "no_show") return { skip: `visit ${v.status}` };
   if (row.channel === "email") {
     const letter = noShowLetter(v, { business, origin, locale: row.locale, extra: emailText(ns, "no_show") });
@@ -677,7 +760,7 @@ async function compose(q: Querier, row: OutboxRow, now: number, env: Env, ctx: C
   // «Уведомления»: a type or a channel switched off since this row was queued
   const ns = await ctx.ns(row.business_id);
   if (!sendsKind(ns, row.kind, row.channel)) return { skip: "switched off" };
-  if (row.kind === "birthday" || row.kind === "no_show") return composeClientMessage(q, row, now, env, ns);
+  if (row.kind === "birthday" || row.kind === "no_show" || row.kind === "review_request") return composeClientMessage(q, row, now, env, ns);
   if (row.channel === "push") return composePush(q, row, now);
   const p = row.payload as { startsAt?: string; subject?: string };
   if (row.kind === "reminder_email" && row.channel === "email") {
@@ -762,7 +845,7 @@ const emptyResult = (): OutboxResult => ({ planned: 0, cancelled: 0, sent: 0, re
 export async function runOutbox(q: Querier, now = Date.now(), env: Env = process.env, senders: Senders = { sms: sendSms, email: sendEmail }): Promise<OutboxResult> {
   const plan = await planReminders(q, now);
   const mail = await planEmailReminders(q, now);
-  const res: OutboxResult = { ...emptyResult(), planned: plan.added + mail.added + (await planBirthdays(q, now)), cancelled: plan.cancelled + mail.cancelled };
+  const res: OutboxResult = { ...emptyResult(), planned: plan.added + mail.added + (await planBirthdays(q, now)) + (await planReviewRequests(q, now)), cancelled: plan.cancelled + mail.cancelled };
   if (pushConfigured(env)) res.planned += await planEveningPush(q, now);
   await deliver(q, await claimDue(q, enabledChannels(env), now), now, env, senders, res);
   const [w] = await q<{ n: number }>(`select count(*)::int as n from notifications where status = 'queued' and send_at <= $1`, [new Date(now)]);

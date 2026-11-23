@@ -253,7 +253,7 @@ test.describe("the frame", () => {
       await expect(month(page)).toHaveCount(0);
       await expect(page.getByRole("group", { name: F.tiles })).toHaveCount(0);
       await expect(menu(page).getByRole("button")).toHaveText([A.nav.reports, A.nav.team, A.nav.clients, A.nav.goods, A.nav.settings]);
-      await expect(menu(page).getByRole("link")).toHaveText([A.nav.services, A.nav.requests, A.nav.invoices, A.nav.account]);
+      await expect(menu(page).getByRole("link")).toHaveText([A.nav.services, A.nav.requests, A.nav.invoices, A.nav.notifications, A.nav.account]);
       // «Отчёты» has «Записи»; «Сотрудники» has «Список» (the barbers' page) and «График работы»
       await menu(page).getByRole("button", { name: A.nav.reports }).click();
       await expect(menu(page).getByRole("link", { name: A.nav.records, exact: true })).toHaveAttribute("href", "/admin/records");
@@ -541,7 +541,7 @@ test.describe("the frame", () => {
       await page.goto("/admin/more");
       await hydrated(page);
       const rows = page.locator(".adm-more .adm-item:visible");
-      await expect(rows.locator("b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.sale.title]);
+      await expect(rows.locator("b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.nav.notifications, A.sale.title]);
       await expectNoSideScroll(page);
       expect(await smallTargets(page)).toEqual([]);
       await phoneShot(page, "more");
