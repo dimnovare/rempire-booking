@@ -16,12 +16,14 @@
  * licence API gives a rolling "last 12 months"), so «switch.isolta» asks
  * Renat for the date of Isolta's last invoice to him.
  *
- * Set 4, 23.11.2026 (Dim, round 14: day one moves to 04.01, Dim away
- * 30.11–13.12): «switch» (switch before 2 December) is replaced by «subs»
- * (Altegio and Isolta: a year or 1–2 more months, Renat checks), then what
- * docs/renat-before-30-11.ru.md asks before 29.11 (site, google, sms,
- * export, staff_mail, payer, alerts); the open questions of set 3 follow.
- * Logins and passwords are never asked here: Renat tells Dim by phone.
+ * Set 4, 23.11.2026, reworked the same day on Dim's notes: no switch date
+ * is agreed with Renat, so none is stated; Renat is only told to check and
+ * decide on Altegio and Isolta himself (a year, or 1-2 months while Dim is
+ * away). «switch» gives way to «subs», then «site» (where the booking
+ * moves), «access» (one place, fewer logins), «export» (Altegio mails its
+ * export only to the owner) and «payer». Messaggio's login, the barbers'
+ * e-mails and access come later: LATER. The down alert goes to Renat after
+ * the switch: DECIDED. Logins and passwords are never asked here.
  *
  * Each field saves on its own («subs.altegio», «extra.note»…). The page sends
  * one field at a time; every change is logged (qa_answer_log), so a later
@@ -39,99 +41,74 @@ export type Field =
 export type Question = { id: string; title: string; lead: string; fields: Field[] };
 
 export const INTRO =
-  "Ренат, новая система записи начинает работать 4 января: Дима в отъезде с 30 ноября по 13 декабря. " +
-  "Здесь 17 коротких вопросов. Первые восемь нужны до 29 ноября, остальные могут подождать. " +
+  "Ренат, здесь 14 коротких вопросов о новой системе записи. Первые пять хорошо бы до 29 ноября: " +
+  "с 30 ноября по 13 декабря Дима в отъезде. Остальные могут подождать. " +
   "Что ты уже ответил, внизу, в «Уже решено». " +
   "Ответы сохраняются сами: можно закрыть страницу, вернуться и дописать. Логины и пароли здесь не пиши.";
 
-/** One choice for both subscriptions in «subs». */
-const KEEP = ["Оставить ещё на 1–2 месяца", "Продлить на год", "Проверю и напишу"];
+/** One choice for each subscription in «subs». */
+const TERM = ["На год", "На 1–2 месяца", "Ещё не решил"];
 
 export const QUESTIONS: Question[] = [
-  /* Dim, 23.11: if we move away, Renat checks: a year, or 1–2 more months until the new system is ready. */
+  /* Dim, 23.11: inform only; Renat checks and decides himself. */
   {
     id: "subs",
-    title: "Altegio и Isolta: продлевать?",
+    title: "Altegio и Isolta",
     lead:
-      "Новая система начинает работать 4 января, до этого всё идёт в Altegio и Isolta. " +
-      "Раз мы от них уходим, проверь, что выгоднее: продлить на год или оставить ещё на 1–2 месяца, пока новая система не готова. " +
-      "Altegio стоит 92,99\u00a0€ в месяц и продлевается сам 2-го числа. " +
-      "Isolta стоит 94,80\u00a0€ + НДС в год и тоже продлевается сама; отказаться надо за месяц до продления. " +
-      "Дату продления Isolta видно по последнему счёту от неё на почте.",
+      "Altegio и Isolta продлеваются сами. Проверь и реши сам, продлевать ли их на год. " +
+      "Дима будет в отъезде с 30 ноября по 13 декабря, поэтому, может быть, хватит ещё 1–2 месяцев, " +
+      "а потом перейдём на новую систему.",
     fields: [
-      { id: "altegio", kind: "one", label: "Altegio:", options: KEEP },
-      { id: "isolta", kind: "one", label: "Isolta:", options: KEEP },
-      { id: "isolta_date", kind: "text", label: "Когда пришёл последний счёт от Isolta? Если не знаешь, оставь пустым" },
+      { id: "altegio", kind: "one", label: "Altegio:", options: TERM },
+      { id: "isolta", kind: "one", label: "Isolta:", options: TERM },
     ],
   },
-  /* docs/renat-before-30-11.ru.md, 23.11: what the launch needs before Dim leaves. */
   {
     id: "site",
-    title: "Сайт rempire.ee",
+    title: "Где будет онлайн-запись",
     lead:
-      "Для новой записи на rempire.ee нужны два адреса: book.rempire.ee для клиентов и staff.rempire.ee для вас. " +
-      "4 ноября настройки rempire.ee перенесли в другой аккаунт Cloudflare, к нему у нас нет доступа. " +
-      "Сам домен оплачен в Zone.ee до 4 февраля 2027.",
+      "Когда всё проверим, онлайн-запись переедет на постоянный адрес. " +
+      "Если на rempire.ee, например book.rempire.ee, тогда понадобится доступ к настройкам домена rempire.ee. " +
+      "Можно и без доступа: тот, кто ведёт сайт, сам добавит две строчки по нашей инструкции. " +
+      "Или запись будет на адресе магазина, а rempire.ee и Google Карты просто ведут на неё.",
     fields: [
-      { id: "who", kind: "text", label: "Кто сделал и ведёт сайт: имя и телефон" },
       {
-        id: "cloudflare",
+        id: "where",
         kind: "one",
-        label: "Настройки rempire.ee:",
-        options: ["Оставить там, его владелец даст нам доступ", "Перенести к магазину, всё в одном аккаунте", "Не знаю"],
+        label: "Запись будет:",
+        options: ["На rempire.ee", "На адресе магазина rempireshop.com", "Не знаю, обсудим"],
       },
-      { id: "zone", kind: "text", label: "На чей аккаунт в Zone.ee записан домен rempire.ee" },
     ],
   },
   {
-    id: "google",
-    title: "Google и Google Карты",
+    id: "access",
+    title: "Google Карты",
     lead:
-      "У салона есть профиль на Google Картах, им управляет какой-то Google-аккаунт. Туда поставим кнопку «Записаться». " +
-      "Если доступа нет, всё остальное делаем через Google-аккаунт магазина.",
+      "Чтобы всё было в одном месте и логинов было меньше, позже понадобится доступ к Google-аккаунту салона: " +
+      "там профиль на Google Картах, туда поставим кнопку «Записаться». Сейчас ничего не нужно.",
     fields: [
       {
-        id: "own",
+        id: "google",
         kind: "one",
-        label: "У салона свой Google-аккаунт?",
-        options: ["Да, у меня есть доступ", "Да, но доступ у другого человека", "Нет или не знаю: берём аккаунт магазина"],
+        label: "Доступ к этому аккаунту у тебя есть?",
+        options: ["Да", "Нет, он у другого человека", "Не знаю"],
       },
-      { id: "note", kind: "text", label: "Чей это аккаунт или у кого доступ" },
     ],
-  },
-  {
-    id: "sms",
-    title: "SMS через Messaggio",
-    lead:
-      "Напоминания клиентам идут SMS через твой Messaggio, от имени «REMPIRE». Новое имя отправителя одобряют 1–5 рабочих дней. " +
-      "Логин и пароль Messaggio здесь не пиши: скажи Диме по телефону.",
-    fields: [{ id: "sender", kind: "one", label: "Отправитель «REMPIRE» в Messaggio уже есть?", options: ["Да", "Нет", "Не знаю"] }],
   },
   {
     id: "export",
     title: "Клиенты и записи из Altegio",
     lead:
-      "Чтобы перенести клиентов и будущие записи, нужна выгрузка из Altegio в Excel: клиенты и все записи. " +
-      "Файлы придут тебе на почту, перешли их Диме. В воскресенье 3 января сделаем ещё одну, свежую.",
-    fields: [{ id: "done", kind: "one", label: "Выгрузил и переслал?", options: ["Да, переслал", "Сделаю до 29 ноября", "Не нашёл, как выгрузить"] }],
-  },
-  {
-    id: "staff_mail",
-    title: "Почта барберов",
-    lead: "Барберы входят в своё приложение по почте: туда приходит код. Напиши почту каждого барбера.",
-    fields: [{ id: "list", kind: "text", label: "Имя и почта, каждый барбер с новой строки", rows: 6 }],
+      "Клиентов и записи из Altegio мы сами выгрузить не можем: файл выгрузки Altegio отправляет только владельцу, " +
+      "тебе на почту. Нужны две выгрузки в Excel: клиенты и все записи. Перешли эти письма Диме. " +
+      "По ним проверим перенос, а перед самым переходом попросим ещё раз, свежие.",
+    fields: [{ id: "done", kind: "one", label: "Выгрузил и переслал?", options: ["Да, переслал", "Сделаю", "Не нашёл, как выгрузить"] }],
   },
   {
     id: "payer",
     title: "Кто платит за новую систему",
     lead: "Сервер и база данных новой системы сейчас идут с карты Димы, SMS пойдут через твой Messaggio. Это расходы салона.",
     fields: [{ id: "who", kind: "one", label: "Платит:", options: ["Rempire OÜ (салон)", "Rempire Store OÜ (магазин)", "Обсудим"] }],
-  },
-  {
-    id: "alerts",
-    title: "Если запись сломается",
-    lead: "Система каждые 5 минут проверяет, работает ли запись. Если нет, сразу пишет Диме. Тогда можно попросить клиентов звонить.",
-    fields: [{ id: "me", kind: "one", label: "Писать и тебе?", options: ["Да, пишите и мне", "Нет, только Диме"] }],
   },
   {
     id: "pay",
@@ -237,8 +214,6 @@ export const QUESTIONS: Question[] = [
 
 /** Settled by Dim (17.11 and 20.11.2026) and by Renat's answers of 18.11. Renat can object in «decided.note». */
 export const DECIDED: string[] = [
-  "Новая система начинает работать в понедельник 4 января. В воскресенье 3 января переносим клиентов и записи из Altegio. До этого всё идёт в Altegio, счета барберам за ноябрь и декабрь — в Isolta.",
-  "С 30 ноября по 13 декабря ты пробуешь новую систему на тестовой версии и пишешь замечания кнопкой «Сообщить о проблеме».",
   "Запись подтверждается сразу. Барбер сам открыл время, значит клиент записывается без подтверждения. В экстренном случае барбер может отменить запись.",
   "Время для записи как сейчас в Altegio: каждые 30 минут от начала дня барбера, записаться можно в последний момент.",
   "Сообщения клиентам как сейчас: SMS за 2 часа и письмо за 12 часов до визита, поздравление в день рождения, приглашение прийти снова после неявки. SMS идут через твой Messaggio.",
@@ -252,8 +227,16 @@ export const DECIDED: string[] = [
   "Уведомления барберам приходят в приложении барбера. Тебе: новая запись онлайн, перенос или отмена клиентом.",
   "Новую систему сначала пробуешь ты сам, барберов добавим потом.",
   "Сделаем табличку с QR-кодом для записи: одна на салон, на ресепшн.",
+  "Если после перехода онлайн-запись перестанет работать, система сразу напишет тебе: тогда можно попросить клиентов звонить.",
 ];
 export const DECIDED_NOTE: Field = { id: "note", kind: "text", label: "Если что-то здесь не так, напиши" };
+
+/** Asked when the work gets there, not now (Dim, 23.11). */
+export const LATER: string[] = [
+  "Логин Messaggio: попросим, когда дойдём до проверки SMS. Логины и пароли говори Диме лично, не здесь.",
+  "Почта барберов: когда всё проверим. По ней барберы будут входить в своё приложение.",
+  "Доступ к Google-аккаунту салона и, если запись будет на rempire.ee, к настройкам этого домена.",
+];
 
 /** What we read in Altegio and Isolta ourselves (20.11.2026), so we do not ask. */
 export const WE_READ: string[] = [

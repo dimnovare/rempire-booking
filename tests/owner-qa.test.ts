@@ -2,7 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { GET, PUT } from "@/app/api/qa/[token]/route";
 import { closeDb, query, withTx } from "@/lib/db";
 import { findForm, hashToken, loadAnswers, loadLog, saveAnswer } from "@/lib/owner-qa";
-import { cleanValue, FIELDS, INTRO, QUESTIONS } from "@/lib/owner-qa-content";
+import { cleanValue, DECIDED, FIELDS, INTRO, LATER, QUESTIONS } from "@/lib/owner-qa-content";
 import { DEMO_QA, OWNER_QA, seedOwnerQa } from "../tools/seed-demo.mjs";
 import { freshDemo } from "./helpers";
 
@@ -27,16 +27,19 @@ describe("the questions", () => {
     expect(INTRO).toContain(`${QUESTIONS.length} коротких вопросов`);
     for (const key of FIELDS.keys()) expect(key).toMatch(/^[a-z_]{1,30}\.[a-z_]{1,30}$/);
     expect(FIELDS.has("decided.note")).toBe(true);
-    // 23.11: Altegio and Isolta first, then what the launch needs before 29.11, then the open ones from 20.11
-    expect(QUESTIONS.map((q) => q.id).slice(0, 9)).toEqual(["subs", "site", "google", "sms", "export", "staff_mail", "payer", "alerts", "pay"]);
-    expect(INTRO).toContain("Первые восемь");
-    expect(cleanValue("subs.altegio", "Продлить на год")).toBe("Продлить на год");
-    expect(cleanValue("subs.isolta", "Оставить ещё на 1–2 месяца")).toBe("Оставить ещё на 1–2 месяца");
+    // 23.11 (Dim): Altegio and Isolta, where the booking lives, access, the export, who pays; then the open ones from 20.11
+    expect(QUESTIONS.map((q) => q.id).slice(0, 6)).toEqual(["subs", "site", "access", "export", "payer", "pay"]);
+    expect(INTRO).toContain("Первые пять");
+    expect(cleanValue("subs.altegio", "На год")).toBe("На год");
+    expect(cleanValue("subs.isolta", "На 1–2 месяца")).toBe("На 1–2 месяца");
     expect(cleanValue("subs.altegio", "Да")).toBeNull();
-    expect(cleanValue("subs.isolta_date", "в июне")).toBe("в июне");
     // closed questions are off the page; their answers stay in the table
     for (const gone of ["access.altegio", "costs.isolta", "universal.who", "altegio_extra.cash", "switch.ok", "switch.isolta"]) expect(FIELDS.has(gone)).toBe(false);
-    // never a login or a password: Renat tells Dim by phone
+    // no switch date is agreed with Renat, so the page names none
+    for (const text of [INTRO, ...QUESTIONS.map((q) => q.lead), ...DECIDED]) expect(text).not.toMatch(/января|2 декабря/);
+    // Messaggio's login and the barbers' e-mails come later; never a login or a password on the page
+    expect(LATER.join(" ")).toMatch(/Messaggio/);
+    expect(LATER.join(" ")).toMatch(/Почта барберов/);
     for (const q of QUESTIONS) for (const f of q.fields) expect(f.label).not.toMatch(/пароль|логин/i);
     // answered by Renat on 18.11, now in «Уже решено»
     for (const gone of ["emails.who", "commission.vat", "self.may", "telegram.how", "qr.want"]) expect(FIELDS.has(gone)).toBe(false);

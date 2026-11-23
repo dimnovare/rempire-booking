@@ -10,14 +10,17 @@ that must pass first: `docs/test-plan.md`.*
 - Altegio renews itself on **02.12.2026** (92,99 € a month, paid to
   04.12). Cancelling the renewal before 02.12 still leaves it running to
   04.12: that is our safety net for the first days.
-- Renat has not yet said «до 2 декабря подходит» (his page, `switch.ok`,
-  unanswered since 20.11).
+- Renat never answered «до 2 декабря подходит» (`switch.ok`); that
+  question left his page on 23.11.
 - **Dim chose one more month of Altegio** (round 13, 23.11): Altegio renews
   on 02.12 as usual. Dim is away **30.11–13.12** without internet, so the
-  switch comes after that: **day one is Monday 04.01.2027** (round 14),
+  switch comes after that: **Dim's plan is day one Monday 04.01.2027**
+  (round 14; not agreed with Renat, so his page names no date),
   the import runs on Sunday 03.01 (nobody works on Sundays in Altegio).
-  Altegio renews on 02.12 and 02.01 as the fallback, to 04.02.
-- While Dim is away, Renat tries the admin on staging and reports with
+  Whether Altegio and Isolta renew for a year or 1–2 months is Renat's
+  call (his page, «Altegio и Isolta»).
+- While Dim is away, Renat is invited (not asked) to try the admin on
+  staging and report with
   «Сообщить о проблеме» (round 14; message 2 of
   `docs/renat-before-30-11.ru.md`).
 
@@ -51,8 +54,9 @@ of Altegio.
 Round 14 (artifact `1dwcFR6gRYqkwAF23iVkiA`, answered 23.11): day one
 Monday 04.01; Renat tests on staging while Dim is away; two free Resend
 accounts; BrowserStack for the test month plus 10 minutes on a real phone.
-Left to Renat: rempire.ee's Cloudflare account, the salon's Google
-account, whether he gets the down alert, which company pays
+Asked of Renat (his page, set 4): Altegio and Isolta terms (he decides),
+where the booking lives, Google access, Altegio's exports, which company
+pays. The down alert goes to Renat after the switch (Dim, 23.11)
 (`docs/renat-before-30-11.ru.md`).
 
 ## The move, in order

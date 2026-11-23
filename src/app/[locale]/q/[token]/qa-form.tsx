@@ -13,6 +13,7 @@ import {
   DECIDED_NOTE,
   INTRO,
   isAnswered,
+  LATER,
   QUESTIONS,
   WE_READ,
   type Field,
@@ -277,6 +278,18 @@ export function QaForm({ token, initial }: { token: string; initial: Record<stri
           </li>
         ))}
       </ol>
+
+      <section className="qa-q qa-read" aria-labelledby="q-later">
+        <h2 className="qa-title" id="q-later">
+          Понадобится позже
+        </h2>
+        <p className="qa-lead">Сейчас ничего делать не нужно, спросим, когда дойдём.</p>
+        <ul className="qa-plain">
+          {LATER.map((d) => (
+            <li key={d}>{d}</li>
+          ))}
+        </ul>
+      </section>
 
       <section className="qa-q qa-done" aria-labelledby="q-decided">
         <h2 className="qa-title" id="q-decided">
