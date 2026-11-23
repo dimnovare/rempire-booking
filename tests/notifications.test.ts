@@ -13,7 +13,11 @@ import {
   applyChange,
   atOf,
   channelOn,
+  cleanEmailText,
   cleanStored,
+  EMAIL_TEXT_MAX,
+  EMAIL_TEXT_TYPES,
+  emailText,
   NOTIFY_DEFAULTS,
   noShowDelay,
   readNotify,
@@ -30,6 +34,7 @@ import { loadHolder, backfillRights } from "@/lib/auth/rights-store";
 import { book, type BookingInput } from "@/lib/booking";
 import { closeDb, query } from "@/lib/db";
 import { sentToConsole } from "@/lib/email";
+import { EXTRA_MARK, extraBlock } from "@/lib/letter-kit";
 import { messageText, OUTBOX, planBirthdays, planEveningPush, planNoShow, planReminders, runOutbox, sendForVisit } from "@/lib/outbox";
 import { saveSubscription } from "@/lib/push";
 import { DEFAULT_SETTINGS, readSettings } from "@/lib/settings";
@@ -98,7 +103,7 @@ describe("nothing stored is today's behaviour", () => {
       for (const ch of t.channels) expect(channelOn(ns, t.key, ch), `${t.key}.${ch}`).toBe(true);
     }
     expect(ns.base).toEqual(DEFAULT_SETTINGS);
-    expect(ns.stored).toEqual({ off: [], sms: {}, at: {}, delay: {} });
+    expect(ns.stored).toEqual({ off: [], sms: {}, at: {}, delay: {}, email: {} });
     expect(timing(ns, "reminder", "sms")).toEqual({ kind: "lead", min: 120 });
     expect(timing(ns, "reminder", "email")).toEqual({ kind: "lead", min: 720 });
     expect(timing(ns, "reminder", "push")).toEqual({ kind: "withSms", min: 120 });
@@ -222,6 +227,70 @@ describe("the salon's own SMS text", () => {
   });
 });
 
+/* ---------------------------------------------------------------- the letter's own text */
+
+describe("«Дополнительная информация в Email»: the salon's text in a letter", () => {
+  it("each client type with a letter has one; the others none", () => {
+    expect([...EMAIL_TEXT_TYPES]).toEqual(["reminder", "confirmation", "moved", "cancelled", "birthday", "no_show"]);
+    const may = { open: true, sms: true, email: true, push: true, system: true };
+    expect(typeDetail(readNotify({}), may, "confirmation").email).toEqual({ text: "", max: EMAIL_TEXT_MAX });
+    expect(typeDetail(readNotify({ notifications: { email: { birthday: "Hi" } } }), may, "birthday").email).toEqual({ text: "Hi", max: EMAIL_TEXT_MAX });
+    expect(typeDetail(readNotify({}), may, "visit_new").email).toBeUndefined();
+  });
+
+  it("is kept clean: one kind of line end, no control characters, one blank line at most, trimmed", () => {
+    expect(cleanEmailText("  Parking\r\nin the yard \r\n\r\n\r\n\r\nWelcome!\u0007  ")).toEqual({ ok: true, value: "Parking\nin the yard\n\nWelcome!" });
+    expect(cleanEmailText(" \n ")).toEqual({ ok: true, value: null });
+    expect(cleanEmailText(null)).toEqual({ ok: true, value: null });
+    expect(cleanEmailText("x".repeat(EMAIL_TEXT_MAX))).toMatchObject({ ok: true });
+    expect(cleanEmailText("x".repeat(EMAIL_TEXT_MAX + 1))).toEqual({ ok: false, code: "long" });
+    expect(cleanEmailText(5)).toEqual({ ok: false, code: "kind" });
+  });
+
+  it("a change writes only what differs; refused for a type with no letter or a text too long", () => {
+    expect(applyChange({}, "confirmation", { email: " Parking in the yard " })).toEqual({
+      ok: true,
+      patch: { notifications: { off: [], sms: {}, at: {}, delay: {}, email: { confirmation: "Parking in the yard" } } },
+      changed: ["email"],
+    });
+    const raw = { notifications: { email: { confirmation: "Parking in the yard" } } };
+    expect(applyChange(raw, "confirmation", { email: "Parking in the yard  " })).toEqual({ ok: true, patch: {}, changed: [] });
+    expect(applyChange(raw, "confirmation", { email: "" })).toMatchObject({ ok: true, patch: { notifications: { email: {} } }, changed: ["email"] });
+    expect(applyChange(raw, "confirmation", { email: null })).toMatchObject({ ok: true, changed: ["email"] });
+    expect(applyChange({}, "visit_new", { email: "Hi" })).toEqual({ ok: false, field: "email" });
+    expect(applyChange({}, "confirmation", { email: "x".repeat(EMAIL_TEXT_MAX + 1) })).toEqual({ ok: false, field: "email.long" });
+    expect(applyChange({}, "confirmation", { email: 3 as never })).toEqual({ ok: false, field: "email.kind" });
+  });
+
+  it("saved by «Email-уведомления» only, with its audit row", async () => {
+    expect(await saveType(demo.business, await me(), "moved", { email: "Call us if the new time does not suit you." })).toEqual({ ok: true, changed: ["email"] });
+    expect(emailText(readNotify(await stored()), "moved")).toBe("Call us if the new time does not suit you.");
+    const [audit] = await query<{ before: unknown; after: unknown }>("select before, after from audit where entity = 'business' and action = 'settings'");
+    expect(audit).toEqual({ before: { email_text: null }, after: { notification: "moved", email_text: "Call us if the new time does not suit you." } });
+    // only «SMS-уведомления»: not the letters' text
+    await query("update users set rights = array_remove(rights, 'notify.email') where id = $1", [owner]);
+    expect(await saveType(demo.business, await me(), "moved", { email: null })).toEqual({ ok: false, field: "forbidden" });
+  });
+
+  it("goes in the letter sent, read when it is built", async () => {
+    const r = await book(query, demo.business, bookingInput(), { now: NOW });
+    if (!r.ok) throw new Error(r.code);
+    // saved after the booking, before the letter went: the letter has it
+    await saveType(demo.business, await me(), "confirmation", { email: "Parking in the yard <b>free</b>.\n\nMore: https://example.test/parking" });
+    expect((await sendForVisit(query, r.visit.id, NOW, DEV)).sent).toBe(1);
+    const letter = sentToConsole[sentToConsole.length - 1];
+    expect(letter.html).toContain("Parking in the yard &lt;b&gt;free&lt;/b&gt;.");
+    expect(letter.html).toContain('<a href="https://example.test/parking"');
+    expect(letter.text).toContain("Parking in the yard <b>free</b>.\n\nMore: https://example.test/parking");
+  });
+
+  it("the page's previews carry the mark the page puts the typed text in, in every language", async () => {
+    const sample = await loadSample(query, demo.business, ORIGIN, NOW);
+    const p = previews("no_show", sample, { ...demo.business, settings: DEFAULT_SETTINGS }, ORIGIN);
+    for (const l of ["ru", "et", "en"] as const) expect(p.email[l]?.html.split(extraBlock(EXTRA_MARK))).toHaveLength(2);
+  });
+});
+
 const bookingInput = (o: { email?: string | null } = {}): BookingInput => ({
   serviceIds: [demo.services.clip],
   staffId: demo.staff.renat,
@@ -240,7 +309,7 @@ const bookingInput = (o: { email?: string | null } = {}): BookingInput => ({
 describe("a change from the page", () => {
   it("writes only what differs, each in its one place", () => {
     const off = applyChange({}, "confirmation", { on: false });
-    expect(off).toEqual({ ok: true, patch: { notifications: { off: ["confirmation"], sms: {}, at: {}, delay: {} } }, changed: ["on"] });
+    expect(off).toEqual({ ok: true, patch: { notifications: { off: ["confirmation"], sms: {}, at: {}, delay: {}, email: {} } }, changed: ["on"] });
     // back on: the key goes
     const back = applyChange({ notifications: { off: ["confirmation"] } }, "confirmation", { on: true });
     expect(back).toMatchObject({ ok: true, patch: { notifications: { off: [] } } });
@@ -274,11 +343,12 @@ describe("a change from the page", () => {
   });
 
   it("anything else stored is dropped when read", () => {
-    expect(cleanStored({ off: ["confirmation", "birthday", "nope", "reminder.email", "reminder.sms", 3], sms: { reminder: "", birthday: "Hi {date}", no_show: "Hi {client}" }, at: { birthday: "9:00", day_plan: "21:30" }, delay: { no_show: 0.5 } })).toEqual({
+    expect(cleanStored({ off: ["confirmation", "birthday", "nope", "reminder.email", "reminder.sms", 3], sms: { reminder: "", birthday: "Hi {date}", no_show: "Hi {client}" }, at: { birthday: "9:00", day_plan: "21:30" }, delay: { no_show: 0.5 }, email: { confirmation: " Parking ", visit_new: "x", reminder: 3, moved: "   " } })).toEqual({
       off: ["confirmation", "reminder.sms"],
       sms: { no_show: "Hi {client}" },
       at: { day_plan: "21:30" },
       delay: {},
+      email: { confirmation: "Parking" },
     });
   });
 

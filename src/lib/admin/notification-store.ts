@@ -23,6 +23,7 @@ import type { Business } from "../availability";
 import { withTx, type Querier } from "../db";
 import { emailTransport } from "../email";
 import { LOCALES, type Locale } from "../i18n";
+import { EXTRA_MARK } from "../letter-kit";
 import { birthdayLetter, noShowLetter, visitLetter } from "../letters";
 import { clientReminderText } from "../outbox";
 import { pushConfigured } from "../push";
@@ -36,12 +37,15 @@ import {
   AT_OPTIONS,
   AT_TYPES,
   DELAY_OPTIONS,
+  EMAIL_TEXT_MAX,
   LEAD_OPTIONS,
   TYPES,
   applyChange,
   atOf,
   channelOn,
   channelsTouched,
+  emailText,
+  hasEmailText,
   isTypeKey,
   noShowDelay,
   offForLogins,
@@ -98,6 +102,7 @@ const AUDIT_KEY: Record<string, string> = {
   delay: "delay",
   mode: "client_reminder",
   sms: "sms_text",
+  email: "email_text",
 };
 
 function auditValue(ns: NotifySettings, type: TypeKey, what: string): unknown {
@@ -109,6 +114,7 @@ function auditValue(ns: NotifySettings, type: TypeKey, what: string): unknown {
   if (what === "delay") return noShowDelay(ns);
   if (what === "mode") return ns.base.client_reminder;
   if (what === "sms") return isSmsType(type) ? smsTemplate(ns, type) : null;
+  if (what === "email") return emailText(ns, type);
   return null;
 }
 
@@ -221,6 +227,8 @@ export type TypeDetail = TypeRow & {
   delay?: { value: number; options: number[] };
   mode?: string;
   sms?: { template: string | null; standard: string; vars: readonly SmsVar[] };
+  /** «Дополнительная информация в Email»: the salon's text in this type's letter ("" none) */
+  email?: { text: string; max: number };
 };
 
 /** One type's page: its switches, timing and SMS text as they are now. */
@@ -239,6 +247,7 @@ export function typeDetail(ns: NotifySettings, may: NotifyMay, key: TypeKey): Ty
   }
   if (key === "no_show") out.delay = { value: noShowDelay(ns), options: optionsWith([...DELAY_OPTIONS], noShowDelay(ns)) };
   if (isSmsType(key)) out.sms = { template: smsTemplate(ns, key), standard: DEFAULT_SMS[key], vars: VARS_OF[key] };
+  if (hasEmailText(key)) out.email = { text: emailText(ns, key) ?? "", max: EMAIL_TEXT_MAX };
   return out;
 }
 
@@ -256,13 +265,19 @@ export type Sample = {
   staff: string;
   service: { ru: string; et: string; en: string; cents: number; min: number };
   address: string;
+  /** the salon's number and site, as the letters show them */
+  phone: string;
+  website: string;
   day: string;
   startsAt: string;
   tz: string;
 };
 
 export async function loadSample(q: Querier, business: Pick<Business, "id" | "name" | "timezone">, origin: string, now = Date.now()): Promise<Sample> {
-  const [loc] = await q<{ address: string; timezone: string }>("select address, timezone from locations where business_id = $1 and active order by sort, name limit 1", [business.id]);
+  const [loc] = await q<{ address: string; timezone: string; phone: string; website: string }>(
+    "select address, timezone, phone, website from locations where business_id = $1 and active order by sort, name limit 1",
+    [business.id],
+  );
   const [st] = await q<{ name: string }>("select display_name as name from staff where business_id = $1 and active order by sort, display_name limit 1", [business.id]);
   const [sv] = await q<{ name: Record<string, string> | null; price_cents: number; duration_min: number }>(
     "select name, price_cents, duration_min from services where business_id = $1 and active order by sort, slug limit 1",
@@ -285,6 +300,8 @@ export async function loadSample(q: Querier, business: Pick<Business, "id" | "na
     staff,
     service,
     address,
+    phone: loc?.phone ?? "",
+    website: loc?.website ?? "",
     day,
     startsAt,
     tz,
@@ -297,7 +314,9 @@ export type Previews = { email: Partial<Record<Locale, LetterPreview>>; push: Pa
 /**
  * A type's letter and push in each language, made by the same functions
  * that make the real ones (src/lib/letters.ts, push-kinds.ts, outbox.ts)
- * from the made-up visit. The SMS is drawn in the browser, as it is typed.
+ * from the made-up visit. The SMS is drawn in the browser, as it is typed;
+ * so is the letter's own text: each letter carries EXTRA_MARK where it
+ * goes, and the page puts the text being typed in its place.
  */
 export function previews(type: TypeKey, s: Sample, business: Pick<Business, "name" | "timezone" | "settings">, origin: string): Previews {
   const def = typeDef(type);
@@ -319,15 +338,16 @@ export function previews(type: TypeKey, s: Sample, business: Pick<Business, "nam
       locale,
       reminder: true,
       services: [{ serviceId: "00000000-0000-4000-8000-000000000002", name: { ru: s.service.ru, et: s.service.et, en: s.service.en }, durationMin: s.service.min, priceCents: s.service.cents }],
-      location: { name: business.name, address: s.address, phone: "" },
+      location: { name: business.name, address: s.address, phone: s.phone, website: s.website },
     };
-    const o = { business, origin, token: "k3Fq9xT2mB7pW4sZk3Fq9xT2mB7pW4sZ", locale };
+    const extra = EXTRA_MARK;
+    const o = { business, origin, token: "k3Fq9xT2mB7pW4sZk3Fq9xT2mB7pW4sZ", locale, extra };
     if (def.channels.includes("email")) {
       const letter =
         type === "no_show"
-          ? noShowLetter(visit, { business, origin, locale })
+          ? noShowLetter(visit, { business, origin, locale, extra })
           : type === "birthday"
-            ? birthdayLetter({ locale, origin, business, address: s.address })
+            ? birthdayLetter({ locale, origin, business, address: s.address, extra })
             : visitLetter(type === "moved" ? "moved" : type === "cancelled" ? "cancelled" : type === "confirmation" ? "confirmation" : "reminder", visit, type === "moved" ? { ...o, from: { startsAt: iso(start - 24 * 3600_000) } } : o);
       out.email[locale] = { subject: letter.subject, html: letter.html };
     }

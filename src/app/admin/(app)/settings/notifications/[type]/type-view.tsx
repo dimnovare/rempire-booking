@@ -10,14 +10,17 @@
  *
  * The SMS is drawn here as it is typed, by the outbox's own functions
  * (src/lib/admin/notification-text.ts); the letter and the push come from
- * the server in each language.
+ * the server in each language. The letter's own text («Дополнительная
+ * информация в Email», under the e-mail's card, folded as in Altegio) is
+ * put into the letter here as it is typed (src/lib/letter-kit.ts).
  */
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useDeferredValue, useRef, useState } from "react";
 import type { Previews, Sample, TypeDetail } from "@/lib/admin/notification-store";
 import { checkTemplate, isSmsType, smsCount, smsWords, type SmsVar } from "@/lib/admin/notification-text";
 import { typeDef, type NChannel, type Timing, type TypeChange } from "@/lib/admin/notifications";
 import { LOCALES, type Locale } from "@/lib/i18n";
+import { EXTRA_MARK, extraBlock } from "@/lib/letter-kit";
 import { PrevIcon } from "../../../../icons";
 import { useA } from "../../../../lang";
 import { saveTypeAction } from "../actions";
@@ -34,6 +37,8 @@ type Draft = {
   mode: string | null;
   /** the salon's own SMS text; null: the standard one */
   sms: string | null;
+  /** the letter's own text as typed ("" none); null: the type has no letter */
+  email: string | null;
 };
 
 const switchable = (d: TypeDetail, ch: NChannel) => d.channels.length > 1 && !(d.key === "reminder" && ch === "push");
@@ -47,6 +52,7 @@ function draftOf(d: TypeDetail): Draft {
     delay: d.delay?.value ?? null,
     mode: d.mode ?? null,
     sms: d.sms?.template ?? null,
+    email: d.email ? d.email.text : null,
   };
 }
 
@@ -63,6 +69,7 @@ function changeOf(was: Draft, now: Draft): TypeChange {
   if (now.delay !== null && now.delay !== was.delay) c.delay = now.delay;
   if (now.mode !== null && now.mode !== was.mode) c.mode = now.mode as TypeChange["mode"];
   if (now.sms !== was.sms) c.sms = now.sms;
+  if (now.email !== null && now.email.trim() !== (was.email ?? "").trim()) c.email = now.email.trim() || null;
   return c;
 }
 
@@ -109,7 +116,18 @@ export function TypeView({ detail: d, sample, previews }: { detail: TypeDetail; 
         setState({ k: "saved" });
       } else {
         const f = r.field;
-        const text = f === "forbidden" ? N.forbidden : f.startsWith("sms.unknown.") ? N.bad.unknown(f.slice(12)) : f === "sms.empty" ? N.bad.empty : f === "sms.long" ? N.bad.long : N.notSaved;
+        const text =
+          f === "forbidden"
+            ? N.forbidden
+            : f.startsWith("sms.unknown.")
+              ? N.bad.unknown(f.slice(12))
+              : f === "sms.empty"
+                ? N.bad.empty
+                : f === "sms.long"
+                  ? N.bad.long
+                  : f === "email.long"
+                    ? N.extra.long(d.email?.max ?? 0)
+                    : N.notSaved;
         setState({ k: "bad", text });
       }
     } catch {
@@ -210,6 +228,7 @@ export function TypeView({ detail: d, sample, previews }: { detail: TypeDetail; 
                       </select>
                     </label>
                   )}
+                  {ch === "email" && d.email && draft.email !== null && <EmailExtra text={draft.email} max={d.email.max} may={d.rights.email} set={(email) => set({ email })} />}
                 </section>
               ))}
           </div>
@@ -237,7 +256,7 @@ export function TypeView({ detail: d, sample, previews }: { detail: TypeDetail; 
           {smsType && d.sms && <SmsText d={d} draft={draft} set={set} words={words} bad={smsBad} />}
         </div>
 
-        <Preview d={d} sample={sample} previews={previews} words={words} />
+        <Preview d={d} sample={sample} previews={previews} words={words} extra={draft.email ?? ""} />
       </div>
 
       <div className="ntf-bar">
@@ -341,7 +360,42 @@ function SmsText({ d, draft, set, words, bad }: { d: TypeDetail; draft: Draft; s
   );
 }
 
-function Preview({ d, sample, previews, words }: { d: TypeDetail; sample: Sample; previews: Previews; words: string }) {
+/**
+ * «Дополнительная информация в Email»: the salon's own text in this type's
+ * letter, folded until opened (open when there is one), as Altegio has it.
+ */
+function EmailExtra({ text, max, may, set }: { text: string; max: number; may: boolean; set: (v: string) => void }) {
+  const N = useA().notif;
+  const filled = text.trim() !== "";
+  // open at first when there is a text; then it stays as the user leaves it, even while he clears it
+  const [startOpen] = useState(filled);
+  return (
+    <details className="ntf-extra" open={startOpen || undefined}>
+      <summary>
+        <span>{N.extra.title}</span>
+        <small>{filled ? N.extra.set : N.extra.none}</small>
+      </summary>
+      <div className="ntf-extra-body">
+        <textarea
+          className="ntf-text"
+          value={text}
+          rows={4}
+          maxLength={max}
+          disabled={!may}
+          aria-label={N.extra.title}
+          aria-describedby="ntf-extra-hint"
+          onChange={(e) => set(e.target.value)}
+        />
+        <p className="adm-meta ntf-extra-hint" id="ntf-extra-hint">
+          <span>{N.extra.hint}</span>
+          <span className="ntf-extra-count">{N.extra.count([...text].length, max)}</span>
+        </p>
+      </div>
+    </details>
+  );
+}
+
+function Preview({ d, sample, previews, words, extra }: { d: TypeDetail; sample: Sample; previews: Previews; words: string; extra: string }) {
   const A = useA();
   const N = A.notif;
   const chans = d.channels.map((c) => c.ch);
@@ -349,7 +403,10 @@ function Preview({ d, sample, previews, words }: { d: TypeDetail; sample: Sample
   const [lang, setLang] = useState<Locale>(A.lang);
   const [device, setDevice] = useState<"iphone" | "android">("iphone");
   const salon = sample.values.salon || "REMPIRE";
-  const letter = previews.email[lang];
+  // the letter's own text where the server drew the mark; deferred, so typing stays quick
+  const own = useDeferredValue(extra);
+  const raw = previews.email[lang];
+  const letter = raw ? { ...raw, html: raw.html.split(extraBlock(EXTRA_MARK)).join(extraBlock(own)) } : undefined;
   const push = previews.push[lang];
   return (
     <aside className="adm-card ntf-preview" aria-labelledby="ntf-pv-h">

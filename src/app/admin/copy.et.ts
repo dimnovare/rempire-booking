@@ -1095,6 +1095,7 @@ export const et: typeof ru = {
       at: "Saatmise aeg",
       delay: "Viivitus, minutit",
       sms_text: "SMS-i tekst",
+      email_text: "Lisainfo e-kirjas",
       phone: "Telefon",
       phone2: "Lisatelefon",
       locale: "Keel",
@@ -1330,6 +1331,14 @@ export const et: typeof ru = {
     counter: (chars: number, limit: number, parts: number) => `${chars} / ${limit} märki · ${parts} SMS`,
     unicode: "Tekstis on mitteladina tähti või emotikone: ühes SMS-is ainult 70 märki.",
     manyParts: (n: number) => `Tekst läheb ${n} osana, iga osa makstakse SMS-ina.`,
+    extra: {
+      title: "Lisainfo e-kirjas",
+      hint: "Sinu tekst seda tüüpi kirjas, kõigis kolmes keeles, broneeringu andmete all. Lingid https://… muutuvad klõpsatavaks.",
+      count: (n: number, max: number) => `${n} / ${max}`,
+      long: (max: number) => `Kuni ${max} märki.`,
+      set: "lisatud",
+      none: "pole lisatud",
+    },
     bad: {
       empty: "Sisesta tekst või taasta standardtekst.",
       long: "Kuni 600 märki.",

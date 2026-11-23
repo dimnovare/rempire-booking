@@ -96,6 +96,17 @@
 .ntf-meter-bar.is-many i { background: #f59f00; }
 .ntf-warn { color: #8a6100; }
 
+/* the letter's own text («Дополнительная информация в Email»), folded under the e-mail's card */
+.ntf-extra { border-top: 1px solid #e9ecf2; }
+.ntf-extra summary { display: flex; align-items: center; gap: 8px; min-height: 44px; color: #2b3134; font: 500 14px/20px var(--body); cursor: pointer; list-style: none; }
+.ntf-extra summary::-webkit-details-marker { display: none; }
+.ntf-extra summary::before { content: ""; flex: none; width: 7px; height: 7px; margin: 0 4px 3px 2px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s; }
+.ntf-extra[open] summary::before { margin-bottom: 4px; transform: rotate(45deg); }
+.ntf-extra summary small { margin-left: auto; color: #71757f; font-size: 12px; font-weight: 400; white-space: nowrap; }
+.ntf-extra-body { display: flex; flex-direction: column; gap: 6px; padding-bottom: 2px; }
+.ntf-extra-hint { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 16px; }
+.ntf-extra-count { white-space: nowrap; }
+
 /* the preview: a phone, or the letter as it arrives */
 .ntf-preview { gap: 12px; }
 .ntf-pv-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -125,7 +136,7 @@
 .ntf-mail { display: flex; flex-direction: column; gap: 8px; }
 .ntf-subj { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
 .ntf-subj span { color: #71757f; }
-.ntf-frame { width: 100%; height: 520px; border: 1px solid #e0e3eb; border-radius: 8px; background: #000; }
+.ntf-frame { width: 100%; height: 560px; border: 1px solid #e0e3eb; border-radius: 8px; background: #f2f2f2; }
 .ntf-sample { margin: 0; color: #71757f; font-size: 12px; text-align: center; }
 
 /* the bar at the bottom: in view while the cards scroll, above a phone's tab bar */

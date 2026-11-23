@@ -17,7 +17,7 @@ const obj = (v: unknown) => (v && typeof v === "object" && !Array.isArray(v) ? (
 function changeOf(raw: unknown): TypeChange {
   const o = obj(raw) ?? {};
   const c: Record<string, unknown> = {};
-  for (const k of ["on", "at", "delay", "mode", "sms"]) if (k in o) c[k] = o[k];
+  for (const k of ["on", "at", "delay", "mode", "sms", "email"]) if (k in o) c[k] = o[k];
   const ch = obj(o.channels);
   if (ch) c.channels = Object.fromEntries(["sms", "email", "push"].filter((k) => k in ch).map((k) => [k, ch[k]]));
   else if ("channels" in o) c.channels = o.channels;

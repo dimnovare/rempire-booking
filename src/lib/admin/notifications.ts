@@ -23,6 +23,10 @@
  *   sms    the salon's own SMS text per type (notification-text.ts)
  *   at     the hour of a daily message: birthday, day_plan, own_plan
  *   delay  minutes after the event: no_show
+ *   email  the salon's own text in a client's letter, per type
+ *          («Дополнительная информация в Email», as Altegio has it; Dim,
+ *          round 13): plain text, shown under the visit's details in
+ *          every language of that letter (src/lib/letter-kit.ts extraBlock)
  * **Nothing stored is today's behaviour, exactly**: every reader falls back
  * to the default below, which is what the code did before the page.
  *
@@ -112,6 +116,31 @@ export const TYPES: readonly TypeDef[] = [
 const BY_KEY = new Map<string, TypeDef>(TYPES.map((t) => [t.key, t]));
 export const typeDef = (key: TypeKey): TypeDef => BY_KEY.get(key)!;
 
+/** The client's types that go by letter: each may carry the salon's own text («Дополнительная информация в Email»). */
+export const EMAIL_TEXT_TYPES: readonly TypeKey[] = TYPES.filter((t) => t.audience === "client" && t.channels.includes("email")).map((t) => t.key);
+export const hasEmailText = (type: TypeKey): boolean => EMAIL_TEXT_TYPES.includes(type);
+/** The longest text a letter takes, in characters. */
+export const EMAIL_TEXT_MAX = 1000;
+
+/**
+ * The salon's text as it is kept: line ends made one, control characters
+ * out, at most one blank line in a row, trimmed. Empty: no text (null).
+ * Refused when too long or not a text.
+ */
+export function cleanEmailText(v: unknown): { ok: true; value: string | null } | { ok: false; code: "long" | "kind" } {
+  if (v === null || v === undefined) return { ok: true, value: null };
+  if (typeof v !== "string") return { ok: false, code: "kind" };
+  const t = v
+    .replace(/\r\n?/g, "\n")
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if ([...t].length > EMAIL_TEXT_MAX) return { ok: false, code: "long" };
+  return { ok: true, value: t || null };
+}
+
 /** The type an outbox row of this kind belongs to; undefined for a kind with no switch here. */
 export function typeOfKind(kind: string): TypeKey | undefined {
   if (kind === "reminder_email" || kind === "client_reminder") return "reminder";
@@ -155,6 +184,7 @@ export type Stored = {
   sms: Partial<Record<SmsType, string>>;
   at: Partial<Record<AtType, string>>;
   delay: { no_show?: number };
+  email: Partial<Record<TypeKey, string>>;
 };
 
 const OFF_KEYS = new Set<string>([...TYPES.map((t) => t.key as string), ...TYPES.flatMap((t) => t.channels.map((c) => `${t.key}.${c}`))]);
@@ -177,7 +207,13 @@ export function cleanStored(raw: unknown): Stored {
   const delay: Stored["delay"] = {};
   const d = ((o.delay && typeof o.delay === "object" ? o.delay : {}) as Record<string, unknown>).no_show;
   if (typeof d === "number" && Number.isInteger(d) && d >= DELAY_LIMITS[0] && d <= DELAY_LIMITS[1]) delay.no_show = d;
-  return { off, sms, at, delay };
+  const email: Stored["email"] = {};
+  const rawEmail = (o.email && typeof o.email === "object" ? o.email : {}) as Record<string, unknown>;
+  for (const t of EMAIL_TEXT_TYPES) {
+    const c = cleanEmailText(rawEmail[t]);
+    if (c.ok && c.value) email[t] = c.value;
+  }
+  return { off, sms, at, delay, email };
 }
 
 /* ---------- what is in force ---------- */
@@ -232,6 +268,8 @@ export const atOf = (ns: NotifySettings, type: AtType): string => ns.stored.at[t
 export const noShowDelay = (ns: NotifySettings): number => ns.stored.delay.no_show ?? NOTIFY_DEFAULTS.noShowDelayMin;
 /** The salon's own SMS text of a type, or null: the standard one. */
 export const smsTemplate = (ns: NotifySettings, type: SmsType): string | null => ns.stored.sms[type] ?? null;
+/** The salon's own text in this type's letter, or null. */
+export const emailText = (ns: NotifySettings, type: TypeKey): string | null => ns.stored.email[type] ?? null;
 
 /** When one channel of a type goes. */
 export type Timing =
@@ -286,6 +324,8 @@ export type TypeChange = {
   mode?: ReminderChannel;
   /** the salon's own SMS text; null or the standard text: the standard one */
   sms?: string | null;
+  /** the salon's own text in the letter («Дополнительная информация в Email»); null or empty: none */
+  email?: string | null;
 };
 
 export type ChangeResult =
@@ -302,6 +342,7 @@ export function channelsTouched(type: TypeKey, c: TypeChange): NChannel[] {
   if (c.lead?.email !== undefined) out.add("email");
   if (c.mode !== undefined) out.add("push");
   if (c.sms !== undefined) out.add("sms");
+  if (c.email !== undefined) out.add("email");
   return N_CHANNELS.filter((ch) => out.has(ch));
 }
 
@@ -318,7 +359,7 @@ export function applyChange(raw: unknown, type: TypeKey, c: TypeChange): ChangeR
   const def = typeDef(type);
   const ns = readNotify(raw);
   const flat: Record<string, unknown> = {};
-  const next: Stored = { off: [...ns.stored.off], sms: { ...ns.stored.sms }, at: { ...ns.stored.at }, delay: { ...ns.stored.delay } };
+  const next: Stored = { off: [...ns.stored.off], sms: { ...ns.stored.sms }, at: { ...ns.stored.at }, delay: { ...ns.stored.delay }, email: { ...ns.stored.email } };
   const changed: string[] = [];
   const setOff = (key: string, on: boolean) => {
     const has = next.off.includes(key);
@@ -392,6 +433,16 @@ export function applyChange(raw: unknown, type: TypeKey, c: TypeChange): ChangeR
       if (value === null) delete next.sms[type];
       else next.sms[type] = value;
       changed.push("sms");
+    }
+  }
+  if (c.email !== undefined) {
+    if (!hasEmailText(type)) return { ok: false, field: "email" };
+    const t = cleanEmailText(c.email);
+    if (!t.ok) return { ok: false, field: `email.${t.code}` };
+    if (t.value !== emailText(ns, type)) {
+      if (t.value === null) delete next.email[type];
+      else next.email[type] = t.value;
+      changed.push("email");
     }
   }
   const patch: Record<string, unknown> = { ...flat };
