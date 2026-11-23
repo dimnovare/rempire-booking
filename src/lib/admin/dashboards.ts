@@ -9,7 +9,8 @@
  *     kpiClients   the clients behind a card («Посмотреть клиентов»);
  *   «Визиты» (/admin/dashboard), the first page of «Отчёты» in the tool
  *     listDashVisits  the visits ahead («предстоящие») or behind
- *                     («прошедшие»), in time order;
+ *                     («прошедшие»), in time order, with each listed day's
+ *                     whole count for its heading («12 визитов · пришли 3»);
  *     listFeed        «Лента активности по записям»: the bookings something
  *                     happened to, the latest first, each with its history
  *                     from the audit log;
@@ -538,7 +539,15 @@ export type DashVisit = {
   source: string;
 };
 
-export type DashVisits = { rows: DashVisit[]; more: boolean; upcoming: number };
+/**
+ * A day of the panel, whole: the visits it has (cancelled ones not), how
+ * many of them the client came to and how many were no-shows. The day's
+ * heading says it («12 визитов · пришли 3»), however many rows are shown.
+ */
+export type DashDay = { visits: number; came: number; noShow: number };
+
+/** `days`: each day of `rows` (the salon's own, YYYY-MM-DD) as a whole. */
+export type DashVisits = { rows: DashVisit[]; more: boolean; upcoming: number; days: Record<string, DashDay> };
 
 /** What the page offers a login. The screen only hides by these; every action asks again. */
 export type DashMay = {
@@ -613,12 +622,33 @@ const int = (v: unknown, min: number, max: number, dflt: number) => {
   return Number.isInteger(n) && n >= min && n <= max ? n : dflt;
 };
 
-const NO_VISITS: DashVisits = { rows: [], more: false, upcoming: 0 };
+const NO_VISITS: DashVisits = { rows: [], more: false, upcoming: 0, days: {} };
+
+/** The days of `rows` as wholes, in the same scope: what each day's heading counts. */
+async function daySums(q: Querier, business: Business, rows: DashVisit[], who: Holder | undefined, now: number): Promise<Record<string, DashDay>> {
+  if (!rows.length) return {};
+  const tz = business.timezone;
+  const keys = [...new Set(rows.map((r) => todayIn(tz, r.start)))].sort();
+  const d = scoped(business, who, now);
+  const sums = await q<{ day: string; visits: number; came: number; no_show: number }>(
+    `select to_char(a.starts_at at time zone ${d.p(tz)}::text, 'YYYY-MM-DD') as day, count(*)::int as visits,
+            count(*) filter (where a.status in ('arrived', 'done'))::int as came,
+            count(*) filter (where a.status = 'no_show')::int as no_show
+       from appointments a join clients c on c.id = a.client_id
+      where ${d.where} and a.status <> 'cancelled'
+        and a.starts_at >= ${d.p(new Date(startOfDay(keys[0], tz)))} and a.starts_at < ${d.p(new Date(startOfDay(addDays(keys[keys.length - 1], 1), tz)))}
+      group by 1`,
+    d.params,
+  );
+  const want = new Set(keys);
+  return Object.fromEntries(sums.filter((s) => want.has(s.day)).map((s) => [s.day, { visits: Number(s.visits), came: Number(s.came), noShow: Number(s.no_show) }]));
+}
 
 /**
  * The left panel of «Визиты»: the visits ahead (still to end), the soonest
  * first, or behind (ended), the latest first. Cancelled ones are not
- * listed. `upcoming` is how many are ahead, for the switch.
+ * listed. `upcoming` is how many are ahead, for the switch; `days` each
+ * listed day as a whole.
  */
 export async function listDashVisits(q: Querier, business: Business, raw: { when?: unknown; offset?: unknown; limit?: unknown }, who?: Holder, now = Date.now()): Promise<DashVisits> {
   if (who && !can(who, "reports.visits")) return NO_VISITS;
@@ -638,7 +668,8 @@ export async function listDashVisits(q: Querier, business: Business, raw: { when
     s.params,
   );
   const phones = !who || can(who, "reports.visits.phones");
-  return { rows: rows.slice(0, limit).map((r) => dashOf(r, phones)), more: rows.length > limit, upcoming: Number(count?.n ?? 0) };
+  const shown = rows.slice(0, limit).map((r) => dashOf(r, phones));
+  return { rows: shown, more: rows.length > limit, upcoming: Number(count?.n ?? 0), days: await daySums(q, business, shown, who, now) };
 }
 
 /* ---------- «Лента активности по записям» ---------- */

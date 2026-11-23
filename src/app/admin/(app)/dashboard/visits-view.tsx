@@ -2,19 +2,26 @@
 
 /**
  * «Визиты» (dashboard/), as the tool's landing of «Отчёты» is laid out
- * (docs/altegio-pages.md, «D. Dashboards»): two panels side by side from
- * 1200px, one under the other below it.
+ * (docs/altegio-pages.md, «D. Dashboards»), tightened and filled in as on
+ * the canvas Dim approved in round 13: two panels side by side from
+ * 1200px, one under the other from 900px, two tabs on a phone.
  *
  *   «Визиты»   the switch «предстоящие (N)» / «прошедшие»; the visits by
- *              day, each a row of the timeline: a clock badge with the time
- *              and the length, then «Client / phone» (opens the visit), the
- *              services, the barber; «Подробнее» adds the next ones.
+ *              day, each day's heading with its whole count («12 визитов ·
+ *              пришли 3»); a row of the timeline each: the time and the
+ *              length, a dot of its status, «Client / phone» and the
+ *              services, the status and the barber; the row opens the
+ *              visit. «Подробнее» adds the next ones.
  *   «Лента активности по записям»
  *              «новые онлайн (N)», «Все», «Онлайн», «Офлайн»; the bookings
- *              something last happened to, by day: where it came from, the
- *              service (opens the visit), ✓ «Подтвердить запись» and the bin
- *              «Отменить запись», a line of date, barber, length and client,
- *              then its history, the latest first.
+ *              something last happened to, by day: what happened (the tag),
+ *              the service (opens the visit), ✓ «Подтвердить запись» and the
+ *              bin «Отменить запись», a line of date, barber, length and
+ *              client, then its history, a line a row, the latest first.
+ *
+ * On a phone a tab shows one panel; a row is a card line, the feed's
+ * history only its latest line, and a booking waiting for ✓ has the two
+ * big buttons «Подтвердить» / «Отменить» instead of the icons.
  *
  * A visit opens in the journal's own window (../visit-window.tsx), cut by
  * the server for this login. ✓ and the bin are the calendar's own actions:
@@ -25,8 +32,9 @@ import { useRef, useState } from "react";
 // types only: the lib reads the database and stays on the server
 import type { DashMay, DashVisit, DashVisits, DashWhen, Feed, FeedEntry, FeedFilter, FeedLog } from "@/lib/admin/dashboards";
 import type { VisitForSheet } from "@/lib/admin/records";
+import { addDays } from "@/lib/tz";
 import { cap } from "../../copy.shared";
-import { BinIcon, PencilIcon, TickIcon } from "../../icons";
+import { BinIcon, TickIcon } from "../../icons";
 import { useA } from "../../lang";
 import { cancelVisit, setVisitStatus } from "../actions";
 import { useFrame } from "../frame";
@@ -36,6 +44,8 @@ import { feedAction, listVisitsAction, openVisitAction } from "./actions";
 
 export type VisitsViewProps = {
   tz: string;
+  /** the salon's today (YYYY-MM-DD): «Сегодня», «Завтра», «Вчера» */
+  today: string;
   may: DashMay;
   visits: DashVisits;
   feed: Feed;
@@ -47,10 +57,23 @@ export type VisitsViewProps = {
 const CAME = new Set(["arrived", "done"]);
 const WAITS = new Set(["pending", "booked"]);
 
-export function VisitsView({ tz, may, visits: firstVisits, feed: firstFeed, first: VISITS_FIRST, more: VISITS_MORE }: VisitsViewProps) {
+/** A row's status as its pill and dot show it. */
+type Mark = "wait" | "confirmed" | "came" | "noShow";
+const markOf = (v: DashVisit): Mark => (CAME.has(v.status) ? "came" : v.status === "no_show" ? "noShow" : v.confirmed ? "confirmed" : "wait");
+
+/** What the feed's tag says last happened to a booking. */
+type Tag = "online" | "move" | "salon" | "import" | "cancel";
+const tagOf = (e: FeedEntry): Tag => (e.status === "cancelled" ? "cancel" : e.log[0]?.action === "move" ? "move" : e.source === "online" ? "online" : e.source === "import" ? "import" : "salon");
+
+/** A barber's round: the first letter on one of five dark shades, the same one each time. */
+const SHADES = ["#4b4b5c", "#6a4c93", "#2f6f8f", "#8a5a2b", "#9b3d5d"];
+const shadeOf = (id: string) => SHADES[[...id].reduce((n, ch) => n + ch.charCodeAt(0), 0) % SHADES.length];
+
+export function VisitsView({ tz, today, may, visits: firstVisits, feed: firstFeed, first: VISITS_FIRST, more: VISITS_MORE }: VisitsViewProps) {
   const A = useA();
   const D = A.dash;
   const frame = useFrame();
+  const [tab, setTab] = useState<"visits" | "feed">("visits");
   const [when, setWhen] = useState<DashWhen>("upcoming");
   const [visits, setVisits] = useState(firstVisits);
   const [vBusy, setVBusy] = useState(false);
@@ -81,7 +104,7 @@ export function VisitsView({ tz, may, visits: firstVisits, feed: firstFeed, firs
     try {
       const got = await listVisitsAction({ when: w, offset, limit });
       if (n !== seq.current.v) return;
-      setVisits((cur) => (offset ? { ...got, rows: [...cur.rows, ...got.rows] } : got));
+      setVisits((cur) => (offset ? { ...got, rows: [...cur.rows, ...got.rows], days: { ...cur.days, ...got.days } } : got));
     } catch {
       if (n === seq.current.v) frame.say(D.failed, true);
     }
@@ -133,17 +156,56 @@ export function VisitsView({ tz, may, visits: firstVisits, feed: firstFeed, firs
 
   const wd = new Intl.DateTimeFormat(A.intl, { timeZone: tz, weekday: "long", day: "numeric", month: "long" });
   const wdShort = new Intl.DateTimeFormat(A.intl, { timeZone: tz, weekday: "short", day: "numeric", month: "long" });
+  const dm = new Intl.DateTimeFormat(A.intl, { timeZone: tz, day: "numeric", month: "long" });
   const hm = new Intl.DateTimeFormat(A.intl, { timeZone: tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
   const dayKey = new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" });
-  /** «Пятница, 20 ноября» */
-  const dayOf = (ms: number) => cap(wd.format(ms));
+  /** «Сегодня, понедельник, 23 ноября»; another day «Среда, 25 ноября» */
+  const dayOf = (key: string, ms: number) => {
+    const near = key === today ? D.today : key === addDays(today, 1) ? D.tomorrow : key === addDays(today, -1) ? D.yesterday : null;
+    return near ? `${near}, ${wd.format(ms)}` : cap(wd.format(ms));
+  };
+  /** «12 визитов · пришли 3»: the day as a whole; who came only while the day is on, the no-shows always */
+  const sumOf = (key: string) => {
+    const d = visits.days[key];
+    if (!d) return "";
+    return [D.visitsN(d.visits), key === today && d.came ? D.cameN(d.came) : "", d.noShow ? D.noShowN(d.noShow) : ""].filter(Boolean).join(" · ");
+  };
   /** «Пт, 20 ноября, 12:13» */
   const at = (ms: number) => `${cap(wdShort.format(ms))}, ${hm.format(ms)}`;
+  /** «24 ноября 11:00 → 10:30», or with both days when the day changed */
+  const span = (from: number, to: number) => {
+    const same = dayKey.format(from) === dayKey.format(to);
+    return D.what.time(`${dm.format(from)} ${hm.format(from)}`, same ? hm.format(to) : `${dm.format(to)} ${hm.format(to)}`);
+  };
   const length = (v: DashVisit) => A.mins(Math.max(0, Math.round((v.end - v.start) / 60_000)));
   const services = (v: DashVisit) => v.services.map((s) => A.pick(s)).filter(Boolean).join(", ");
-  const who = (v: DashVisit) => (v.clientPhone ? `${v.clientName} / ${v.clientPhone}` : v.clientName);
   const statusOf = (status: string, confirmed: boolean) =>
     status === "cancelled" ? A.visit.status.cancelled : WAITS.has(status) ? (confirmed ? A.records.statuses.confirmed : A.records.statuses.waiting) : (A.records.statuses[status] ?? A.visit.status[status] ?? status);
+
+  /** A row of a booking's history in one line: what changed, then who did it. */
+  const whatOf = (l: FeedLog, e: FeedEntry) => {
+    const W = D.what;
+    const client = l.by.kind === "client";
+    const by = l.by.kind === "user" ? D.by(l.by.name) : l.by.kind === "import" ? A.records.madeByImport : D.by(client ? A.records.madeByClient : A.records.madeBySalon);
+    const parts: string[] = [];
+    if (l.action === "create") {
+      parts.push(client ? W.online : W.salon);
+      if (e.comment) parts.push(D.comment(e.comment));
+      if (!client) parts.push(by);
+    } else if (l.action === "move") {
+      if (l.fromStart !== null && l.start !== null && l.fromStart !== l.start) parts.push(span(l.fromStart, l.start));
+      if (l.fromStaffName && l.staffName && l.fromStaffName !== l.staffName) parts.push(W.barber(l.fromStaffName, l.staffName));
+      parts.push(client ? W.movedByClient : by);
+    } else if (l.action === "cancel") {
+      parts.push(client ? W.cancelledByClient : by);
+    } else {
+      if (l.action === "edit" && l.start !== null) parts.push([at(l.start), l.staffName].filter(Boolean).join(", "));
+      // ✓ by the salon is a confirmation, not «Клиент подтвердил»
+      if (l.status) parts.push(l.action === "status" && l.confirmed && !client && WAITS.has(l.status) ? W.confirmed : D.statusIs(statusOf(l.status, l.confirmed)));
+      parts.push(by);
+    }
+    return parts.filter(Boolean).join(". ");
+  };
 
   /** Rows split by their day, in the order they come. */
   const byDay = <T,>(rows: T[], ms: (r: T) => number) => {
@@ -173,7 +235,7 @@ export function VisitsView({ tz, may, visits: firstVisits, feed: firstFeed, firs
   const mayConfirm = (v: DashVisit) => may.confirm && WAITS.has(v.status) && !v.confirmed && v.start > now;
 
   return (
-    <div className="dsv">
+    <div className={`dsv is-tab-${tab}`}>
       <div className="adm-page-head dsv-head">
         <div className="cb-titles">
           <Titled page="visits">
@@ -183,8 +245,17 @@ export function VisitsView({ tz, may, visits: firstVisits, feed: firstFeed, firs
         </div>
       </div>
 
+      <div className="dsv-tabs only-narrow" role="group" aria-label={D.tabs}>
+        <button type="button" aria-pressed={tab === "visits"} aria-controls="dsv-left" onClick={() => setTab("visits")}>
+          {D.tabVisits(visits.upcoming)}
+        </button>
+        <button type="button" aria-pressed={tab === "feed"} aria-controls="dsv-right" onClick={() => setTab("feed")}>
+          {D.tabFeed(feed.fresh)}
+        </button>
+      </div>
+
       <div className="dsv-cols">
-        <section className={`dsv-panel dsv-left${vBusy ? " is-busy" : ""}`} aria-labelledby="dsv-visits" aria-busy={vBusy}>
+        <section id="dsv-left" className={`dsv-panel dsv-left${vBusy ? " is-busy" : ""}`} aria-labelledby="dsv-visits" aria-busy={vBusy}>
           <div className="dsv-bar">
             <h2 id="dsv-visits">{D.visitsTitle}</h2>
             <div className="dsv-switch" role="group" aria-label={D.visitsTitle}>
@@ -202,26 +273,39 @@ export function VisitsView({ tz, may, visits: firstVisits, feed: firstFeed, firs
             ) : (
               byDay(visits.rows, (v) => v.start).map((day) => (
                 <div key={day.key} className="dsv-day">
-                  <h3>{dayOf(day.first)}</h3>
+                  <div className="dsv-day-head">
+                    <h3>{dayOf(day.key, day.first)}</h3>
+                    <span>{sumOf(day.key)}</span>
+                  </div>
                   <ul className="dsv-rows">
-                    {day.rows.map((v) => (
-                      <li key={v.id}>
-                        <div className="dsv-time">
-                          <span className="dsv-clock" aria-hidden="true">
-                            <ClockIcon />
-                          </span>
-                          <b className="num">{hm.format(v.start)}</b>
-                          <small>{length(v)}</small>
-                        </div>
-                        <div className="dsv-what">
-                          <button type="button" className="dsv-link" disabled={opening === v.id} aria-label={D.openVisit(v.clientName, at(v.start))} onClick={() => void open(v.id)}>
-                            {who(v)}
+                    {day.rows.map((v) => {
+                      const mark = markOf(v);
+                      const svc = services(v);
+                      return (
+                        <li key={v.id}>
+                          <button type="button" className={`dsv-row is-${mark}`} disabled={opening === v.id} aria-label={`${D.openVisit(v.clientName, at(v.start))}, ${D.pill[mark]}`} onClick={() => void open(v.id)}>
+                            <span className="dsv-time">
+                              <b className="num">{hm.format(v.start)}</b>
+                              <small>{length(v)}</small>
+                            </span>
+                            <span className="dsv-dot" aria-hidden="true" />
+                            <span className="dsv-who">
+                              <span className="dsv-name">{v.clientName}</span>
+                              {v.clientPhone && <span className="dsv-tel num only-wide">{` / ${v.clientPhone}`}</span>}
+                            </span>
+                            {svc && <span className="dsv-svcs">{svc}</span>}
+                            <span className={`dsv-pill is-${mark}`}>{D.pill[mark]}</span>
+                            <span className="dsv-staff">
+                              <span className="dsv-ava" style={{ background: shadeOf(v.staffId) }} aria-hidden="true">
+                                {v.staffName.trim().charAt(0).toUpperCase()}
+                              </span>
+                              {v.staffName}
+                              {v.clientPhone && <span className="num only-narrow">{`· ${v.clientPhone}`}</span>}
+                            </span>
                           </button>
-                          {services(v) && <span>{services(v)}</span>}
-                          <small>{v.staffName}</small>
-                        </div>
-                      </li>
-                    ))}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               ))
@@ -234,7 +318,7 @@ export function VisitsView({ tz, may, visits: firstVisits, feed: firstFeed, firs
           </div>
         </section>
 
-        <section className={`dsv-panel dsv-feed${fBusy ? " is-busy" : ""}`} aria-labelledby="dsv-feed" aria-busy={fBusy}>
+        <section id="dsv-right" className={`dsv-panel dsv-feed${fBusy ? " is-busy" : ""}`} aria-labelledby="dsv-feed" aria-busy={fBusy}>
           <div className="dsv-bar">
             <h2 id="dsv-feed">{D.feedTitle}</h2>
             <div className="dsv-switch" role="group" aria-label={D.feedTitle}>
@@ -247,60 +331,95 @@ export function VisitsView({ tz, may, visits: firstVisits, feed: firstFeed, firs
           </div>
           <div className="dsv-body">
             {feed.entries.length === 0 ? (
-              <p className="adm-meta">{D.feedNone}</p>
+              <p className="adm-meta">{filter === "fresh" ? D.freshNone : D.feedNone}</p>
             ) : (
               byDay(feed.entries, (e) => e.lastAt).map((day) => (
                 <div key={day.key} className="dsv-day">
-                  <h3>{dayOf(day.first)}</h3>
-                  {day.rows.map((e) => (
-                    <article key={e.id} className="dsv-entry" aria-label={`${e.clientName}, ${at(e.start)}`}>
-                      <div className="dsv-entry-top">
-                        <span className="dsv-tag">{A.records.sources[e.source] ?? e.source}</span>
-                        <div className="dsv-tools">
-                          {mayConfirm(e) && (
-                            <button type="button" className="dsv-ibtn" title={D.confirm} aria-label={`${D.confirm}: ${e.clientName}, ${at(e.start)}`} disabled={acting === e.id} onClick={() => void confirm(e)}>
-                              <TickIcon size={16} />
-                            </button>
-                          )}
-                          {mayCancel(e) && (
-                            <button type="button" className="dsv-ibtn" title={D.cancel} aria-label={`${D.cancel}: ${e.clientName}, ${at(e.start)}`} disabled={acting === e.id} onClick={() => setAsking(e)}>
-                              <BinIcon size={16} />
-                            </button>
+                  <div className="dsv-day-head">
+                    <h3>{dayOf(day.key, day.first)}</h3>
+                  </div>
+                  {day.rows.map((e) => {
+                    const tag = tagOf(e);
+                    const canConfirm = mayConfirm(e);
+                    const canCancel = mayCancel(e);
+                    const comment = e.comment && !e.log.some((l) => l.action === "create");
+                    return (
+                      <article key={e.id} className="dsv-entry" aria-label={`${e.clientName}, ${at(e.start)}`}>
+                        <div className="dsv-entry-top">
+                          <span className={`dsv-tag is-${tag}`}>{D.tags[tag]}</span>
+                          <button type="button" className="dsv-link dsv-svc" disabled={opening === e.id} onClick={() => void open(e.id)}>
+                            {services(e) || D.booking}
+                          </button>
+                          <time className="dsv-last num only-narrow" dateTime={new Date(e.lastAt).toISOString()}>
+                            {hm.format(e.lastAt)}
+                          </time>
+                          {(canConfirm || canCancel) && (
+                            <div className="dsv-tools only-wide">
+                              {canConfirm && (
+                                <button type="button" className="dsv-ibtn" title={D.confirm} aria-label={`${D.confirm}: ${e.clientName}, ${at(e.start)}`} disabled={acting === e.id} onClick={() => void confirm(e)}>
+                                  <TickIcon size={16} />
+                                </button>
+                              )}
+                              {canCancel && (
+                                <button type="button" className="dsv-ibtn" title={D.cancel} aria-label={`${D.cancel}: ${e.clientName}, ${at(e.start)}`} disabled={acting === e.id} onClick={() => setAsking(e)}>
+                                  <BinIcon size={16} />
+                                </button>
+                              )}
+                            </div>
                           )}
                         </div>
-                      </div>
-                      <button type="button" className="dsv-link dsv-svc" disabled={opening === e.id} onClick={() => void open(e.id)}>
-                        {services(e) || D.booking}
-                      </button>
-                      <p className="dsv-meta">
-                        <span>
-                          <CalIcon />
-                          {at(e.start)}
-                        </span>
-                        <span>
-                          <PersonIcon />
-                          {e.staffName}
-                        </span>
-                        <span>
-                          <ClockIcon />
-                          {length(e)}
-                        </span>
-                        <span>
-                          <ClientIcon />
-                          {who(e)}
-                        </span>
-                        <span className={`dsv-status is-${e.status}`}>{statusOf(e.status, e.confirmed)}</span>
-                      </p>
-                      {e.comment && <p className="dsv-comment">{D.comment(e.comment)}</p>}
-                      {e.log.length > 0 && (
-                        <ol className="dsv-log">
-                          {e.log.map((l, i) => (
-                            <LogRow key={`${l.at}:${i}`} l={l} at={at} statusOf={statusOf} />
-                          ))}
-                        </ol>
-                      )}
-                    </article>
-                  ))}
+                        <p className="dsv-meta">
+                          <span>
+                            <CalIcon />
+                            {at(e.start)}
+                          </span>
+                          <span>
+                            <PersonIcon />
+                            {e.staffName}
+                          </span>
+                          <span>
+                            <ClockIcon />
+                            {length(e)}
+                          </span>
+                          <span>
+                            <ClientIcon />
+                            {e.clientPhone ? `${e.clientName}, ${e.clientPhone}` : e.clientName}
+                          </span>
+                        </p>
+                        {(e.log.length > 0 || comment) && (
+                          <ol className="dsv-log">
+                            {comment && (
+                              <li>
+                                <p>{D.comment(e.comment)}</p>
+                              </li>
+                            )}
+                            {e.log.map((l, i) => (
+                              <li key={`${l.at}:${i}`}>
+                                <p className="dsv-log-head">
+                                  <b>{D.log[l.action] ?? l.action}</b>
+                                  {" · "}
+                                  <time dateTime={new Date(l.at).toISOString()}>{at(l.at)}</time>
+                                </p>
+                                <p>{whatOf(l, e)}</p>
+                              </li>
+                            ))}
+                          </ol>
+                        )}
+                        {canConfirm && (
+                          <div className="dsv-acts only-narrow">
+                            <button type="button" className="cc-btn cc-btn-main" aria-label={`${D.confirm}: ${e.clientName}, ${at(e.start)}`} disabled={acting === e.id} onClick={() => void confirm(e)}>
+                              {D.confirmShort}
+                            </button>
+                            {canCancel && (
+                              <button type="button" className="cc-btn dsv-no" aria-label={`${D.cancel}: ${e.clientName}, ${at(e.start)}`} disabled={acting === e.id} onClick={() => setAsking(e)}>
+                                {D.cancelShort}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })}
                 </div>
               ))
             )}
@@ -341,45 +460,6 @@ export function VisitsView({ tz, may, visits: firstVisits, feed: firstFeed, firs
         />
       )}
     </div>
-  );
-}
-
-/* ---------- a row of a booking's history ---------- */
-
-function LogRow({ l, at, statusOf }: { l: FeedLog; at: (ms: number) => string; statusOf: (status: string, confirmed: boolean) => string }) {
-  const A = useA();
-  const D = A.dash;
-  const by = l.by.kind === "client" ? A.records.madeByClient : l.by.kind === "user" ? l.by.name : l.by.kind === "import" ? A.records.madeByImport : A.records.madeBySalon;
-  const lines: [React.ReactNode, string][] = [];
-  if (l.action === "move") {
-    if (l.fromStart !== null) lines.push([<CalIcon key="i" />, D.was([at(l.fromStart), l.fromStaffName].filter(Boolean).join(", "))]);
-    if (l.start !== null) lines.push([<CalIcon key="i" />, D.now([at(l.start), l.staffName].filter(Boolean).join(", "))]);
-  } else {
-    if (l.start !== null) lines.push([<CalIcon key="i" />, at(l.start)]);
-    if (l.staffName) lines.push([<PersonIcon key="i" />, l.staffName]);
-  }
-  if (l.status) lines.push([<TickIcon key="i" size={12} />, D.statusIs(statusOf(l.status, l.confirmed))]);
-  lines.push([<ClientIcon key="i" />, D.by(by)]);
-  return (
-    <li>
-      <p>
-        <span className="dsv-log-icon" aria-hidden="true">
-          {l.action === "create" ? <TickIcon size={12} /> : <PencilIcon size={12} />}
-        </span>
-        {" — "}
-        <b>{D.log[l.action] ?? l.action}</b>
-        {" — "}
-        <time dateTime={new Date(l.at).toISOString()}>{at(l.at)}</time>:
-      </p>
-      <ul>
-        {lines.map(([icon, text], i) => (
-          <li key={i}>
-            {icon}
-            {text}
-          </li>
-        ))}
-      </ul>
-    </li>
   );
 }
 

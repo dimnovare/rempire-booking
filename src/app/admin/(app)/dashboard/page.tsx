@@ -14,6 +14,7 @@ import { connection } from "next/server";
 import { dashMay, listDashVisits, listFeed, VISITS_FIRST, VISITS_MORE } from "@/lib/admin/dashboards";
 import { requireAdmin } from "@/lib/auth/current";
 import { dbConfigured, query } from "@/lib/db";
+import { todayIn } from "@/lib/tz";
 import { Wait } from "../../lang";
 import { getA } from "../../lang-server";
 import { NoRights } from "../no-rights";
@@ -37,6 +38,7 @@ async function Loaded() {
   const { user, business } = await requireAdmin();
   const may = dashMay(user);
   if (!may.open) return <NoRights />;
-  const [visits, feed] = await Promise.all([listDashVisits(query, business, { when: "upcoming" }, user), listFeed(query, business, { filter: "all" }, user)]);
-  return <VisitsView tz={business.timezone} may={may} visits={visits} feed={feed} first={VISITS_FIRST} more={VISITS_MORE} />;
+  const now = Date.now();
+  const [visits, feed] = await Promise.all([listDashVisits(query, business, { when: "upcoming" }, user, now), listFeed(query, business, { filter: "all" }, user, now)]);
+  return <VisitsView tz={business.timezone} today={todayIn(business.timezone, now)} may={may} visits={visits} feed={feed} first={VISITS_FIRST} more={VISITS_MORE} />;
 }
