@@ -324,7 +324,7 @@ describe("several conditions", () => {
     await query("insert into clients (business_id, name, gender) values ($1, 'Their Client', 'female')", [other.id]);
     expect(await only({ kind: "hasVisits", value: "no" })).toEqual(["Carl Sample", "Dan Sample"]);
     expect(await names({ conds: [{ kind: "gender", value: "female" }, { kind: "hasVisits", value: "no" }], join: "or" })).toEqual(["Anna Näidis", "Carl Sample", "Dan Sample", "Eve Sample"]);
-    expect(clientWhere(demo.business.id, { conds: [{ kind: "gender", value: "female" }], join: "or" }, NOW, TZ).where).toMatch(/^c\.business_id = \$1 and c\.merged_into is null and \(/);
+    expect(clientWhere(demo.business.id, { conds: [{ kind: "gender", value: "female" }], join: "or" }, NOW, TZ).where).toMatch(/^c\.business_id = \$1 and c\.merged_into is null and c\.anonymised_at is null and \(/);
   });
 });
 

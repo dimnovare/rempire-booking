@@ -30,6 +30,7 @@
 import { useEffect, useRef, useState } from "react";
 import { RECORD_CANCELLED, RECORD_PAGE_SIZES, RECORD_SOURCES, RECORD_STATUSES, type RecordQuery } from "@/lib/admin/record-filter";
 import type { RecordList, RecordRow, RecordsMay, VisitForSheet } from "@/lib/admin/records";
+import { shownName } from "@/lib/client-anon";
 import { cap } from "../../copy.shared";
 import { Ava, CaretIcon, FunnelIcon, InfoIcon, NextIcon, PencilIcon, PrevIcon, TickIcon, XIcon } from "../../icons";
 import { useA } from "../../lang";
@@ -455,7 +456,7 @@ export function RecordsView({ initial, first, tz, may, staff, services, makers }
                   const at = when(v.start);
                   return (
                     <tr key={v.id} data-id={v.id} data-status={v.status} className={[gone ? "is-cancelled" : "", ticks.has(v.id) ? "is-ticked" : ""].filter(Boolean).join(" ") || undefined}>
-                      <td className="rc-tick">{may.cancel && !gone && <input type="checkbox" aria-label={R.tick(v.clientName, at)} checked={ticks.has(v.id)} onChange={(e) => tick(v.id, e.target.checked)} />}</td>
+                      <td className="rc-tick">{may.cancel && !gone && <input type="checkbox" aria-label={R.tick(shownName(v.clientName, A.clients.anonName), at)} checked={ticks.has(v.id)} onChange={(e) => tick(v.id, e.target.checked)} />}</td>
                       <td className="rc-ava">
                         <Ava src={v.staffPhoto} name={v.staffName} className="rc-photo" />
                       </td>
@@ -467,7 +468,7 @@ export function RecordsView({ initial, first, tz, may, staff, services, makers }
                         {servicesOf(v)}
                       </td>
                       <td data-col="client">
-                        <span>{v.clientName}</span>
+                        <span>{shownName(v.clientName, A.clients.anonName)}</span>
                         {v.clientPhone && <small>{v.clientPhone}</small>}
                       </td>
                       <td data-col="visit">{at}</td>
@@ -478,7 +479,7 @@ export function RecordsView({ initial, first, tz, may, staff, services, makers }
                       <td data-col="status">{statusOf(v)}</td>
                       <td data-col="source">{sourceOf(v)}</td>
                       <td className="rc-act">
-                        <button type="button" className="jr-btn jr-ibtn" aria-label={R.open(v.clientName, at)} title={R.open(v.clientName, at)} disabled={opening === v.id} onClick={() => void open(v.id)}>
+                        <button type="button" className="jr-btn jr-ibtn" aria-label={R.open(shownName(v.clientName, A.clients.anonName), at)} title={R.open(shownName(v.clientName, A.clients.anonName), at)} disabled={opening === v.id} onClick={() => void open(v.id)}>
                           {gone ? <InfoIcon /> : <PencilIcon />}
                         </button>
                       </td>
@@ -495,7 +496,7 @@ export function RecordsView({ initial, first, tz, may, staff, services, makers }
                 <button type="button" className={`adm-item rc-item${v.status === "cancelled" ? " is-cancelled" : ""}`} data-id={v.id} data-status={v.status} disabled={opening === v.id} onClick={() => void open(v.id)}>
                   <span className="txt">
                     <b>
-                      {when(v.start)} · {v.clientName}
+                      {when(v.start)} · {shownName(v.clientName, A.clients.anonName)}
                     </b>
                     <small>{[v.staffName, servicesOf(v)].filter(Boolean).join(" · ")}</small>
                     <small>{[statusOf(v), sourceOf(v), v.clientPhone].filter(Boolean).join(" · ")}</small>

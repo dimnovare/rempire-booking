@@ -8,7 +8,8 @@
  *     base (client-filter.ts) joined by «И» or «Или», sorted by a column,
  *     10, 25, 50 or 100 a page, each client with his numbers;
  *   - one client: his fields and his visits with every barber;
- *   - add a client, change one, delete one who has no history.
+ *   - add a client, change one, delete one who has no history, anonymise
+ *     one who has (anonymiseClient: his history stays, who he was goes).
  *
  * The card's other parts (comments, photo, files, messages, statistics)
  * are in client-card.ts; what is done to many clients at once (a mass
@@ -24,7 +25,9 @@
  * A category is a free word (clients.labels, migration 016). The note is
  * the one shared note the barbers read and write too
  * (src/lib/barber/clients.ts). A client merged into another
- * (clients.merged_into) is not listed and cannot be opened.
+ * (clients.merged_into) is not listed and cannot be opened. An anonymised
+ * one (clients.anonymised_at, 040) is not listed or found either; his card
+ * still opens from his visits, with nothing on it but his numbers.
  *
  * The fields of the full card (018_client_card.sql; the owner, 19.11.2026):
  * a second phone, the birthday, gender, importance class, card number,
@@ -52,6 +55,7 @@ import type { Business } from "../availability";
 import { NOTE_MAX } from "../barber/clients";
 import { birthdayText, parseBirthday, type Birthday } from "../birthday";
 import type { L10n } from "../catalog";
+import { ANON_NAME, isAnonName } from "../client-anon";
 import { CLIENT_KINDS, isClientKind, type ClientKind } from "../client-notify";
 import { query, withTx, type Querier } from "../db";
 import { isLocale, type Locale } from "../i18n";
@@ -178,14 +182,14 @@ function searchPart(raw: unknown, params: unknown[], contacts = true): string {
 
 /**
  * Which clients a filter leaves, as a WHERE over `clients c` with its
- * values: this business's, not merged away, then the search, the category
- * and the conditions. The list, the export and the bulk actions all ask
+ * values: this business's, not merged away, not anonymised, then the
+ * search, the category and the conditions. The list, the export and the bulk actions all ask
  * with this one, so they always mean the same clients. Paging and sorting
  * are not part of it. With a login (`who`): only the clients it sees.
  */
 export function clientWhere(businessId: string, filter: ClientFilter = {}, now = Date.now(), tz = TZ, who?: Holder): { where: string; params: unknown[] } {
   const params: unknown[] = [businessId];
-  let where = "c.business_id = $1 and c.merged_into is null";
+  let where = "c.business_id = $1 and c.merged_into is null and c.anonymised_at is null";
   where += seenClientsSql(who, (value) => {
     params.push(value);
     return `$${params.length}`;
@@ -321,6 +325,8 @@ export type ClientDetail = ClientRow & {
   notifyOff: ClientKind[];
   /** his photo's version, for its link (/admin/clients/<id>/photo?v=…); null: no photo */
   photoV: string | null;
+  /** when he was anonymised (anonymiseClient), ms; null: he was not. His name is then the mark of src/lib/client-anon.ts */
+  anonymisedAt: number | null;
 };
 
 /**
@@ -372,11 +378,12 @@ async function readDetail(q: Querier, business: Business, id: string, now: numbe
       push_opt_out: boolean;
       notify_off: string[] | null;
       photo_v: string | null;
+      anonymised_at: Date | null;
     } & StatsRow
   >(
     `select c.id, c.name, c.phone_e164, c.email, c.labels, c.locale, c.staff_note, c.sms_opt_out, c.email_opt_out, c.source, c.created_at,
             c.phone2_e164, c.birth_day, c.birth_month, c.birth_year, c.gender, c.importance, c.card_no, c.discount_pct,
-            c.no_online, c.marketing_opt_out, c.push_opt_out, c.notify_off,
+            c.no_online, c.marketing_opt_out, c.push_opt_out, c.notify_off, c.anonymised_at,
             (select floor(extract(epoch from p.updated_at))::bigint::text from client_photo p where p.client_id = c.id) as photo_v,
             v.visits, v.first_visit, v.last_visit, v.sold, v.sold_visits
        from clients c ${STATS.replaceAll("$NOW", "$3")}
@@ -437,6 +444,7 @@ async function readDetail(q: Querier, business: Business, id: string, now: numbe
     pushOptOut: c.push_opt_out,
     notifyOff: (c.notify_off ?? []).filter(isClientKind),
     photoV: c.photo_v,
+    anonymisedAt: c.anonymised_at ? ms(c.anonymised_at) : null,
   };
 }
 
@@ -521,7 +529,8 @@ function clean(input: ClientInput, adding: boolean, today: string): { ok: true; 
   const v: Clean = {};
   if (input.name !== undefined || adding) {
     const name = text(input.name, 120).replace(/\s+/g, " ");
-    if (!name) return { ok: false, field: "name" };
+    // the anonymised clients' mark is nobody's name (src/lib/client-anon.ts)
+    if (!name || isAnonName(name)) return { ok: false, field: "name" };
     v.name = name;
   }
   if (input.phone !== undefined) {
@@ -692,9 +701,10 @@ export async function saveClient(business: Business, id: string | null, input: C
         `select name, phone_e164, email, locale, staff_note, labels, sms_opt_out, email_opt_out,
                 phone2_e164, birth_day, birth_month, birth_year, gender, importance, card_no, discount_pct,
                 no_online, marketing_opt_out, push_opt_out, notify_off
-           from clients where id = $1 and business_id = $2 and merged_into is null for update`,
+           from clients where id = $1 and business_id = $2 and merged_into is null and anonymised_at is null for update`,
         [id, business.id],
       );
+      // an anonymised client's card is not changed: he is nobody now
       if (!cur) return { ok: false, field: "id" };
       const next: Stored = {
         name: v.name ?? cur.name,
@@ -812,4 +822,108 @@ export async function deleteClient(business: Business, id: string, actor: string
     if (pgCode(err) === "23503") return { ok: false, code: "has_history" };
     throw err;
   }
+}
+
+/**
+ * `upcoming`: he has a visit ahead (booked or waiting, not begun): the salon
+ * cancels or moves it first. `already`: he was anonymised before; nothing is
+ * done twice. `forbidden`: no right to delete clients, which is the right to
+ * this too.
+ */
+export type ClientAnonymised = { ok: true } | { ok: false; code: "not_found" | "forbidden" | "upcoming" | "already" };
+
+/**
+ * Anonymise a client who asks to be erased but has a history, which
+ * deleteClient refuses (040_client_anonymise.sql; the privacy policy,
+ * src/lib/privacy-content.ts: «мы не стираем их, а обезличиваем»). Done to
+ * him and to every client merged into him, who carry his old names and
+ * phones. In one transaction:
+ *
+ *   stays  his row (the visits and sales name it), his visits with their
+ *          barber, services, prices and statuses, his product sales, the
+ *          invoices, his numbers, his reviews' stars and words, the rows
+ *          of the outbox (when, which kind, the status, the cost);
+ *   goes   his name (it becomes the mark of src/lib/client-anon.ts), both
+ *          phones, the e-mail, the birthday, gender, class, card number,
+ *          discount, categories, the note, the old tool's key; his photo,
+ *          files and the comments about him; what he and the staff wrote
+ *          on his visits, the links to them and the phones turned on for
+ *          their notifications; every message not sent yet (cancelled);
+ *          the phone and the address the sent ones went to, the words of
+ *          the ones written to him by hand, and his name wherever a
+ *          message kept it; his name on his reviews.
+ *
+ * From then on nothing reaches him: every channel and every kind is off,
+ * he is in no list, no search and no mass message, his card cannot be
+ * changed and no new visit can be made for him (src/lib/admin/visits.ts).
+ * The audit row says who did it, never whom by name. It cannot be undone.
+ */
+export async function anonymiseClient(business: Business, id: string, actor: string, who?: Holder, now = Date.now()): Promise<ClientAnonymised> {
+  if (!isUuid(id)) return { ok: false, code: "not_found" };
+  if (who && !can(who, "clients.delete")) return { ok: false, code: "forbidden" };
+  if (who && !(await clientSeen(query, business.id, who, id))) return { ok: false, code: "not_found" };
+  const at = new Date(now);
+  return withTx<ClientAnonymised>(async (tx) => {
+    const [c] = await tx<{ anonymised: boolean }>(
+      "select anonymised_at is not null as anonymised from clients where id = $1 and business_id = $2 and merged_into is null for update",
+      [id, business.id],
+    );
+    if (!c) return { ok: false, code: "not_found" };
+    if (c.anonymised) return { ok: false, code: "already" };
+    // he and whoever was merged into him, or into one of those; each locked
+    const ids = (
+      await tx<{ id: string }>(
+        `with recursive m(id) as (select $1::uuid union select k.id from clients k join m on k.merged_into = m.id where k.business_id = $2)
+         select c.id from clients c join m on m.id = c.id order by c.id for update of c`,
+        [id, business.id],
+      )
+    ).map((r) => r.id);
+    const [ahead] = await tx<{ n: number }>(
+      "select count(*)::int as n from appointments where business_id = $1 and client_id = any($2::uuid[]) and status in ('booked', 'pending') and starts_at > $3",
+      [business.id, ids, at],
+    );
+    if (ahead.n > 0) return { ok: false, code: "upcoming" };
+
+    await tx(
+      `update clients set name = $2, phone_e164 = null, phone2_e164 = null, email = null, staff_note = '', labels = '{}',
+              birth_day = null, birth_month = null, birth_year = null, gender = null, importance = null, card_no = '', discount_pct = 0,
+              no_online = false, sms_opt_out = true, email_opt_out = true, push_opt_out = true, marketing_opt_out = true,
+              notify_off = $3::text[], altegio_id = null, anonymised_at = $4, updated_at = $4
+        where id = any($1::uuid[])`,
+      [ids, ANON_NAME, [...CLIENT_KINDS], at],
+    );
+    for (const table of ["client_photo", "client_files", "client_comments"]) await tx(`delete from ${table} where client_id = any($1::uuid[])`, [ids]);
+
+    // his visits stay; what was written on them and the ways back to them go
+    const visits = (
+      await tx<{ id: string }>("update appointments set client_comment = '', staff_note = '', manage_token_hash = null where client_id = any($1::uuid[]) returning id", [ids])
+    ).map((r) => r.id);
+    await tx("delete from visit_links where appointment_id = any($1::uuid[])", [visits]);
+    await tx("update client_push_subscriptions set retired_at = $2, retired_reason = 'anonymised' where appointment_id = any($1::uuid[]) and retired_at is null", [visits, at]);
+
+    // the outbox to him: nothing more goes; what went keeps its row without his phone, address, name or the words written to him
+    await tx(
+      `update notifications
+          set status = case when status in ('queued', 'sending') then 'cancelled' else status end,
+              locked_until = case when status in ('queued', 'sending') then null else locked_until end,
+              recipient = case when channel in ('sms', 'email') then '' else recipient end,
+              payload = case when kind = 'manual' then payload - 'client' - 'text' else payload - 'client' end,
+              last_error = null
+        where business_id = $1 and user_id is null and (client_id = any($2::uuid[]) or appointment_id = any($3::uuid[]))`,
+      [business.id, ids, visits],
+    );
+    // the barbers' own notifications about his visits named him too
+    await tx("update notifications set payload = payload - 'client' where business_id = $1 and user_id is not null and appointment_id = any($2::uuid[])", [business.id, visits]);
+    // his reviews keep their stars and words, not his name
+    await tx("update reviews set author_name = '', updated_at = $2 where client_id = any($1::uuid[]) and author_name <> ''", [ids, at]);
+
+    const merged = ids.filter((x) => x !== id);
+    await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'client', $2, 'anonymise', $3::jsonb)`, [
+      actor,
+      id,
+      JSON.stringify(merged.length ? { by: "admin", merged: merged.length } : { by: "admin" }),
+    ]);
+    for (const m of merged) await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'client', $2, 'anonymise', $3::jsonb)`, [actor, m, JSON.stringify({ by: "admin" })]);
+    return { ok: true };
+  });
 }

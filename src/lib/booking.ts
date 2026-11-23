@@ -15,6 +15,7 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 import { loadAvailability, type Business } from "./availability";
+import { isAnonName } from "./client-anon";
 import { visitClientTakes } from "./client-notify";
 import { withTx, type Querier } from "./db";
 import { isLocale, type Locale } from "./i18n";
@@ -97,7 +98,8 @@ type Clean = {
 /** Every field checked and copied by name; nothing else from the body gets through. */
 export function validateBooking(input: BookingInput): { ok: true; value: Omit<Clean, "source"> } | { ok: false; field: string } {
   const name = String(input.name ?? "").trim().replace(/\s+/g, " ");
-  if (name.length < 1 || name.length > 120) return { ok: false, field: "name" };
+  // the anonymised clients' mark is nobody's name (src/lib/client-anon.ts)
+  if (name.length < 1 || name.length > 120 || isAnonName(name)) return { ok: false, field: "name" };
   const phone = normalizePhone(input.phone);
   if (!phone) return { ok: false, field: "phone" };
   const emailRaw = String(input.email ?? "").trim();

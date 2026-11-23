@@ -10,7 +10,7 @@
  * **Whom:** the rows that are ticked (`ids`), or, with none ticked, every
  * client the list's search and conditions leave (`filter`, read by the
  * same `clientWhere` the list asks with). Always this business's, never
- * one merged away.
+ * one merged away, never one anonymised.
  *
  * **A mass message is advertising.** It goes to nobody who ticked
  * «Рекламные сообщения: не отправлять» (clients.marketing_opt_out), and by
@@ -77,7 +77,8 @@ function targetWhere(business: Business, target: BulkTarget, now: number, who?: 
       params.push(value);
       return `$${params.length}`;
     });
-    return { where: `c.business_id = $1 and c.merged_into is null and c.id = any($2::uuid[])${only}`, params };
+    // never an anonymised client (clients.ts, anonymiseClient), as the list never shows one
+    return { where: `c.business_id = $1 and c.merged_into is null and c.anonymised_at is null and c.id = any($2::uuid[])${only}`, params };
   }
   return clientWhere(business.id, target.filter, now, business.timezone, who);
 }

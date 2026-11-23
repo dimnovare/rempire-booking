@@ -106,7 +106,7 @@ export async function searchMyClients(q: Querier, businessId: string, staffId: s
             count(a.id) filter (where a.status <> 'cancelled')::int as visits,
             max(a.starts_at) filter (where a.status <> 'cancelled') as last_visit
        from clients c join appointments a on a.client_id = c.id and a.staff_id = $3
-      where c.business_id = $1 and c.merged_into is null
+      where c.business_id = $1 and c.merged_into is null and c.anonymised_at is null
         and (${byPhone ? "replace(coalesce(c.phone_e164, ''), '+', '') like '%' || $2 || '%'" : "c.name ilike '%' || $2 || '%'"})
       group by c.id
       order by max(a.starts_at) desc nulls last, c.name

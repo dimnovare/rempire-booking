@@ -769,6 +769,14 @@ describe("Клиентская база", () => {
   };
   both("clients.delete", "desk", async (c) => clients.deleteClientAction(await lonely(c)), (r) => r.ok);
 
+  it("clients.delete: «Обезличить» is the same door", async () => {
+    for (const has of [true, false]) {
+      const c = await fresh("desk");
+      await grant(c.me, "clients.delete", has);
+      expect(await clients.anonymiseClientAction(await lonely(c)), has ? "with it" : "without it").toEqual(has ? { ok: true } : { ok: false, code: "forbidden" });
+    }
+  });
+
   it("clients.delete: many at once stays the owner's, with the right or without", async () => {
     const c = await fresh("desk");
     const id = await lonely(c);

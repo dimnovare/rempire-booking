@@ -17,6 +17,7 @@
  */
 import { useEffect, useState } from "react";
 import type { CalVisit } from "@/lib/admin/calendar";
+import { shownName } from "@/lib/client-anon";
 import { eur } from "../copy";
 import { useA } from "../lang";
 import { visitWindowAction, setVisitStatus } from "./actions";
@@ -136,10 +137,10 @@ export function VisitCard({
   };
 
   return (
-    <section className="jr-card" aria-label={v.clientName}>
+    <section className="jr-card" aria-label={shownName(v.clientName, A.clients.anonName)}>
       <header className="jr-card-head">
         <div className="jr-card-who">
-          <h3>{v.clientName}</h3>
+          <h3>{shownName(v.clientName, A.clients.anonName)}</h3>
           {phone && (
             <p className="jr-card-phone">
               <span>{phone}</span>

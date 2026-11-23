@@ -1,7 +1,7 @@
 /**
  * The client's card beyond his fields (018_client_card.sql; the owner,
  * 19.11.2026: every tab of the tool we follow but loyalty and accounts).
- * His fields, his visits and deleting him are in clients.ts.
+ * His fields, his visits, deleting and anonymising him are in clients.ts.
  *
  *   comments    the dated history beside the one shared note: who wrote,
  *               when, the text. Anyone in the admin adds one; Renat and the
@@ -46,10 +46,18 @@ type Env = Record<string, string | undefined>;
 const ms = (d: Date | string) => new Date(d).getTime();
 const AUDIT = `insert into audit (actor, entity, entity_id, action, after) values ($1, 'client', $2, $3, $4::jsonb)`;
 
-/** This business's client, not merged away; locked for the rest of the transaction when `lock`. */
-async function hasClient(q: Querier, businessId: string, clientId: string, lock = false): Promise<boolean> {
+/**
+ * This business's client, not merged away; locked for the rest of the
+ * transaction when `lock`. An anonymised one (clients.ts, anonymiseClient)
+ * only when `anonymisedToo`, for what reads his card: nothing is added to
+ * his card again.
+ */
+async function hasClient(q: Querier, businessId: string, clientId: string, lock = false, anonymisedToo = false): Promise<boolean> {
   if (!isUuid(clientId)) return false;
-  const [c] = await q<{ id: string }>(`select id from clients where id = $1 and business_id = $2 and merged_into is null${lock ? " for update" : ""}`, [clientId, businessId]);
+  const [c] = await q<{ id: string }>(
+    `select id from clients where id = $1 and business_id = $2 and merged_into is null${anonymisedToo ? "" : " and anonymised_at is null"}${lock ? " for update" : ""}`,
+    [clientId, businessId],
+  );
   return !!c;
 }
 
@@ -467,7 +475,8 @@ export function cleanStatsPeriod(from: unknown, to: unknown, tz: string, now = D
 
 /** What this client spent in the period, or null: no such client. */
 export async function clientStats(q: Querier, business: Business, clientId: string, period: StatsPeriod, now = Date.now()): Promise<ClientStats | null> {
-  if (!(await hasClient(q, business.id, clientId))) return null;
+  // an anonymised client's visits stay, and so do his numbers
+  if (!(await hasClient(q, business.id, clientId, false, true))) return null;
   const tz = business.timezone;
   const { from, to } = cleanStatsPeriod(period?.from, period?.to, tz, now);
   const rows = await q<{ starts_at: Date; staff_id: string; staff_name: string; total_cents: number; lines: { id: string; name: L10n; cents: number }[] | null }>(

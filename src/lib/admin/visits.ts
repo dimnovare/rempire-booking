@@ -28,6 +28,7 @@
 import { can, type Holder } from "../auth/rights";
 import type { Business } from "../availability";
 import { queueChangeLetter, queueConfirmation } from "../booking";
+import { isAnonName } from "../client-anon";
 import { query, withTx, type Querier } from "../db";
 import { planNoShow, sendPushSoon } from "../outbox";
 import { pushVisitChange } from "../push";
@@ -240,6 +241,8 @@ export async function adminCreateVisit(business: Business, input: AdminVisitInpu
   const clientId = input.clientId && isUuid(input.clientId) ? input.clientId : null;
   const name = text(input.name, 120).replace(/\s+/g, " ");
   if (!clientId && !name && !phone) return { ok: false, code: "invalid", field: "name" };
+  // the anonymised clients' mark is nobody's name (src/lib/client-anon.ts)
+  if (!clientId && isAnonName(name)) return { ok: false, code: "invalid", field: "name" };
   const emailRaw = clientId ? "" : String(input.email ?? "").trim();
   if (emailRaw && (emailRaw.length > 254 || !EMAIL_RE.test(emailRaw))) return { ok: false, code: "invalid", field: "email" };
   const email = emailRaw ? emailRaw.toLowerCase() : null;
@@ -275,7 +278,8 @@ export async function adminCreateVisit(business: Business, input: AdminVisitInpu
 
         let cid = clientId;
         if (cid) {
-          const [c] = await tx<{ id: string }>("select id from clients where id = $1 and business_id = $2", [cid, business.id]);
+          // an anonymised client gets no new visit (clients.ts, anonymiseClient); the lock waits for one being anonymised now
+          const [c] = await tx<{ id: string }>("select id from clients where id = $1 and business_id = $2 and anonymised_at is null for key share", [cid, business.id]);
           if (!c) throw new Problem("invalid", "client");
         } else if (phone) {
           // a phone another client has: the visit is his, and his card (e-mail and all) stays as it is
