@@ -17,6 +17,7 @@
     "seed:demo": "node tools/seed-demo.mjs",
     "check:noindex": "node tools/check-noindex.mjs",
     "e2e": "playwright test",
+    "e2e:browserstack": "node e2e/browserstack.mjs",
     "test:shop-link": "node tools/shop-link-local.mjs"
   },
   "dependencies": {
@@ -40,6 +41,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/web-push": "^3.6.4",
+    "browserstack-node-sdk": "^1.80.3",
     "tailwindcss": "4.3.3",
     "typescript": "^5",
     "vitest": "^5.1.0"

@@ -86,6 +86,9 @@ Goal: as simple as Altegio or Fresha. Copy their flows and features freely.
   - `npm run e2e`: Playwright, the barber app at phone width, on its own
     server (port 3420, fake data). `E2E_PROD=yes` after `npm run build`
     for the production build and offline. See `playwright.config.ts`.
+  - `npm run e2e:browserstack -- android <spec files>`: the same specs on a
+    real Galaxy at BrowserStack (`e2e/browserstack.mjs`). Uses Automate
+    minutes (the free ones ran out 23.11); keys only as env vars. No iPhone: see `docs/test-plan.md` § 10.
   - `npm run typecheck`: runs `next typegen` first, for the global
     `LayoutProps` / `PageProps` types.
   - `npm run build`
