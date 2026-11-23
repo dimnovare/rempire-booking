@@ -72,9 +72,10 @@ shows the same, nothing else.
 | Suite | Command | Today (23.11) | Must be |
 |---|---|---|---|
 | Types | `npm run typecheck` | green | green |
-| Unit (Vitest, PGlite) | `npm test` | 1151 tests; 1 failed, depended on the hour of the day, fixed 23.11 | green twice in a row, at two hours of the day |
-| E2E, phone size (Playwright: Pixel 7 Chromium, iPhone 13 WebKit) | `npm run e2e` | 268 passed, 61 skipped (by design), 4 failed: each assumed a working day or a later hour; fixed 23.11, the 4 pass | green on a Monday, a Saturday and a weekday, morning and evening |
-| E2E, production build | `npm run build` then `E2E_PROD=yes npm run e2e` | Android only | green |
+| Unit (Vitest, PGlite) | `npm test` | 1216 tests, green at 19:05 and 20:40 on 23.11 (run 3) | green twice in a row, at two hours of the day |
+| E2E, phone size (Playwright: Pixel 7 Chromium, iPhone 13 WebKit) | `npm run e2e` | 23.11 evening (a Monday): 275 passed, 63 skipped (by design), 1 failed: the new «Обезличить» test's own mistake, fixed, passes | green on a Monday, a Saturday and a weekday, morning and evening |
+| E2E, production build | `npm run build` then `E2E_PROD=yes npm run e2e` | 23.11: 172 passed, 8 skipped, 0 failed. Android only: WebKit keeps no Secure cookie over plain http | green |
+| Crawl: every page, every button | `E2E_PROD=yes E2E_CRAWL=yes npm run e2e -- e2e/crawl.spec.ts` | 23.11: 173 pages, 1839 buttons, 0 problems | 0 problems |
 | No index | `npm run check:noindex -- <url>` | after every deploy | staging: noindex; production after the move: indexed |
 
 **To add before the launch** (in this order):
@@ -415,6 +416,37 @@ Not run yet:
 - **On Dim's own phone (about 10 minutes):** install both apps on the home
   screen; a push with the screen locked; tapping it opens the visit.
 
+### Run 3: the final full run before the launch, 23.11.2026 evening
+
+At Dim's request («the one final full run, as if we went to prod»), on
+main at 9108dfe (with «Обезличить» and the walk-through fixes). Local
+production build (`npm run build`), the e2e server's fake data; staging only
+read.
+
+| What | Result |
+|---|---|
+| Types, unit tests | green; 1216 tests, twice (19:05 and 20:40) |
+| E2E on `next dev`, Android and iPhone, phone and wide | 275 passed, 63 skipped; 1 failed (the test's own mistake), fixed and passed |
+| E2E on the production build, Android | 172 passed, 8 skipped, 0 failed; offline day and push in the service worker included |
+| Crawl on the production build (`e2e/crawl.spec.ts`) | 0 problems. Owner, owner who cuts (boss), barber and client; phone and wide; every admin page without an id plus every page its links reach (cards, invoices, receivers, notification types): 173 pages, 1839 buttons pressed. It records the error page, script and console errors, answers of 500 and more, a 404 link, sideways scroll on a phone; a page that does not exist is planted and must be caught, and was, each time. Buttons that delete, send, issue, cancel or log out are left to the specs |
+| § 11 database down (`db-down-prod` preview, production build) | every client page (RU, ET, EN, the visit page) shows «Онлайн-запись сейчас не открывается» with the salon's phone; staff login shows «Страница не открылась… Попробовать ещё раз»; `/api/health` and `/api/health/cron` answer 503 |
+| § 11 shop down (`shop-down` preview) | «Продать» says «Магазин сейчас не отвечает. Попробуйте позже.»; booking and free times answer as usual |
+| § 11 Resend failing, two cron runs at once, shop outage on a sale, cron health | unit tests (`outbox`, `billing`, `invoice-section`, `health`) |
+| § 11 `DATABASE_URL` missing | the app refuses to start (`src/lib/db.ts`); production must not set `DB_DRIVER` |
+| Staging, read only | `/ru`, `/et`, `/en`, about, privacy, both logins, install, manifests, service workers 200; the test banner shows; `/api/slots` gives tomorrow's times; health and cron health 200; noindex |
+
+Not covered by run 3, still open before the switch:
+- **Two bookings of one time at the same moment, on Postgres** (§ 2 item
+  2): the local server is PGlite, one connection, so the race cannot
+  happen there. Run 1 saw it work on staging (two phones moving at once).
+- **A limit per IP on `/api/bookings`** (§ 11 «Spam bookings»): not built.
+- **iPhone on the production build**: WebKit drops the Secure login cookie
+  over plain http; the iPhone e2e ran on `next dev` only.
+- **Days and hours**: one Monday evening; a Saturday and a morning run
+  still to do.
+- **Real inboxes, SMS, real phones, the Altegio import** (§§ 7, 10, 12):
+  need staging with Dim, Messaggio's login and Altegio's exports.
+
 ## 11. Can it go down?
 
 Each case is forced on staging or a local production build, and the
@@ -450,11 +482,11 @@ On the dress rehearsal (launch step 6) and again on the evening before.
 
 | Part | Run by | Date | Result |
 |---|---|---|---|
-| § 2 automated, all green on the production build | Claude | | |
-| § 3–8 on the local production build | Claude | | |
+| § 2 automated, all green on the production build | Claude | 23.11 | green (run 3); iPhone on `next dev` only |
+| § 3–8 on the local production build | Claude | 23.11 | e2e and the crawl green (run 3) |
 | § 3–8 on staging, letters and SMS checked in Dim's inbox and phone | Claude and Dim | | |
 | § 10 real phones | Dim, Renat, one barber | | |
-| § 11 outages | Claude | | |
+| § 11 outages | Claude | 23.11 | database and shop down checked; per-IP limit not built; the race on Postgres not run |
 | § 12 import | Claude, checked by Renat | | |
 | § 9 smoke test on production | Claude and Dim | | |
 | Go | Dim and Renat | | |
