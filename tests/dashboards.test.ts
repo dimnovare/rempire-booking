@@ -319,13 +319,29 @@ describe("«Визиты»: the visits ahead and behind", () => {
     expect(up.upcoming).toBe(3);
     expect(up.more).toBe(false);
     expect(up.rows[1]).toMatchObject({ staffName: expect.any(String), clientName: "Тест Девять", status: "booked", confirmed: false, end: up.rows[1].start + 30 * MIN });
+    // each listed day as a whole: 20.11 has the one before, the running one and the next (2 came); the cancelled 21.11 is not a day of it
+    expect(up.days).toEqual({ "2026-11-20": { visits: 3, came: 2, noShow: 0 }, "2026-11-23": { visits: 1, came: 0, noShow: 0 } });
     const past = await listDashVisits(query, demo.business, { when: "past" }, undefined, now);
     expect(past.rows.map((r) => r.id)).toEqual([before, earlier]);
     expect(past.upcoming).toBe(3);
+    expect(past.days).toEqual({ "2026-11-20": { visits: 3, came: 2, noShow: 0 }, "2026-11-19": { visits: 1, came: 0, noShow: 1 } });
     // «Подробнее»: the next ones after the first
     const page = await listDashVisits(query, demo.business, { when: "upcoming", offset: 1, limit: 1 }, undefined, now);
     expect(page.rows.map((r) => r.id)).toEqual([next]);
     expect(page.more).toBe(true);
+    // a page's days are whole too, however few of their rows it holds
+    expect(page.days).toEqual({ "2026-11-20": { visits: 3, came: 2, noShow: 0 } });
+  });
+
+  it("a day's count is in the login's scope: only its barbers' visits", async () => {
+    const g = await client("Тест Девять-два");
+    await visit(jev, g, "2026-11-21", "10:00", 30, "booked", 2000);
+    await visit(val, g, "2026-11-21", "12:00", 30, "booked", 2000);
+    await visit(val, g, "2026-11-21", "13:00", 30, "no_show", 2000);
+    const desk = legacyHolder("admin", "desk-login");
+    const onlyJev: Holder = { ...desk, rights: { ...desk.rights, values: { ...desk.rights.values, "journal.staff": [jev] } } };
+    expect((await listDashVisits(query, demo.business, {}, desk, NOW)).days["2026-11-21"]).toEqual({ visits: 3, came: 0, noShow: 1 });
+    expect((await listDashVisits(query, demo.business, {}, onlyJev, NOW)).days["2026-11-21"]).toEqual({ visits: 1, came: 0, noShow: 0 });
   });
 
   it("a phone is whole only with «Показывать номера телефонов в сводке»; nothing without «Визиты»", async () => {
@@ -337,7 +353,7 @@ describe("«Визиты»: the visits ahead and behind", () => {
     const masked: Holder = { ...desk, rights: { ...desk.rights, on: new Set([...desk.rights.on].filter((k) => k !== "reports.visits.phones")) } };
     expect((await listDashVisits(query, demo.business, {}, masked, NOW)).rows[0].clientPhone).toContain("•");
     const none: Holder = { ...desk, rights: { ...desk.rights, on: new Set([...desk.rights.on].filter((k) => k !== "reports.visits")) } };
-    expect(await listDashVisits(query, demo.business, {}, none, NOW)).toEqual({ rows: [], more: false, upcoming: 0 });
+    expect(await listDashVisits(query, demo.business, {}, none, NOW)).toEqual({ rows: [], more: false, upcoming: 0, days: {} });
     expect((await listFeed(query, demo.business, {}, none, NOW)).entries).toEqual([]);
   });
 

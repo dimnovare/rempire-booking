@@ -2441,11 +2441,14 @@ button.sc-cell:not(.is-on):hover { background: #f0f3f8; }
    column of three white cards (1px #e0e3eb, 12px corners, 20px padding, the title 20/24 500), 24px apart;
    KPI cards three a row, 16px apart: a 12px name with an (i), the value 24/32 500, the change tag (red down,
    grey none, green up), a 12px line; the charts 275px high with a #e0e0e0 grid, 12px #9aa3b1 axis words and
-   the legend centred under them. «Визиты» (dsv-): from 1200px a 530px panel and the rest, 30px apart; each
-   a 60px white title bar (12px top corners) over a white body (12px bottom corners); the switch's buttons
-   28px, the pressed one pressed in; the visits a timeline (a 30x25 clock badge, the length in #583cf1, a 1px
-   #e7eaec line); the feed's entries split by dashed #e7eaec lines, a #583cf1-on-#e1e1fd tag, two 34x30 icon
-   buttons. On a phone both stack; the KPI cards go two a row. Its own classes; the popovers (pop.tsx) are
+   the legend centred under them. «Визиты» (dsv-, the canvas of round 13): from 1200px a
+   440–500px panel and the rest, 24px apart, one under the other from 900px; each a white title bar (12px top
+   corners) over a white body (12px bottom corners); the switch's buttons 28px, the pressed one pressed in;
+   each day's heading with its count on the right; the visits a timeline (the time bold, the length in
+   #583cf1, a dot of the status on a 1px #e7eaec line, a status pill, the barber's round); the feed's entries
+   split by dashed lines, a tag of what happened (online/moved purple, the calendar grey, cancelled red), two
+   34x30 icon buttons, the history in a grey box, a line a row. On a phone two tabs show one panel at a time,
+   the rows on a white card, a booking waiting for ✓ with two 44px buttons; the KPI cards go two a row. Its own classes; the popovers (pop.tsx) are
    given their look here at every width, as «График работы» does. */
 .dsk, .dsv { display: flex; flex-direction: column; gap: 16px; min-width: 0; color: #2b3134; }
 .dsk.is-busy .dsk-card { opacity: .55; transition: opacity .2s .15s; }
@@ -2516,66 +2519,126 @@ button.sc-cell:not(.is-on):hover { background: #f0f3f8; }
 .dsk-names small { grid-column: 1; color: #71757f; font-size: 13px; }
 .dsk-names a svg { grid-row: 1 / span 2; grid-column: 2; color: #9aa3b1; transform: rotate(-90deg); }
 
-/* «Визиты»: the two panels */
+/* «Визиты»: the two panels (the canvas of round 13: Altegio's two panels, tighter and filled in) */
 .dsv-cols { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
 .dsv-panel { display: flex; flex-direction: column; min-width: 0; }
 .dsv-panel.is-busy .dsv-body { opacity: .55; transition: opacity .2s .15s; }
-.dsv-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; min-height: 60px; padding: 9px 15px; border: 1px solid #e0e3eb; border-radius: 12px 12px 0 0; background: #fff; }
-.dsv-bar h2 { margin: 0; font: 400 16px/17.6px var(--body); }
+.dsv-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; min-height: 56px; padding: 9px 15px; border: 1px solid #e0e3eb; border-radius: 12px 12px 0 0; background: #fff; }
+.dsv-bar h2 { margin: 0; font: 500 16px/20px var(--body); }
 .dsv-switch { display: flex; flex-wrap: wrap; }
-.dsv-switch button { height: 28px; padding: 0 10px; border: 1px solid #e0e3eb; border-radius: 0; background: #fff; color: #2b3134; font: 400 12px/18px var(--body); white-space: nowrap; }
+.dsv-switch button { height: 28px; padding: 0 12px; border: 1px solid #e0e3eb; border-radius: 0; background: #fff; color: #2b3134; font: 400 12px/18px var(--body); white-space: nowrap; }
 .dsv-switch button + button { margin-left: -1px; }
 .dsv-switch button:first-child { border-radius: 6px 0 0 6px; }
 .dsv-switch button:last-child { border-radius: 0 6px 6px 0; }
-.dsv-switch button[aria-pressed="true"] { background: #f7f9fc; box-shadow: inset 0 2px 5px rgba(0, 0, 0, .15); }
-.dsv-body { display: flex; flex-direction: column; min-width: 0; padding: 15px; border: 1px solid #e0e3eb; border-top: 0; border-radius: 0 0 12px 12px; background: #fff; color: #71757f; font: 400 13px/18px var(--body); }
-.dsv-day h3 { margin: 5px 0 10px; color: #2b3134; font: 500 12px/13.2px var(--body); }
-.dsv-day + .dsv-day { margin-top: 20px; }
+.dsv-switch button[aria-pressed="true"] { background: #eef1f6; box-shadow: inset 0 2px 5px rgba(0, 0, 0, .15); font-weight: 500; }
+.dsv-body { display: flex; flex-direction: column; min-width: 0; padding: 4px 16px 16px; border: 1px solid #e0e3eb; border-top: 0; border-radius: 0 0 12px 12px; background: #fff; color: #71757f; font: 400 13px/18px var(--body); }
+.dsv-body > .adm-meta { margin: 0; padding: 20px 0 8px; }
+.dsv-day-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; padding: 14px 0 8px; }
+.dsv-day-head h3 { margin: 0; color: #2b3134; font: 600 13px/16px var(--body); }
+.dsv-day-head span { color: #71757f; font: 400 12px/16px var(--body); }
 .dsv-rows { margin: 0; padding: 0; list-style: none; }
-.dsv-rows > li { display: grid; grid-template-columns: 76px minmax(0, 1fr); min-height: 84px; }
-.dsv-time { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding-top: 8px; }
-.dsv-clock { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 25px; border: 1px solid #e7eaec; border-radius: 4px; background: #f7f9fc; color: #71757f; }
-.dsv-time b { color: #2b3134; font: 400 13px/16px var(--body); }
-.dsv-time small { color: #583cf1; font-size: 11px; line-height: 14px; }
-.dsv-what { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; padding: 10px 0 12px 15px; border-left: 1px solid #e7eaec; }
-.dsv-what > span { overflow-wrap: anywhere; }
-.dsv-what > small { font-size: 11px; line-height: 14px; }
+
+/* a visit: [time, length] [its dot on the day's line] [client / phone, services] [status, barber]; the row opens it */
+.dsv-row { position: relative; display: grid; width: 100%; grid-template-columns: 64px 18px minmax(0, 1fr) auto; grid-template-areas: "time dot who pill" "time dot svc staff"; padding: 0; border: 0; background: none; color: #2b3134; font: 400 13px/18px var(--body); text-align: left; cursor: pointer; }
+.dsv-row:focus-visible { outline: 2px solid #583cf1; outline-offset: -2px; border-radius: 6px; }
+.dsv-row:disabled { opacity: .6; cursor: progress; }
+.dsv-time { grid-area: time; display: flex; flex-direction: column; padding: 10px 0; }
+.dsv-time b { font: 600 15px/20px var(--body); }
+.dsv-time small { color: #583cf1; font: 500 12px/16px var(--body); }
+.dsv-dot { grid-area: dot; position: relative; }
+.dsv-dot::before { content: ""; position: absolute; top: 0; bottom: 0; left: 8px; width: 1px; background: #e7eaec; }
+.dsv-dot::after { content: ""; position: absolute; top: 16px; left: 4px; width: 9px; height: 9px; box-sizing: border-box; border: 2px solid #c6cbd3; border-radius: 50%; background: #fff; }
+.dsv-row.is-confirmed .dsv-dot::after { border-color: #583cf1; }
+.dsv-row.is-came .dsv-dot::after { border: 0; background: #17845a; }
+.dsv-row.is-noShow .dsv-dot::after { border: 0; background: #d92d20; }
+.dsv-who { grid-area: who; min-width: 0; padding: 9px 10px 0 12px; font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.dsv-name { text-decoration: underline; text-decoration-color: #c6cbd3; text-underline-offset: 3px; }
+.dsv-row:hover .dsv-name { text-decoration-color: currentColor; }
+.dsv-tel { color: #71757f; }
+.dsv-svcs { grid-area: svc; min-width: 0; padding: 2px 10px 9px 12px; color: #71757f; overflow-wrap: anywhere; }
+.dsv-pill { grid-area: pill; justify-self: end; align-self: start; margin-top: 9px; padding: 2px 8px; border-radius: 999px; background: #eef1f6; color: #4f535c; font: 500 11px/16px var(--body); white-space: nowrap; }
+.dsv-pill.is-confirmed { background: #e1e1fd; color: #4a2fd6; }
+.dsv-pill.is-came { background: #e3f4ec; color: #136b49; }
+.dsv-pill.is-noShow { background: #fdecea; color: #b42318; }
+.dsv-staff { grid-area: staff; justify-self: end; align-self: start; display: inline-flex; align-items: center; gap: 6px; padding: 6px 0 9px; font-size: 12px; line-height: 16px; white-space: nowrap; }
+.dsv-ava { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; color: #fff; font: 600 10px/1 var(--body); }
+/* the line under a row runs under its words, not across the timeline */
+.dsv-row::after { content: ""; grid-column: 3 / -1; grid-row: 2; align-self: end; height: 1px; background: #f0f2f6; }
 .dsv-link { max-width: 100%; padding: 0; border: 0; background: none; color: #2b3134; font: 400 13px/18px var(--body); text-align: left; text-decoration: underline; text-decoration-color: #c6cbd3; text-underline-offset: 3px; overflow-wrap: anywhere; cursor: pointer; }
 .dsv-link:hover { text-decoration-color: currentColor; }
 .dsv-link:disabled { opacity: .6; cursor: progress; }
-.dsv-more { width: 100%; height: 30px; margin-top: 12px; border: 1px solid #e0e3eb; border-radius: 6px; background: #fff; color: #2b3134; font: 400 12px/18px var(--body); text-align: center; }
+.dsv-more { width: 100%; height: 32px; margin-top: 14px; border: 1px solid #e0e3eb; border-radius: 6px; background: #fff; color: #2b3134; font: 500 12px/18px var(--body); text-align: center; }
 .dsv-more:hover { border-color: #c6cbd3; }
 
-/* «Лента активности по записям» */
-.dsv-entry + .dsv-entry { margin-top: 20px; padding-top: 20px; border-top: 1px dashed #e7eaec; }
-.dsv-entry-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.dsv-tag { display: inline-block; height: 24px; padding: 0 8px; border-radius: 4px; background: #e1e1fd; color: #583cf1; font: 400 12px/24px var(--body); text-transform: uppercase; white-space: nowrap; }
-.dsv-tools { display: flex; gap: 8px; }
-.dsv-ibtn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 30px; padding: 0; border: 1px solid #e0e3eb; border-radius: 6px; background: #fff; color: #2b3134; }
+/* «Лента активности по записям»: a booking each, split by dashed lines */
+.dsv-entry { display: flex; flex-direction: column; gap: 8px; padding: 16px 0; border-bottom: 1px dashed #dfe3ea; }
+.dsv-entry:last-child { border-bottom: 0; }
+.dsv-entry-top { display: flex; align-items: flex-start; gap: 10px; }
+.dsv-tag { flex: none; display: inline-block; height: 24px; padding: 0 8px; border-radius: 4px; background: #e1e1fd; color: #4a2fd6; font: 600 11px/24px var(--body); letter-spacing: .3px; text-transform: uppercase; white-space: nowrap; }
+.dsv-tag.is-salon, .dsv-tag.is-import { background: #eef1f6; color: #4f535c; }
+.dsv-tag.is-cancel { background: #fdecea; color: #b42318; }
+.dsv-svc { flex: 1 1 auto; font-size: 14px; line-height: 24px; }
+.dsv-tools { flex: none; display: flex; gap: 6px; margin-left: auto; }
+.dsv-ibtn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 30px; padding: 0; border: 1px solid #e0e3eb; border-radius: 6px; background: #fff; color: #71757f; }
+.dsv-ibtn:first-child:not(:last-child) { color: #17845a; }
 .dsv-ibtn:hover { border-color: #c6cbd3; }
 .dsv-ibtn:disabled { opacity: .5; }
-.dsv-svc { margin-top: 6px; font-size: 14px; line-height: 24px; }
-.dsv-meta { margin: 2px 0 0; display: flex; flex-wrap: wrap; gap: 0 16px; font: 400 14px/24px var(--body); }
+.dsv-meta { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; font: 400 13px/20px var(--body); }
 .dsv-meta > span { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
-.dsv-meta svg { flex: none; color: #9aa3b1; }
-.dsv-status.is-cancelled { color: #b42318; }
-.dsv-comment { margin: 4px 0 0; overflow-wrap: anywhere; white-space: pre-line; }
-.dsv-log { margin: 12px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
-.dsv-log p { margin: 0; color: #71757f; font: 400 13px/18px var(--body); }
-.dsv-log p b { color: #2b3134; font-weight: 500; }
-.dsv-log time { color: #2b3134; }
-.dsv-log-icon { display: inline-flex; vertical-align: -1px; color: #c6cbd3; }
-.dsv-log ul { margin: 4px 0 0; padding: 0 0 0 18px; list-style: none; display: flex; flex-direction: column; gap: 2px; }
-.dsv-log ul li { display: flex; align-items: center; gap: 6px; color: #71757f; font: 400 12px/16px var(--body); overflow-wrap: anywhere; }
-.dsv-log ul svg { flex: none; width: 12px; height: 12px; color: #c6cbd3; }
+.dsv-meta svg { flex: none; }
+.dsv-log { margin: 0; padding: 8px 12px; border-radius: 8px; background: #f7f9fc; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.dsv-log p { margin: 0; color: #71757f; font: 400 12px/16px var(--body); overflow-wrap: anywhere; white-space: pre-line; }
+.dsv-log b { color: #2b3134; font-weight: 600; }
+.dsv-acts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.dsv-acts .cc-btn { width: 100%; }
+.dsv-no { color: #b42318; }
 
 @media (max-width: 899px) {
   /* a phone: the popover opens under the whole row, from its left edge */
   .dsk-controls .jr-pop-wrap { position: static; }
   .dsk-controls .jr-pop { top: 100%; margin-top: 4px; }
+  /* «Визиты» on a phone: two tabs, one panel at a time; the panels lose their frame, the rows sit on cards */
+  .dsv-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 10px; background: #eef1f6; }
+  .dsv-tabs button { min-height: 40px; padding: 0 6px; border: 0; border-radius: 8px; background: transparent; color: #2b3134; font: 500 14px/18px var(--body); }
+  .dsv-tabs button[aria-pressed="true"] { background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); font-weight: 600; }
+  .dsv.is-tab-visits .dsv-feed, .dsv.is-tab-feed .dsv-left { display: none; }
+  .dsv-cols { margin-top: -4px; }
+  .dsv-bar { min-height: 0; padding: 0; border: 0; background: none; }
+  .dsv-bar h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .dsv-switch button { height: 32px; }
+  .dsv-body { padding: 0; border: 0; background: none; }
+  .dsv-day-head { padding: 16px 4px 8px; }
+  .dsv-day-head h3 { font-size: 14px; line-height: 18px; }
+  .dsv-rows { border: 1px solid #e0e3eb; border-radius: 12px; background: #fff; }
+  .dsv-rows > li + li { border-top: 1px solid #f0f2f6; }
+  .dsv-row { grid-template-columns: 54px minmax(0, 1fr) auto; grid-template-areas: "time who pill" "time svc svc" "time staff staff"; column-gap: 10px; min-height: 44px; padding: 12px 14px; }
+  .dsv-row::after, .dsv-dot { display: none; }
+  .dsv-time { padding: 0; }
+  .dsv-time b { font-size: 16px; }
+  .dsv-who { padding: 0; font-size: 15px; font-weight: 500; }
+  .dsv-name { text-decoration: none; }
+  .dsv-svcs { padding: 3px 0 0; }
+  .dsv-pill { margin-top: 2px; }
+  .dsv-staff { justify-self: start; flex-wrap: wrap; padding: 4px 0 0; white-space: normal; }
+  .dsv-more { height: 44px; border-radius: 10px; font-size: 14px; }
+  /* the feed: a card a booking, its latest line only, no icons */
+  .dsv-entry { gap: 8px; padding: 14px; border: 1px solid #e0e3eb; border-radius: 12px; background: #fff; }
+  .dsv-entry:last-child { border-bottom: 1px solid #e0e3eb; }
+  .dsv-entry + .dsv-entry { margin-top: 10px; }
+  .dsv-entry-top { flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+  .dsv-svc { order: 3; flex-basis: 100%; font-size: 15px; font-weight: 500; line-height: 24px; text-decoration: none; }
+  .dsv-last { margin-left: auto; color: #71757f; font-size: 12px; }
+  /* one line of text that wraps after a «·», never before it */
+  .dsv-meta { display: block; }
+  .dsv-meta > span { display: inline; }
+  .dsv-meta svg { display: none; }
+  .dsv-meta > span + span::before { content: "· "; margin-left: 6px; }
+  .dsv-log { padding: 6px 10px; }
+  .dsv-log > li + li, .dsv-log-head { display: none; }
+  .dsv-acts { margin-top: 2px; }
 }
 @media (min-width: 900px) {
-  .adm-page.adm-wide.adm-dsk, .adm-page.adm-wide.adm-dsv { padding: 16px 24px 40px; }
+  .adm-page.adm-wide.adm-dsk, .adm-page.adm-wide.adm-dsv { padding: 20px 24px 40px; }
   .dsk, .dsv { gap: 20px; font: 400 13px/18px var(--body); }
   .dsk .adm-h1, .dsv .adm-h1 { font: 400 24px/32px var(--body); }
   .dsk { max-width: 800px; }
@@ -2587,10 +2650,9 @@ button.sc-cell:not(.is-on):hover { background: #f0f3f8; }
   .dsk-kpi-val b { font-size: 24px; line-height: 32px; }
   :where(.adm) .dsk-pop :is(input, select) { height: 32px; min-height: 32px; padding: 0 9px; border-color: #e0e3eb; color: #2b3134; font-size: 12px; }
   .dsk-pop :is(input, select):focus-visible { outline: none; }
-  .dsv-rows > li { grid-template-columns: 90px minmax(0, 1fr); min-height: 100px; }
 }
 @media (min-width: 1200px) {
-  .dsv-cols { grid-template-columns: 530px minmax(0, 1fr); gap: 30px; }
+  .dsv-cols { grid-template-columns: minmax(440px, 500px) minmax(0, 1fr); gap: 24px; }
 }
 
 /* ---------- «Настройки → Локация» (settings/; Dim, 20.11.2026): the salon's page on the booking site ----------
