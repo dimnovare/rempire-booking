@@ -91,14 +91,14 @@ async function invoiceRows(q: Querier, where: string, params: unknown[], limit: 
       `select a.at, a.action, a.after, i.id, i.number, i.kind, coalesce(i.buyer->>'name', r.legal_name) as receiver
          from audit a join invoices i on i.id = a.entity_id join invoice_receivers r on r.id = i.receiver_id
         where a.entity = 'invoice' and a.action in ${ACTIONS} and ${where}
-        order by a.at desc limit ${limit}`,
+        order by a.at desc, a.id desc limit ${limit}`,
       params,
     ),
     q<AuditRow>(
       `select a.at, 'issue' as action, null::jsonb as after, i.id, i.number, i.kind, coalesce(i.buyer->>'name', r.legal_name) as receiver
          from audit a join invoices i on i.id::text = a.after->>'credit' join invoice_receivers r on r.id = i.receiver_id
         where a.entity = 'invoice' and a.action = 'credit' and ${where}
-        order by a.at desc limit ${limit}`,
+        order by a.at desc, a.id desc limit ${limit}`,
       params,
     ),
     q<MailRow>(
@@ -128,7 +128,7 @@ export async function invoiceEvents(q: Querier, businessId: string, invoiceId: s
       `select a.at, a.action, a.after, i.id, i.number, i.kind, coalesce(i.buyer->>'name', r.legal_name) as receiver
          from audit a join invoices i on i.id = a.entity_id join invoice_receivers r on r.id = i.receiver_id
         where a.entity = 'invoice' and a.action = 'import' and i.business_id = $1 and i.id = $2
-        order by a.at desc limit 1`,
+        order by a.at desc, a.id desc limit 1`,
       [businessId, invoiceId],
     ),
   ]);

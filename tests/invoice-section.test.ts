@@ -542,7 +542,7 @@ describe("what happened to an invoice: the audit log and the outbox", () => {
     expect(events.find((e) => e.kind === "opened")).toMatchObject({ email: "delivered@resend.dev" });
     expect(events.find((e) => e.kind === "credited")!.other).toEqual({ id: credit.id, number: credit.number });
     // the newest first
-    expect([...events].sort((a, b) => (a.at < b.at ? 1 : -1))).toEqual(events);
+    expect([...events].sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))).toEqual(events);
 
     const own = await invoiceEvents(query, biz.id, credit.id);
     expect(own.map((e) => [e.kind, e.number, e.credit])).toEqual([["issued", credit.number, true]]);
