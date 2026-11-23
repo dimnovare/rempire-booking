@@ -125,7 +125,7 @@ export function messageContent(m: ContentInput): string | null {
     const t = clientReminderText({ locale: L, payload: { ...p, startsAt: startsAt ?? undefined, tz, business, staff: text(p.staff) ?? m.visit?.staff ?? undefined }, appointment_id: null }, "");
     return short(t?.body);
   }
-  if (m.kind === "birthday" || m.kind === "no_show") return short(clientPushText(m.kind, { business, startsAt: startsAt ?? undefined, tz, date: text(p.date) ?? undefined }, L)?.body);
+  if (m.kind === "birthday" || m.kind === "no_show" || m.kind === "review_request") return short(clientPushText(m.kind, { business, startsAt: startsAt ?? undefined, tz, date: text(p.date) ?? undefined }, L)?.body);
   if (m.kind === "day_plan" || m.kind === "own_plan") {
     // the plan's numbers are counted when it goes and not kept: its title and its day
     const date = text(p.date);

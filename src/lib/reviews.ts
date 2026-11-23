@@ -4,9 +4,11 @@
  *
  *   staffRatings   each barber's average and count, over the reviews that
  *                  are not hidden: the booking page's stars (catalog.ts).
- *   salonReviewCount, salonReviews  the reviews about the salon itself
- *                  (no barber) on show: the count and the list on the
- *                  salon's page («REMPIRE ▾», /api/salon/reviews).
+ *   salonReviewCount, salonReviews  every review on show, the barbers'
+ *                  and the salon's own: the count, the average and the
+ *                  list on the salon's page («REMPIRE ▾»,
+ *                  /api/salon/reviews), as the widget we follow counts
+ *                  them (Dim, round 12: «all reviews»).
  *   listReviews   the admin's «Отзывы», as the tool we follow has its
  *                  reviews report: date, client, barber, stars, text.
  *   setReviewHidden  takes one off the booking page or puts it back; a new
@@ -14,7 +16,9 @@
  *   submitReview  a client's own review from the salon's page («Оцените и
  *                  напишите отзыв»; migration 035): checked, limited per
  *                  address and per day, and kept waiting (pending, hidden)
- *                  until the salon approves it.
+ *                  until the salon approves it. Each one is told by push
+ *                  («Новый отзыв», own_review; Dim, round 13) to the
+ *                  logins that see «Отзывы», each as he has it switched.
  *   importReviews  the Altegio export, read by scripts/import-reviews.ts:
  *                  an upsert by each review's own key, so a second run of
  *                  the same file changes nothing.
@@ -34,6 +38,8 @@ import { can, maskPhone, seenStaff, type Holder } from "./auth/rights";
 import { seenClientsSql } from "./admin/client-scope";
 import { REVIEW_COMPANY, type ReviewFilter } from "./admin/review-filter";
 import { normalizePhone } from "./phone";
+import { queuePush } from "./push";
+import { loadHolder } from "./auth/rights-store";
 import { addDays, isLocalDate, todayIn, zonedToUtc } from "./tz";
 
 /* ---------- the booking page's stars ---------- */
@@ -55,21 +61,25 @@ export async function staffRatings(q: Querier, businessId: string): Promise<Map<
 /* ---------- the salon's own page ---------- */
 
 /**
- * One review about the salon itself (no barber), as its page on the booking
- * site shows it: the name as the review was signed, the stars, the text and
- * when. Public: no client card, no phone.
+ * One review as the salon's page on the booking site shows it: the name as
+ * the review was signed, the stars, the text, when, and the barber it is
+ * about (null: the salon itself). Public: no client card, no phone.
  */
-export type SalonReview = { id: string; at: number; rating: number; body: string; name: string };
+export type SalonReview = { id: string; at: number; rating: number; body: string; name: string; staff: string | null };
 
-/** How many reviews about the salon itself are on show: «★ 7 отзывов» on its page (catalog.ts). */
+/** How many reviews are on show, the barbers' and the salon's own: «★ 51 отзыв» on its page (catalog.ts). */
 export async function salonReviewCount(q: Querier, businessId: string): Promise<number> {
   return (await salonRating(q, businessId)).count;
 }
 
-/** The reviews about the salon itself on show: how many, and their average (two decimals; null with none). «4,9 ★ · 51 отзыв» on its page. */
+/**
+ * Every review on show, the barbers' and the salon's own, as the widget we
+ * follow counts them (Dim, round 12): how many, and their average (two
+ * decimals; null with none). «4,9 ★ · 51 отзыв» on its page.
+ */
 export async function salonRating(q: Querier, businessId: string): Promise<{ count: number; rating: number | null }> {
   const [row] = await q<{ n: number; avg: string | null }>(
-    "select count(*)::int as n, round(avg(rating), 2)::text as avg from reviews where business_id = $1 and staff_id is null and not hidden",
+    "select count(*)::int as n, round(avg(rating), 2)::text as avg from reviews where business_id = $1 and not hidden",
     [businessId],
   );
   return { count: Number(row?.n ?? 0), rating: row?.avg == null ? null : Number(row.avg) };
@@ -79,7 +89,7 @@ const SALON_PAGE = 6;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * The reviews about the salon on show, newest first, `limit` at a time (6,
+ * The reviews on show, the barbers' and the salon's own, newest first, `limit` at a time (6,
  * as the widget shows them; 1 to 50). `before` is the id of the last one
  * given: the page goes on after it («Ещё отзывы»). `more` says whether
  * there are any after these. An id that is not one gives nothing.
@@ -96,17 +106,18 @@ export async function salonReviews(
     if (!UUID.test(opts.before)) return { rows: [], more: false };
     params.push(opts.before);
     // the order's own key, read from the review itself: two at the same moment keep their order
-    after = " and (created_at, id) < (select b.created_at, b.id from reviews b where b.id = $3 and b.business_id = $1)";
+    after = " and (r.created_at, r.id) < (select b.created_at, b.id from reviews b where b.id = $3 and b.business_id = $1)";
   }
-  const rows = await q<{ id: string; created_at: Date | string; rating: number; body: string; author_name: string }>(
-    `select id, created_at, rating, body, author_name from reviews
-      where business_id = $1 and staff_id is null and not hidden${after}
-      order by created_at desc, id desc
+  const rows = await q<{ id: string; created_at: Date | string; rating: number; body: string; author_name: string; staff: string | null }>(
+    `select r.id, r.created_at, r.rating, r.body, r.author_name, s.display_name as staff
+       from reviews r left join staff s on s.id = r.staff_id
+      where r.business_id = $1 and not r.hidden${after}
+      order by r.created_at desc, r.id desc
       limit $2`,
     params,
   );
   return {
-    rows: rows.slice(0, limit).map((r) => ({ id: r.id, at: new Date(r.created_at).getTime(), rating: Number(r.rating), body: r.body, name: r.author_name })),
+    rows: rows.slice(0, limit).map((r) => ({ id: r.id, at: new Date(r.created_at).getTime(), rating: Number(r.rating), body: r.body, name: r.author_name, staff: r.staff ?? null })),
     more: rows.length > limit,
   };
 }
@@ -213,12 +224,37 @@ export async function submitReview(q: Querier, business: Pick<Business, "id" | "
     [business.id, hash, at(now - 60 * 60 * 1000), at(now - 24 * 60 * 60 * 1000)],
   );
   if (n && (n.hour >= REVIEW_LIMITS.perHour || n.day >= REVIEW_LIMITS.perDay || n.site >= REVIEW_LIMITS.siteDay)) return { ok: false, code: "too_many" };
-  await q(
+  const [made] = await q<{ id: string; staff: string | null }>(
     `insert into reviews (business_id, rating, body, author_name, staff_id, created_at, source, hidden, pending, ip_hash)
-     values ($1, $2, $3, $4, $5, $6::timestamptz, 'ours', true, true, $7)`,
+     values ($1, $2, $3, $4, $5, $6::timestamptz, 'ours', true, true, $7)
+     returning id, (select display_name from staff where id = $5) as staff`,
     [business.id, v.rating, v.body, v.name, v.staffId, at(now), hash],
   );
+  if (made) await tellNewReview(q, business.id, { reviewId: made.id, rating: v.rating, staff: made.staff ?? null }, now);
   return { ok: true };
+}
+
+/**
+ * «Новый отзыв» (own_review): a push to each login of the salon that sees
+ * «Отзывы» («Просматривать отзывы»), where the new one waits for its OK.
+ * Each login's own switch decides on top (on unless he turned it off), and
+ * the salon's in «Уведомления» when it goes. Never the review's words: a
+ * lock screen is public. A push that cannot be queued loses nothing: the
+ * review is kept and «Отзывы» shows it.
+ */
+async function tellNewReview(q: Querier, businessId: string, payload: { reviewId: string; rating: number; staff: string | null }, now: number): Promise<number> {
+  try {
+    const logins = await q<{ id: string }>("select id from users where business_id = $1 and active and role in ('owner', 'admin')", [businessId]);
+    const may: string[] = [];
+    for (const u of logins) {
+      const h = await loadHolder(q, businessId, u.id);
+      if (h && can(h, "reports.reviews")) may.push(u.id);
+    }
+    if (!may.length) return 0;
+    return await queuePush(q, { businessId, kind: "own_review", to: "owners", onlyUserIds: may, payload, now });
+  } catch {
+    return 0;
+  }
 }
 
 /* ---------- the admin's list ---------- */

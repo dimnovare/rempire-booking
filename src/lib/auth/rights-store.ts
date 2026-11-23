@@ -42,9 +42,10 @@ export type LegacySwitches = { barber_self_time?: unknown; barber_self_price?: u
  * own settings. «Настройки локации» (built 20.11.2026) is among them: until
  * then the salon's page changed only by SQL, which the front desk never had.
  * So are «SMS-» and «Email-уведомления» (the page «Уведомления», 20.11.2026),
- * which go with «Настройки локации» (033_notification_rights.sql).
+ * which go with «Настройки локации» (033_notification_rights.sql), and the
+ * page's door «Типы уведомлений» (038_category_and_notify_types_rights.sql).
  */
-const OWNER_ONLY: readonly string[] = ["clients.export", "settings.users", "settings.users.remove", "settings.users.invite", "settings.users.rights", "settings.system", "settings.location", "notify.sms", "notify.email"];
+const OWNER_ONLY: readonly string[] = ["clients.export", "settings.users", "settings.users.remove", "settings.users.invite", "settings.users.rights", "settings.system", "settings.location", "notify.types", "notify.sms", "notify.email"];
 
 /**
  * What a barber's login could do in the barber app: his own column with

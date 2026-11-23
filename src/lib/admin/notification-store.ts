@@ -1,5 +1,5 @@
 /**
- * «Настройки → Уведомления» with the database: who may open and change it,
+ * «Уведомления» with the database: who may open and change it,
  * what its two pages show, and the one save (src/lib/admin/notifications.ts
  * holds the rules, notification-text.ts the SMS words).
  *
@@ -7,7 +7,8 @@
  * «Доступ к разделу SMS-уведомления» (notify.sms) and «… Email-уведомления»
  * (notify.email), in the group «Уведомления»; 033_notification_rights.sql
  * gives both to every login that has «Доступ к настройкам локации»
- * (settings.location), as the brief asked. Either opens the page; a change
+ * (settings.location), as the brief asked. The third, «Доступ к разделу
+ * Типы уведомлений» (notify.types; Dim, round 13), opens the page; a change
  * to a type's SMS needs notify.sms, to its e-mail notify.email, to its push
  * either of them. «SMS, push or both» for the reminder stays «Доступ к
  * системным настройкам» (settings.system), as it was on «Запросы».
@@ -23,7 +24,7 @@ import type { Business } from "../availability";
 import { withTx, type Querier } from "../db";
 import { emailTransport } from "../email";
 import { LOCALES, type Locale } from "../i18n";
-import { birthdayLetter, noShowLetter, visitLetter } from "../letters";
+import { birthdayLetter, noShowLetter, reviewFormUrl, reviewRequestLetter, visitLetter } from "../letters";
 import { clientReminderText } from "../outbox";
 import { pushConfigured } from "../push";
 import { clientPushText, pushText, type PushText } from "../push-kinds";
@@ -35,15 +36,16 @@ import { DEFAULT_SMS, VARS_OF, isSmsType, type SmsValues, type SmsVar } from "./
 import {
   AT_OPTIONS,
   AT_TYPES,
-  DELAY_OPTIONS,
   LEAD_OPTIONS,
   TYPES,
   applyChange,
   atOf,
   channelOn,
   channelsTouched,
+  delayOf,
+  delayOptions,
+  isDelayType,
   isTypeKey,
-  noShowDelay,
   offForLogins,
   optionsWith,
   readNotify,
@@ -67,9 +69,11 @@ type Env = Record<string, string | undefined>;
 export type NotifyMay = { open: boolean; sms: boolean; email: boolean; push: boolean; system: boolean };
 
 export function notifyMay(user: Holder | null | undefined): NotifyMay {
-  const sms = can(user, "notify.sms");
-  const email = can(user, "notify.email");
-  return { open: sms || email, sms, email, push: sms || email, system: can(user, "settings.system") };
+  // «Доступ к разделу Типы уведомлений» is the door (Dim, round 13); each channel needs its own right on top
+  const open = can(user, "notify.types");
+  const sms = open && can(user, "notify.sms");
+  const email = open && can(user, "notify.email");
+  return { open, sms, email, push: sms || email, system: can(user, "settings.system") };
 }
 
 /** May this login make this change? Each channel it touches by its own right; the reminder's «SMS, push or both» by «Доступ к системным настройкам». */
@@ -106,7 +110,7 @@ function auditValue(ns: NotifySettings, type: TypeKey, what: string): unknown {
   if (what === "lead.sms") return ns.base.reminder_min;
   if (what === "lead.email") return ns.base.reminder_email_min;
   if (what === "at") return atOf(ns, type as AtType);
-  if (what === "delay") return noShowDelay(ns);
+  if (what === "delay") return isDelayType(type) ? delayOf(ns, type) : null;
   if (what === "mode") return ns.base.client_reminder;
   if (what === "sms") return isSmsType(type) ? smsTemplate(ns, type) : null;
   return null;
@@ -237,7 +241,7 @@ export function typeDetail(ns: NotifySettings, may: NotifyMay, key: TypeKey): Ty
     const t = key as AtType;
     out.at = { value: atOf(ns, t), options: optionsWith([...AT_OPTIONS[t]], atOf(ns, t)) };
   }
-  if (key === "no_show") out.delay = { value: noShowDelay(ns), options: optionsWith([...DELAY_OPTIONS], noShowDelay(ns)) };
+  if (isDelayType(key)) out.delay = { value: delayOf(ns, key), options: optionsWith([...delayOptions(key)], delayOf(ns, key)) };
   if (isSmsType(key)) out.sms = { template: smsTemplate(ns, key), standard: DEFAULT_SMS[key], vars: VARS_OF[key] };
   return out;
 }
@@ -253,6 +257,8 @@ export type Sample = {
   visitLink: string;
   /** the birthday's and the invitation's {link}: the booking page, as the SMS is in English */
   bookLink: string;
+  /** the review request's {link}: the salon's page at its review card */
+  reviewLink: string;
   staff: string;
   service: { ru: string; et: string; en: string; cents: number; min: number };
   address: string;
@@ -282,6 +288,7 @@ export async function loadSample(q: Querier, business: Pick<Business, "id" | "na
     values: { salon: business.name || "REMPIRE", master: staff, address, client: "Demo client", service: service.en, date: `${d}.${m}`, time: "14:30", link: visitLink },
     visitLink,
     bookLink: `${origin}/en`,
+    reviewLink: reviewFormUrl(origin, "en"),
     staff,
     service,
     address,
@@ -326,7 +333,9 @@ export function previews(type: TypeKey, s: Sample, business: Pick<Business, "nam
       const letter =
         type === "no_show"
           ? noShowLetter(visit, { business, origin, locale })
-          : type === "birthday"
+          : type === "review_request"
+            ? reviewRequestLetter(visit, { business, origin, locale })
+            : type === "birthday"
             ? birthdayLetter({ locale, origin, business, address: s.address })
             : visitLetter(type === "moved" ? "moved" : type === "cancelled" ? "cancelled" : type === "confirmation" ? "confirmation" : "reminder", visit, type === "moved" ? { ...o, from: { startsAt: iso(start - 24 * 3600_000) } } : o);
       out.email[locale] = { subject: letter.subject, html: letter.html };
@@ -344,6 +353,8 @@ function pushOf(type: TypeKey, s: Sample, salon: string, locale: Locale): PushTe
   if (type === "reminder") return clientReminderText({ locale, payload: { startsAt: s.startsAt, staff: s.staff, business: salon, address: s.address, tz: s.tz }, appointment_id: null }, "/v/k3Fq9xT2mB7pW4sZ");
   if (type === "birthday") return clientPushText("birthday", { business: salon, date: s.day }, locale);
   if (type === "no_show") return clientPushText("no_show", { business: salon, startsAt: s.startsAt, tz: s.tz, visitId: null }, locale);
+  if (type === "review_request") return clientPushText("review_request", { business: salon, startsAt: s.startsAt, tz: s.tz, visitId: null }, locale);
+  if (type === "own_review") return pushText(type, { reviewId: "x", rating: 5, staff: s.staff }, locale);
   if (type === "day_plan") return pushText(type, { date: s.day, tz: s.tz, count: 6, firstAt: s.startsAt, totalCents: 6 * s.service.cents }, locale);
   if (type === "own_plan") return pushText(type, { date: s.day, tz: s.tz, count: 6, perStaff: [{ name: s.staff, n: 6 }] }, locale);
   const off = { kind: "time_off", action: "add", offKind: "vacation", from: start + 7 * 24 * 3600_000, to: start + 13 * 24 * 3600_000 };

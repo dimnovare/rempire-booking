@@ -156,6 +156,8 @@ type PushMessage = {
   exceptUserId?: string | null;
   /** logins already told of this change by another kind (Renat's own column) */
   exceptUserIds?: string[];
+  /** only these logins (those with the right to what the push opens), when given */
+  onlyUserIds?: string[];
   payload: Record<string, unknown>;
   now?: number;
 };
@@ -171,10 +173,11 @@ async function queuePushTo(q: Querier, m: PushMessage): Promise<string[]> {
         and (case when $6::uuid is null then u.role in ('owner', 'admin') else u.staff_id = $6::uuid end)
         and u.id::text is distinct from $7
         and not (u.id = any($9::uuid[]))
+        and ($10::uuid[] is null or u.id = any($10::uuid[]))
         and coalesce((u.notify ->> $3)::boolean, $8)
         and exists (select 1 from push_subscriptions p where p.user_id = u.id and p.retired_at is null)
      returning id, user_id`,
-    [m.businessId, m.appointmentId ?? null, m.kind, JSON.stringify(m.payload), new Date(m.now ?? Date.now()), staffId, m.exceptUserId ?? null, DEFAULT_ON[m.kind], m.exceptUserIds ?? []],
+    [m.businessId, m.appointmentId ?? null, m.kind, JSON.stringify(m.payload), new Date(m.now ?? Date.now()), staffId, m.exceptUserId ?? null, DEFAULT_ON[m.kind], m.exceptUserIds ?? [], m.onlyUserIds ?? null],
   );
   return rows.map((r) => r.user_id);
 }

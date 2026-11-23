@@ -24,7 +24,7 @@ const OLD_SWITCH = "Мой день или салон";
 const RENAT = demoId("staff", "renat");
 const OWN_BAR = [A.nav.mine, A.nav.calendar, A.nav.clients, A.nav.reports, A.nav.more];
 const SALON_BAR = [A.nav.calendar, A.nav.clients, A.nav.reports, A.nav.invoices, A.nav.more];
-const BARBER_BAR = [B.nav.day, B.nav.week, B.nav.time, B.nav.sell, B.nav.more];
+const BARBER_BAR = [B.nav.day, B.nav.time, B.nav.sell, B.nav.more];
 
 /** e2e/.out/screens/<phone>-a-<name>.png, or pc-a-<name>.png from a wide screen. */
 const shot = async (page: Page, name: string, device = test.info().project.name) => {
@@ -198,9 +198,9 @@ test.describe("an owner who cuts too, on a phone", () => {
     await expect(group(M.mineGroup).locator(".mo-row b")).toHaveText([M.time, M.sell, M.money]);
     await expect(group(M.mineGroup).locator(".mo-row small").first()).toHaveText(M.timeHint);
     // «Основные показатели» is the tab «Отчёты»; «Запросы» a row
-    await expect(group(M.salonGroup).locator(".mo-row b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.nav.invoices, A.sale.title]);
+    await expect(group(M.salonGroup).locator(".mo-row b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.nav.invoices, A.nav.notifications, A.sale.title]);
     // «Настройки»: the salon's page on the booking site, the owner's
-    await expect(group(M.settingsGroup).locator(".mo-row b")).toHaveText([A.nav.brand, A.nav.contacts, A.nav.gallery, A.nav.notifications]);
+    await expect(group(M.settingsGroup).locator(".mo-row b")).toHaveText([A.nav.brand, A.nav.contacts, A.nav.gallery]);
     await expect(group(M.accountGroup).locator(".mo-row b")).toHaveText([M.access, M.notify, M.language, M.logout]);
     await expect(group(M.accountGroup).locator(".mo-row", { hasText: M.language }).locator("small")).toHaveText("Русский");
     await expectNoSideScroll(page);
@@ -386,7 +386,7 @@ test.describe("an owner who does not cut, on a phone", () => {
     await expect(more.locator(".mo-who b")).toHaveText("Owner (demo)");
     await expect(more.locator(".mo-who span:not(.mo-ava)")).toHaveText(PRESETS.OW.ru);
     await expect(more.getByRole("heading", { level: 2 })).toHaveText([M.salonGroup, M.settingsGroup, M.accountGroup]);
-    await expect(more.getByRole("region", { name: M.salonGroup }).locator(".mo-row b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.sale.title]);
+    await expect(more.getByRole("region", { name: M.salonGroup }).locator(".mo-row b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.nav.notifications, A.sale.title]);
     await expect(more.getByRole("region", { name: M.accountGroup }).locator(".mo-row b")).toHaveText([M.access, M.notify, M.language, M.logout]);
     await expect(more.locator('a[href^="/b/time"], a[href^="/b/sell"], a[href^="/b/money"]')).toHaveCount(0);
     await expectNoSideScroll(page);
@@ -413,7 +413,7 @@ test.describe("an owner who does not cut, on a phone", () => {
     await open.click();
     await page.waitForURL((u) => u.pathname === "/b");
     await hydrated(page);
-    // the barber's own frame: his name on top, his five sections, his visits
+    // the barber's own frame: his name on top, his four sections, his visits
     const line = page.getByRole("link", { name: B.pick.viewing(barber.name) });
     await expect(line).toBeVisible();
     await expect(line).toContainText(B.pick.back);
@@ -426,7 +426,7 @@ test.describe("an owner who does not cut, on a phone", () => {
     expect(await smallTargets(page)).toEqual([]);
     await shot(page, "support");
     // the line stays on his other screens, and in view when the page is scrolled
-    await bar(page).getByRole("link", { name: B.nav.week }).click();
+    await page.locator("main:visible").getByRole("navigation", { name: B.own.view }).getByRole("link", { name: B.own.week }).click();
     await page.waitForURL((u) => u.pathname === "/b/week");
     await expect(line).toBeVisible();
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));

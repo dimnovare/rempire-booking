@@ -1,12 +1,13 @@
 /**
  * The SMS we write ourselves, as words (decision 30, docs/kickoff.md: in
  * English for everyone and one part): the reminder before a visit, the
- * birthday greeting and the invitation after a missed visit.
+ * birthday greeting, the invitation after a missed visit and the request
+ * for a review after one (round 13).
  *
  * Two ways to the words of one SMS:
  *   - the standard text, exactly today's: each drops what it can spare
  *     (the address first) until it fits one part (`standardSms`);
- *   - the salon's own text from «Настройки → Уведомления», with variables
+ *   - the salon's own text from «Уведомления», with variables
  *     such as {time} filled in (`renderSms`). It is sent as written: the
  *     page shows its characters and parts while it is typed.
  * No stored text is the standard one. The outbox (src/lib/outbox.ts) builds
@@ -18,7 +19,7 @@ import { oneSmsPart, smsSegments } from "../sms";
 
 export { smsSegments };
 
-export const SMS_TYPES = ["reminder", "birthday", "no_show"] as const;
+export const SMS_TYPES = ["reminder", "birthday", "no_show", "review_request"] as const;
 export type SmsType = (typeof SMS_TYPES)[number];
 export const isSmsType = (v: unknown): v is SmsType => typeof v === "string" && (SMS_TYPES as readonly string[]).includes(v);
 
@@ -29,12 +30,14 @@ export type SmsValues = Partial<Record<SmsVar, string>>;
 
 /**
  * The variables each SMS knows when it goes. The reminder's {link} is the
- * visit's own short change link; the other two link the booking page.
+ * visit's own short change link; the birthday's and the invitation's the
+ * booking page; the review request's the salon's page at its review card.
  */
 export const VARS_OF: Record<SmsType, readonly SmsVar[]> = {
   reminder: ["time", "date", "master", "service", "client", "salon", "address", "link"],
   birthday: ["client", "salon", "link"],
   no_show: ["date", "time", "master", "client", "salon", "link"],
+  review_request: ["date", "time", "master", "client", "salon", "link"],
 };
 
 /** The standard texts as the page shows them: today's words with every part in. */
@@ -42,6 +45,7 @@ export const DEFAULT_SMS: Record<SmsType, string> = {
   reminder: "{salon}: reminder of your visit on {date} at {time} with {master}. {address}. Change or cancel: {link}",
   birthday: "Happy birthday from {salon}! Wishing you a great year ahead. Book your next visit: {link}",
   no_show: "{salon}: we missed you on {date} at {time}. Book a new time: {link}",
+  review_request: "{salon}: thank you for your visit! How was it? Leave a review: {link}",
 };
 
 /** A salon's own text is at most this long (four parts in GSM-7). */
@@ -67,6 +71,10 @@ export function standardSms(type: SmsType, v: SmsValues): string | null {
   if (type === "birthday") {
     const head = `Happy birthday from ${name}! Wishing you a great year ahead.`;
     return oneSmsPart(link ? `${head} Book your next visit: ${link}` : "", head);
+  }
+  if (type === "review_request") {
+    const head = `${name}: thank you for your visit!`;
+    return oneSmsPart(link ? `${head} How was it? Leave a review: ${link}` : "", `${head} How was it?`);
   }
   if (!v.date || !v.time) return null;
   const head = `${name}: we missed you on ${v.date} at ${v.time}.`;

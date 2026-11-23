@@ -539,6 +539,78 @@ export function birthdayLetter(o: { locale: Locale; origin: string; business: Pi
   return { subject: k.subject, text, html };
 }
 
+// ---- «Запрос отзыва после визита» (Altegio's types 6 / 20: 3 h after) ----
+
+type ReviewRequestCopy = { subject: string; eyebrow: string; heading: string; lead: (when: string) => string; write: string; why: string };
+
+const REVIEW_REQUEST: Record<Locale, ReviewRequestCopy> = {
+  ru: {
+    subject: "Как прошёл визит в REMPIRE?",
+    eyebrow: "Отзыв",
+    heading: "Спасибо за визит!",
+    lead: (w) => `Вы были у нас ${w}. Расскажите, как всё прошло: оценка и пара слов помогут нам и другим клиентам.`,
+    write: "Оставить отзыв",
+    why: "Письмо пришло, потому что у вас была запись в REMPIRE.",
+  },
+  et: {
+    subject: "Kuidas läks REMPIRE'is?",
+    eyebrow: "Arvustus",
+    heading: "Aitäh külastuse eest!",
+    lead: (w) => `Käisid meil ${w}. Räägi, kuidas läks: hinne ja paar sõna aitavad meid ja teisi kliente.`,
+    write: "Jäta arvustus",
+    why: "Said selle kirja, sest sul oli aeg REMPIRE'is.",
+  },
+  en: {
+    subject: "How was your visit to REMPIRE?",
+    eyebrow: "Review",
+    heading: "Thank you for your visit!",
+    lead: (w) => `You visited us on ${w}. Tell us how it went: a rating and a few words help us and other clients.`,
+    write: "Leave a review",
+    why: "You get this e-mail because you had a booking at REMPIRE.",
+  },
+};
+
+/** Where a review is written: the salon's page, at its card «Оцените и напишите отзыв» (src/app/[locale]/booking-flow.tsx). */
+export const reviewFormUrl = (origin: string, locale: Locale) => `${origin}/${locale}/about#ab-reviews`;
+
+/**
+ * The request for a review after a visit (off until the salon switches it
+ * on in «Уведомления»): when it was, with whom, and the salon's page at its
+ * review card. No change link (the visit is over) and no client name.
+ */
+export function reviewRequestLetter(v: VisitView, o: InviteOptions): Letter {
+  const L = o.locale;
+  const c = COPY[L];
+  const k = REVIEW_REQUEST[L] ?? REVIEW_REQUEST.ru;
+  const tz = o.business.timezone;
+  const start = Date.parse(v.startsAt);
+  const s = localParts(start, tz);
+  const dayLong = longDay(start, L, tz);
+  const when = `${L === "en" ? dayLong : dayLong.charAt(0).toLowerCase() + dayLong.slice(1)}, ${s.time}`;
+  const form = reviewFormUrl(o.origin, L);
+  const place = [v.location.name, v.location.address].filter(Boolean).join(", ");
+  const text = [k.heading, "", k.lead(when), "", `${c.barberK}: ${v.staffName}`, `${c.whereK}: ${place}`, "", `${k.write}: ${form}`].join("\n");
+  const body = [
+    eyebrow(k.eyebrow),
+    heading(k.heading),
+    para(esc(k.lead(when))),
+    details([
+      [c.barberK, esc(v.staffName)],
+      [c.whereK, esc(place)],
+    ]),
+    button(form, k.write, true),
+  ];
+  const html = layout({
+    lang: L,
+    title: k.subject,
+    preheader: `${dayLong}, ${s.time} · ${v.staffName}`,
+    origin: o.origin,
+    body: body.join("\n"),
+    footer: [esc([o.business.name, v.location.address].filter(Boolean).join(" · ")), esc(k.why)],
+  });
+  return { subject: k.subject, text, html };
+}
+
 // ---- an invoice to a barber's company (Phase C, C5) ---------------------
 
 type InvoiceCopy = {
@@ -631,6 +703,7 @@ export function letterSubject(kind: string, locale: Locale, o: { startsAt?: stri
   const L: Locale = locale === "et" || locale === "en" ? locale : "ru";
   if (kind === "birthday") return BIRTHDAY[L].subject;
   if (kind === "no_show") return NO_SHOW[L].subject;
+  if (kind === "review_request") return REVIEW_REQUEST[L].subject;
   if (kind === "invoice") return o.number ? (INVOICE[L] ?? INVOICE.et).subject(o.number, o.credit === true) : null;
   const copy = kind === "confirmation" ? CONFIRM[L] : kind === "moved" ? MOVED[L] : kind === "cancelled" ? CANCELLED[L] : kind === "reminder_email" ? REMINDER[L] : null;
   if (!copy || !o.startsAt || Number.isNaN(Date.parse(o.startsAt))) return null;

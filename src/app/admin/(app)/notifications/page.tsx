@@ -1,5 +1,6 @@
 /**
- * /admin/settings/notifications «Уведомления» (decision page round 11,
+ * /admin/notifications «Уведомления», a section of its own as in the admin
+ * we follow (Dim, round 13; until then «Настройки → Уведомления») (decision page round 11,
  * board «Notifications»): every message the system sends by itself, by who
  * gets it (the client, the admin, a barber), each with its switch, its
  * channels and when it goes; a type opens its own page ([type]/). The
@@ -12,9 +13,9 @@ import { loadNotify, notifyMay, transports, typeRows } from "@/lib/admin/notific
 import { requireAdmin } from "@/lib/auth/current";
 import { can } from "@/lib/auth/rights";
 import { dbConfigured, query } from "@/lib/db";
-import { Title, Wait } from "../../../lang";
-import { getA } from "../../../lang-server";
-import { NoRights } from "../../no-rights";
+import { Title, Wait } from "../../lang";
+import { getA } from "../../lang-server";
+import { NoRights } from "../no-rights";
 import { NotificationsView } from "./notifications-view";
 
 export default function NotificationsPage() {

@@ -1,5 +1,5 @@
 /**
- * /admin/settings/notifications/<type>: one message's page (board
+ * /admin/notifications/<type>: one message's page (board
  * «Notification-Type»): its switch, each channel with when it goes, the
  * reminder's «SMS, push or both», the SMS text with its variables, and a
  * preview of the SMS, the letter and the push as the client or the barber
@@ -13,12 +13,12 @@ import { isTypeKey } from "@/lib/admin/notifications";
 import { requireAdmin } from "@/lib/auth/current";
 import { dbConfigured, query } from "@/lib/db";
 import { siteUrl } from "@/lib/site";
-import { Title, Wait } from "../../../../lang";
-import { getA } from "../../../../lang-server";
-import { NoRights } from "../../../no-rights";
+import { Title, Wait } from "../../../lang";
+import { getA } from "../../../lang-server";
+import { NoRights } from "../../no-rights";
 import { TypeView } from "./type-view";
 
-export default function NotificationTypePage({ params }: PageProps<"/admin/settings/notifications/[type]">) {
+export default function NotificationTypePage({ params }: PageProps<"/admin/notifications/[type]">) {
   return (
     <main className="adm-page adm-wide ntf-page">
       <Suspense fallback={<Wait />}>
@@ -28,7 +28,7 @@ export default function NotificationTypePage({ params }: PageProps<"/admin/setti
   );
 }
 
-async function Loaded({ params }: { params: PageProps<"/admin/settings/notifications/[type]">["params"] }) {
+async function Loaded({ params }: { params: PageProps<"/admin/notifications/[type]">["params"] }) {
   await connection();
   const A = await getA();
   if (!dbConfigured()) return <p className="adm-wait">{A.noDb}</p>;

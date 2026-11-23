@@ -40,7 +40,7 @@ export type MessageStatus = (typeof MESSAGE_STATUSES)[number];
  * barbers' and the salon's own phones, and the salon's other letters.
  */
 export const MESSAGE_KIND_GROUPS = [
-  { key: "client", kinds: ["confirmation", "reminder", "reminder_email", "client_reminder", "moved", "cancelled", "no_show", "birthday"] },
+  { key: "client", kinds: ["confirmation", "reminder", "reminder_email", "client_reminder", "moved", "cancelled", "no_show", "review_request", "birthday"] },
   { key: "written", kinds: ["manual", "mass"] },
   { key: "staff", kinds: [...STAFF_KINDS, ...OWNER_KINDS] },
   { key: "other", kinds: ["invoice", "login_code"] },

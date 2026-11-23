@@ -12,7 +12,7 @@ import { saveClientSubscription } from "@/lib/client-push";
 import { closeDb, query } from "@/lib/db";
 import { sendEmail, sentToConsole } from "@/lib/email";
 import { birthdayLetter, noShowLetter, visitLetter } from "@/lib/letters";
-import { messageText, OUTBOX, planBirthdays, planEmailReminders, planNoShow, runOutbox, sendForVisit, type Senders } from "@/lib/outbox";
+import { messageText, OUTBOX, planBirthdays, planEmailReminders, planNoShow, planReviewRequests, runOutbox, sendForVisit, type Senders } from "@/lib/outbox";
 import { clientPushText, type PushText } from "@/lib/push-kinds";
 import { DEFAULT_SETTINGS, readSettings } from "@/lib/settings";
 import { sendSms, sentSms, smsSegments } from "@/lib/sms";
@@ -330,6 +330,101 @@ describe("«Приглашение недошедших» (type 72)", () => {
     expect(await adminSetStatus(demo.business, r.id, "no_show", "test")).toBe(true);
     expect(await adminSetStatus(demo.business, r.id, "arrived", "test")).toBe(true);
     expect((await rows("no_show")).map((x) => x.status)).toEqual(["cancelled", "cancelled"]);
+  });
+});
+
+describe("«Запрос отзыва после визита» (types 6 / 20; Dim, round 13)", () => {
+  const MIN = 60_000;
+  /** A visit the client came to; `due` is three hours after its end. */
+  async function came(o: Parameters<typeof input>[0] = {}) {
+    const id = await booked(o);
+    await query("update appointments set status = 'arrived' where id = $1", [id]);
+    const [a] = await query<{ ends_at: Date }>("select ends_at from appointments where id = $1", [id]);
+    return { id, due: new Date(a.ends_at).getTime() + 180 * MIN };
+  }
+  const switchOn = (more: Record<string, unknown> = {}) => setting({ notifications: { on: ["review_request"], ...more } });
+  const clientOf = (id: string) => "(select client_id from appointments where id = '" + id + "')";
+
+  it("off until the salon switches it on: nothing planned, nothing sent", async () => {
+    const { id, due } = await came();
+    await saveClientSubscription(query, demo.business.id, id, PHONE);
+    expect(await planReviewRequests(query, due)).toBe(0);
+    sentToConsole.length = 0;
+    await runOutbox(query, due + 60 * MIN, ENV, senders);
+    expect(await rows("review_request")).toEqual([]);
+    expect(sentSms).toEqual([]);
+    expect(told).toEqual([]);
+  });
+
+  it("on: the letter and the notification three hours after the visit, the SMS only if neither went; each once", async () => {
+    const { id, due } = await came();
+    await saveClientSubscription(query, demo.business.id, id, PHONE);
+    await switchOn();
+    expect(await planReviewRequests(query, due - MIN)).toBe(0);
+    expect(await planReviewRequests(query, due)).toBe(3);
+    expect(await planReviewRequests(query, due)).toBe(0);
+    expect((await rows("review_request")).map((r) => [r.channel, r.recipient, new Date(r.send_at).getTime()])).toEqual([
+      ["email", "client@example.test", due],
+      ["push", id, due],
+      ["sms", "+37255550601", due + OUTBOX.reviewSmsAfterMin * MIN],
+    ]);
+
+    sentToConsole.length = 0;
+    await runOutbox(query, due, ENV, senders);
+    const mail = sentToConsole.filter((m) => m.subject === "Как прошёл визит в REMPIRE?");
+    expect(mail).toHaveLength(1);
+    expect(mail[0].to).toBe("client@example.test");
+    expect(mail[0].text).toContain(`Оставить отзыв: ${ORIGIN}/ru/about#ab-reviews`);
+    expect(mail[0].html).not.toContain("Test Client");
+    expect(told).toEqual([{ visitId: id, msg: expect.objectContaining({ title: "REMPIRE", url: "/ru/about#ab-reviews", tag: `review-${id}` }) }]);
+    // the SMS waits, then sees the letter went
+    await runOutbox(query, due + OUTBOX.reviewSmsAfterMin * MIN, ENV, senders);
+    expect(sentSms).toEqual([]);
+    expect((await rows("review_request")).map((r) => [r.channel, r.status === "sent" ? "sent" : r.last_error])).toEqual([
+      ["email", "sent"],
+      ["push", "sent"],
+      ["sms", "sent by email"],
+    ]);
+  });
+
+  it("no e-mail and no phone turned on: the SMS at once, one part, to the salon's page", async () => {
+    const { due } = await came({ email: null });
+    await switchOn();
+    expect(await planReviewRequests(query, due)).toBe(1);
+    expect((await rows("review_request")).map((r) => [r.channel, new Date(r.send_at).getTime()])).toEqual([["sms", due]]);
+    await runOutbox(query, due, ENV, senders);
+    expect(sentSms).toEqual([{ to: "+37255550601", text: `REMPIRE: thank you for your visit! How was it? Leave a review: ${ORIGIN}/en/about#ab-reviews` }]);
+    expect(smsSegments(sentSms[0].text)).toMatchObject({ encoding: "gsm7", segments: 1 });
+  });
+
+  it("the salon's own delay", async () => {
+    const { due } = await came();
+    await switchOn({ delay: { review_request: 60 } });
+    expect(await planReviewRequests(query, due - 121 * MIN)).toBe(0);
+    expect(await planReviewRequests(query, due - 120 * MIN)).toBe(2);
+  });
+
+  it("none for a visit not come to, one too long ago, a client who refused it or wrote a review; a review written since stops it", async () => {
+    const { id, due } = await came();
+    await switchOn();
+    expect(await planReviewRequests(query, due + (OUTBOX.reviewLateMaxMin + 1) * MIN)).toBe(0);
+    await query("update appointments set status = 'no_show' where id = $1", [id]);
+    expect(await planReviewRequests(query, due)).toBe(0);
+    await query("update appointments set status = 'done' where id = $1", [id]);
+    await query(`update clients set notify_off = '{review_request}' where id = ${clientOf(id)}`);
+    expect(await planReviewRequests(query, due)).toBe(0);
+    await query(`update clients set notify_off = '{}' where id = ${clientOf(id)}`);
+    // the letter and the SMS (no phone turned on for the visit)
+    expect(await planReviewRequests(query, due)).toBe(2);
+    await query(`insert into reviews (business_id, rating, client_id, created_at) select business_id, 5, client_id, now() from appointments where id = $1`, [id]);
+    sentToConsole.length = 0;
+    await runOutbox(query, due + OUTBOX.reviewSmsAfterMin * MIN, ENV, senders);
+    expect((await rows("review_request")).map((r) => r.last_error)).toEqual(["the client wrote a review", "the client wrote a review"]);
+    expect(sentSms).toEqual([]);
+    expect(sentToConsole.filter((m) => m.subject === "Как прошёл визит в REMPIRE?")).toEqual([]);
+    // another visit of his: never asked again
+    const next = await came({ time: "15:00" });
+    expect(await planReviewRequests(query, next.due)).toBe(0);
   });
 });
 

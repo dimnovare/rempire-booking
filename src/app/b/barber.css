@@ -235,3 +235,5 @@ html:has(.bx-cal) { overscroll-behavior-y: contain; }
 .bx-own-seg a[aria-current="page"] + a { border-left: 0; }
 .bx-week.is-own { padding-top: 16px; }
 .bx-week.is-own .bx-own-head { margin-bottom: 6px; }
+/* a barber's week: «День | Неделя» on the right, above the week (the week has no tab of its own) */
+.bx-week-seg { display: flex; justify-content: flex-end; margin-bottom: 6px; }

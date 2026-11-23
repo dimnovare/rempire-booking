@@ -28,7 +28,7 @@ export const FAV_HREF = {
   brand: "/admin/settings/brand",
   contacts: "/admin/settings/contacts",
   gallery: "/admin/settings/gallery",
-  notifications: "/admin/settings/notifications",
+  notifications: "/admin/notifications",
   account: "/admin/account",
 } as const;
 

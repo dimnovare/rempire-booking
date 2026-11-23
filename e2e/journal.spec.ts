@@ -338,7 +338,7 @@ test.describe("the journal", () => {
       const menu = cal(page).getByRole("menu", { name: C.headMenu("Slava") });
       await expect(menu.locator(".jr-head-top b")).toHaveText("Slava");
       await expect(menu.locator(".jr-head-top small")).toHaveText(C.headDay(dayText, "11:00–13:00, 14:00–17:00"));
-      await expect(menu.getByRole("menuitem")).toHaveText([C.changeHours(false), C.makeOff, C.openSchedule]);
+      await expect(menu.getByRole("menuitem")).toHaveText([C.changeHours, C.makeOff, C.openSchedule]);
       await expect(menu.getByRole("menuitem", { name: C.openSchedule })).toHaveAttribute("href", `/admin/schedule?d=${day}`);
       expect(await menu.evaluate((el) => `${el.getBoundingClientRect().width} ${getComputedStyle(el).backgroundColor}`)).toBe(`244 ${WHITE}`);
       await shot(page, "head-menu");
@@ -349,8 +349,8 @@ test.describe("the journal", () => {
 
       // «Изменить часы на этот день»: 10:00–18:00, the break kept
       await head.click();
-      await menu.getByRole("menuitem", { name: C.changeHours(false) }).click();
-      const hours = menu.getByRole("group", { name: C.changeHours(false) });
+      await menu.getByRole("menuitem", { name: C.changeHours }).click();
+      const hours = menu.getByRole("group", { name: C.changeHours });
       await expect(hours.getByRole("combobox", { name: `${C.workTime}: ${C.timeFrom}`, exact: true })).toHaveValue("11:00");
       await expect(hours.getByRole("combobox", { name: `${C.workTime}: ${C.timeTo}`, exact: true })).toHaveValue("17:00");
       await hours.getByRole("combobox", { name: `${C.workTime}: ${C.timeFrom}`, exact: true }).selectOption("10:00");

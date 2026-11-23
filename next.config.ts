@@ -33,12 +33,14 @@ const nextConfig: NextConfig = {
     },
   },
   // «Счета» got its own frame and pages (19.11.2026): the two old tab
-  // addresses lead to where their content went. A query (?m=2026-10) is
+  // addresses lead to where their content went; so does «Уведомления». A query (?m=2026-10) is
   // carried over by itself.
   async redirects() {
     return [
       { source: "/admin/invoices/month", destination: "/admin/invoices/reports", permanent: false },
       { source: "/admin/invoices/company", destination: "/admin/invoices/settings", permanent: false },
+      // «Уведомления» left «Настройки» (Dim, round 13): a section of its own, as in the admin we follow
+      { source: "/admin/settings/notifications/:path*", destination: "/admin/notifications/:path*", permanent: false },
     ];
   },
   // X-Robots-Tag on every path, files in /public included (headers are

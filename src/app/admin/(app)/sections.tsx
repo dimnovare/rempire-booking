@@ -37,7 +37,8 @@ export const SECTIONS = [
   { href: "/admin/settings/brand", key: "brand", icon: "cog", bar: false },
   { href: "/admin/settings/contacts", key: "contacts", icon: "cog", bar: false },
   { href: "/admin/settings/gallery", key: "gallery", icon: "cog", bar: false },
-  { href: "/admin/settings/notifications", key: "notifications", icon: "cog", bar: false },
+  // «Уведомления»: a section of its own, not under «Настройки», as in the admin we follow (Dim, round 13)
+  { href: "/admin/notifications", key: "notifications", icon: "bell", bar: false },
 ] as const;
 
 /** «Ещё»: only in a phone's bar. Lit while one of the sections behind it is open. */
@@ -60,8 +61,8 @@ export const ACCOUNT = { href: "/admin/account", key: "account", icon: "key" } a
  * (frame.tsx): a page by its own key, a row by `off` or its key; a group
  * with no page left is not drawn.
  */
-export type MenuPage = { href: string; key: "analytics" | "records" | "reviews" | "visits" | "messages" | "changes" | "staffList" | "schedule" | "clientBase" | "catalogue" | "brand" | "contacts" | "gallery" | "notifications" };
-export type MenuRow = { key: "reports" | "team" | "clients" | "services" | "goods" | "requests" | "invoices" | "settings" | "account"; icon: string; href?: string; pages?: readonly MenuPage[]; off?: string };
+export type MenuPage = { href: string; key: "analytics" | "records" | "reviews" | "visits" | "messages" | "changes" | "staffList" | "schedule" | "clientBase" | "catalogue" | "brand" | "contacts" | "gallery" };
+export type MenuRow = { key: "reports" | "team" | "clients" | "services" | "goods" | "requests" | "invoices" | "notifications" | "settings" | "account"; icon: string; href?: string; pages?: readonly MenuPage[]; off?: string };
 export const MENU: readonly MenuRow[] = [
   {
     key: "reports",
@@ -91,6 +92,8 @@ export const MENU: readonly MenuRow[] = [
   { key: "goods", icon: "box", pages: [{ href: "/admin/catalogue", key: "catalogue" }] },
   { key: "requests", icon: "req", href: "/admin/requests" },
   { key: "invoices", icon: "inv", href: "/admin/invoices" },
+  // the salon's «Уведомления» (notifications/): a row of its own, as in the tool's menu, not a page of «Настройки» (Dim, round 13)
+  { key: "notifications", icon: "bell", href: "/admin/notifications" },
   // the tool's «Настройки → Локация»: «Бренд», «Контакты», «Галерея» (settings/), near the end as in its menu
   {
     key: "settings",
@@ -99,7 +102,6 @@ export const MENU: readonly MenuRow[] = [
       { href: "/admin/settings/brand", key: "brand" },
       { href: "/admin/settings/contacts", key: "contacts" },
       { href: "/admin/settings/gallery", key: "gallery" },
-      { href: "/admin/settings/notifications", key: "notifications" },
     ],
   },
   { key: "account", icon: "key", href: "/admin/account" },
@@ -213,6 +215,13 @@ export function SectionIcon({ name, size = 22 }: { name: string; size?: number }
         <circle cx="12" cy="12" r="3" />
         <path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8" />
         <circle cx="12" cy="12" r="6.5" />
+      </svg>
+    );
+  // a bell: «Уведомления»
+  if (name === "bell")
+    return (
+      <svg viewBox="0 0 24 24" {...p}>
+        <path d="M6 16.5V11a6 6 0 0112 0v5.5l1.5 2h-15zM10 20.5a2 2 0 004 0" />
       </svg>
     );
   // three lines, as «Ещё» in the barber app

@@ -8,8 +8,9 @@
  * time is not changed, and the answer names them.
  *
  *   HeadMenu       from 900px, a click on a barber's head (board Journal-
- *                  Head): his name and hours that day, «Изменить часы на
- *                  сегодня», «Сделать выходным», «Открыть график работы».
+ *                  Head): his name and hours that day, «Изменить рабочее
+ *                  время», «Отменить рабочий день», «Настроить график
+ *                  работы» (the words of the admin we follow; Dim, round 13).
  *   DayOff         a day nobody works (board Journal-DayOff): what it is,
  *                  the schedule, and «Добавить сотрудников в день».
  *   AddStaffDialog «Добавить сотрудника в расписание»: barbers to tick, the
@@ -158,7 +159,7 @@ export function HeadMenu({
             <small>{C.headDay(isToday ? C.headToday : dayText, hours)}</small>
           </div>
           {edit ? (
-            <div className="jr-head-edit" role="group" aria-label={C.changeHours(isToday)}>
+            <div className="jr-head-edit" role="group" aria-label={C.changeHours}>
               <div className="jr-time-row">
                 <span>{C.timeFrom}</span>
                 <TimeSelect label={`${C.workTime}: ${C.timeFrom}`} value={edit.from} onChange={(from) => setEdit({ ...edit, from })} />
@@ -187,7 +188,7 @@ export function HeadMenu({
                     <circle cx="12" cy="12" r="8.5" />
                     <path d="M12 7.5v4.8l3 1.8" />
                   </svg>
-                  <span>{C.changeHours(isToday)}</span>
+                  <span>{C.changeHours}</span>
                 </button>
               )}
               {may.edit && work.length > 0 && (

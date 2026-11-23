@@ -13,8 +13,10 @@
  * right of their own under it; switching a service off is our «Удаление
  * услуг»; a barber's row in the window (whether he does it, his price, his
  * time) is «Изменять услуги сотрудников и их длительность». A category
- * rides on «Редактирование услуг»: the list's own «Категория услуги» stays
- * locked in the rights' catalogue until Dim says otherwise.
+ * has its own right under «Редактирование услуг», «Категория услуги» (Dim,
+ * round 12: «same as Altegio»): moving a service to another category, a
+ * new category and a category's pencil need it; a new service may still go
+ * into one of the categories there are.
  */
 import { can, type Holder } from "../auth/rights";
 import type { Business } from "../availability";
@@ -241,8 +243,8 @@ export async function saveService(business: Business, id: string | null, input: 
     // ---- everything that can refuse comes before the first write
     if (id && !isUuid(id)) return { ok: false as const, field: "id" };
     const [cur] = id
-      ? await tx<{ name: L10n; duration_min: number; price_cents: number; price_max_cents: number | null; online: boolean; active: boolean }>(
-          "select name, duration_min, price_cents, price_max_cents, online, active from services where id = $1 and business_id = $2 for update",
+      ? await tx<{ name: L10n; duration_min: number; price_cents: number; price_max_cents: number | null; online: boolean; active: boolean; category_id: string | null }>(
+          "select name, duration_min, price_cents, price_max_cents, online, active, category_id from services where id = $1 and business_id = $2 for update",
           [id, business.id],
         )
       : [];
@@ -255,7 +257,11 @@ export async function saveService(business: Business, id: string | null, input: 
       if (cur.online !== !!input.online && !can(who, "services.edit.online")) return { ok: false as const, field: "forbidden" };
       // a service is never deleted: switching it off is the list's «Удаление услуг»
       if (cur.active && !input.active && !can(who, "services.delete")) return { ok: false as const, field: "forbidden" };
+      // «Категория услуги»: another category, or none
+      if (cat !== undefined && !newCategory && (cat && "id" in cat ? cat.id : null) !== (cur.category_id ?? null) && !can(who, "services.edit.category")) return { ok: false as const, field: "forbidden" };
     }
+    // a new category is «Категория услуги» too, for a new service as for one there is
+    if (who && newCategory && !can(who, "services.edit.category")) return { ok: false as const, field: "forbidden" };
     if (cat && "id" in cat) {
       const [c] = await tx<{ id: string }>("select id from service_categories where id = $1 and business_id = $2", [cat.id, business.id]);
       if (!c) return { ok: false as const, field: "category" };
@@ -406,7 +412,7 @@ export async function setServicePrice(business: Business, id: string, priceCents
 
 /** A category's pencil: its name in one language; the other two stay. */
 export async function renameCategory(business: Business, id: string, lang: "ru" | "et" | "en", text: string, actor: string, who?: Holder): Promise<{ ok: true } | { ok: false; field: string }> {
-  if (who && !can(who, "services.edit")) return { ok: false, field: "forbidden" };
+  if (who && !(can(who, "services.edit") && can(who, "services.edit.category"))) return { ok: false, field: "forbidden" };
   if (!isUuid(id)) return { ok: false, field: "id" };
   if (!["ru", "et", "en"].includes(lang)) return { ok: false, field: "lang" };
   const name = String(text ?? "").trim().replace(/\s+/g, " ").slice(0, CATEGORY_MAX);

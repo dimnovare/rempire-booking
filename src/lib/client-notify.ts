@@ -20,6 +20,9 @@
  *                 notification, the SMS only when neither went
  *   no_show       «Приглашение недошедших» («no_show»): when his visit is
  *                 marked «Не пришёл», by every channel he accepts
+ *   review_request  «Запрос отзыва после визита» («review_request»): after
+ *                 a visit he came to, letter and notification, the SMS
+ *                 only when neither went (off until the salon switches it on)
  *
  * A message written by hand on his card («manual») has no switch: somebody
  * chose to send it. It still goes only by a channel he accepts.
@@ -35,7 +38,7 @@
  */
 import type { Querier } from "./db";
 
-export const CLIENT_KINDS = ["confirmation", "reminder", "moved", "cancelled", "birthday", "no_show"] as const;
+export const CLIENT_KINDS = ["confirmation", "reminder", "moved", "cancelled", "birthday", "no_show", "review_request"] as const;
 export type ClientKind = (typeof CLIENT_KINDS)[number];
 export const isClientKind = (k: unknown): k is ClientKind => typeof k === "string" && (CLIENT_KINDS as readonly string[]).includes(k);
 
@@ -54,6 +57,7 @@ export const SWITCH_OF: Record<string, ClientKind | undefined> = {
   cancelled: "cancelled",
   birthday: "birthday",
   no_show: "no_show",
+  review_request: "review_request",
 };
 
 /**

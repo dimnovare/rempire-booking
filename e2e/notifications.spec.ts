@@ -16,7 +16,7 @@ import { A, asOwner, expect, expectNoSideScroll, hydrated, smallTargets, test } 
  * .test.ts saves it).
  */
 const N = A.notif;
-const LIST = "/admin/settings/notifications";
+const LIST = "/admin/notifications";
 
 const shot = async (page: Page, name: string, wide = false) => {
   const file = wide ? `pc-notif-${name}.png` : `${test.info().project.name}-notif-${name}.png`;
@@ -42,12 +42,17 @@ test.describe("«Уведомления» on a phone", () => {
     await expect(page.getByRole("tab", { name: N.tabs.types })).toHaveAttribute("aria-selected", "true");
     await expect(page.locator(".ntf-group:visible .ntf-group-name")).toHaveText([N.groups.client, N.groups.salon, N.groups.staff]);
     await expect(page.getByRole("heading", { level: 2, name: N.groups.client })).toBeVisible();
-    await expect(group(page, N.groups.client).locator(".ntf-row")).toHaveCount(6);
-    await expect(group(page, N.groups.salon).locator(".ntf-row")).toHaveCount(5);
+    await expect(group(page, N.groups.client).locator(".ntf-row")).toHaveCount(7);
+    await expect(group(page, N.groups.salon).locator(".ntf-row")).toHaveCount(6);
     await expect(group(page, N.groups.staff).locator(".ntf-row")).toHaveCount(5);
     await expect(group(page, N.groups.client).locator(".ntf-name b")).toHaveText(
-      ["reminder", "confirmation", "moved", "cancelled", "birthday", "no_show"].map((k) => N.types[k]),
+      ["reminder", "confirmation", "moved", "cancelled", "birthday", "no_show", "review_request"].map((k) => N.types[k]),
     );
+    // the review request waits to be switched on, three hours after the visit; «Новый отзыв» to the salon is on
+    await expect(row(page, "review_request").getByRole("switch", { name: N.types.review_request })).not.toBeChecked();
+    await expect(row(page, "review_request").locator(".ntf-name small")).toContainText(N.sub.review(N.dur(180)));
+    await expect(row(page, "own_review").getByRole("switch", { name: N.types.own_review })).toBeChecked();
+    await expect(group(page, N.groups.client).locator(".ntf-count")).toHaveText(N.count(6, 7));
     // the reminder: its channels and when each goes
     const reminder = row(page, "reminder");
     await expect(reminder.locator(".ntf-chip")).toHaveText([N.ch.sms, N.ch.email, N.ch.push]);
@@ -157,10 +162,10 @@ test.describe("«Уведомления» on a phone", () => {
     const plan = row(page, "own_plan");
     const sw = plan.getByRole("switch", { name: N.types.own_plan });
     await expect(sw).toBeChecked();
-    await expect(group(page, N.groups.salon).locator(".ntf-count")).toHaveText(N.count(5, 5));
+    await expect(group(page, N.groups.salon).locator(".ntf-count")).toHaveText(N.count(6, 6));
     try {
       await sw.uncheck();
-      await expect(group(page, N.groups.salon).locator(".ntf-count")).toHaveText(N.count(4, 5));
+      await expect(group(page, N.groups.salon).locator(".ntf-count")).toHaveText(N.count(5, 6));
       await expect(plan.getByRole("status")).toHaveText(A.saved);
       await page.reload();
       await hydrated(page);
@@ -182,13 +187,13 @@ test.describe("«Уведомления» on a wide screen", () => {
     test.skip(info.project.name !== "android", "one wide run is enough");
   });
 
-  test("two columns as the board, in the sidebar under «Настройки», the preview beside the settings", async ({ page }) => {
+  test("two columns as the board, a row of its own in the sidebar, the preview beside the settings", async ({ page }) => {
     await open(page, "/admin/requests", A.req.title);
     const menu = page.getByRole("navigation", { name: A.sections });
     // on a page other than the journal the sidebar already shows the menu
     const all = page.locator(".sb").getByRole("button", { name: A.frame.all });
     if (await all.isVisible()) await all.click();
-    await menu.getByRole("button", { name: A.nav.settings }).click();
+    // «Уведомления» is the salon's own row (Dim, round 13), no longer under «Настройки»
     await expect(menu.getByRole("link", { name: A.nav.notifications, exact: true })).toHaveAttribute("href", LIST);
     await menu.getByRole("link", { name: A.nav.notifications, exact: true }).click();
     await expect(page.locator("h1.adm-h1:visible", { hasText: A.nav.notifications })).toBeVisible();

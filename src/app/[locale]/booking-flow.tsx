@@ -1281,7 +1281,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
               onClick={() => reviewsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
             >
               <StarIcon size={20} />
-              {/* «4,9 · 7 отзывов»: the average of the salon's own reviews on show, then how many */}
+              {/* «4,9 · 51 отзыв»: the average of every review on show, the barbers' too (Dim, round 12), then how many */}
               <span>
                 {avg && (
                   <>
@@ -1386,6 +1386,8 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
                               ))}
                             </span>
                             <time dateTime={new Date(r.at).toISOString()}>{fmtDay(r.at)}</time>
+                            {/* about whom: a barber's name; the salon's own carry none */}
+                            {r.staff && <span className="rv-about">{r.staff}</span>}
                           </span>
                         </span>
                         {r.body && <p className="rv-body">{r.body}</p>}

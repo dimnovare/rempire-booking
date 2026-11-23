@@ -49,7 +49,7 @@ Altegio publishes the complete list itself: a PDF "Права ролей сот�
 | Товары | 39 | 39 |
 | Сотрудники | 8 | 8 |
 | Услуги | not given | 12 |
-| Уведомления | not given | 2 |
+| Уведомления | not given | 2 (3 with the help article's) |
 | Настройки | not given | 10 |
 | Клиентская база | not given | 26 |
 | Отчёты | not given | 25 |
@@ -58,7 +58,7 @@ Altegio publishes the complete list itself: a PDF "Права ролей сот�
 | Онлайн-запись | not given | 1 |
 | Single rights | 4 named | 4 |
 
-Total: 209 rights in 13 groups plus 4 single rights, 213 switches. Only «Окно записи» differs (29 on the live screen, 31 in the PDF). No page says which two are missing on that account.
+Total: 209 rights in 13 groups plus 4 single rights, 213 switches; 210 and 214 with «Доступ к разделу Типы уведомлений», which only the help article names (added 23.11.2026, Dim, round 13). Only «Окно записи» differs (29 on the live screen, 31 in the PDF). No page says which two are missing on that account.
 
 ## 1. Журнал записей / Appointment Calendar (8)
 Sources: https://alteg.io/ru/support/knowledge-base/4846977968669/ and https://alteg.io/en/support/knowledge-base/4846977968669-appointment-calendar-access-rights/
@@ -232,15 +232,18 @@ Group totals: SM 0/12 (group on, view only), MG 12, OW 12, others off. The group
 11. Изменять технологические карты — Modify bills of materials.
 12. Удаление услуг — Delete services.
 
-## 7. Уведомления / Notifications (2)
+## 7. Уведомления / Notifications (3)
 Source: https://alteg.io/ru/support/knowledge-base/323629/
 
-Group totals: SM 2, MG 2, OW 2, others off.
+Group totals: SM 3, MG 3, OW 3, others off.
 
-1. Доступ к разделу SMS-уведомления — Access to the SMS Notifications section — old interface only. On: SM MG OW.
-2. Доступ к разделу Email-уведомления — Access to the Email Notifications section — old interface only. On: SM MG OW.
+1. Доступ к разделу Типы уведомлений — Access to the "Notification types" section — channels, scenarios, templates, sending parameters. On: SM MG OW.
+2. Доступ к разделу SMS-уведомления — Access to the SMS Notifications section — old interface only. On: SM MG OW.
+3. Доступ к разделу Email-уведомления — Access to the Email Notifications section — old interface only. On: SM MG OW.
 
-The help article describes a third right that the PDF does not list: «Доступ к разделу Типы уведомлений» — Access to the "Notification types" section — channels, scenarios, templates, sending parameters.
+The PDF lists only rights 2 and 3. Right 1 is from the help article; the roles are assumed to match the other two. Added 23.11.2026 (Dim, round 13).
+
+Ours: right 1 opens «Уведомления» (`/admin/notifications`, a row of «Салон»). Rights 2 and 3 then decide which channels of a type a login may change. Push goes with either one.
 
 ## 8. Настройки / Settings (10)
 Source: https://alteg.io/ru/support/knowledge-base/4847114440093/
@@ -394,16 +397,16 @@ Sources: https://alteg.io/ru/support/knowledge-base/19029472943261/ and https://
 | 3. Финансы | 38 | 0 | 38 |
 | 4. Товары | 39 | 0 | 39 |
 | 5. Сотрудники | 8 | 4 | 4 |
-| 6. Услуги | 12 | 7 | 5 |
-| 7. Уведомления | 2 | 0 | 2 |
-| 8. Настройки | 10 | 6 | 4 |
+| 6. Услуги | 12 | 8 | 4 |
+| 7. Уведомления | 3 | 3 | 0 |
+| 8. Настройки | 10 | 7 | 3 |
 | 9. Клиентская база | 26 | 16 | 10 |
-| 10. Отчёты | 25 | 3 | 22 |
+| 10. Отчёты | 25 | 10 | 15 |
 | 11. Лояльность | 8 | 0 | 8 |
 | 12. Лицензия | 1 | 0 | 1 |
 | 13. Онлайн-запись | 1 | 0 | 1 |
 | Single rights | 4 | 1 | 3 |
-| **Total** | **213** | **58** | **155** |
+| **Total** | **214** | **70** | **144** |
 
 A group's switch works in the seven groups that have an enforced right: with it off, everything inside answers no, and for «Сотрудники», «Услуги» and «Клиентская база» the section itself is closed (its page says «Нет доступа», the menus leave it out). «Сотрудники» is two pages now, the barbers' list and «График работы»; with «Отчёты» off, or without «Просматривать список записей», «Записи» is closed the same way.
 

@@ -36,7 +36,7 @@ import { saveServiceAction, type ServiceForm } from "./actions";
 import { baseOf, fromCents, initial, priceText, timeText, toCents } from "./labels";
 
 /** What the login may change here (page.tsx, by its rights). */
-export type May = { create: boolean; edit: boolean; name: boolean; price: boolean; online: boolean; off: boolean; staff: boolean };
+export type May = { create: boolean; edit: boolean; name: boolean; category: boolean; price: boolean; online: boolean; off: boolean; staff: boolean };
 
 const NEW_CAT = "__new";
 const LANGS: readonly Locale[] = ["ru", "et", "en"];
@@ -163,7 +163,7 @@ export function ServiceWindow({ service, board, may, onClose }: { service?: Boar
   const sum = sumUp(base, doing.map(effOf));
   const catName =
     d.category === NEW_CAT ? d.newCat.trim() || S.newCategory.replace("…", "") : A.pick(board.categories.find((c) => c.id === d.category)?.name) || S.noCategory;
-  const title = isNew ? S.newTitle : A.pick(service.name) || S.title;
+  const title = isNew ? S.newTitle : A.pick(service.name) || S.crumb;
 
   const why = sum.nobody
     ? S.whyNobody
@@ -183,7 +183,8 @@ export function ServiceWindow({ service, board, may, onClose }: { service?: Boar
       online: d.online,
       active: d.active,
       allBarbers: false,
-      category: d.category === NEW_CAT ? { name: { ru: "", et: "", en: "", [lang]: d.newCat.trim() } } : d.category ? { id: d.category } : null,
+      // without «Категория услуги» a service keeps its category; a new one goes into the first
+      category: !isNew && !may.category ? undefined : d.category === NEW_CAT ? { name: { ru: "", et: "", en: "", [lang]: d.newCat.trim() } } : d.category ? { id: d.category } : null,
       // without the right to the barbers' rows an existing service leaves them as they are
       barbers: canDoes ? d.rows.map((r) => ({ staffId: r.staffId, offered: r.offered, priceCents: toCents(r.price) ?? base.priceCents, durationMin: r.min })) : undefined,
     };
@@ -245,14 +246,14 @@ export function ServiceWindow({ service, board, may, onClose }: { service?: Boar
                 </label>
                 <div className="sv-field">
                   <label htmlFor={`${uid}-cat`}>{S.category}</label>
-                  <select id={`${uid}-cat`} className="sv-in sv-sel" value={d.category} disabled={!canEdit} onChange={(e) => setD({ ...d, category: e.target.value })}>
+                  <select id={`${uid}-cat`} className="sv-in sv-sel" value={d.category} disabled={!canEdit || !may.category} onChange={(e) => setD({ ...d, category: e.target.value })}>
                     {board.categories.map((c) => (
                       <option key={c.id} value={c.id}>
                         {A.pick(c.name) || S.noCategory}
                       </option>
                     ))}
                     {(!d.category || board.categories.length === 0) && <option value="">{S.noCategory}</option>}
-                    <option value={NEW_CAT}>{S.newCategory}</option>
+                    {may.category && <option value={NEW_CAT}>{S.newCategory}</option>}
                   </select>
                   {d.category === NEW_CAT && (
                     <input className="sv-in" aria-label={S.newCategoryName} placeholder={S.newCategoryName} maxLength={60} value={d.newCat} onChange={(e) => setD({ ...d, newCat: e.target.value })} />

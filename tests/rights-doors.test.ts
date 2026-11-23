@@ -54,7 +54,7 @@ import * as requests from "@/app/admin/(app)/requests/actions";
 import * as schedule from "@/app/admin/(app)/schedule/actions";
 import * as services from "@/app/admin/(app)/services/actions";
 import * as settingsActs from "@/app/admin/(app)/settings/actions";
-import * as notif from "@/app/admin/(app)/settings/notifications/actions";
+import * as notif from "@/app/admin/(app)/notifications/actions";
 import * as staffActs from "@/app/admin/(app)/staff/actions";
 import * as bSell from "@/app/b/(app)/sell/actions";
 import * as bTime from "@/app/b/(app)/time/actions";
@@ -549,6 +549,28 @@ describe("Услуги", () => {
   both("services.edit.price", "desk", (c) => save(c, (f) => ({ priceCents: f.priceCents + 100, priceMaxCents: null })), (r) => r.ok);
   both("services.edit.online", "desk", (c) => save(c, (f) => ({ online: !f.online })), (r) => r.ok);
   both("services.delete", "desk", (c) => save(c, () => ({ active: false })), (r) => r.ok);
+  // «Категория услуги» (its own since round 13): another category for a service there is
+  const otherCategory = async (c: Ctx) => {
+    const [s] = await query<{ category_id: string | null }>("select category_id from services where id = $1", [c.demo.services.clip]);
+    const [o] = await query<{ id: string }>("select id from service_categories where business_id = $1 and id is distinct from $2 limit 1", [c.demo.business.id, s.category_id]);
+    if (!o && !s.category_id) throw new Error("no category to move to");
+    return o ? { id: o.id } : null;
+  };
+  both("services.edit.category", "desk", async (c) => services.saveServiceAction(c.demo.services.clip, { ...(await formOf(c)), category: await otherCategory(c) }), (r) => r.ok);
+
+  it("services.edit.category: a new category and a category's pencil need it too; a new service may still go into one there is", async () => {
+    const c = await fresh("desk");
+    await grant(c.me, "services.edit.category", false);
+    const [cat] = await query<{ id: string }>("select id from service_categories where business_id = $1 limit 1", [c.demo.business.id]);
+    expect(await services.renameCategoryAction(cat.id, "ru", "Бороды")).toEqual({ ok: false, field: "forbidden" });
+    expect(await services.saveServiceAction(null, { ...fresh1, category: { name: { ru: "Новая категория", et: "", en: "" } } })).toEqual({ ok: false, field: "forbidden" });
+    expect(await services.saveServiceAction(c.demo.services.clip, { ...(await formOf(c)), category: { name: { ru: "Новая категория", et: "", en: "" } } })).toEqual({ ok: false, field: "forbidden" });
+    expect((await services.saveServiceAction(null, { ...fresh1, category: { id: cat.id } })).ok).toBe(true);
+    // the window sends no category when it may not change it: the rest saves
+    expect((await save(c, (f) => ({ durationMin: f.durationMin + 5 }))).ok).toBe(true);
+    const [now] = await query<{ category_id: string | null }>("select category_id from services where id = $1", [c.demo.services.clip]);
+    expect((await services.saveServiceAction(c.demo.services.clip, { ...(await formOf(c)), category: now.category_id ? { id: now.category_id } : null })).ok).toBe(true);
+  });
   // a barber's row in the service's window: his price and time, or whether he does it
   both("services.staff", "desk", async (c) => services.saveServiceAction(c.demo.services.clip, { ...(await formOf(c)), barbers: [{ staffId: c.val, offered: true, priceCents: 2600, durationMin: 30 }] }), (r) => r.ok);
 
@@ -606,7 +628,8 @@ describe("Услуги", () => {
 /* ------------------------------------------------------------------ 7. Уведомления */
 
 describe("Уведомления", () => {
-  // either opens «Настройки → Уведомления»; each changes its own channel of a type
+  // «Доступ к разделу Типы уведомлений» opens «Уведомления» (round 13); each of the other two changes its own channel of a type
+  both("notify.types", "owner", () => notif.saveTypeAction("visit_new", { on: false }), (r) => r.ok === true);
   both("notify.sms", "owner", () => notif.saveTypeAction("reminder", { lead: { sms: 60 } }), (r) => r.ok === true);
   both("notify.email", "owner", () => notif.saveTypeAction("confirmation", { on: false }), (r) => r.ok === true);
 });

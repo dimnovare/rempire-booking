@@ -14,7 +14,7 @@ import { localParts } from "./tz";
 /** What a barber gets about his own column. */
 export const STAFF_KINDS = ["visit_new", "visit_moved", "visit_cancelled", "day_plan", "request_answer"] as const;
 /** What Renat and the front desk get about the salon. */
-export const OWNER_KINDS = ["own_online", "own_client", "own_barber", "own_request", "own_plan"] as const;
+export const OWNER_KINDS = ["own_online", "own_client", "own_barber", "own_request", "own_review", "own_plan"] as const;
 export type PushKind = (typeof STAFF_KINDS)[number] | (typeof OWNER_KINDS)[number];
 
 /**
@@ -33,6 +33,8 @@ export const DEFAULT_ON: Record<PushKind, boolean> = {
   own_client: true,
   own_barber: false,
   own_request: false,
+  // a client's new review, waiting for the salon's OK (Dim, rounds 12 and 13: «push him anyway, switchable»)
+  own_review: true,
   own_plan: false,
 };
 
@@ -87,6 +89,8 @@ export type PlanPayload = {
 
 /** own_request: a barber's change, waiting for Renat or applied at once (B4). */
 export type RequestPayload = { requestId: string; staff: string; status: "requested" | "applied"; tz: string; what: RequestWhat; visitsInside?: number };
+/** own_review: a client's new review from the salon's page, waiting in «Отзывы». No words of the review on a lock screen. */
+export type ReviewPayload = { reviewId: string; rating: number; staff?: string | null };
 /** request_answer: Renat's yes or no to the barber. */
 export type AnswerPayload = { requestId: string; answer: "approved" | "declined"; tz: string; what: RequestWhat; note?: string };
 
@@ -110,6 +114,9 @@ const W = {
     client: "Клиент",
     requestFrom: (s: string) => `Запрос: ${s}`,
     changed: (s: string) => `${s}: изменение`,
+    review: "Новый отзыв",
+    aboutSalon: "о салоне",
+    toCheck: "ждёт проверки",
   },
   et: {
     new: "Uus broneering",
@@ -130,6 +137,9 @@ const W = {
     client: "Klient",
     requestFrom: (s: string) => `Taotlus: ${s}`,
     changed: (s: string) => `${s}: muudatus`,
+    review: "Uus arvustus",
+    aboutSalon: "salongi kohta",
+    toCheck: "ootab kinnitust",
   },
   en: {
     new: "New visit",
@@ -150,6 +160,9 @@ const W = {
     client: "Client",
     requestFrom: (s: string) => `Request: ${s}`,
     changed: (s: string) => `${s}: a change`,
+    review: "New review",
+    aboutSalon: "about the salon",
+    toCheck: "waiting for your OK",
   },
 } satisfies Record<Locale, unknown>;
 
@@ -217,6 +230,13 @@ export function pushText(kind: string, payload: Record<string, unknown>, locale:
     const inside = Number.isInteger(p.visitsInside) && p.visitsInside! > 0 ? ` · ${w.visits(p.visitsInside!)}` : "";
     return { title, body: `${requestWords(p.what, p.tz || "Europe/Tallinn", locale)}${inside}`.slice(0, 200), url: "/admin/requests", tag: `req-${p.requestId}` };
   }
+  if (kind === "own_review") {
+    const p = payload as ReviewPayload;
+    const n = Math.round(Number(p.rating));
+    if (!p.reviewId || !(n >= 1 && n <= 5)) return null;
+    const about = p.staff ? String(p.staff).slice(0, 40) : w.aboutSalon;
+    return { title: w.review, body: `${"★".repeat(n)}${"☆".repeat(5 - n)} · ${about} · ${w.toCheck}`, url: "/admin/reviews", tag: `review-${p.reviewId}` };
+  }
   if (kind === "request_answer") {
     const p = payload as AnswerPayload;
     if (!isRequestWhat(p.what) || !p.requestId) return null;
@@ -265,15 +285,28 @@ export function pushText(kind: string, payload: Record<string, unknown>, locale:
 /**
  * The client messages added 20.11.2026 as a notification, in the client's
  * language: the birthday greeting and the invitation after a missed visit
- * (src/lib/outbox.ts). Both open the booking page, never a visit link; the
- * salon's name is the title, and neither carries the client's name.
+ * (src/lib/outbox.ts), and the request for a review after a visit (round
+ * 13). They open the booking page or its salon page, never a visit link;
+ * the salon's name is the title, and none carries the client's name.
  */
-export type ClientPushKind = "birthday" | "no_show";
+export type ClientPushKind = "birthday" | "no_show" | "review_request";
 
 const CW = {
-  ru: { birthday: "С днём рождения! Желаем отличного года, ждём вас в гости.", noShow: (d: string, t: string) => `Мы ждали вас ${d} в ${t}. Запишитесь на новое время.` },
-  et: { birthday: "Palju õnne sünnipäevaks! Soovime toredat aastat, ootame sind külla.", noShow: (d: string, t: string) => `Ootasime sind ${d} kell ${t}. Broneeri uus aeg.` },
-  en: { birthday: "Happy birthday! Wishing you a great year, see you soon.", noShow: (d: string, t: string) => `We missed you on ${d} at ${t}. Book a new time.` },
+  ru: {
+    birthday: "С днём рождения! Желаем отличного года, ждём вас в гости.",
+    noShow: (d: string, t: string) => `Мы ждали вас ${d} в ${t}. Запишитесь на новое время.`,
+    review: "Спасибо за визит! Как всё прошло? Оставьте отзыв.",
+  },
+  et: {
+    birthday: "Palju õnne sünnipäevaks! Soovime toredat aastat, ootame sind külla.",
+    noShow: (d: string, t: string) => `Ootasime sind ${d} kell ${t}. Broneeri uus aeg.`,
+    review: "Aitäh külastuse eest! Kuidas läks? Jäta arvustus.",
+  },
+  en: {
+    birthday: "Happy birthday! Wishing you a great year, see you soon.",
+    noShow: (d: string, t: string) => `We missed you on ${d} at ${t}. Book a new time.`,
+    review: "Thank you for your visit! How was it? Leave a review.",
+  },
 } satisfies Record<Locale, unknown>;
 
 export function clientPushText(
@@ -285,6 +318,8 @@ export function clientPushText(
   const title = p.business || "REMPIRE";
   const url = `/${locale}`;
   if (kind === "birthday") return p.date ? { title, body: w.birthday, url, tag: `birthday-${p.date}` } : null;
+  // the salon's page at its review card (src/lib/letters.ts, reviewFormUrl)
+  if (kind === "review_request") return { title, body: w.review, url: `/${locale}/about#ab-reviews`, tag: `review-${p.visitId ?? "x"}` };
   if (!p.startsAt) return null;
   const at = localParts(Date.parse(p.startsAt), p.tz || "Europe/Tallinn");
   return { title, body: w.noShow(`${at.date.slice(8, 10)}.${at.date.slice(5, 7)}`, at.time), url, tag: `no-show-${p.visitId ?? "x"}` };
