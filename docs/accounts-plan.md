@@ -34,7 +34,7 @@ one never takes the other down. What they share is the accounts around them.
 | **Resend** (e-mail) | two free accounts: the shop's (rempireshop.com) and the booking's (rempireshopinfo+booking@, same inbox) | **option A**: keep both free (0 €; one Google inbox behind both). **option B**: one paid account for both domains ($20 a month). One free account for both doesn't fit: 100 letters a day shared | **Dim chose A** (round 14, 23.11) |
 | **Google Cloud** | two projects: «Rempire shop» (customers' Google login, published) and «REMPIRE Booking» (staff Google login, never published, broke on 18.11) | **option A**: drop staff Google login (e-mail code and password stay) and delete the booking project. **option B**: move the staff login into the shop's project | Later (Dim, 23.11): access to the salon's Google account, to keep one place and fewer logins; Renat's page asks only whether he has it |
 | **SMS** (Messaggio) | Renat's own account; Altegio sends through it | the same; Altegio's sending switched off at the move | Renat: login and sender before 30.11 |
-| **Uptime monitor** | none | one free UptimeRobot account on rempireshopinfo@: `/api/health` and `/api/health/cron` of the booking, the shop's home page; alerts to Renat after the switch (Dim, 23.11), to Dim while testing | Dim opens it (5 minutes) |
+| **Uptime monitor** | none | one free UptimeRobot account on rempireshopinfo@: `/api/health` and `/api/health/cron` of the booking, the shop's home page; alerts to Renat after the switch if he wants them (his page, `alert`), to Dim while testing | Dim opens it (5 minutes) |
 | **Backups** | shop: GitHub Actions twice a day, restored and counted each time | the booking copies the same workflow | Claude builds it |
 | **Web push keys** | one pair per app, in Vercel only | the same (no account) | — |
 | **Altegio, Isolta** | Renat's | cancelled after the move (Altegio a month after, Isolta at its renewal) | Renat |
@@ -69,6 +69,10 @@ with Renat, so none is named.
    to the owner, so he forwards them.
 5. Which side the accounts move to (23.11 evening): the salon,
    rempire.ee, or the shop, rempireshop.com.
+6. Whether he wants the uptime check that mails him when the booking is
+   down (asked, not decided: Dim, 23.11 evening).
+7. The privacy draft: the salon's e-mail for data requests, how long a
+   client card is kept, whether cards hold health notes.
 
 Later, when the work gets there: Messaggio's login (SMS tests), the
 barbers' e-mails (after testing), access to the Google account and, if

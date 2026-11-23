@@ -271,6 +271,13 @@ export function QaForm({ token, initial }: { token: string; initial: Record<stri
               </h2>
             </div>
             <p className="qa-lead">{q.lead}</p>
+            {q.link && (
+              <p className="qa-lead">
+                <a href={q.link.href} target="_blank" rel="noopener">
+                  {q.link.text}
+                </a>
+              </p>
+            )}
             {q.fields.map((f) => input(q.id, f))}
             <p className="qa-stl" aria-live="polite">
               {statusLine(q.id)}

@@ -30,7 +30,7 @@ describe("the questions", () => {
     expect(FIELDS.has("decided.more")).toBe(true);
     expect(FIELDS.has("decided.note")).toBe(false);
     // 23.11 (Dim): Altegio and Isolta, where the booking lives, access, the export, which side the accounts go to; then the open ones from 20.11
-    expect(QUESTIONS.map((q) => q.id).slice(0, 6)).toEqual(["subs", "site", "access", "export", "payer", "pay"]);
+    expect(QUESTIONS.map((q) => q.id).slice(0, 5)).toEqual(["subs", "site", "access", "export", "payer"]);
     expect(cleanValue("payer.side", "К магазину, rempireshop.com")).toBe("К магазину, rempireshop.com");
     expect(FIELDS.has("payer.who")).toBe(false);
     expect(INTRO).toContain("Первые пять");
@@ -53,6 +53,11 @@ describe("the questions", () => {
     expect(DECIDED.join(" ")).toMatch(/приложения для клиентов не делаем/);
     expect(DECIDED.join(" ")).toMatch(/Тату-студию/);
     expect(QUESTIONS.at(-1)?.id).toBe("skipped");
+    // asked, not decided (Dim, 23.11 evening): the down alert and the privacy draft, right after the first five
+    expect(QUESTIONS.map((q) => q.id).slice(5, 7)).toEqual(["alert", "privacy"]);
+    expect(DECIDED.join(" ")).not.toMatch(/перестанет работать/);
+    expect(QUESTIONS.find((q) => q.id === "privacy")?.link?.href).toBe("/ru/privacy");
+    expect(cleanValue("privacy.health", "Нет")).toBe("Нет");
   });
 
   it("take only what the page offers", () => {

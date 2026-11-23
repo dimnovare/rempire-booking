@@ -32,6 +32,9 @@
  * it) and left for DECIDED; «extra» left (answered 18.11, kickoff decision
  * 37). Renat's note under DECIDED of 18.11 is in DECIDED itself (the 17 %
  * lines), so the note field is new («decided.more») and starts empty.
+ * Then (Dim: «ask him»): «alert», whether he wants the uptime check that
+ * mails him when the booking is down (no longer in DECIDED), and «privacy»,
+ * the policy draft to read, with the few points only the salon knows.
  *
  * Each field saves on its own («subs.altegio», «extra.note»…). The page sends
  * one field at a time; every change is logged (qa_answer_log), so a later
@@ -46,10 +49,11 @@ export type Field =
   | { id: string; kind: "text"; label: string; rows?: number }
   | { id: string; kind: "money"; label: string; hint: string };
 
-export type Question = { id: string; title: string; lead: string; fields: Field[] };
+/** `link`: a page of ours to read first, opened in a new tab (a path on the same site). */
+export type Question = { id: string; title: string; lead: string; link?: { href: string; text: string }; fields: Field[] };
 
 export const INTRO =
-  "Ренат, здесь 11 коротких вопросов о новой системе записи. Первые пять хорошо бы до 29 ноября: " +
+  "Ренат, здесь 13 коротких вопросов о новой системе записи. Первые пять хорошо бы до 29 ноября: " +
   "с 30 ноября по 13 декабря Дима в отъезде. Остальные могут подождать. " +
   "Что ты уже ответил, внизу, в «Уже решено». " +
   "Ответы сохраняются сами: можно закрыть страницу, вернуться и дописать. Логины и пароли здесь не пиши.";
@@ -120,6 +124,31 @@ export const QUESTIONS: Question[] = [
       "Сервер, база данных и почта новой системы сейчас на аккаунтах Димы. Позже всё переведём на тебя. " +
       "Нужно понять, к чему их привязать: к салону, rempire.ee, или к магазину, rempireshop.com.",
     fields: [{ id: "side", kind: "one", label: "Аккаунты:", options: ["К салону, rempire.ee", "К магазину, rempireshop.com", "Обсудим"] }],
+  },
+  /* Dim, 23.11 evening: ask, don't decide (launch B7) */
+  {
+    id: "alert",
+    title: "Если онлайн-запись перестанет работать",
+    lead:
+      "Можно поставить бесплатную проверку: каждые 5 минут она открывает онлайн-запись и, если та не открывается, " +
+      "сразу пишет тебе на почту. Тогда можно попросить клиентов звонить, пока мы чиним. Без неё о сбое узнаем, только когда кто-то заметит.",
+    fields: [{ id: "want", kind: "one", label: "Нужно?", options: ["Да, пусть пишет мне", "Не нужно", "Не знаю"] }],
+  },
+  /* Dim, 23.11 evening: Renat reads the draft (launch B6); the server regions are ours to check */
+  {
+    id: "privacy",
+    title: "Политика конфиденциальности",
+    lead:
+      "Онлайн-запись хранит имена, телефоны и почту клиентов, поэтому по закону (GDPR) нужна страница: какие данные храним, " +
+      "зачем и сколько. Её же требует Google для входа через Google. Черновик готов: прочитай, всё ли так о салоне. " +
+      "Выделенные места мы ещё уточняем, от тебя нужно только то, что ниже.",
+    link: { href: "/ru/privacy", text: "Открыть черновик" },
+    fields: [
+      { id: "email", kind: "text", label: "Почта салона, куда клиент пишет о своих данных", rows: 1 },
+      { id: "keep", kind: "one", label: "Сколько хранить карточку клиента после его последнего визита?", options: ["3 года, как в черновике", "Другой срок, напишу ниже", "Не знаю"] },
+      { id: "health", kind: "one", label: "Пишете ли в карточку что-то о здоровье, например аллергию перед тату?", options: ["Нет", "Да", "Не знаю"] },
+      { id: "note", kind: "text", label: "Что поправить" },
+    ],
   },
   {
     id: "pay",
@@ -214,7 +243,6 @@ export const DECIDED: string[] = [
   "Уведомления барберам приходят в приложении барбера. Тебе: новая запись онлайн, перенос или отмена клиентом.",
   "Новую систему сначала пробуешь ты сам, барберов добавим потом.",
   "Сделаем табличку с QR-кодом для записи: одна на салон, на ресепшн.",
-  "Если после перехода онлайн-запись перестанет работать, система сразу напишет тебе: тогда можно попросить клиентов звонить.",
   "Отдельного приложения для клиентов не делаем. Клиенты записываются по ссылке, с сайта или из Google Карт; кто хочет, сохраняет страницу записи на телефон как приложение.",
   "Тату-студию или любое другое направление можно будет добавить в систему отдельно, со своими мастерами, услугами и онлайн-записью, когда понадобится.",
 ];

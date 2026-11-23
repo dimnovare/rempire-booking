@@ -30,11 +30,11 @@ that must pass first: `docs/test-plan.md`.*
 |---|---|---|---|
 | B1 | **Altegio import (A7):** clients with phones, future visits. Staff, services, prices and hours are already in from Altegio's public widget | Renat forwards Altegio's Excel exports; Claude builds the importer | Without the future visits, barbers lose every booking made in Altegio |
 | B2 | **rempire.ee DNS:** who holds the Cloudflare zone, and access for one DNS change per host | Renat (or whoever runs rempire.ee) | No address, no Resend domain on rempire.ee, no Google publish |
-| B3 | **Two addresses:** `book.rempire.ee` for clients, `staff.rempire.ee` for staff (round 13); routing by host is not built | Claude builds | On Android only one of the two apps installs while they share an address (`docs/apps.md`) |
+| B3 | **Two addresses:** `book.rempire.ee` for clients, `staff.rempire.ee` for staff (round 13); routing by host is not built | Claude builds, after Renat's feedback (Dim, 23.11: no rempire.ee access yet). It can be tried before on a second staging address on diipsolutions.eu | On Android only one of the two apps installs while they share an address (`docs/apps.md`). Renat's iPhone holds both, so his test does not need it |
 | B4 | **Messaggio:** project login and the sender code «REMPIRE» | Renat → Dim puts them into Vercel | No SMS reminders. A new sender name takes 1–5 working days |
-| B5 | **Production database** on Railway, empty, its own URL and CA | Dim creates it; Claude sets the CA | Staging's database holds demo data |
-| B6 | **Privacy policy** page in RU, ET, EN | **Drafted 23.11:** `/ru/privacy`, text in `src/lib/privacy-content.ts` with 16 «[to confirm]» marks. Still: Dim and Renat settle the marks; an «anonymise client» action for erasure requests (clients with visits can't be deleted today) | Google needs it to publish the login; we hold clients' phones and e-mails (GDPR) |
-| B7 | **Error page and monitoring:** a friendly error page with the salon's phone, an uptime check that alerts Dim, database backups | **Built 23.11:** the error pages and `/api/health`, `/api/health/cron`. Still: Dim opens the UptimeRobot account; Claude copies the shop's backup workflow | Today an error shows Next's bare page; nobody would know the booking is down |
+| B5 | **Production database** on Railway, empty, its own URL and CA | Waits for Renat's answer on which side the accounts go (`payer.side`): the shop's Railway or another. Two databases, one for staging and one live: the same app and setup, but live clients never mix with test data and a change is tried on staging first. Reusing today's database as the live one works too; staging then gets a new empty one (Dim, 23.11: asked) | Staging's database holds demo data |
+| B6 | **Privacy policy** page in RU, ET, EN | **Drafted 23.11:** `/ru/privacy`, text in `src/lib/privacy-content.ts` with 16 «[to confirm]» marks. Still: Renat reads it and answers what only the salon knows (his page, `privacy`, 23.11); the server regions are ours to check; an «anonymise client» action for erasure requests (clients with visits can't be deleted today) | Google needs it to publish the login; we hold clients' phones and e-mails (GDPR) |
+| B7 | **Error page and monitoring:** a friendly error page with the salon's phone, an uptime check that alerts Dim, database backups | **Built 23.11:** the error pages and `/api/health`, `/api/health/cron`. Still: Renat is asked whether he wants the uptime check that mails him (his page, `alert`, 23.11); backups start with the live database, after Renat's OK on the tests (Dim, 23.11) | Today an error shows Next's bare page; nobody would know the booking is down |
 | B8 | **The full test pass** in `docs/test-plan.md`, all green, on the production build | Claude runs it; Dim and Renat do the real-phone part | «The booking can never go down» |
 
 Not blocking the launch (they can follow):
@@ -56,10 +56,11 @@ Monday 04.01; Renat tests on staging while Dim is away; two free Resend
 accounts; BrowserStack for the test month plus 10 minutes on a real phone.
 Asked of Renat (his page, set 4): Altegio and Isolta terms (he decides),
 where the booking lives, Google access, Altegio's exports, which side the
-accounts move to (rempire.ee or rempireshop.com). The down alert goes to
-Renat after the switch (Dim, 23.11) (`docs/renat-before-30-11.ru.md`).
-Settled the same evening (Dim, kickoff decision 38): no client app of our
-own, and another business (tattoo or other) is added when Renat wants it.
+accounts move to (rempire.ee or rempireshop.com); then whether he wants
+the down alert (it would go to him, not Dim) and the privacy draft to
+read (`docs/renat-before-30-11.ru.md`). Settled the same evening (Dim,
+kickoff decision 38): no client app of our own, and another business
+(tattoo or other) is added when Renat wants it.
 
 ## The move, in order
 
