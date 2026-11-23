@@ -2,10 +2,12 @@
 plain text for WhatsApp or Telegram. It informs: you are away 30.11–13.12,
 you finish what you can before, then you wait for his feedback. No switch
 date: none is agreed with Renat.
+Staging logins, ready (23.11): his own e-mail (Владелец, «Он же барбер» →
+Renat), +admin (Владелец, no barber) and +barber (Барбер Renat). No
+passwords: codes go straight to the person, never to the test inbox, and
+Gmail delivers the + addresses to his own inbox. Google login opens only
+the first one (Google always gives the address without +).
 Before sending:
-- staging «Доступ» → «Входы»: Renat has a login with his own e-mail,
-  role «Владелец», «Он же барбер» → Renat; a login code reaches him (codes
-  go straight to the person, never to the test inbox);
 - put his questions link where it says <ссылка> (same link as before).
 Staging shows the barbers, services, prices and hours from Altegio; clients
 and visits are made up. On an iPhone both apps install from Safari on the
@@ -26,12 +28,22 @@ one staging address (on Android only one of the two, docs/apps.md). -->
 https://rempire-booking.diipsolutions.eu/admin
 Твой e-mail → код из письма. Пароль не нужен.
 
+Я подготовил тебе три входа, чтобы посмотреть систему с разных сторон.
+Код на все три приходит на твою обычную почту:
+1. renatgayanov@gmail.com: салон и твой день как у барбера. Так у
+   тебя будет на самом деле.
+2. renatgayanov+admin@gmail.com: только салон, без своего дня.
+3. renatgayanov+barber@gmail.com: только приложение барбера, как его
+   видят ребята.
+Другие входы можешь добавить сам: «Доступ» → «Добавить вход».
+Пароль, если хочешь, ставится там же: «Доступ» → «Сменить пароль».
+
 ЧТО ПОСМОТРЕТЬ
 – Салон: «Журнал» с записями всех барберов, «Клиенты», «Счета»,
   «Отчёты», барберы в «Сотрудники» → «Список».
 – Твой день как у барбера: «Мой день».
-– Как видит барбер: «Сотрудники» → «Список» → барбер → «Открыть его
-  приложение».
+– Как видит барбер: вход 3, или «Сотрудники» → «Список» → барбер →
+  «Открыть его приложение».
 – На телефоне меню внизу: «Мой день», «Журнал», «Клиенты», «Отчёты»,
   остальное в «Ещё».
 – Как видит клиент: https://rempire-booking.diipsolutions.eu/ru
