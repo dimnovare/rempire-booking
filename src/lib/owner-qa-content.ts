@@ -16,7 +16,14 @@
  * licence API gives a rolling "last 12 months"), so «switch.isolta» asks
  * Renat for the date of Isolta's last invoice to him.
  *
- * Each field saves on its own («switch.ok», «extra.note»…). The page sends
+ * Set 4, 23.11.2026 (Dim, round 14: day one moves to 04.01, Dim away
+ * 30.11–13.12): «switch» (switch before 2 December) is replaced by «subs»
+ * (Altegio and Isolta: a year or 1–2 more months, Renat checks), then what
+ * docs/renat-before-30-11.ru.md asks before 29.11 (site, google, sms,
+ * export, staff_mail, payer, alerts); the open questions of set 3 follow.
+ * Logins and passwords are never asked here: Renat tells Dim by phone.
+ *
+ * Each field saves on its own («subs.altegio», «extra.note»…). The page sends
  * one field at a time; every change is logged (qa_answer_log), so a later
  * addition never loses what was written first.
  *
@@ -32,23 +39,99 @@ export type Field =
 export type Question = { id: string; title: string; lead: string; fields: Field[] };
 
 export const INTRO =
-  "Ренат, мы ещё раз посмотрели, как REMPIRE работает в Altegio и Isolta, и почти всё уже перенесли. " +
-  "Здесь 10 коротких вопросов. Что ты уже ответил, теперь внизу, в «Уже решено». " +
-  "Ответы сохраняются сами: можно закрыть страницу, вернуться и дописать.";
+  "Ренат, новая система записи начинает работать 4 января: Дима в отъезде с 30 ноября по 13 декабря. " +
+  "Здесь 17 коротких вопросов. Первые восемь нужны до 29 ноября, остальные могут подождать. " +
+  "Что ты уже ответил, внизу, в «Уже решено». " +
+  "Ответы сохраняются сами: можно закрыть страницу, вернуться и дописать. Логины и пароли здесь не пиши.";
+
+/** One choice for both subscriptions in «subs». */
+const KEEP = ["Оставить ещё на 1–2 месяца", "Продлить на год", "Проверю и напишу"];
 
 export const QUESTIONS: Question[] = [
-  /* Dim, round 10: before Altegio renews itself on 2 December. */
+  /* Dim, 23.11: if we move away, Renat checks: a year, or 1–2 more months until the new system is ready. */
   {
-    id: "switch",
-    title: "Переход до 2 декабря",
+    id: "subs",
+    title: "Altegio и Isolta: продлевать?",
     lead:
-      "Altegio стоит 92,99 € в месяц и сам продлится 2 декабря. Поэтому хотим перейти на новую систему до этого дня. " +
-      "Isolta стоит 94,80 € + НДС в год и тоже продлевается сама; отказаться надо за месяц до продления. " +
-      "Дату продления Isolta не показывает: её видно по последнему счёту от Isolta на почте.",
+      "Новая система начинает работать 4 января, до этого всё идёт в Altegio и Isolta. " +
+      "Раз мы от них уходим, проверь, что выгоднее: продлить на год или оставить ещё на 1–2 месяца, пока новая система не готова. " +
+      "Altegio стоит 92,99\u00a0€ в месяц и продлевается сам 2-го числа. " +
+      "Isolta стоит 94,80\u00a0€ + НДС в год и тоже продлевается сама; отказаться надо за месяц до продления. " +
+      "Дату продления Isolta видно по последнему счёту от неё на почте.",
     fields: [
-      { id: "ok", kind: "one", label: "До 2 декабря тебе подходит?", options: ["Да", "Нет, нужно позже"] },
-      { id: "isolta", kind: "text", label: "Когда пришёл последний счёт от Isolta? Если не знаешь, оставь пустым" },
+      { id: "altegio", kind: "one", label: "Altegio:", options: KEEP },
+      { id: "isolta", kind: "one", label: "Isolta:", options: KEEP },
+      { id: "isolta_date", kind: "text", label: "Когда пришёл последний счёт от Isolta? Если не знаешь, оставь пустым" },
     ],
+  },
+  /* docs/renat-before-30-11.ru.md, 23.11: what the launch needs before Dim leaves. */
+  {
+    id: "site",
+    title: "Сайт rempire.ee",
+    lead:
+      "Для новой записи на rempire.ee нужны два адреса: book.rempire.ee для клиентов и staff.rempire.ee для вас. " +
+      "4 ноября настройки rempire.ee перенесли в другой аккаунт Cloudflare, к нему у нас нет доступа. " +
+      "Сам домен оплачен в Zone.ee до 4 февраля 2027.",
+    fields: [
+      { id: "who", kind: "text", label: "Кто сделал и ведёт сайт: имя и телефон" },
+      {
+        id: "cloudflare",
+        kind: "one",
+        label: "Настройки rempire.ee:",
+        options: ["Оставить там, его владелец даст нам доступ", "Перенести к магазину, всё в одном аккаунте", "Не знаю"],
+      },
+      { id: "zone", kind: "text", label: "На чей аккаунт в Zone.ee записан домен rempire.ee" },
+    ],
+  },
+  {
+    id: "google",
+    title: "Google и Google Карты",
+    lead:
+      "У салона есть профиль на Google Картах, им управляет какой-то Google-аккаунт. Туда поставим кнопку «Записаться». " +
+      "Если доступа нет, всё остальное делаем через Google-аккаунт магазина.",
+    fields: [
+      {
+        id: "own",
+        kind: "one",
+        label: "У салона свой Google-аккаунт?",
+        options: ["Да, у меня есть доступ", "Да, но доступ у другого человека", "Нет или не знаю: берём аккаунт магазина"],
+      },
+      { id: "note", kind: "text", label: "Чей это аккаунт или у кого доступ" },
+    ],
+  },
+  {
+    id: "sms",
+    title: "SMS через Messaggio",
+    lead:
+      "Напоминания клиентам идут SMS через твой Messaggio, от имени «REMPIRE». Новое имя отправителя одобряют 1–5 рабочих дней. " +
+      "Логин и пароль Messaggio здесь не пиши: скажи Диме по телефону.",
+    fields: [{ id: "sender", kind: "one", label: "Отправитель «REMPIRE» в Messaggio уже есть?", options: ["Да", "Нет", "Не знаю"] }],
+  },
+  {
+    id: "export",
+    title: "Клиенты и записи из Altegio",
+    lead:
+      "Чтобы перенести клиентов и будущие записи, нужна выгрузка из Altegio в Excel: клиенты и все записи. " +
+      "Файлы придут тебе на почту, перешли их Диме. В воскресенье 3 января сделаем ещё одну, свежую.",
+    fields: [{ id: "done", kind: "one", label: "Выгрузил и переслал?", options: ["Да, переслал", "Сделаю до 29 ноября", "Не нашёл, как выгрузить"] }],
+  },
+  {
+    id: "staff_mail",
+    title: "Почта барберов",
+    lead: "Барберы входят в своё приложение по почте: туда приходит код. Напиши почту каждого барбера.",
+    fields: [{ id: "list", kind: "text", label: "Имя и почта, каждый барбер с новой строки", rows: 6 }],
+  },
+  {
+    id: "payer",
+    title: "Кто платит за новую систему",
+    lead: "Сервер и база данных новой системы сейчас идут с карты Димы, SMS пойдут через твой Messaggio. Это расходы салона.",
+    fields: [{ id: "who", kind: "one", label: "Платит:", options: ["Rempire OÜ (салон)", "Rempire Store OÜ (магазин)", "Обсудим"] }],
+  },
+  {
+    id: "alerts",
+    title: "Если запись сломается",
+    lead: "Система каждые 5 минут проверяет, работает ли запись. Если нет, сразу пишет Диме. Тогда можно попросить клиентов звонить.",
+    fields: [{ id: "me", kind: "one", label: "Писать и тебе?", options: ["Да, пишите и мне", "Нет, только Диме"] }],
   },
   {
     id: "pay",
@@ -154,7 +237,8 @@ export const QUESTIONS: Question[] = [
 
 /** Settled by Dim (17.11 and 20.11.2026) and by Renat's answers of 18.11. Renat can object in «decided.note». */
 export const DECIDED: string[] = [
-  "Переходим до 2 декабря, пока Altegio не продлился ещё на месяц.",
+  "Новая система начинает работать в понедельник 4 января. В воскресенье 3 января переносим клиентов и записи из Altegio. До этого всё идёт в Altegio, счета барберам за ноябрь и декабрь — в Isolta.",
+  "С 30 ноября по 13 декабря ты пробуешь новую систему на тестовой версии и пишешь замечания кнопкой «Сообщить о проблеме».",
   "Запись подтверждается сразу. Барбер сам открыл время, значит клиент записывается без подтверждения. В экстренном случае барбер может отменить запись.",
   "Время для записи как сейчас в Altegio: каждые 30 минут от начала дня барбера, записаться можно в последний момент.",
   "Сообщения клиентам как сейчас: SMS за 2 часа и письмо за 12 часов до визита, поздравление в день рождения, приглашение прийти снова после неявки. SMS идут через твой Messaggio.",
