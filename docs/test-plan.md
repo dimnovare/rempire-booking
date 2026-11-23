@@ -366,18 +366,52 @@ Seen, not changed:
 - The policy link's new tab cannot be seen through the driver; the e2e
   covers it.
 
+### Run 2: the barber app on a real Galaxy, 23.11.2026
+
+`npm run e2e:browserstack -- android <spec files>` (`e2e/browserstack.mjs`):
+the e2e server with fake data runs on this computer at `bs-local.com`, and
+the specs run on a real Samsung Galaxy S24 (Android 14, Chrome) at
+BrowserStack Automate, through BrowserStack Local. Builds «barber app,
+Galaxy» in the project «REMPIRE booking». The keys are only the env vars
+`BROWSERSTACK_USERNAME` and `BROWSERSTACK_ACCESS_KEY`. No staging, no real
+login.
+
+| Specs | Result on the real Galaxy |
+|---|---|
+| `day.spec.ts`: his day, a visit's sheet, the strip and its swipe, the week, the bottom bar | 6 of 6 passed |
+| `shell.spec.ts`: the login, a wrong code, the manifest, the service worker, the install guide, robots.txt, a barber kept out of the admin | 9 of 9 passed |
+| `more.spec.ts`: «Ещё», Eesti and back, «Выйти», Renat on `/b`, «Запросы» on his phone | 5 of 6 passed; the sixth needs Renat's phone at the same time |
+| `time.spec.ts`: his time page, his hours | 2 of 8 passed; five need Renat's phone at the same time; Renat's «Особое время»: below |
+
+What failed was the test setup, not the app:
+- A test that needs two phones at once (the barber's and Renat's) cannot
+  run there: one real phone is one browser, and a second one closes it.
+  Those tests now skip on a real phone; `npm run e2e` still runs them.
+- Renat's «Особое время» on a phone: after the «301 %» error, the second
+  tap on «Добавить» missed twice on the Galaxy. The driver's tap landed on
+  the form above, with the phone's keyboard open; the screenshot shows the
+  button free. At the Galaxy's size (384 × 832) without a keyboard the
+  test passes. **Check by hand on a phone:** type 301, «Добавить», then 50,
+  «Добавить».
+
+That run used the branch before main got the round-13 merges (c467972:
+the barber's bottom bar, «Визиты» on a phone). The rerun on main stopped
+at once: «Automate testing time expired», the free plan's minutes are
+used up. On main, `day.spec.ts` and `reports.spec.ts` (with «Визиты» at
+phone width: the two tabs, «Подтвердить», no sideways scroll) passed on
+both emulated phones, 34 of 34.
+
+**No real iPhone for the staff app.** BrowserStack's Playwright on a real
+iPhone 17 Pro Max (iOS 26) timed out opening a page with a login, and
+could not read Playwright's role selectors, which every spec uses. Only
+the checks without a page passed (the manifest, the service worker file,
+robots.txt). Device Control has no tunnel to this computer.
+
 Not run yet:
-- **The staff app (`/admin`, `/b`) on real phones.** It needs a login, and
-  login codes are never typed on staging. The plan: Playwright on
-  BrowserStack Automate (it takes a real iPhone 17 Pro Max with iOS 26 and
-  the Galaxy S24) against the e2e server with fake data, through
-  BrowserStack Local. Needs from Dim: `BROWSERSTACK_USERNAME` and
-  `BROWSERSTACK_ACCESS_KEY` as env vars, and an OK to add
-  `browserstack-node-sdk`, which downloads the Local binary. Once
-  `claude/hopeful-gauss-ce3e8f` is merged, the run includes «Визиты»
-  (`/admin/dashboard`) at phone width: its two tabs and the long day
-  heading wrap cleanly, the 44px «Подтвердить» / «Отменить» buttons, and
-  nothing scrolls sideways. WebKit has not run it yet.
+- **The staff app on a real iPhone, and on main on a real Android.** Either
+  more BrowserStack Automate minutes (a paid plan) for `npm run
+  e2e:browserstack`, or by hand: Dim's phone, or a BrowserStack Live
+  session where Dim logs in himself.
 - **On Dim's own phone (about 10 minutes):** install both apps on the home
   screen; a push with the screen locked; tapping it opens the visit.
 
