@@ -26,8 +26,9 @@ const cont = (page: Page) => page.getByRole("button", { name: new RegExp(`^${c.c
 /**
  * A fake client books Milena some days ahead, so the visit can still be
  * cancelled. Ends on the confirmation. `snap` takes a picture of each step.
+ * `tooManyFirst`: the first «Записаться» meets the limit per address (429).
  */
-async function bookMilena(page: Page, phone: string, dayIndex = 3, snap: (name: string) => Promise<void> = async () => {}) {
+async function bookMilena(page: Page, phone: string, dayIndex = 3, snap: (name: string) => Promise<void> = async () => {}, tooManyFirst = false) {
   await page.goto("/ru");
   await hydrated(page);
   // 1 the barber
@@ -68,6 +69,15 @@ async function bookMilena(page: Page, phone: string, dayIndex = 3, snap: (name: 
   await page.locator("#f-consent").click();
   await expect(page.locator("#f-consent")).toHaveAttribute("aria-checked", "true");
   await snap("4-details");
+  if (tooManyFirst) {
+    // many bookings from this address lately (src/lib/booking-limit.ts): «call the salon», with the call
+    await page.route("**/api/bookings", (r) => r.fulfill({ status: 429, contentType: "application/json", body: JSON.stringify({ error: "too_many" }) }), { times: 1 });
+    await page.getByRole("button", { name: c.book, exact: true }).click();
+    await expect(page.getByRole("alert").filter({ hasText: c.errTooMany })).toBeVisible();
+    await expect(page.locator("a:visible", { hasText: c.callSalon })).toHaveAttribute("href", /^tel:\+?\d+$/);
+    await expect(page.locator("#f-name")).toHaveValue("App Test Client");
+    await expectNoSideScroll(page);
+  }
   await page.getByRole("button", { name: c.book, exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: c.booked })).toBeVisible();
 }
@@ -114,10 +124,16 @@ test.describe("the client app", () => {
     await expect(page.locator(".next")).toHaveCount(0);
 
     // barber, services, a time some days ahead, details: booked
-    await bookMilena(page, phone, 3, async (name) => {
-      await expectNoSideScroll(page);
-      await shot(page, name);
-    });
+    await bookMilena(
+      page,
+      phone,
+      3,
+      async (name) => {
+        await expectNoSideScroll(page);
+        await shot(page, name);
+      },
+      true,
+    );
     // a client moves or cancels at any time: no cutoff, no «call the salon»
     await expect(page.getByText(c.anyTime)).toBeVisible();
 
@@ -192,6 +208,10 @@ test.describe("moving a visit", () => {
     await expect(page.getByText(c.taken)).toBeVisible();
     await page.locator(".slots .slot:not([disabled])").first().click();
     await expect(page.getByText(c.taken)).toHaveCount(0);
+    // many moves from this address lately: «call the salon», and the picked time stays
+    await page.route("**/api/visit/*/move", (r) => r.fulfill({ status: 429, contentType: "application/json", body: JSON.stringify({ error: "too_many" }) }), { times: 1 });
+    await page.getByRole("button", { name: c.moveHere }).click();
+    await expect(page.getByText(c.errTooMany)).toBeVisible();
     await page.getByRole("button", { name: c.moveHere }).click();
 
     // back on the visit's page, at the new time

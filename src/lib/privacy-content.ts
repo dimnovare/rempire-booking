@@ -132,6 +132,7 @@ const ru: PrivacyCopy = {
             "Язык, на котором вы записались",
           ],
         },
+        { p: "Чтобы защититься от спама, мы считаем, сколько записей и переносов приходит с одного IP-адреса. Сам адрес мы не храним, только код, сделанный из него и даты. Код старше двух дней стирается." },
         { h: "Ваши визиты" },
         {
           list: [
@@ -196,7 +197,7 @@ const ru: PrivacyCopy = {
         { h: "Отзывы" },
         { p: "Отзыв вы оставляете сами, и он появляется на сайте только после проверки салоном. Основание: ваше согласие (ст. 6(1)(a)). Вы можете отозвать его в любой момент, тогда мы уберём отзыв." },
         { h: "Карточка клиента и защита от спама" },
-        { p: "Заметки в карточке помогают нам помнить, что вам нравится, и хорошо вас обслуживать. Код против спама защищает страницу отзывов. Основание: наш законный интерес (ст. 6(1)(f))." },
+        { p: "Заметки в карточке помогают нам помнить, что вам нравится, и хорошо вас обслуживать. Код против спама защищает онлайн-запись и страницу отзывов. Основание: наш законный интерес (ст. 6(1)(f))." },
         { p: "Мы не продаём ваши данные и не передаём их другим для рекламы." },
       ],
     },
@@ -324,6 +325,7 @@ const et: PrivacyCopy = {
             "Keel, milles broneerisid",
           ],
         },
+        { p: "Rämpsposti vastu loeme, mitu broneeringut ja ümberbroneerimist tuleb ühelt IP-aadressilt. Aadressi ennast me ei hoia, ainult sellest ja kuupäevast tehtud koodi. Üle kahe päeva vana kood kustutatakse." },
         { h: "Sinu külastused" },
         {
           list: [
@@ -388,7 +390,7 @@ const et: PrivacyCopy = {
         { h: "Arvustused" },
         { p: "Arvustuse jätad ise ja see ilmub saidile alles pärast salongi kontrolli. Alus: sinu nõusolek (art 6(1)(a)). Võid selle igal ajal tagasi võtta, siis eemaldame arvustuse." },
         { h: "Kliendikaart ja kaitse rämpsposti eest" },
-        { p: "Märkmed kaardil aitavad meil meeles pidada, mis sulle meeldib, ja sind hästi teenindada. Rämpsposti vastane kood kaitseb arvustuste lehte. Alus: meie õigustatud huvi (art 6(1)(f))." },
+        { p: "Märkmed kaardil aitavad meil meeles pidada, mis sulle meeldib, ja sind hästi teenindada. Rämpsposti vastane kood kaitseb veebibroneerimist ja arvustuste lehte. Alus: meie õigustatud huvi (art 6(1)(f))." },
         { p: "Me ei müü sinu andmeid ega anna neid teistele reklaami jaoks." },
       ],
     },
@@ -516,6 +518,7 @@ const en: PrivacyCopy = {
             "The language you booked in",
           ],
         },
+        { p: "To stop spam, we count how many bookings and moves come from one IP address. We do not keep the address itself, only a code made from it and the date. A code older than two days is erased." },
         { h: "Your visits" },
         {
           list: [
@@ -580,7 +583,7 @@ const en: PrivacyCopy = {
         { h: "Reviews" },
         { p: "You choose to leave a review, and it shows on the site only after the salon has checked it. Legal basis: your consent (Article 6(1)(a)). You can withdraw it at any time; then we take the review down." },
         { h: "Your client card and spam protection" },
-        { p: "Notes on your card help us remember what you like and serve you well. The spam code protects the reviews page. Legal basis: our legitimate interest (Article 6(1)(f))." },
+        { p: "Notes on your card help us remember what you like and serve you well. The spam code protects the online booking and the reviews page. Legal basis: our legitimate interest (Article 6(1)(f))." },
         { p: "We do not sell your data or give it to others for advertising." },
       ],
     },

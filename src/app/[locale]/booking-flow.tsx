@@ -515,6 +515,8 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
         setAvail(null);
       } else if (res.status === 422 && j.field && ["name", "phone", "email"].includes(j.field)) {
         setErrors({ [j.field]: j.field === "name" ? c.errName : j.field === "phone" ? c.errPhone : c.errEmail });
+      } else if (res.status === 429) {
+        setFormError(c.errTooMany);
       } else {
         setFormError(c.errGeneric);
       }
@@ -553,6 +555,8 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
         setMoveError(c.taken);
       } else if (res.status === 409 || res.status === 404) {
         setMoveError(c.moveGone);
+      } else if (res.status === 429) {
+        setMoveError(c.errTooMany);
       } else {
         setMoveError(c.errGeneric);
       }
@@ -1101,6 +1105,11 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
               <p className="alert" role="alert">
                 {formError}
               </p>
+            )}
+            {formError === c.errTooMany && catalog.location.phone && (
+              <a className="btn btn-soft" href={`tel:${catalog.location.phone.replace(/\s/g, "")}`}>
+                {c.callSalon}
+              </a>
             )}
           </div>
         </div>

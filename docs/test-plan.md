@@ -72,7 +72,8 @@ shows the same, nothing else.
 | Suite | Command | Today (23.11) | Must be |
 |---|---|---|---|
 | Types | `npm run typecheck` | green | green |
-| Unit (Vitest, PGlite) | `npm test` | 1216 tests, green at 19:05 and 20:40 on 23.11 (run 3) | green twice in a row, at two hours of the day |
+| Unit (Vitest, PGlite) | `npm test` | 1216 tests, green at 19:05 and 20:40 on 23.11 (run 3); 1227 at 23:35 with the limit per address and the Postgres race | green twice in a row, at two hours of the day |
+| Postgres 18 (`tests/pg-race.test.ts`) | `PG_TEST_URL=postgres://postgres@127.0.0.1:55432/booking_test npm test` (a local `postgres:18` container; CI starts its own) | 23.11: every migration from empty, the race below, 3 runs green | green in CI on every push |
 | E2E, phone size (Playwright: Pixel 7 Chromium, iPhone 13 WebKit) | `npm run e2e` | 23.11 evening (a Monday): 275 passed, 63 skipped (by design), 1 failed: the new «Обезличить» test's own mistake, fixed, passes | green on a Monday, a Saturday and a weekday, morning and evening |
 | E2E, production build | `npm run build` then `E2E_PROD=yes npm run e2e` | 23.11: 172 passed, 8 skipped, 0 failed. Android only: WebKit keeps no Secure cookie over plain http | green |
 | Crawl: every page, every button | `E2E_PROD=yes E2E_CRAWL=yes npm run e2e -- e2e/crawl.spec.ts` | 23.11: 173 pages, 1839 buttons, 0 problems | 0 problems |
@@ -87,9 +88,15 @@ shows the same, nothing else.
 2. **Two people, one time:** two bookings of the same slot at the same
    moment, against Postgres: exactly one 201, one 409. The database has an
    exclusion constraint (`appointments_no_overlap`); the test proves the
-   API turns it into a clean «time taken».
+   API turns it into a clean «time taken». **Built 23.11**
+   (`tests/pg-race.test.ts`, through the pool, as on Vercel): eight at
+   once on one barber's time give one 201 and seven 409 with other times;
+   «anyone» with two more people than free barbers books each free barber
+   once and refuses two; the same tap three times at once is one visit.
 3. **Postgres in CI**: the migrations from empty and from staging's last
-   state, on a real Postgres 18, not only PGlite.
+   state, on a real Postgres 18, not only PGlite. **From empty: built
+   23.11** (the same test file; a `postgres:18` service in
+   `.github/workflows/ci.yml`). From staging's last state: still to do.
 4. **The cron over HTTP**: with the secret, one due reminder goes once;
    a second run sends nothing more.
 5. **Resend handling**: a 500, a timeout and a 429 from a stub; the row is
@@ -439,11 +446,18 @@ Not covered by run 3, still open before the switch:
 - **Two bookings of one time at the same moment, on Postgres** (§ 2 item
   2): the local server is PGlite, one connection, so the race cannot
   happen there. Run 1 saw it work on staging (two phones moving at once).
-- **A limit per IP on `/api/bookings`** (§ 11 «Spam bookings»): not built.
+  Built later the same evening: `tests/pg-race.test.ts`, green.
+- **A limit per IP on `/api/bookings`** (§ 11 «Spam bookings»): built
+  later the same evening (`src/lib/booking-limit.ts`, migration 041).
 - **iPhone on the production build**: WebKit drops the Secure login cookie
   over plain http; the iPhone e2e ran on `next dev` only.
 - **Days and hours**: one Monday evening; a Saturday and a morning run
-  still to do.
+  still to do. A late-night run (23:36 on 23.11 and 00:05 on 24.11, with
+  the limit and the race): 273 passed; the tests that failed depended on
+  the hour, through the demo's visit «in 20 minutes» (after 23:40 it fell
+  on tomorrow; after midnight it is the first, short card). Fixed in the
+  seed (`tools/seed-demo.mjs`, a unit test at 23:45) and in
+  `e2e/sides.spec.ts`; one rights test failed once and passed again.
 - **Real inboxes, SMS, real phones, the Altegio import** (§§ 7, 10, 12):
   need staging with Dim, Messaggio's login and Altegio's exports.
 
@@ -463,8 +477,8 @@ answer must be calm, clear and recoverable.
 | The shop down | «Продать» says so; booking untouched |
 | A deploy during a booking | the booking finishes or fails clearly; never half a visit |
 | A deploy with a bad migration | caught on staging first; Vercel's Instant Rollback; migrations only add |
-| Spam bookings | a limit per IP on `/api/bookings` (to build); Renat can cancel many at once |
-| Two people, one time | one visit; the other sees other times (§ 2 item 2) |
+| Spam bookings | a limit per address (built 23.11, `src/lib/booking-limit.ts`): 6 online bookings an hour and 15 a day, 10 moves an hour; past it 429 and «call the salon» with the call button; the same tap again still gets its visit; the address kept only as a code, two days. Renat can cancel many at once |
+| Two people, one time | one visit; the other sees other times (§ 2 item 2; on Postgres, `tests/pg-race.test.ts`) |
 | Backups | a nightly backup (Railway's, if the plan has them, or a dump of our own) restored once into a scratch database; counts match |
 
 ## 12. The Altegio import check (A7)
@@ -486,7 +500,7 @@ On the dress rehearsal (launch step 6) and again on the evening before.
 | § 3–8 on the local production build | Claude | 23.11 | e2e and the crawl green (run 3) |
 | § 3–8 on staging, letters and SMS checked in Dim's inbox and phone | Claude and Dim | | |
 | § 10 real phones | Dim, Renat, one barber | | |
-| § 11 outages | Claude | 23.11 | database and shop down checked; per-IP limit not built; the race on Postgres not run |
+| § 11 outages | Claude | 23.11 | database and shop down checked; the limit per address built and tested; the race green on Postgres 18; backups not checked |
 | § 12 import | Claude, checked by Renat | | |
 | § 9 smoke test on production | Claude and Dim | | |
 | Go | Dim and Renat | | |

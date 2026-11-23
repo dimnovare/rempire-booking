@@ -82,7 +82,11 @@ Goal: as simple as Altegio or Fresha. Copy their flows and features freely.
     `node_modules/next/dist/docs/`.
 - **Commands:**
   - `npm run dev`: port 3400. The shop uses 3300.
-  - `npm test`
+  - `npm test`. With `PG_TEST_URL` (a local database named `*_test`) it
+    also runs `tests/pg-race.test.ts` on real Postgres: the migrations from
+    empty, and two bookings of one time at once. The command for a
+    throwaway `postgres:18` container is at the top of that file; CI starts
+    its own.
   - `npm run e2e`: Playwright, the barber app at phone width, on its own
     server (port 3420, fake data). `E2E_PROD=yes` after `npm run build`
     for the production build and offline. See `playwright.config.ts`.

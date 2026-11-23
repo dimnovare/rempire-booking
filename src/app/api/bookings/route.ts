@@ -8,13 +8,16 @@
  * 201 { visit, manageUrl }    booked (or the same tap again: manageUrl null)
  * 409 { error: "slot_taken", alternatives: [[startMs, staffId, extraCents], …] }
  * 422 { error: "invalid", field }
+ * 429 { error: "too_many" }  many bookings from this address (src/lib/booking-limit.ts)
  *
  * With an e-mail, the booking queued its confirmation; it goes out right
  * after this response (the cron retries it if that fails).
  */
 import { after } from "next/server";
+import { requestAddress } from "@/lib/address-hash";
 import { loadAvailability } from "@/lib/availability";
 import { book, type BookingInput } from "@/lib/booking";
+import { noteBooking, withinBookingLimit } from "@/lib/booking-limit";
 import { currentBusiness } from "@/lib/business";
 import { dbConfigured, query } from "@/lib/db";
 import { isLocale } from "@/lib/i18n";
@@ -54,11 +57,17 @@ export async function POST(request: Request) {
     smsReminder: body.smsReminder !== false,
     idempotencyKey: request.headers.get("idempotency-key") || "",
   };
+  const ip = requestAddress(request);
+  if (!(await withinBookingLimit(query, business, "book", ip, { idempotencyKey: input.idempotencyKey }))) {
+    return Response.json({ error: "too_many" }, { status: 429, headers: NO_STORE });
+  }
   const r = await book(query, business, input, { source: "online" });
 
   if (r.ok) {
     // the confirmation letter and the barber's push (Phase B), right after the response
     if (!r.replay) {
+      // the count never fails a visit already booked
+      await noteBooking(query, business, "book", ip).catch((err) => console.error("booking limit count failed:", err instanceof Error ? err.message : err));
       const id = r.visit.id;
       after(async () => {
         try {

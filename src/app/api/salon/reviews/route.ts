@@ -20,6 +20,7 @@
  * request only to count against the limit, and kept only as a hash.
  */
 import { connection } from "next/server";
+import { requestAddress } from "@/lib/address-hash";
 import { currentBusiness } from "@/lib/business";
 import { dbConfigured, query } from "@/lib/db";
 import { salonReviews, submitReview } from "@/lib/reviews";
@@ -43,12 +44,6 @@ export async function GET(request: Request) {
   return Response.json(page, { headers: HEADERS });
 }
 
-/** The sender's address as the host gives it: Vercel sets x-real-ip and overwrites x-forwarded-for, so neither can be made up there. */
-function addressOf(request: Request): string {
-  const h = request.headers;
-  return (h.get("x-real-ip") || (h.get("x-forwarded-for") ?? "").split(",")[0] || "").trim().slice(0, 64);
-}
-
 export async function POST(request: Request) {
   if (!dbConfigured()) return Response.json({ error: "unavailable" }, { status: 503, headers: HEADERS });
   const raw = await request.text();
@@ -68,7 +63,7 @@ export async function POST(request: Request) {
     query,
     business,
     { rating: body.rating, staffId: body.staffId, name: body.name, text: body.text, website: body.website, ms: body.ms },
-    { ip: addressOf(request) },
+    { ip: requestAddress(request) },
   );
   if (r.ok) return Response.json({ ok: true }, { status: 201, headers: HEADERS });
   if (r.code === "too_many") return Response.json({ error: "too_many" }, { status: 429, headers: HEADERS });

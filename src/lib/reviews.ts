@@ -31,7 +31,8 @@
  *
  * No Next.js here: the pages, the script and the tests call the same code.
  */
-import { createHash, createHmac } from "node:crypto";
+import { createHash } from "node:crypto";
+import { addressHash } from "./address-hash";
 import type { Business } from "./availability";
 import type { Querier } from "./db";
 import { can, maskPhone, seenStaff, type Holder } from "./auth/rights";
@@ -175,18 +176,6 @@ export function cleanReviewInput(input: unknown): { ok: true; value: CleanReview
   if ([...body].length > REVIEW_MAX.body) return { ok: false, field: "text" };
   if (LINK.test(name) || LINK.test(body)) return { ok: false, field: "link" };
   return { ok: true, value: { rating, staffId: who && who !== "salon" ? who : null, name, body } };
-}
-
-/**
- * The address, unreadable: an HMAC of it and the salon's day, keyed with
- * the database's own random key (review_salt, migration 035). The same
- * address gives one hash a day, so a day's reviews can be counted, and
- * another the next day.
- */
-async function addressHash(q: Querier, ip: string, day: string): Promise<string> {
-  const [row] = await q<{ salt: string }>("select salt from review_salt limit 1");
-  if (!row) throw new Error("review_salt is empty: migration 035 makes it");
-  return createHmac("sha256", row.salt).update(`${day}\n${ip.trim().toLowerCase()}`).digest("hex");
 }
 
 /**
