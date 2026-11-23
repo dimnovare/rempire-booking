@@ -81,7 +81,9 @@
  *
  * «Настройки → Уведомления» (src/lib/admin/notifications.ts; Dim, round
  * 11): the salon's switch per type and per channel, the leads, hours and
- * delays, and its own SMS texts. Nothing stored there is everything as
+ * delays, its own SMS texts and the text in each letter (read when the
+ * letter is built, so a change reaches letters not sent yet). Nothing
+ * stored there is everything as
  * above. Every message is asked about twice:
  *   - when it is planned: a type or channel that is off plans nothing, and
  *     the planners above cancel the reminders it had queued;
@@ -97,7 +99,7 @@
  * the words are built at send time.
  */
 import { after } from "next/server";
-import { atOf, NOTIFY_DEFAULTS, noShowDelay, readNotify, sends, sendsKind, smsTemplate, type NotifySettings } from "./admin/notifications";
+import { atOf, emailText, NOTIFY_DEFAULTS, noShowDelay, readNotify, sends, sendsKind, smsTemplate, type NotifySettings } from "./admin/notifications";
 import { smsWords, tokensIn, type SmsType, type SmsValues } from "./admin/notification-text";
 import { getBusinessById, type Business } from "./availability";
 import { birthdayMatch } from "./birthday";
@@ -631,8 +633,8 @@ async function composeClientMessage(q: Querier, row: OutboxRow, now: number, env
     const p = row.payload as { date?: string; tz?: string; business?: string };
     if (!p.date || localParts(now, p.tz || business.timezone).date !== p.date) return { skip: "not the day any more" };
     if (row.channel === "email") {
-      const [loc] = await q<{ address: string }>("select address from locations where business_id = $1 and active order by sort, name limit 1", [business.id]);
-      const letter = birthdayLetter({ locale: row.locale, origin, business, address: loc?.address });
+      const [loc] = await q<{ address: string; website: string }>("select address, website from locations where business_id = $1 and active order by sort, name limit 1", [business.id]);
+      const letter = birthdayLetter({ locale: row.locale, origin, business, address: loc?.address, website: loc?.website, extra: emailText(ns, "birthday") });
       return { subject: letter.subject, body: letter };
     }
     if (row.channel === "push") {
@@ -659,7 +661,7 @@ async function composeClientMessage(q: Querier, row: OutboxRow, now: number, env
   if (!v) return { skip: "visit gone" };
   if (v.status !== "no_show") return { skip: `visit ${v.status}` };
   if (row.channel === "email") {
-    const letter = noShowLetter(v, { business, origin, locale: row.locale });
+    const letter = noShowLetter(v, { business, origin, locale: row.locale, extra: emailText(ns, "no_show") });
     return { subject: letter.subject, body: letter };
   }
   const seen = { business: business.name, startsAt: v.startsAt, tz: business.timezone, visitId: v.id };
@@ -687,7 +689,7 @@ async function compose(q: Querier, row: OutboxRow, now: number, env: Env, ctx: C
     const business = await getBusinessById(q, row.business_id);
     if (!business) return { skip: "business gone" };
     const token = await mintVisitLink(q, v.id, "email");
-    const letter = visitLetter("reminder", v, { business, origin: siteUrl(env).origin, token, locale: row.locale, now });
+    const letter = visitLetter("reminder", v, { business, origin: siteUrl(env).origin, token, locale: row.locale, now, extra: emailText(ns, "reminder") });
     return { subject: letter.subject, body: letter };
   }
   if (row.kind === "confirmation" && row.channel === "email") {
@@ -699,7 +701,7 @@ async function compose(q: Querier, row: OutboxRow, now: number, env: Env, ctx: C
     if (!business) return { skip: "business gone" };
     // a link of this letter's own: only its hash is kept (006_visit_links.sql)
     const token = await mintVisitLink(q, v.id, "email");
-    const letter = confirmationLetter(v, { business, origin: siteUrl(env).origin, token, locale: row.locale, now });
+    const letter = confirmationLetter(v, { business, origin: siteUrl(env).origin, token, locale: row.locale, now, extra: emailText(ns, "confirmation") });
     return { subject: letter.subject, body: letter };
   }
   if ((row.kind === "moved" || row.kind === "cancelled") && row.channel === "email") {
@@ -723,6 +725,7 @@ async function compose(q: Querier, row: OutboxRow, now: number, env: Env, ctx: C
       locale: row.locale,
       now,
       from: from.fromStart ? { startsAt: from.fromStart, staffName: from.fromStaff } : undefined,
+      extra: emailText(ns, row.kind),
     });
     return { subject: letter.subject, body: letter };
   }

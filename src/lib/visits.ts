@@ -26,7 +26,8 @@ export type VisitView = {
   locale: string;
   reminder: boolean;
   services: { serviceId: string; name: L10n; durationMin: number; priceCents: number }[];
-  location: { name: string; address: string; phone: string };
+  /** website: the salon's site for the letters' last line (locations.website) */
+  location: { name: string; address: string; phone: string; website?: string };
 };
 
 // 16 characters (96 bits) is the SMS short link's; letters and the booking screen use 32
@@ -76,10 +77,11 @@ async function loadVisit(q: Querier, where: string, params: unknown[]): Promise<
     loc_name: string;
     address: string;
     phone: string;
+    website: string;
   }>(
     `select a.id, a.status, a.starts_at, a.ends_at, a.total_cents, a.extra_cents, a.staff_id, s.display_name as staff_name,
             a.any_staff, c.name as client_name, a.locale, a.reminder_min,
-            l.name as loc_name, l.address, l.phone
+            l.name as loc_name, l.address, l.phone, l.website
        from appointments a
        join staff s on s.id = a.staff_id
        join clients c on c.id = a.client_id
@@ -106,7 +108,7 @@ async function loadVisit(q: Querier, where: string, params: unknown[]): Promise<
     locale: row.locale,
     reminder: row.reminder_min != null,
     services: services.map((s) => ({ serviceId: s.service_id, name: s.name, durationMin: s.duration_min, priceCents: s.price_cents })),
-    location: { name: row.loc_name, address: row.address, phone: row.phone },
+    location: { name: row.loc_name, address: row.address, phone: row.phone, website: row.website },
   };
 }
 

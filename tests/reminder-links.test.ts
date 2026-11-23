@@ -118,7 +118,7 @@ describe("admin bookings get the confirmation letter too (Dim, 17.11.2026)", () 
     await runOutbox(query, Date.now() + 60_000, LIVE);
     const letter = sentToConsole.find((l) => l.subject.includes("kell 15:00"));
     expect(letter?.subject).toMatch(/^Aeg on broneeritud: REMPIRE \d\d\.\d\d kell 15:00$/);
-    expect(letter?.html).toContain("sest sul on aeg REMPIRE");
+    expect(letter?.html).toContain("Sinu aeg on broneeritud:");
   });
 
   it("an e-mail someone left with this phone but never came: no letter (security review, 17.11.2026)", async () => {

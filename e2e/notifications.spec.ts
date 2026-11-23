@@ -112,6 +112,19 @@ test.describe("«Уведомления» on a phone", () => {
     await expect(page.locator(".ntf-subj b")).toHaveText(/^Напоминание о записи в /);
     await page.getByRole("button", { name: "EN", exact: true }).click();
     await expect(page.locator(".ntf-subj b")).toHaveText(/^Reminder: your /);
+    // «Дополнительная информация в Email»: typed, it is in the letter at once; put back, never saved here
+    const extra = page.locator("details.ntf-extra");
+    await expect(extra.locator("summary small")).toHaveText(N.extra.none);
+    await extra.locator("summary").click();
+    const words = "Parking in the yard behind the house.";
+    const extraBox = page.getByRole("textbox", { name: N.extra.title });
+    await extraBox.fill(words);
+    await expect(extra.locator(".ntf-extra-count")).toHaveText(new RegExp(`^${words.length} / `));
+    await expect.poll(() => page.locator(".ntf-frame").getAttribute("srcdoc")).toContain(words);
+    await expect(save).toBeEnabled();
+    await extraBox.fill("");
+    await expect.poll(() => page.locator(".ntf-frame").getAttribute("srcdoc")).not.toContain(words);
+    await expect(save).toBeDisabled();
     await page.getByRole("tab", { name: N.ch.push }).click();
     await expect(page.locator(".ntf-push p")).toHaveText(/^Reminder: your visit on \d\d\.\d\d at 14:30/);
     await expectNoSideScroll(page);

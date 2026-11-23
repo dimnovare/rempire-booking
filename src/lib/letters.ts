@@ -1,105 +1,607 @@
 /**
- * The letters, in REMPIRE's look (docs/brand.md): a black page, white text,
- * lime (#e9fc53) only for the one thing to do, square edges, uppercase
- * headings with wide spacing, a 2 px lime rule left of the key line.
+ * The letters: to a client about a visit (confirmed, moved, cancelled, the
+ * reminder, the review request), the birthday greeting and the invitation
+ * after a missed visit, the staff login code, an invoice to a barber's
+ * company.
  *
- * Written for mail clients, not browsers: tables and inline styles, no web
- * fonts (Questrial where installed, else Helvetica or Arial), no SVG (the
- * logo is the PNG the app serves), a hidden preheader, and a plain-text
- * part with the same words. Every value from the database goes through
- * esc(); links are built here from the app's own address.
+ * The look is the light design canvas Dim approved in round 13 (src/lib/
+ * letter-kit.ts): the order of REMPIRE's letters today (what happened, the
+ * buttons, who, when, what, where, the rules), in the booking's colours,
+ * with our own words and icons. Never another system's name or logo.
+ *
+ * Each client letter can carry the salon's own text for its kind,
+ * «Дополнительная информация в Email» on «Настройки → Уведомления»
+ * (`extra`), under the visit's details. Every letter has a plain-text part
+ * with the same words. Every value from the database goes through esc();
+ * links are built here from the app's own address.
  */
 import type { Business } from "./availability";
 import type { Attachment, LetterBody } from "./email";
 import { COPY, INTL, eur, pick, type Locale } from "./i18n";
 import { visitIcsFor } from "./ics";
+import * as K from "./letter-kit";
 import { localParts } from "./tz";
 import type { VisitView } from "./visits";
 
+export const esc = K.esc;
+
 export type Letter = LetterBody & { subject: string; html: string };
 
-const INK = "#000000";
-const FG = "#ffffff";
-const LIME = "#e9fc53";
-const LINE = "#262624";
-const LINE2 = "#3b3c36";
-const SOFT = "#b4b4ac";
-const DIM = "#86867f";
-const FONT = "Questrial, 'Helvetica Neue', Helvetica, Arial, sans-serif";
-const MONO = "'SF Mono', SFMono-Regular, Menlo, Consolas, 'Courier New', monospace";
+const pad2 = (n: number) => String(n).padStart(2, "0");
 
-export const esc = (s: unknown) =>
-  String(s ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]!);
+/** A tap-to-call link for a phone inside a sentence. */
+const telLink = (phone: string) => `<a href="tel:${esc(phone.replace(/[^\d+]/g, ""))}" style="color:${K.C.ink2};white-space:nowrap;">${esc(phone)}</a>`;
+/** A sentence of escaped copy with the phone as a link in it. */
+const withTel = (sentence: (p: string) => string, phone: string) => esc(sentence("\u0000")).replace("\u0000", telLink(phone));
 
-// ---- pieces: each one is a <tr> of the 520 px column ----------------------
-
-const PX = "padding-left:36px;padding-right:36px;";
-
-function eyebrow(text: string) {
-  return `<tr><td class="px" style="${PX}padding-bottom:10px;font:700 12px/16px ${FONT};letter-spacing:3px;text-transform:uppercase;color:${LIME};">${esc(text)}</td></tr>`;
+/** «Вторник, 25 ноября» in the visit's timezone. */
+function longDay(ms: number, L: Locale, tz: string) {
+  const long = new Intl.DateTimeFormat(INTL[L], { weekday: "long", day: "numeric", month: "long", timeZone: tz }).format(ms);
+  return long.charAt(0).toUpperCase() + long.slice(1);
 }
 
-function heading(text: string) {
-  return `<tr><td class="px h1" style="${PX}padding-bottom:22px;font:700 28px/34px ${FONT};letter-spacing:3px;text-transform:uppercase;color:${FG};">${esc(text)}</td></tr>`;
+/**
+ * The day inside a sentence: «на пятницу, 27 ноября» (the weekdays in -а
+ * take -у after «на»), «reede, 27. november», «Friday 27 November».
+ */
+function inSentence(dayLong: string, L: Locale) {
+  if (L === "en") return dayLong;
+  const low = dayLong.charAt(0).toLowerCase() + dayLong.slice(1);
+  return L === "ru" ? low.replace(/^([а-яё]+)а(?=,)/, "$1у") : low;
 }
 
-/** The one line that matters (the code, the time), behind the lime rule. */
-function keyLine(inner: string, style = `font:20px/28px ${FONT};color:${FG};`) {
-  return `<tr><td class="px" style="${PX}padding-bottom:24px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="border-left:2px solid ${LIME};padding:4px 0 4px 18px;${style}">${inner}</td></tr></table></td></tr>`;
+/* ---------- the words every visit letter shares ---------- */
+
+type LookCopy = {
+  details: string;
+  services: string;
+  findUs: string;
+  openMap: string;
+  cancel: string;
+  move: string;
+  priceNote: string;
+  extraFee: string;
+  auto: string;
+  dur: (min: number) => string;
+};
+
+const hm = (min: number, h: string, m: string) => {
+  const hours = Math.floor(min / 60);
+  const rest = min % 60;
+  return [hours ? `${hours} ${h}` : "", rest || !hours ? `${rest} ${m}` : ""].filter(Boolean).join(" ");
+};
+
+const LOOK: Record<Locale, LookCopy> = {
+  ru: {
+    details: "Детали записи",
+    services: "Услуги",
+    findUs: "Как нас найти",
+    openMap: "открыть карту",
+    cancel: "Отменить",
+    move: "Перенести",
+    priceNote: "Цены по прайс-листу. Итоговую стоимость барбер назовёт на месте.",
+    extraFee: "Доплата за время вне графика",
+    auto: "Письмо отправлено автоматически, отвечать на него не нужно.",
+    dur: (m) => hm(m, "ч", "мин"),
+  },
+  et: {
+    details: "Broneeringu andmed",
+    services: "Teenused",
+    findUs: "Kuidas meid leida",
+    openMap: "ava kaart",
+    cancel: "Tühista",
+    move: "Muuda aega",
+    priceNote: "Hinnad hinnakirja järgi. Lõpliku hinna ütleb meister kohapeal.",
+    extraFee: "Lisatasu väljaspool tööaega",
+    auto: "Kiri saadeti automaatselt, sellele pole vaja vastata.",
+    dur: (m) => hm(m, "h", "min"),
+  },
+  en: {
+    details: "Booking details",
+    services: "Services",
+    findUs: "How to find us",
+    openMap: "open map",
+    cancel: "Cancel",
+    move: "Reschedule",
+    priceNote: "Prices as on the price list. Your barber confirms the final price at the salon.",
+    extraFee: "Out-of-hours fee",
+    auto: "This e-mail was sent automatically; there is no need to reply.",
+    dur: (m) => hm(m, "h", "min"),
+  },
+};
+
+/** One kind of visit letter: its subject, its pill, its title and lead. `day` is already in its sentence form. */
+type VisitCopy = {
+  subject: (day: string, time: string) => string;
+  pill: string;
+  title: (day: string, time: string, salon: string) => string;
+  lead: (salon: string, phone: boolean) => string;
+};
+
+// ---- the booking confirmation (A6) ----------------------------------------
+
+const CONFIRM: Record<Locale, VisitCopy & { cutoff: (span: string) => string; call: (phone: string) => string; hours: (h: number) => string; minutes: (m: number) => string }> = {
+  ru: {
+    subject: (d, t) => `Вы записаны в REMPIRE: ${d}, ${t}`,
+    pill: "Запись подтверждена",
+    title: (d, t) => `Вы записаны на ${d}, в\u00a0${t}`,
+    lead: (s) => `Ждём вас в ${s}. Если планы изменятся, перенесите или отмените запись здесь.`,
+    cutoff: (s) => `Перенести или отменить онлайн можно не позже чем за ${s} до визита.`,
+    call: (p) => `Позже — по телефону ${p}.`,
+    hours: (h) => `${h} ч`,
+    minutes: (m) => `${m} мин`,
+  },
+  et: {
+    subject: (d, t) => `Aeg on broneeritud: REMPIRE ${d} kell ${t}`,
+    pill: "Broneering kinnitatud",
+    title: (d, t) => `Sinu aeg on broneeritud: ${d} kell\u00a0${t}`,
+    lead: () => "Ootame sind! Kui plaanid muutuvad, muuda või tühista aeg siin.",
+    cutoff: (s) => `Veebis saab aega muuta või tühistada kuni ${s} enne külastust.`,
+    call: (p) => `Hiljem helista: ${p}.`,
+    hours: (h) => `${h} h`,
+    minutes: (m) => `${m} min`,
+  },
+  en: {
+    subject: (d, t) => `You're booked at REMPIRE: ${d}, ${t}`,
+    pill: "Booking confirmed",
+    title: (d, t) => `You're booked for ${d} at\u00a0${t}`,
+    lead: (s) => `See you at ${s}. If your plans change, move or cancel your booking here.`,
+    cutoff: (s) => `You can change or cancel online up to ${s} before your visit.`,
+    call: (p) => `After that, please call ${p}.`,
+    hours: (h) => `${h} h`,
+    minutes: (m) => `${m} min`,
+  },
+};
+
+// ---- a visit changed by the salon: moved or cancelled (A6) ----------------
+
+const MOVED: Record<Locale, VisitCopy & { was: (when: string) => string }> = {
+  ru: {
+    subject: (d, t) => `Запись перенесена: ${d}, ${t}`,
+    pill: "Запись перенесена",
+    title: (d, t) => `Ваша запись перенесена на ${d}, в\u00a0${t}`,
+    lead: () => "Мы изменили вашу запись. Новое время и детали — ниже.",
+    was: (w) => `Было: ${w}`,
+  },
+  et: {
+    subject: (d, t) => `Aeg on muudetud: REMPIRE ${d} kell ${t}`,
+    pill: "Aeg on muudetud",
+    title: (d, t) => `Sinu uus aeg: ${d} kell\u00a0${t}`,
+    lead: () => "Muutsime sinu broneeringut. Uus aeg ja andmed on allpool.",
+    was: (w) => `Enne: ${w}`,
+  },
+  en: {
+    subject: (d, t) => `Your REMPIRE booking has moved: ${d}, ${t}`,
+    pill: "Booking moved",
+    title: (d, t) => `Your booking has moved to ${d} at\u00a0${t}`,
+    lead: () => "We have changed your booking. The new time and the details are below.",
+    was: (w) => `Was: ${w}`,
+  },
+};
+
+const CANCELLED: Record<Locale, VisitCopy & { call: (phone: string) => string; why: string }> = {
+  ru: {
+    subject: (d, t) => `Запись отменена: ${d}, ${t}`,
+    pill: "Запись отменена",
+    title: (d, t) => `Ваша запись на ${d}, в\u00a0${t} отменена`,
+    lead: (_, p) => `Выберите другое время, это займёт минуту.${p ? " Если отмена — ошибка, позвоните нам." : ""}`,
+    call: (p) => `Вопросы — по телефону ${p}.`,
+    why: "Письмо пришло, потому что у вас была запись в REMPIRE.",
+  },
+  et: {
+    subject: (d, t) => `Aeg on tühistatud: REMPIRE ${d} kell ${t}`,
+    pill: "Aeg on tühistatud",
+    title: (d, t) => `Sinu aeg on tühistatud: ${d} kell\u00a0${t}`,
+    lead: (_, p) => `Vali uus aeg, see võtab minuti.${p ? " Kui tühistamine oli viga, helista meile." : ""}`,
+    call: (p) => `Küsimuste korral helista: ${p}.`,
+    why: "Said selle kirja, sest sul oli aeg REMPIRE'is.",
+  },
+  en: {
+    subject: (d, t) => `Your REMPIRE booking is cancelled: ${d}, ${t}`,
+    pill: "Booking cancelled",
+    title: (d, t) => `Your booking for ${d} at\u00a0${t} is cancelled`,
+    lead: (_, p) => `Pick another time, it only takes a minute.${p ? " If this was a mistake, give us a call." : ""}`,
+    call: (p) => `Questions? Call ${p}.`,
+    why: "You get this e-mail because you had a booking at REMPIRE.",
+  },
+};
+
+// ---- the reminder before a visit (type 1: 12 hours before) ------------------
+
+const REMINDER: Record<Locale, VisitCopy> = {
+  ru: {
+    subject: (d, t) => `Напоминание о записи в REMPIRE: ${d}, ${t}`,
+    pill: "Напоминание",
+    title: (_, __, s) => `Скоро ваш визит в\u00a0${s}`,
+    lead: () => "Напоминаем о вашей записи.",
+  },
+  et: {
+    subject: (d, t) => `Meeldetuletus: REMPIRE ${d} kell ${t}`,
+    pill: "Meeldetuletus",
+    title: (_, __, s) => `Peagi näeme ${s}'is`,
+    lead: () => "Tuletame meelde sinu broneeringut.",
+  },
+  en: {
+    subject: (d, t) => `Reminder: your REMPIRE visit on ${d} at ${t}`,
+    pill: "Reminder",
+    title: (_, __, s) => `Your visit to ${s} is coming up`,
+    lead: () => "A reminder of your booking.",
+  },
+};
+
+export type VisitLetterKind = "confirmation" | "moved" | "cancelled" | "reminder";
+
+type VisitLetterOptions = {
+  business: Pick<Business, "name" | "timezone" | "settings">;
+  origin: string;
+  token: string;
+  locale: Locale;
+  now?: number;
+  /** moved: where the visit was before, for the «Было» line */
+  from?: { startsAt: string; staffName?: string };
+  /** the salon's own text for this kind of letter («Дополнительная информация в Email») */
+  extra?: string | null;
+};
+
+export function confirmationLetter(v: VisitView, o: VisitLetterOptions): Letter & { attachments: Attachment[] } {
+  return visitLetter("confirmation", v, o);
 }
 
-function para(html: string, color = FG, size = 16) {
-  return `<tr><td class="px" style="${PX}padding-bottom:14px;font:${size}px/${Math.round(size * 1.5)}px ${FONT};color:${color};">${html}</td></tr>`;
+/** The pieces every letter about one visit draws from. */
+function visitParts(v: VisitView, L: Locale, origin: string, tz: string, salon: string) {
+  const c = COPY[L];
+  const start = Date.parse(v.startsAt);
+  const s = localParts(start, tz);
+  const e = localParts(Date.parse(v.endsAt), tz);
+  const dayLong = longDay(start, L, tz);
+  const phone = v.location.phone;
+  const place = [v.location.name, v.location.address].filter(Boolean).join(", ");
+  const maps = v.location.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.location.address)}` : "";
+  const barber = K.discRow({ origin, disc: { initial: K.initial(v.staffName) }, title: esc(v.staffName), sub: esc(c.barberK) });
+  const mapRow = v.location.address
+    ? K.discRow({ origin, disc: { icon: "pin" }, title: esc(v.location.name || salon), sub: `${esc(v.location.address)} · ${esc(LOOK[L].openMap)}`, href: maps })
+    : "";
+  const phoneRow = phone ? K.discRow({ origin, disc: { icon: "phone", px: 19 }, title: esc(phone), href: `tel:${phone.replace(/[^\d+]/g, "")}`, chevron: false, bold: false }) : "";
+  const foot = K.footLine(salon, v.location.address, v.location.website);
+  return { c, start, s, e, dayLong, phone, place, maps, barber, mapRow, phoneRow, foot };
 }
 
-/** Label over value, one per row, a thin rule between: reads well at 320 px. */
-function details(rows: [label: string, valueHtml: string][]) {
-  const cells = rows
-    .map(
-      ([k, v], i) =>
-        `<tr><td style="padding:12px 0;${i ? `border-top:1px solid ${LINE};` : ""}"><div style="font:700 11px/16px ${FONT};letter-spacing:2px;text-transform:uppercase;color:${DIM};padding-bottom:3px;">${esc(k)}</div><div style="font:16px/24px ${FONT};color:${FG};">${v}</div></td></tr>`,
-    )
-    .join("");
-  return `<tr><td class="px" style="${PX}padding-bottom:22px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${LINE2};border-bottom:1px solid ${LINE2};">${cells}</table></td></tr>`;
+/**
+ * The letter about one visit: its confirmation, its reminder, or that the
+ * salon moved or cancelled it. All show the visit as it is now; none
+ * carries the client's name (see below). The reminder carries no .ics: the
+ * confirmation brought it.
+ */
+export function visitLetter(kind: VisitLetterKind, v: VisitView, o: VisitLetterOptions): Letter & { attachments: Attachment[] } {
+  const L = o.locale;
+  const k = CONFIRM[L];
+  const look = LOOK[L];
+  const tz = o.business.timezone;
+  const salon = o.business.name || "REMPIRE";
+  const { c, start, s, e, dayLong, phone, place, barber, mapRow, phoneRow, foot } = visitParts(v, L, o.origin, tz, salon);
+  const [, mm, dd] = s.date.split("-").map(Number);
+  const short = `${pad2(dd)}.${pad2(mm)}`;
+  const when = `${dayLong}, ${s.time}–${e.time}`;
+
+  const manage = `${o.origin}/${L}/visit/${o.token}`;
+  const ics = `${o.origin}/api/ics/${o.token}?lang=${L}`;
+  const again = `${o.origin}/${L}`;
+  const services = v.services.map((x) => pick(x.name, L));
+  const total = eur(v.totalCents);
+  const extraFee = v.extraCents > 0 ? c.plusSpecial(eur(v.totalCents - v.extraCents), eur(v.extraCents)) : "";
+  const cut = o.business.settings.cancel_cutoff_min;
+  const span = cut >= 60 && cut % 60 === 0 ? k.hours(cut / 60) : k.minutes(cut);
+
+  let fromWhen = "";
+  if (kind === "moved" && o.from) {
+    const f = Date.parse(o.from.startsAt);
+    const at = `${longDay(f, L, tz)}, ${localParts(f, tz).time}`;
+    fromWhen = o.from.staffName && o.from.staffName !== v.staffName ? `${at} · ${o.from.staffName}` : at;
+  }
+  const wasLine = fromWhen ? MOVED[L].was(fromWhen) : "";
+
+  const copy = kind === "moved" ? MOVED[L] : kind === "cancelled" ? CANCELLED[L] : kind === "reminder" ? REMINDER[L] : CONFIRM[L];
+  const subject = copy.subject(short, s.time);
+  const title = copy.title(inSentence(dayLong, L), s.time, salon);
+  const lead = copy.lead(salon, !!phone);
+  const extra = (o.extra ?? "").trim();
+  const rules = kind === "cancelled" ? [phone ? CANCELLED[L].call(phone) : ""].filter(Boolean) : [cut > 0 ? k.cutoff(span) : "", phone ? k.call(phone) : ""].filter(Boolean);
+  const rulesHtml = (kind === "cancelled" ? [] : [cut > 0 ? esc(k.cutoff(span)) : "", phone ? withTel(k.call, phone) : ""]).filter(Boolean).join(" ");
+
+  const text = [
+    title,
+    "",
+    lead,
+    ...(wasLine ? [wasLine] : []),
+    "",
+    when,
+    `${c.barberK}: ${v.staffName}`,
+    `${look.services}: ${services.join(" + ")}`,
+    ...(kind === "cancelled" ? [] : [`${c.total}: ${total}${extraFee ? ` (${extraFee})` : ""}`]),
+    `${c.whereK}: ${place}`,
+    "",
+    ...(kind === "cancelled" ? [`${c.again}: ${again}`] : [`${c.changeCancel}: ${manage}`, ...(kind === "reminder" ? [] : [`${c.addCal}: ${ics}`])]),
+    ...(extra ? ["", extra] : []),
+    ...(rules.length ? ["", rules.join(" ")] : []),
+  ].join("\n");
+
+  // No client name anywhere: the stored one belongs to the phone, and anyone
+  // can book with any phone and any e-mail, so it would tell a stranger whose
+  // number it is. Nothing the booker typed goes into the letter either.
+  const lines: [string, string][] = [...v.services.map((x): [string, string] => [pick(x.name, L), eur(x.priceCents)]), ...(v.extraCents > 0 ? [[look.extraFee, eur(v.extraCents)] as [string, string]] : [])];
+  const priceList = (pad?: number) => K.prices(lines, [c.total, total], pad);
+  const timeRow = K.discRow({ origin: o.origin, disc: { icon: "clock" }, title: esc(dayLong), sub: esc(`${s.time}–${e.time} · ${look.dur(Math.round((Date.parse(v.endsAt) - start) / 60_000))}`) });
+  const rulesBlock = rulesHtml ? K.block(K.small(rulesHtml)) : "";
+
+  let body: string[];
+  if (kind === "reminder") {
+    body = [
+      K.intro({ origin: o.origin, pill: ["bell", copy.pill], title }),
+      K.block(K.timeBox({ origin: o.origin, day: dayLong, time: `${s.time}–${e.time}`, person: v.staffName, role: c.barberK })),
+      K.block(priceList(8)),
+      K.block(K.button({ origin: o.origin, href: manage, label: c.changeCancel, dark: true })),
+      K.extraBlock(extra),
+      ...(mapRow || phoneRow ? [K.block(K.divider()), K.block(K.stack([mapRow, phoneRow], 12))] : []),
+      rulesBlock,
+    ];
+  } else if (kind === "cancelled") {
+    body = [
+      K.intro({ origin: o.origin, pill: ["off", copy.pill], title, lead: esc(lead) }),
+      K.block(K.struck(when, `${services.join(" + ")} · ${v.staffName}`)),
+      K.block(K.button({ origin: o.origin, href: again, label: c.again, dark: true })),
+      K.extraBlock(extra),
+      phoneRow ? K.block(phoneRow) : "",
+    ];
+  } else {
+    const was = fromWhen ? esc(MOVED[L].was("\u0000")).replace("\u0000", `<span style="text-decoration:line-through;">${esc(fromWhen)}</span>`) : undefined;
+    body = [
+      K.intro({ origin: o.origin, pill: [kind === "moved" ? "moved" : "ok", copy.pill], title, lead: esc(lead), after: was }),
+      K.block(
+        K.buttonPair(
+          K.button({ origin: o.origin, href: manage, label: look.cancel, icon: "btn-cancel" }),
+          K.button({ origin: o.origin, href: `${manage}/move`, label: look.move, icon: "btn-move" }),
+        ) +
+          K.space(8) +
+          K.button({ origin: o.origin, href: ics, label: c.addCal, dark: true, icon: "btn-cal" }),
+      ),
+      K.block(K.divider()),
+      K.block(K.h2(look.details) + K.space(16) + K.stack([barber, timeRow, priceList(), K.note(o.origin, look.priceNote)], 16)),
+      K.extraBlock(extra),
+      ...(mapRow || phoneRow ? [K.block(K.divider()), K.block(K.h2(look.findUs, 16) + K.stack([mapRow, phoneRow], 12))] : []),
+      rulesBlock,
+    ];
+  }
+
+  const html = K.layout({
+    lang: L,
+    title: subject,
+    preheader: kind === "moved" && wasLine ? `${when} · ${wasLine}` : `${when} · ${v.staffName}`,
+    origin: o.origin,
+    salon,
+    address: v.location.address,
+    body: body.filter(Boolean),
+    footer: [esc(kind === "cancelled" ? CANCELLED[L].why : look.auto), foot],
+  });
+
+  if (kind === "reminder") return { subject, text, html, attachments: [] };
+  // a cancelled visit's file says METHOD:CANCEL, so a calendar app can drop it
+  const calendar = visitIcsFor(v, { businessName: o.business.name, origin: o.origin, token: o.token, locale: L, now: o.now });
+  const method = v.status === "cancelled" ? "CANCEL" : "PUBLISH";
+  return { subject, text, html, attachments: [{ filename: "rempire.ics", content: calendar, contentType: `text/calendar; charset=utf-8; method=${method}` }] };
 }
 
-/** A full-width square button; `main` is lime, the other is outlined. */
-function button(href: string, label: string, main: boolean) {
-  const cell = main ? `background-color:${LIME};border:1px solid ${LIME};` : `border:1px solid ${LINE2};`;
-  return `<tr><td class="px" style="${PX}padding-bottom:12px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center"${main ? ` bgcolor="${LIME}"` : ""} style="${cell}"><a href="${esc(href)}" style="display:block;padding:15px 20px;font:700 14px/18px ${FONT};letter-spacing:2px;text-transform:uppercase;text-align:center;text-decoration:none;color:${main ? INK : FG};">${esc(label)}</a></td></tr></table></td></tr>`;
+// ---- the review request after a visit (round 13: built, off as today) ------
+
+type ReviewCopy = { subject: string; pill: string; title: (salon: string) => string; lead: string; write: string; stars: string; why: string };
+
+const REVIEW: Record<Locale, ReviewCopy> = {
+  ru: {
+    subject: "Как прошёл визит в REMPIRE?",
+    pill: "Как всё прошло?",
+    title: (s) => `Оцените визит в\u00a0${s}`,
+    lead: "Спасибо, что выбрали нас. Расскажите, как всё прошло: это займёт минуту, а другим поможет выбрать барбера.",
+    write: "Оставить отзыв",
+    stars: "Оценка от 1 до 5",
+    why: "Письмо пришло, потому что у вас была запись в REMPIRE.",
+  },
+  et: {
+    subject: "Kuidas sulle REMPIRE'is meeldis?",
+    pill: "Kuidas läks?",
+    title: () => "Hinda oma külastust",
+    lead: "Aitäh, et valisid meid. Kirjuta, kuidas läks: see võtab minuti ja aitab teistel meistrit valida.",
+    write: "Kirjuta arvustus",
+    stars: "Hinne 1 kuni 5",
+    why: "Said selle kirja, sest sul oli aeg REMPIRE'is.",
+  },
+  en: {
+    subject: "How was your visit to REMPIRE?",
+    pill: "How was it?",
+    title: (s) => `Rate your visit to ${s}`,
+    lead: "Thank you for choosing us. Tell us how it went: it takes a minute and helps others choose a barber.",
+    write: "Write a review",
+    stars: "Rating from 1 to 5",
+    why: "You get this e-mail because you had a booking at REMPIRE.",
+  },
+};
+
+type InviteOptions = { business: Pick<Business, "name" | "timezone">; origin: string; locale: Locale; extra?: string | null };
+
+/**
+ * After a visit: who served him and when, five stars and the button, all
+ * to the review form on the salon's page. No client name.
+ */
+export function reviewLetter(v: VisitView, o: InviteOptions): Letter {
+  const L = o.locale;
+  const k = REVIEW[L] ?? REVIEW.ru;
+  const salon = o.business.name || "REMPIRE";
+  const { dayLong, foot } = visitParts(v, L, o.origin, o.business.timezone, salon);
+  const services = v.services.map((x) => pick(x.name, L)).join(" + ");
+  const url = `${o.origin}/${L}/about`;
+  const extra = (o.extra ?? "").trim();
+  const text = [k.title(salon), "", k.lead, "", `${v.staffName} · ${dayLong} · ${services}`, "", `${k.write}: ${url}`, ...(extra ? ["", extra] : [])].join("\n");
+  const body = [
+    K.intro({ origin: o.origin, pill: ["star", k.pill], title: k.title(salon), lead: esc(k.lead) }),
+    K.block(K.discRow({ origin: o.origin, disc: { initial: K.initial(v.staffName) }, title: esc(v.staffName), sub: esc(`${dayLong} · ${services}`) })),
+    K.block(K.stars(o.origin, url, k.stars) + K.space(20) + K.button({ origin: o.origin, href: url, label: k.write, dark: true })),
+    K.extraBlock(extra),
+  ];
+  const html = K.layout({
+    lang: L,
+    title: k.subject,
+    preheader: `${dayLong} · ${v.staffName}`,
+    origin: o.origin,
+    salon,
+    address: v.location.address,
+    body: body.filter(Boolean),
+    footer: [esc(k.why), foot],
+  });
+  return { subject: k.subject, text, html };
 }
 
-function layout(o: { lang: Locale; title: string; preheader: string; origin: string; body: string; footer: string[] }): string {
-  const logo = `${o.origin}/brand/rempire-logo-white.png`;
-  // the preheader is followed by invisible padding so the inbox preview shows nothing else
-  const pad = "&#847;&zwnj;&nbsp;".repeat(60);
-  return `<!doctype html>
-<html lang="${o.lang}">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="dark">
-<meta name="supported-color-schemes" content="dark">
-<title>${esc(o.title)}</title>
-<style>
-@media (max-width: 540px) { .px { padding-left: 22px !important; padding-right: 22px !important; } .h1 { font-size: 24px !important; line-height: 30px !important; } }
-a { color: ${LIME}; }
-</style>
-</head>
-<body style="margin:0;padding:0;background-color:${INK};color:${FG};-webkit-text-size-adjust:100%;">
-<div style="display:none;max-height:0;max-width:0;overflow:hidden;opacity:0;mso-hide:all;font-size:1px;line-height:1px;color:${INK};">${esc(o.preheader)}${pad}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${INK}" style="background-color:${INK};">
-<tr><td align="center" style="padding:28px 0 44px;">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;">
-<tr><td class="px" style="${PX}padding-top:8px;padding-bottom:36px;"><img src="${esc(logo)}" width="132" height="32" alt="REMPIRE" style="display:block;border:0;outline:none;width:132px;height:auto;font:700 20px/32px ${FONT};letter-spacing:4px;color:${FG};"></td></tr>
-${o.body}
-<tr><td class="px" style="${PX}padding-top:30px;"><div style="border-top:1px solid ${LINE};font-size:0;line-height:0;">&nbsp;</div></td></tr>
-${o.footer.map((f, i) => `<tr><td class="px" style="${PX}padding-top:${i ? 4 : 16}px;font:13px/20px ${FONT};color:${DIM};">${f}</td></tr>`).join("\n")}
-</table>
-</td></tr>
-</table>
-</body>
-</html>`;
+// ---- «Приглашение недошедших»: the visit was marked «Не пришёл» (type 72) ----
+
+type NoShowCopy = {
+  subject: string;
+  pill: string;
+  heading: string;
+  lead: (when: string) => string;
+  book: string;
+  call: (phone: string) => string;
+  why: string;
+};
+
+const NO_SHOW: Record<Locale, NoShowCopy> = {
+  ru: {
+    subject: "Мы вас ждали в REMPIRE",
+    pill: "Приглашение",
+    heading: "Мы вас ждали",
+    lead: (w) => `Вы не пришли на запись ${w}. Ничего страшного: выберите новое время, будем рады вас видеть.`,
+    book: "Записаться снова",
+    call: (p) => `Удобнее по телефону — ${p}.`,
+    why: "Письмо пришло, потому что у вас была запись в REMPIRE.",
+  },
+  et: {
+    subject: "Ootasime sind REMPIRE'is",
+    pill: "Kutse",
+    heading: "Ootasime sind",
+    lead: (w) => `Sa ei jõudnud oma ajale ${w}. Pole hullu: vali uus aeg, ootame sind.`,
+    book: "Broneeri uus aeg",
+    call: (p) => `Telefoni teel: ${p}.`,
+    why: "Said selle kirja, sest sul oli aeg REMPIRE'is.",
+  },
+  en: {
+    subject: "We missed you at REMPIRE",
+    pill: "Invitation",
+    heading: "We missed you",
+    lead: (w) => `You did not make it to your visit on ${w}. No problem: pick a new time, we would be glad to see you.`,
+    book: "Book a new time",
+    call: (p) => `Prefer to call? ${p}.`,
+    why: "You get this e-mail because you had a booking at REMPIRE.",
+  },
+};
+
+/**
+ * The invitation after a missed visit: when it was, with whom, and the
+ * booking page. No change link (the visit is over) and no client name.
+ */
+export function noShowLetter(v: VisitView, o: InviteOptions): Letter {
+  const L = o.locale;
+  const c = COPY[L];
+  const k = NO_SHOW[L] ?? NO_SHOW.ru;
+  const salon = o.business.name || "REMPIRE";
+  const { s, dayLong, phone, place, barber, phoneRow, foot } = visitParts(v, L, o.origin, o.business.timezone, salon);
+  // inside a sentence: «вторник, 17 ноября, 12:00»; English keeps its capital weekday
+  const when = `${L === "en" ? dayLong : dayLong.charAt(0).toLowerCase() + dayLong.slice(1)}, ${s.time}`;
+  const book = `${o.origin}/${L}`;
+  const extra = (o.extra ?? "").trim();
+  const text = [
+    k.heading,
+    "",
+    k.lead(when),
+    "",
+    `${c.barberK}: ${v.staffName}`,
+    `${c.whereK}: ${place}`,
+    "",
+    `${k.book}: ${book}`,
+    ...(extra ? ["", extra] : []),
+    ...(phone ? ["", k.call(phone)] : []),
+  ].join("\n");
+  const timeRow = K.discRow({ origin: o.origin, disc: { icon: "clock" }, title: esc(dayLong), sub: esc(s.time) });
+  const body = [
+    K.intro({ origin: o.origin, pill: ["cal", k.pill], title: k.heading, lead: esc(k.lead(when)) }),
+    K.block(K.stack([barber, timeRow], 16)),
+    K.block(K.button({ origin: o.origin, href: book, label: k.book, dark: true })),
+    K.extraBlock(extra),
+    phoneRow ? K.block(phoneRow) : "",
+  ];
+  const html = K.layout({
+    lang: L,
+    title: k.subject,
+    preheader: `${dayLong}, ${s.time} · ${v.staffName}`,
+    origin: o.origin,
+    salon,
+    address: v.location.address,
+    body: body.filter(Boolean),
+    footer: [esc(k.why), foot],
+  });
+  return { subject: k.subject, text, html };
+}
+
+// ---- the birthday greeting (type 3: 10:00 on the day) --------------------
+
+type BirthdayCopy = { subject: string; pill: string; heading: string; lead: string; book: string; why: string };
+
+const BIRTHDAY: Record<Locale, BirthdayCopy> = {
+  ru: {
+    subject: "С днём рождения от REMPIRE!",
+    pill: "Поздравление",
+    heading: "С днём рождения!",
+    lead: "Поздравляем вас с днём рождения! Желаем отличного года, и ждём в гости.",
+    book: "Записаться",
+    why: "Письмо пришло, потому что вы клиент REMPIRE.",
+  },
+  et: {
+    subject: "Palju õnne sünnipäevaks, soovib REMPIRE!",
+    pill: "Õnnitlus",
+    heading: "Palju õnne!",
+    lead: "Palju õnne sünnipäevaks! Soovime sulle toredat aastat ja ootame sind külla.",
+    book: "Broneeri aeg",
+    why: "Said selle kirja, sest oled REMPIRE'i klient.",
+  },
+  en: {
+    subject: "Happy birthday from REMPIRE!",
+    pill: "Greetings",
+    heading: "Happy birthday!",
+    lead: "Happy birthday from all of us! We wish you a great year ahead, and hope to see you soon.",
+    book: "Book a visit",
+    why: "You get this e-mail because you are a REMPIRE client.",
+  },
+};
+
+/** The birthday greeting: no name (the stored one may not be his), the booking page as the one thing to do. */
+export function birthdayLetter(o: { locale: Locale; origin: string; business: Pick<Business, "name">; address?: string; website?: string; extra?: string | null }): Letter {
+  const L = o.locale;
+  const k = BIRTHDAY[L] ?? BIRTHDAY.ru;
+  const salon = o.business.name || "REMPIRE";
+  const book = `${o.origin}/${L}`;
+  const extra = (o.extra ?? "").trim();
+  const text = [k.heading, "", k.lead, "", `${k.book}: ${book}`, ...(extra ? ["", extra] : [])].join("\n");
+  const body = [
+    K.intro({ origin: o.origin, pill: ["gift", k.pill], title: k.heading, lead: esc(k.lead) }),
+    K.block(K.button({ origin: o.origin, href: book, label: k.book, dark: true })),
+    K.extraBlock(extra),
+  ];
+  const html = K.layout({
+    lang: L,
+    title: k.subject,
+    preheader: k.lead,
+    origin: o.origin,
+    salon,
+    address: o.address ?? "",
+    body: body.filter(Boolean),
+    footer: [esc(k.why), K.footLine(o.business.name, o.address, o.website)],
+  });
+  return { subject: k.subject, text, html };
 }
 
 // ---- the staff login code (A4) ------------------------------------------
@@ -115,435 +617,33 @@ export function loginCodeLetter(code: string, ttlMin: number, origin: string): L
     `Your REMPIRE login code: ${code} (valid for ${ttlMin} minutes, once).`,
   ].join("\n");
   const body = [
-    eyebrow("Вход для команды"),
-    heading("Ваш код"),
-    keyLine(esc(code), `font:700 40px/48px ${MONO};letter-spacing:10px;color:${FG};`),
-    para(`Введите его на странице входа. Код действует ${ttlMin}&nbsp;минут и&nbsp;подходит один раз.`),
-    para("Если вы не запрашивали код, просто удалите это письмо.", SOFT),
-    para(`Your REMPIRE login code. Valid for ${ttlMin} minutes, once.`, DIM, 13),
-  ].join("\n");
-  const html = layout({
+    K.intro({ origin, pill: ["key", "Вход для команды"], title: "Ваш код" }),
+    K.block(K.codeBox(code)),
+    K.block(
+      K.para(`Введите его на странице входа. Код действует ${ttlMin}&nbsp;минут и&nbsp;подходит один раз.`) +
+        K.space(12) +
+        K.small("Если вы не запрашивали код, просто удалите это письмо.") +
+        K.space(12) +
+        `<p lang="en" style="margin:0;${K.text(13, 19, K.C.ink2)}">${esc(`Your REMPIRE login code. Valid for ${ttlMin} minutes, once.`)}</p>`,
+    ),
+  ];
+  const html = K.layout({
     lang: "ru",
     title: subject,
     preheader: `Действует ${ttlMin} минут.`,
     origin,
+    salon: "REMPIRE",
+    address: "",
     body,
-    footer: ["REMPIRE · Tallinn", "Письмо отправлено автоматически, отвечать на него не нужно."],
+    footer: ["Письмо отправлено автоматически, отвечать на него не нужно.", "REMPIRE · Tallinn"],
   });
   return { subject, text, html };
-}
-
-// ---- the booking confirmation (A6) --------------------------------------
-
-type ConfirmCopy = {
-  subject: (day: string, time: string) => string;
-  eyebrow: string;
-  hello: string;
-  services: string;
-  cutoff: (span: string) => string;
-  call: (phone: string) => string;
-  why: string;
-  hours: (h: number) => string;
-  minutes: (m: number) => string;
-};
-
-const CONFIRM: Record<Locale, ConfirmCopy> = {
-  ru: {
-    subject: (d, t) => `Вы записаны в REMPIRE: ${d}, ${t}`,
-    eyebrow: "Подтверждение записи",
-    hello: "Ждём вас!",
-    services: "Услуги",
-    cutoff: (s) => `Перенести или отменить онлайн можно не позже чем за ${s} до визита.`,
-    call: (p) => `Позже — по телефону ${p}.`,
-    why: "Письмо пришло, потому что вы записаны в REMPIRE.",
-    hours: (h) => `${h} ч`,
-    minutes: (m) => `${m} мин`,
-  },
-  et: {
-    subject: (d, t) => `Aeg on broneeritud: REMPIRE ${d} kell ${t}`,
-    eyebrow: "Broneeringu kinnitus",
-    hello: "Ootame sind!",
-    services: "Teenused",
-    cutoff: (s) => `Veebis saab aega muuta või tühistada kuni ${s} enne külastust.`,
-    call: (p) => `Hiljem helista: ${p}.`,
-    why: "Said selle kirja, sest sul on aeg REMPIRE'is.",
-    hours: (h) => `${h} h`,
-    minutes: (m) => `${m} min`,
-  },
-  en: {
-    subject: (d, t) => `You're booked at REMPIRE: ${d}, ${t}`,
-    eyebrow: "Booking confirmation",
-    hello: "See you soon!",
-    services: "Services",
-    cutoff: (s) => `You can change or cancel online up to ${s} before your visit.`,
-    call: (p) => `After that, please call ${p}.`,
-    why: "You get this e-mail because you have a booking at REMPIRE.",
-    hours: (h) => `${h} h`,
-    minutes: (m) => `${m} min`,
-  },
-};
-
-// ---- a visit changed by the salon: moved or cancelled (A6) ----------------
-
-type ChangeCopy = {
-  subject: (day: string, time: string) => string;
-  eyebrow: string;
-  heading: string;
-  lead: string;
-};
-
-const MOVED: Record<Locale, ChangeCopy & { was: (when: string) => string }> = {
-  ru: {
-    subject: (d, t) => `Запись перенесена: ${d}, ${t}`,
-    eyebrow: "Запись изменена",
-    heading: "Новое время",
-    lead: "Мы изменили вашу запись. Вот как она выглядит теперь.",
-    was: (w) => `Было: ${w}`,
-  },
-  et: {
-    subject: (d, t) => `Aeg on muudetud: REMPIRE ${d} kell ${t}`,
-    eyebrow: "Broneering muudetud",
-    heading: "Uus aeg",
-    lead: "Muutsime sinu broneeringut. Nii see nüüd välja näeb.",
-    was: (w) => `Enne: ${w}`,
-  },
-  en: {
-    subject: (d, t) => `Your REMPIRE booking has moved: ${d}, ${t}`,
-    eyebrow: "Booking changed",
-    heading: "New time",
-    lead: "We have changed your booking. Here is how it looks now.",
-    was: (w) => `Was: ${w}`,
-  },
-};
-
-const CANCELLED: Record<Locale, ChangeCopy & { call: (phone: string) => string; why: string }> = {
-  ru: {
-    subject: (d, t) => `Запись отменена: ${d}, ${t}`,
-    eyebrow: "Отмена записи",
-    heading: "Запись отменена",
-    lead: "Мы отменили вашу запись. Если хотите другое время, запишитесь снова.",
-    call: (p) => `Вопросы — по телефону ${p}.`,
-    why: "Письмо пришло, потому что у вас была запись в REMPIRE.",
-  },
-  et: {
-    subject: (d, t) => `Aeg on tühistatud: REMPIRE ${d} kell ${t}`,
-    eyebrow: "Tühistamine",
-    heading: "Aeg on tühistatud",
-    lead: "Tühistasime sinu aja. Kui soovid uut aega, broneeri uuesti.",
-    call: (p) => `Küsimuste korral helista: ${p}.`,
-    why: "Said selle kirja, sest sul oli aeg REMPIRE'is.",
-  },
-  en: {
-    subject: (d, t) => `Your REMPIRE booking is cancelled: ${d}, ${t}`,
-    eyebrow: "Cancellation",
-    heading: "Booking cancelled",
-    lead: "We have cancelled your booking. If you would like another time, book again.",
-    call: (p) => `Questions? Call ${p}.`,
-    why: "You get this e-mail because you had a booking at REMPIRE.",
-  },
-};
-
-// ---- the reminder before a visit (Altegio's type 1: 12 hours before) ------
-
-const REMINDER: Record<Locale, ChangeCopy> = {
-  ru: {
-    subject: (d, t) => `Напоминание о записи в REMPIRE: ${d}, ${t}`,
-    eyebrow: "Напоминание",
-    heading: "Скоро увидимся",
-    lead: "Напоминаем о вашей записи.",
-  },
-  et: {
-    subject: (d, t) => `Meeldetuletus: REMPIRE ${d} kell ${t}`,
-    eyebrow: "Meeldetuletus",
-    heading: "Peagi näeme",
-    lead: "Tuletame meelde sinu broneeringut.",
-  },
-  en: {
-    subject: (d, t) => `Reminder: your REMPIRE visit on ${d} at ${t}`,
-    eyebrow: "Reminder",
-    heading: "See you soon",
-    lead: "A reminder of your booking.",
-  },
-};
-
-const pad2 = (n: number) => String(n).padStart(2, "0");
-
-export type VisitLetterKind = "confirmation" | "moved" | "cancelled" | "reminder";
-
-type VisitLetterOptions = {
-  business: Pick<Business, "name" | "timezone" | "settings">;
-  origin: string;
-  token: string;
-  locale: Locale;
-  now?: number;
-  /** moved: where the visit was before, for the «Было» line */
-  from?: { startsAt: string; staffName?: string };
-};
-
-/** «Вторник, 25 ноября» in the visit's timezone. */
-function longDay(ms: number, L: Locale, tz: string) {
-  const long = new Intl.DateTimeFormat(INTL[L], { weekday: "long", day: "numeric", month: "long", timeZone: tz }).format(ms);
-  return long.charAt(0).toUpperCase() + long.slice(1);
-}
-
-export function confirmationLetter(v: VisitView, o: VisitLetterOptions): Letter & { attachments: Attachment[] } {
-  return visitLetter("confirmation", v, o);
-}
-
-/**
- * The letter about one visit: its confirmation, its reminder, or that the
- * salon moved or cancelled it. All show the visit as it is now; none
- * carries the client's name (see below). The reminder carries no .ics: the
- * confirmation brought it.
- */
-export function visitLetter(kind: VisitLetterKind, v: VisitView, o: VisitLetterOptions): Letter & { attachments: Attachment[] } {
-  const L = o.locale;
-  const c = COPY[L];
-  const k = CONFIRM[L];
-  const tz = o.business.timezone;
-  const start = Date.parse(v.startsAt);
-  const s = localParts(start, tz);
-  const e = localParts(Date.parse(v.endsAt), tz);
-  const [, mm, dd] = s.date.split("-").map(Number);
-  const short = `${pad2(dd)}.${pad2(mm)}`;
-  const dayLong = longDay(start, L, tz);
-  const when = `${dayLong}, ${s.time}–${e.time}`;
-
-  const manage = `${o.origin}/${L}/visit/${o.token}`;
-  const ics = `${o.origin}/api/ics/${o.token}?lang=${L}`;
-  const again = `${o.origin}/${L}`;
-  const services = v.services.map((x) => pick(x.name, L));
-  const place = [v.location.name, v.location.address].filter(Boolean).join(", ");
-  const maps = v.location.address ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(v.location.address)}` : "";
-  const total = eur(v.totalCents);
-  const extra = v.extraCents > 0 ? c.plusSpecial(eur(v.totalCents - v.extraCents), eur(v.extraCents)) : "";
-  const cut = o.business.settings.cancel_cutoff_min;
-  const span = cut >= 60 && cut % 60 === 0 ? k.hours(cut / 60) : k.minutes(cut);
-  const phone = v.location.phone;
-  // the phone as a tap-to-call link inside a sentence of escaped copy
-  const tel = phone ? `<a href="tel:${esc(phone.replace(/[^\d+]/g, ""))}" style="color:${SOFT};white-space:nowrap;">${esc(phone)}</a>` : "";
-  const withTel = (sentence: (p: string) => string) => esc(sentence("\u0000")).replace("\u0000", tel);
-
-  let wasLine = "";
-  if (kind === "moved" && o.from) {
-    const f = Date.parse(o.from.startsAt);
-    const fromWhen = `${longDay(f, L, tz)}, ${localParts(f, tz).time}`;
-    wasLine = MOVED[L].was(o.from.staffName && o.from.staffName !== v.staffName ? `${fromWhen} · ${o.from.staffName}` : fromWhen);
-  }
-
-  const copy = kind === "moved" ? MOVED[L] : kind === "cancelled" ? CANCELLED[L] : kind === "reminder" ? REMINDER[L] : null;
-  const subject = copy ? copy.subject(short, s.time) : k.subject(short, s.time);
-  const title = copy ? copy.heading : c.booked;
-  const rules = kind === "cancelled" ? [phone ? CANCELLED[L].call(phone) : ""].filter(Boolean) : [cut > 0 ? k.cutoff(span) : "", phone ? k.call(phone) : ""].filter(Boolean);
-  const rulesHtml = (kind === "cancelled" ? [tel ? withTel(CANCELLED[L].call) : ""] : [cut > 0 ? esc(k.cutoff(span)) : "", tel ? withTel(k.call) : ""])
-    .filter(Boolean)
-    .join(" ");
-
-  const text = [
-    title,
-    ...(copy ? ["", copy.lead] : []),
-    "",
-    when,
-    ...(wasLine ? [wasLine] : []),
-    `${c.barberK}: ${v.staffName}`,
-    `${k.services}: ${services.join(" + ")}`,
-    ...(kind === "cancelled" ? [] : [`${c.total}: ${total}${extra ? ` (${extra})` : ""}`]),
-    `${c.whereK}: ${place}`,
-    "",
-    ...(kind === "cancelled" ? [`${c.again}: ${again}`] : [`${c.changeCancel}: ${manage}`, `${c.addCal}: ${ics}`]),
-    ...(rules.length ? ["", rules.join(" ")] : []),
-  ].join("\n");
-
-  const time =
-    kind === "cancelled"
-      ? `<span style="color:${SOFT};text-decoration:line-through;">${esc(dayLong)}<br><span style="font-size:28px;line-height:36px;letter-spacing:1px;">${esc(s.time)}–${esc(e.time)}</span></span>`
-      : `${esc(dayLong)}<br><span style="font-size:28px;line-height:36px;letter-spacing:1px;">${esc(s.time)}–${esc(e.time)}</span>`;
-  const rows: [string, string][] = [
-    [c.barberK, esc(v.staffName)],
-    [k.services, services.map(esc).join("<br>")],
-    ...(kind === "cancelled" ? [] : [[c.total, `${esc(total)}${extra ? `<div style="font:13px/20px ${FONT};color:${SOFT};">${esc(extra)}</div>` : ""}`] as [string, string]]),
-    [c.whereK, maps ? `<a href="${esc(maps)}" style="color:${FG};text-decoration:underline;">${esc(place)}</a>` : esc(place)],
-  ];
-  const body = [
-    eyebrow(copy ? copy.eyebrow : k.eyebrow),
-    heading(title),
-    keyLine(time),
-    ...(wasLine ? [para(esc(wasLine), SOFT, 14)] : []),
-    // No client name: the stored one belongs to the phone, and anyone can
-    // book with any phone and any e-mail, so it would tell a stranger whose
-    // number it is. Nothing the booker typed goes into the letter either.
-    para(esc(copy ? copy.lead : k.hello)),
-    details(rows),
-    ...(kind === "cancelled" ? [button(again, c.again, true)] : [button(manage, c.changeCancel, true), button(ics, c.addCal, false)]),
-    ...(rulesHtml ? [`<tr><td style="height:10px;font-size:0;line-height:0;">&nbsp;</td></tr>`, para(rulesHtml, SOFT, 14)] : []),
-  ];
-
-  const html = layout({
-    lang: L,
-    title: subject,
-    preheader: kind === "moved" && wasLine ? `${when} · ${wasLine}` : `${when} · ${v.staffName}`,
-    origin: o.origin,
-    body: body.join("\n"),
-    footer: [esc([o.business.name, v.location.address].filter(Boolean).join(" · ")), esc(kind === "cancelled" ? CANCELLED[L].why : k.why)],
-  });
-
-  if (kind === "reminder") return { subject, text, html, attachments: [] };
-  // a cancelled visit's file says METHOD:CANCEL, so a calendar app can drop it
-  const calendar = visitIcsFor(v, { businessName: o.business.name, origin: o.origin, token: o.token, locale: L, now: o.now });
-  const method = v.status === "cancelled" ? "CANCEL" : "PUBLISH";
-  return { subject, text, html, attachments: [{ filename: "rempire.ics", content: calendar, contentType: `text/calendar; charset=utf-8; method=${method}` }] };
-}
-
-// ---- «Приглашение недошедших»: the visit was marked «Не пришёл» (type 72) ----
-
-type NoShowCopy = {
-  subject: string;
-  eyebrow: string;
-  heading: string;
-  lead: (when: string) => string;
-  book: string;
-  call: (phone: string) => string;
-  why: string;
-};
-
-const NO_SHOW: Record<Locale, NoShowCopy> = {
-  ru: {
-    subject: "Мы вас ждали в REMPIRE",
-    eyebrow: "Приглашение",
-    heading: "Мы вас ждали",
-    lead: (w) => `Вы не пришли на запись ${w}. Ничего страшного: выберите новое время, будем рады вас видеть.`,
-    book: "Записаться снова",
-    call: (p) => `Удобнее по телефону — ${p}.`,
-    why: "Письмо пришло, потому что у вас была запись в REMPIRE.",
-  },
-  et: {
-    subject: "Ootasime sind REMPIRE'is",
-    eyebrow: "Kutse",
-    heading: "Ootasime sind",
-    lead: (w) => `Sa ei jõudnud oma ajale ${w}. Pole hullu: vali uus aeg, ootame sind.`,
-    book: "Broneeri uus aeg",
-    call: (p) => `Telefoni teel: ${p}.`,
-    why: "Said selle kirja, sest sul oli aeg REMPIRE'is.",
-  },
-  en: {
-    subject: "We missed you at REMPIRE",
-    eyebrow: "Invitation",
-    heading: "We missed you",
-    lead: (w) => `You did not make it to your visit on ${w}. No problem: pick a new time, we would be glad to see you.`,
-    book: "Book a new time",
-    call: (p) => `Prefer to call? ${p}.`,
-    why: "You get this e-mail because you had a booking at REMPIRE.",
-  },
-};
-
-type InviteOptions = { business: Pick<Business, "name" | "timezone">; origin: string; locale: Locale };
-
-/**
- * The invitation after a missed visit: when it was, with whom, and the
- * booking page. No change link (the visit is over) and no client name.
- */
-export function noShowLetter(v: VisitView, o: InviteOptions): Letter {
-  const L = o.locale;
-  const c = COPY[L];
-  const k = NO_SHOW[L] ?? NO_SHOW.ru;
-  const tz = o.business.timezone;
-  const start = Date.parse(v.startsAt);
-  const s = localParts(start, tz);
-  const dayLong = longDay(start, L, tz);
-  // inside a sentence: «вторник, 17 ноября, 12:00»; English keeps its capital weekday
-  const when = `${L === "en" ? dayLong : dayLong.charAt(0).toLowerCase() + dayLong.slice(1)}, ${s.time}`;
-  const book = `${o.origin}/${L}`;
-  const place = [v.location.name, v.location.address].filter(Boolean).join(", ");
-  const phone = v.location.phone;
-  const tel = phone ? `<a href="tel:${esc(phone.replace(/[^\d+]/g, ""))}" style="color:${SOFT};white-space:nowrap;">${esc(phone)}</a>` : "";
-  const text = [
-    k.heading,
-    "",
-    k.lead(when),
-    "",
-    `${c.barberK}: ${v.staffName}`,
-    `${c.whereK}: ${place}`,
-    "",
-    `${k.book}: ${book}`,
-    ...(phone ? ["", k.call(phone)] : []),
-  ].join("\n");
-  const body = [
-    eyebrow(k.eyebrow),
-    heading(k.heading),
-    keyLine(`${esc(dayLong)}<br><span style="font-size:28px;line-height:36px;letter-spacing:1px;">${esc(s.time)}</span>`),
-    para(esc(k.lead(when))),
-    details([
-      [c.barberK, esc(v.staffName)],
-      [c.whereK, esc(place)],
-    ]),
-    button(book, k.book, true),
-    ...(tel ? [`<tr><td style="height:10px;font-size:0;line-height:0;">&nbsp;</td></tr>`, para(esc(k.call("\u0000")).replace("\u0000", tel), SOFT, 14)] : []),
-  ];
-  const html = layout({
-    lang: L,
-    title: k.subject,
-    preheader: `${dayLong}, ${s.time} · ${v.staffName}`,
-    origin: o.origin,
-    body: body.join("\n"),
-    footer: [esc([o.business.name, v.location.address].filter(Boolean).join(" · ")), esc(k.why)],
-  });
-  return { subject: k.subject, text, html };
-}
-
-// ---- the birthday greeting (type 3: 10:00 on the day) --------------------
-
-type BirthdayCopy = { subject: string; eyebrow: string; heading: string; lead: string; book: string; why: string };
-
-const BIRTHDAY: Record<Locale, BirthdayCopy> = {
-  ru: {
-    subject: "С днём рождения от REMPIRE!",
-    eyebrow: "REMPIRE",
-    heading: "С днём рождения!",
-    lead: "Поздравляем вас с днём рождения! Желаем отличного года, и ждём в гости.",
-    book: "Записаться",
-    why: "Письмо пришло, потому что вы клиент REMPIRE.",
-  },
-  et: {
-    subject: "Palju õnne sünnipäevaks, soovib REMPIRE!",
-    eyebrow: "REMPIRE",
-    heading: "Palju õnne!",
-    lead: "Palju õnne sünnipäevaks! Soovime sulle toredat aastat ja ootame sind külla.",
-    book: "Broneeri aeg",
-    why: "Said selle kirja, sest oled REMPIRE'i klient.",
-  },
-  en: {
-    subject: "Happy birthday from REMPIRE!",
-    eyebrow: "REMPIRE",
-    heading: "Happy birthday!",
-    lead: "Happy birthday from all of us! We wish you a great year ahead, and hope to see you soon.",
-    book: "Book a visit",
-    why: "You get this e-mail because you are a REMPIRE client.",
-  },
-};
-
-/** The birthday greeting: no name (the stored one may not be his), the booking page as the one thing to do. */
-export function birthdayLetter(o: { locale: Locale; origin: string; business: Pick<Business, "name">; address?: string }): Letter {
-  const L = o.locale;
-  const k = BIRTHDAY[L] ?? BIRTHDAY.ru;
-  const book = `${o.origin}/${L}`;
-  const text = [k.heading, "", k.lead, "", `${k.book}: ${book}`].join("\n");
-  const body = [eyebrow(k.eyebrow), heading(k.heading), para(esc(k.lead)), `<tr><td style="height:10px;font-size:0;line-height:0;">&nbsp;</td></tr>`, button(book, k.book, true)];
-  const html = layout({
-    lang: L,
-    title: k.subject,
-    preheader: k.lead,
-    origin: o.origin,
-    body: body.join("\n"),
-    footer: [esc([o.business.name, o.address].filter(Boolean).join(" · ")), esc(k.why)],
-  });
-  return { subject: k.subject, text, html };
 }
 
 // ---- an invoice to a barber's company (Phase C, C5) ---------------------
 
 type InvoiceCopy = {
   subject: (n: string, credit: boolean) => string;
-  eyebrow: string;
   heading: (credit: boolean) => string;
   lead: (credit: boolean) => string;
   number: string;
@@ -556,7 +656,6 @@ type InvoiceCopy = {
 const INVOICE: Record<Locale, InvoiceCopy> = {
   et: {
     subject: (n, c) => `${c ? "Kreeditarve" : "Arve"} ${n} · REMPIRE`,
-    eyebrow: "REMPIRE",
     heading: (c) => (c ? "Kreeditarve" : "Arve"),
     lead: (c) => (c ? "Kreeditarve on lisatud PDF-failina." : "Arve on lisatud PDF-failina. Palume tasuda maksetähtajaks."),
     number: "Arve nr",
@@ -567,7 +666,6 @@ const INVOICE: Record<Locale, InvoiceCopy> = {
   },
   en: {
     subject: (n, c) => `${c ? "Credit note" : "Invoice"} ${n} · REMPIRE`,
-    eyebrow: "REMPIRE",
     heading: (c) => (c ? "Credit note" : "Invoice"),
     lead: (c) => (c ? "The credit note is attached as a PDF." : "The invoice is attached as a PDF. Please pay by the due date."),
     number: "Invoice no",
@@ -578,7 +676,6 @@ const INVOICE: Record<Locale, InvoiceCopy> = {
   },
   ru: {
     subject: (n, c) => `${c ? "Кредит-счёт" : "Счёт"} ${n} · REMPIRE`,
-    eyebrow: "REMPIRE",
     heading: (c) => (c ? "Кредит-счёт" : "Счёт"),
     lead: (c) => (c ? "Кредит-счёт во вложении, в PDF." : "Счёт во вложении, в PDF. Просим оплатить до срока."),
     number: "№ счёта",
@@ -612,8 +709,17 @@ export function invoiceLetter(
     ...(!credit && inv.dueOn ? ([[k.due, esc(dmy(inv.dueOn))]] as [string, string][]) : []),
   ];
   const text = [`${k.heading(credit)} ${inv.number}`, "", k.lead(credit), "", ...rows.map(([a, b]) => `${a}: ${b.replace(/&[^;]+;/g, "")}`), "", inv.sellerName].join("\n");
-  const body = [eyebrow(k.eyebrow), heading(`${k.heading(credit)} ${inv.number}`), para(esc(k.lead(credit))), details(rows)].join("\n");
-  const html = layout({ lang: L, title: subject, preheader: `${period} · ${eurComma(inv.grossCents)}`, origin: o.origin, body, footer: [esc(inv.sellerName), esc(k.footer)] });
+  const body = [K.intro({ origin: o.origin, title: `${k.heading(credit)} ${inv.number}`, lead: esc(k.lead(credit)) }), K.block(K.facts(rows))];
+  const html = K.layout({
+    lang: L,
+    title: subject,
+    preheader: `${period} · ${eurComma(inv.grossCents)}`,
+    origin: o.origin,
+    salon: "REMPIRE",
+    address: "",
+    body,
+    footer: [esc(inv.sellerName), esc(k.footer)],
+  });
   return { subject, text, html, attachments: [{ filename: o.pdf.filename, content: o.pdf.content, contentType: "application/pdf" }] };
 }
 
@@ -631,6 +737,7 @@ export function letterSubject(kind: string, locale: Locale, o: { startsAt?: stri
   const L: Locale = locale === "et" || locale === "en" ? locale : "ru";
   if (kind === "birthday") return BIRTHDAY[L].subject;
   if (kind === "no_show") return NO_SHOW[L].subject;
+  if (kind === "review") return REVIEW[L].subject;
   if (kind === "invoice") return o.number ? (INVOICE[L] ?? INVOICE.et).subject(o.number, o.credit === true) : null;
   const copy = kind === "confirmation" ? CONFIRM[L] : kind === "moved" ? MOVED[L] : kind === "cancelled" ? CANCELLED[L] : kind === "reminder_email" ? REMINDER[L] : null;
   if (!copy || !o.startsAt || Number.isNaN(Date.parse(o.startsAt))) return null;

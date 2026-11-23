@@ -1096,6 +1096,7 @@ export const en: typeof ru = {
       at: "Sending time",
       delay: "Delay, minutes",
       sms_text: "SMS text",
+      email_text: "Additional information in the e-mail",
       phone: "Phone",
       phone2: "Second phone",
       locale: "Language",
@@ -1331,6 +1332,14 @@ export const en: typeof ru = {
     counter: (chars: number, limit: number, parts: number) => `${chars} / ${limit} characters · ${parts} SMS`,
     unicode: "Non-Latin letters or emoji: only 70 characters fit one SMS.",
     manyParts: (n: number) => `The text goes in ${n} parts, each billed as an SMS.`,
+    extra: {
+      title: "Additional information in the e-mail",
+      hint: "Your text in this kind of letter, in all three languages, under the booking's details. Links https://… become clickable.",
+      count: (n: number, max: number) => `${n} / ${max}`,
+      long: (max: number) => `No longer than ${max} characters.`,
+      set: "set",
+      none: "not set",
+    },
     bad: {
       empty: "Type a text or bring back the standard one.",
       long: "600 characters at most.",
