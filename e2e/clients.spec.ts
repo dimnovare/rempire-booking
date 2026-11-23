@@ -806,8 +806,10 @@ test.describe("clients", () => {
       await sheet.getByRole("textbox", { name: A.visit.phone }).fill(phone);
       await sheet.getByRole("button", { name: C.add }).click();
       await page.waitForURL(CARD_URL);
-      await page.goto("/admin");
+      // this tab opened on the clients, so its sidebar shows the menu: its yellow «Журнал» goes back to the calendar and the tiles
       await hydrated(page);
+      await page.locator(".sb .sb-bar", { hasText: A.frame.journal }).click();
+      await page.waitForURL(/\/admin$/);
       await page.getByRole("group", { name: A.frame.tiles }).getByRole("button", { name: A.sale.title }).click();
       const sale = page.getByRole("dialog", { name: A.sale.title });
       await sale.getByLabel(A.sale.seller).selectOption({ label: "Milena" });
