@@ -31,6 +31,27 @@
         "GEOCODER": "fake",
         "DATABASE_URL": ""
       }
+    },
+    {
+      "name": "db-down",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "dev", "--port", "3430"],
+      "port": 3430,
+      "env": {
+        "DB_DRIVER": "pg",
+        "DATABASE_URL": "postgres://nobody:nothing@127.0.0.1:1/none",
+        "EMAIL_TRANSPORT": "console",
+        "SMS_TRANSPORT": "console",
+        "RESEND_API_KEY": "",
+        "EMAIL_FROM": "",
+        "MESSAGGIO_LOGIN": "",
+        "MESSAGGIO_SENDER": "",
+        "SHOP_API_URL": "",
+        "SHOP_API_SECRET": "",
+        "VAPID_PUBLIC_KEY": "",
+        "VAPID_PRIVATE_KEY": "",
+        "CRON_SECRET": ""
+      }
     }
   ]
 }

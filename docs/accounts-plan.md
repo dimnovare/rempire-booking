@@ -1,0 +1,73 @@
+# One REMPIRE: the accounts plan
+
+*23.11.2026, at Dim's request: «decide what runs on rempire.ee and what on
+the shop, which accounts are used; the fewer accounts, the better the
+overview». A proposal; the choices are on decisions round 14. Today's
+accounts: `docs/accounts.md` (booking) and `rempire-web/docs/accounts.md`
+(shop). Dim is away 30.11–13.12 without internet, so everything that needs
+Renat is asked before 30.11.*
+
+## What runs where
+
+| Address | What | Runs on | Company |
+|---|---|---|---|
+| `rempire.ee`, `www.rempire.ee` | The salon's website (a React site; its host is not known to us) | as today; its «book» buttons go to `book.rempire.ee` | Rempire OÜ |
+| `book.rempire.ee` | Client booking, the visit pages, the salon page | Vercel team «Rempire», project `rempire-booking` | Rempire OÜ |
+| `staff.rempire.ee` | Renat's admin and the barbers' app (one installed app) | the same project | Rempire OÜ |
+| `send.rempire.ee` | Booking letters' sending domain (Resend); mail to `@rempire.ee` stays at Zone | Resend | Rempire OÜ |
+| `rempireshop.com` | The shop, its panel, the partner API the booking reads | Vercel project `rempire-web` | Rempire Store OÜ |
+| `rempire-booking.diipsolutions.eu` | Staging, noindex, its own database (round 13: it stays) | the same Vercel project, Dim's DNS | — |
+
+Both apps stay **separate projects with separate databases**: a problem in
+one never takes the other down. What they share is the accounts around them.
+
+## Accounts: today and the target
+
+| Service | Today | Target | Who acts |
+|---|---|---|---|
+| **Google identity** | rempireshopinfo@gmail.com for the shop and the booking; the salon's Google Maps profile and (probably) the rempire.ee tags sit on **another account nobody here has** | rempireshopinfo@gmail.com owns or manages all of it | Renat: find who holds the salon's Maps profile and ask them to add rempireshopinfo@ as owner |
+| **Domains** (Zone.ee) | `rempireshop.com`: THEFLOW OÜ, Zone account blackboxestonia@ (Renat's own). `rempire.ee`: Rempire OÜ, Zone.ee, **expires 04.02.2027**, account not known | both domains in one Zone.ee account, auto-renew on | Renat: which Zone.ee account holds rempire.ee |
+| **Cloudflare** (DNS) | `rempireshop.com` on the shop's account (rempireshopinfo@). `rempire.ee` on **another account** (nameservers `ligia` / `vicky`, moved there on 04.11.2026) | one account (rempireshop.com's) with both zones | Renat: who moved rempire.ee to Cloudflare on 04.11; that person adds rempireshopinfo@ as member, or moves the zone |
+| **Vercel** | team «Rempire», Pro $20 a month, both projects | the same; **stays Pro**: Hobby is for non-commercial use only and allows a cron once a day, the booking needs one every 5 minutes | nothing |
+| **Railway** | workspace «rempireshop's Projects»: the shop's Postgres and booking staging | the same workspace; booking production as its own project and database (about $5 a month more) | Dim creates it after 13.12 |
+| **GitHub** | shop: `rempireshop/rempire-web`; booking: `dimnovare/rempire-booking` | both under `rempireshop`; Dim a collaborator; the booking gets the shop's backup workflow | Dim, at the handover |
+| **Resend** (e-mail) | two free accounts: the shop's (rempireshop.com) and the booking's (rempireshopinfo+booking@, same inbox) | **option A**: keep both free (0 €; one Google inbox behind both). **option B**: one paid account for both domains ($20 a month). One free account for both doesn't fit: 100 letters a day shared | round 14 |
+| **Google Cloud** | two projects: «Rempire shop» (customers' Google login, published) and «REMPIRE Booking» (staff Google login, never published, broke on 18.11) | **option A**: drop staff Google login (e-mail code and password stay) and delete the booking project. **option B**: move the staff login into the shop's project | round 14 |
+| **SMS** (Messaggio) | Renat's own account; Altegio sends through it | the same; Altegio's sending switched off at the move | Renat: login and sender before 30.11 |
+| **Uptime monitor** | none | one free UptimeRobot account on rempireshopinfo@: `/api/health` and `/api/health/cron` of the booking, the shop's home page; alerts to Dim and Renat | Dim opens it (5 minutes) |
+| **Backups** | shop: GitHub Actions twice a day, restored and counted each time | the booking copies the same workflow | Claude builds it |
+| **Web push keys** | one pair per app, in Vercel only | the same (no account) | — |
+| **Altegio, Isolta** | Renat's | cancelled after the move (Altegio a month after, Isolta at its renewal) | Renat |
+| **Telegram** `@rempireshop_bot` | shop's order pings | untouched | — |
+
+After this, the list is: **one Google identity, one Zone.ee, one
+Cloudflare, one Vercel team, one Railway workspace, one GitHub owner**, plus
+Resend (one or two), Messaggio, UptimeRobot, and the shop's own (Montonio,
+OpenAI, Merchant Center, Search Console).
+
+## Who pays
+
+Three companies are in play: **Rempire OÜ** (the salon, rempire.ee),
+**Rempire Store OÜ** (the shop) and **THEFLOW OÜ** (rempireshop.com's
+registrant). The booking's costs (its share of Vercel, its database, SMS)
+belong to the salon. Today Vercel, Railway and Cloudflare run on Dim's
+card. Renat decides which company's card replaces it (the shop's «card
+plan»).
+
+## Needed from Renat before 30.11
+
+1. Who made and runs the rempire.ee website, its Cloudflare and the salon's
+   Google Maps profile: a name and a contact.
+2. Which Zone.ee account holds rempire.ee (it expires 04.02.2027).
+3. Messaggio: the project login and the sender «REMPIRE».
+4. Altegio's Excel exports: clients and visits (forward the e-mails).
+5. The barbers' e-mail addresses for their logins.
+6. His questions page (10 open questions).
+7. Which company pays for the booking.
+
+## Not now
+
+- Moving the rempire.ee website itself onto Vercel (one host less): only
+  if its maker hands it over; it works as it is.
+- One shared database for shop and booking: saves about $5 a month, but a
+  shop problem could stop bookings.

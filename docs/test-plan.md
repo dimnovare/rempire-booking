@@ -94,7 +94,10 @@ shows the same, nothing else.
 5. **Resend handling**: a 500, a timeout and a 429 from a stub; the row is
    retried, never sent twice. A timeout on the call itself.
 6. **The error page**: database off → the friendly page with the salon's
-   phone, HTTP 503 (blocker B7 in `docs/launch.md`).
+   phone (built 23.11, checked by hand with the `db-down` preview in
+   `.claude/launch.json`); an e2e test for it is still to write.
+   `/api/health` and `/api/health/cron` have unit tests
+   (`tests/health.test.ts`).
 7. **E2E in CI** on every push, and three desktop projects for the admin:
    Chrome, Firefox and Safari (WebKit) at 1440 × 900.
 8. **Load**: 50 visitors choosing times and 10 booking at once, for five
@@ -324,10 +327,10 @@ answer must be calm, clear and recoverable.
 
 | Case | Expected |
 |---|---|
-| Database unreachable | the error page with the salon's phone, HTTP 503; the monitor alerts Dim in a minute; back by itself when the database is |
+| Database unreachable | the error page with the salon's phone (the page itself may still answer 200: it streams); `/api/health` answers 503 and the monitor alerts within 5 minutes; back by itself when the database is |
 | `DATABASE_URL` missing on production | refuses to start; never the in-memory demo database (`DB_DRIVER` unset on production) |
 | Railway's CA changes | known date (CA expires 14.02.2029); a reminder in Dim's calendar |
-| Cron stops | booking and confirmations still work; reminders late; an alert after 15 minutes without a run |
+| Cron stops | booking and confirmations still work; reminders late; `/api/health/cron` answers 503 after 15 minutes without a finished run, and the monitor alerts |
 | Resend down or slow | booking still works; letters retried; after 5 failures shown in «Сообщения» and resent by hand |
 | Messaggio down | the same for SMS |
 | The shop down | «Продать» says so; booking untouched |

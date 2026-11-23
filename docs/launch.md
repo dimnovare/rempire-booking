@@ -12,8 +12,11 @@ that must pass first: `docs/test-plan.md`.*
   04.12: that is our safety net for the first days.
 - Renat has not yet said «до 2 декабря подходит» (his page, `switch.ok`,
   unanswered since 20.11).
-- If the blockers below are not done by **30.11**, paying Altegio one more
-  month is cheaper than a bad switch.
+- **Dim chose one more month of Altegio** (round 13, 23.11): Altegio renews
+  on 02.12 as usual. Dim is away **30.11–13.12** without internet, so the
+  switch comes after that: day one Monday 04.01 (Altegio one more month as
+  the fallback) or Monday 21.12 (round 14). In Altegio's schedule nobody
+  works on Sundays: the import runs on the Sunday before day one.
 
 ## Blockers: none of these is done yet
 
@@ -21,11 +24,11 @@ that must pass first: `docs/test-plan.md`.*
 |---|---|---|---|
 | B1 | **Altegio import (A7):** clients with phones, future visits. Staff, services, prices and hours are already in from Altegio's public widget | Renat forwards Altegio's Excel exports; Claude builds the importer | Without the future visits, barbers lose every booking made in Altegio |
 | B2 | **rempire.ee DNS:** who holds the Cloudflare zone, and access for one DNS change per host | Renat (or whoever runs rempire.ee) | No address, no Resend domain on rempire.ee, no Google publish |
-| B3 | **Two addresses:** one for clients, one for staff (e.g. `broneeri.rempire.ee` and `staff.rempire.ee`); routing by host is not built | Dim decides the names; Claude builds | On Android only one of the two apps installs while they share an address (`docs/apps.md`) |
+| B3 | **Two addresses:** `book.rempire.ee` for clients, `staff.rempire.ee` for staff (round 13); routing by host is not built | Claude builds | On Android only one of the two apps installs while they share an address (`docs/apps.md`) |
 | B4 | **Messaggio:** project login and the sender code «REMPIRE» | Renat → Dim puts them into Vercel | No SMS reminders. A new sender name takes 1–5 working days |
 | B5 | **Production database** on Railway, empty, its own URL and CA | Dim creates it; Claude sets the CA | Staging's database holds demo data |
 | B6 | **Privacy policy** page in RU, ET, EN | Claude drafts, Dim and Renat approve | Google needs it to publish the login; we hold clients' phones and e-mails (GDPR) |
-| B7 | **Error page and monitoring:** a friendly error page with the salon's phone, an uptime check every minute that alerts Dim, database backups | Claude builds the page; Dim opens the monitor account | Today an error shows Next's bare page; nobody would know the booking is down |
+| B7 | **Error page and monitoring:** a friendly error page with the salon's phone, an uptime check that alerts Dim, database backups | **Built 23.11:** the error pages and `/api/health`, `/api/health/cron`. Still: Dim opens the UptimeRobot account; Claude copies the shop's backup workflow | Today an error shows Next's bare page; nobody would know the booking is down |
 | B8 | **The full test pass** in `docs/test-plan.md`, all green, on the production build | Claude runs it; Dim and Renat do the real-phone part | «The booking can never go down» |
 
 Not blocking the launch (they can follow):
@@ -36,13 +39,15 @@ Not blocking the launch (they can follow):
 
 ## Decisions for Dim
 
-On the round-13 decisions page (artifact `4VNZQCdY9mHDAdYTSzZhrs`, 23.11):
-- the two host names;
-- who does the real-phone test (`docs/test-plan.md` § 10);
-- does staging stay as a second environment after the launch;
-- what carries over from staging to production (nothing / the structure);
-- where staging's redirected letters go (`TEST_MAIL_TO`);
-- the date: 30.11 (Monday 1.12 as day one) or one more month of Altegio.
+Round 13 (artifact `4VNZQCdY9mHDAdYTSzZhrs`, answered 23.11): hosts
+`book.` and `staff.rempire.ee`; staging stays; production starts with the
+setup from staging (no clients, no visits), then the Altegio import;
+staging's redirected letters keep going to the shop inbox; one more month
+of Altegio.
+
+Round 14 (artifact `1dwcFR6gRYqkwAF23iVkiA`, 23.11): the day one, what
+happens while Dim is away, the accounts (`docs/accounts-plan.md`), and
+testing on a cloud of real phones.
 
 ## The move, in order
 

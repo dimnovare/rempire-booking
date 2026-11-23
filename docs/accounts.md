@@ -5,7 +5,8 @@ outside account the booking app uses, how it is signed in, which env var
 names it fills, its state today, and what has to happen at the launch on
 rempire.ee. The launch order itself is `docs/launch.md`; the tests before
 it are `docs/test-plan.md`. The shop's own registry is
-`rempire-web/docs/accounts.md`; this file covers the booking app only.*
+`rempire-web/docs/accounts.md`; this file covers the booking app only.
+How the two sets become one: `docs/accounts-plan.md` (23.11).*
 
 ## Rules
 
@@ -80,7 +81,7 @@ channels are live, without values.
 | `RESEND_API_KEY`, `EMAIL_FROM` | yes; `EMAIL_FROM` on rempire.ee | yes | |
 | `RESEND_WEBHOOK_SECRET` | if «Открыт» is wanted | ? | one per webhook endpoint |
 | `EMAIL_TRANSPORT`, `SMS_TRANSPORT` | **must be unset** | ? | `console` silently stops sending, even with the Resend or Messaggio keys set (e-mail since 23.11) |
-| `TEST_MAIL_TO` | no | ? | where staging redirects letters to non-staff; default rempireshopinfo@gmail.com. Proposed (round 13): Dim's inbox before the full test pass |
+| `TEST_MAIL_TO` | no | ? | where staging redirects letters to non-staff; default rempireshopinfo@gmail.com. Dim kept that default (round 13, 23.11): leave it unset |
 | `MESSAGGIO_LOGIN`, `MESSAGGIO_SENDER` | yes | ? | the login Sensitive |
 | `SMS_TEST_TO` | no (ignored once indexing is on) | ? | the testers' own numbers, E.164 |
 | `CRON_SECRET` | yes | yes (Dim) | Sensitive |
