@@ -51,8 +51,10 @@ Three companies are in play: **Rempire OÜ** (the salon, rempire.ee),
 **Rempire Store OÜ** (the shop) and **THEFLOW OÜ** (rempireshop.com's
 registrant). The booking's costs (its share of Vercel, its database, SMS)
 belong to the salon. Today Vercel, Railway and Cloudflare run on Dim's
-card. Renat decides which company's card replaces it (the shop's «card
-plan»).
+card. The accounts move to Renat in any case (Dim, 23.11); the open point
+is which side they belong to, the salon's rempire.ee or the shop's
+rempireshop.com, and so which company's card replaces Dim's (the shop's
+«card plan»).
 
 ## Asked of Renat (his page, set 4, 23.11)
 
@@ -65,7 +67,8 @@ with Renat, so none is named.
 3. Whether he has access to the salon's Google account.
 4. Altegio's Excel exports of clients and visits: Altegio mails them only
    to the owner, so he forwards them.
-5. Which company pays.
+5. Which side the accounts move to (23.11 evening): the salon,
+   rempire.ee, or the shop, rempireshop.com.
 
 Later, when the work gets there: Messaggio's login (SMS tests), the
 barbers' e-mails (after testing), access to the Google account and, if

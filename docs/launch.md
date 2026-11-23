@@ -55,9 +55,11 @@ Round 14 (artifact `1dwcFR6gRYqkwAF23iVkiA`, answered 23.11): day one
 Monday 04.01; Renat tests on staging while Dim is away; two free Resend
 accounts; BrowserStack for the test month plus 10 minutes on a real phone.
 Asked of Renat (his page, set 4): Altegio and Isolta terms (he decides),
-where the booking lives, Google access, Altegio's exports, which company
-pays. The down alert goes to Renat after the switch (Dim, 23.11)
-(`docs/renat-before-30-11.ru.md`).
+where the booking lives, Google access, Altegio's exports, which side the
+accounts move to (rempire.ee or rempireshop.com). The down alert goes to
+Renat after the switch (Dim, 23.11) (`docs/renat-before-30-11.ru.md`).
+Settled the same evening (Dim, kickoff decision 38): no client app of our
+own, and another business (tattoo or other) is added when Renat wants it.
 
 ## The move, in order
 

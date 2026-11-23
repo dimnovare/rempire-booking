@@ -26,9 +26,13 @@ describe("the questions", () => {
   it("are as many as the intro says, each field a key the table accepts", () => {
     expect(INTRO).toContain(`${QUESTIONS.length} коротких вопросов`);
     for (const key of FIELDS.keys()) expect(key).toMatch(/^[a-z_]{1,30}\.[a-z_]{1,30}$/);
-    expect(FIELDS.has("decided.note")).toBe(true);
-    // 23.11 (Dim): Altegio and Isolta, where the booking lives, access, the export, who pays; then the open ones from 20.11
+    // Renat's note of 18.11 is in «Уже решено»; the field under it starts empty (23.11)
+    expect(FIELDS.has("decided.more")).toBe(true);
+    expect(FIELDS.has("decided.note")).toBe(false);
+    // 23.11 (Dim): Altegio and Isolta, where the booking lives, access, the export, which side the accounts go to; then the open ones from 20.11
     expect(QUESTIONS.map((q) => q.id).slice(0, 6)).toEqual(["subs", "site", "access", "export", "payer", "pay"]);
+    expect(cleanValue("payer.side", "К магазину, rempireshop.com")).toBe("К магазину, rempireshop.com");
+    expect(FIELDS.has("payer.who")).toBe(false);
     expect(INTRO).toContain("Первые пять");
     expect(cleanValue("subs.altegio", "На год")).toBe("На год");
     expect(cleanValue("subs.isolta", "На 1–2 месяца")).toBe("На 1–2 месяца");
@@ -44,8 +48,11 @@ describe("the questions", () => {
     // answered by Renat on 18.11, now in «Уже решено»
     for (const gone of ["emails.who", "commission.vat", "self.may", "telegram.how", "qr.want"]) expect(FIELDS.has(gone)).toBe(false);
     expect(cleanValue("emails.who", "Сначала я сам")).toBeNull();
-    // «Что ещё важно» stays last
-    expect(QUESTIONS.slice(-2).map((q) => q.id)).toEqual(["skipped", "extra"]);
+    // settled by Dim on 23.11 (no client app, another business when wanted) or answered on 18.11 («Что ещё важно»)
+    for (const gone of ["app.ok", "place.tattoo", "place.note", "extra.note"]) expect(FIELDS.has(gone)).toBe(false);
+    expect(DECIDED.join(" ")).toMatch(/приложения для клиентов не делаем/);
+    expect(DECIDED.join(" ")).toMatch(/Тату-студию/);
+    expect(QUESTIONS.at(-1)?.id).toBe("skipped");
   });
 
   it("take only what the page offers", () => {
@@ -57,8 +64,8 @@ describe("the questions", () => {
     // many: the page's order, no repeats, nothing it never offered
     expect(cleanValue("skipped.need", ["Акции", "Расчёт зарплат", "Акции"])).toEqual(["Расчёт зарплат", "Акции"]);
     expect(cleanValue("skipped.need", ["Всё"])).toBeNull();
-    expect(cleanValue("extra.note", "x".repeat(5000))).toHaveLength(5000);
-    expect(cleanValue("extra.note", "x".repeat(5001))).toBeNull();
+    expect(cleanValue("accountant.needs", "x".repeat(5000))).toHaveLength(5000);
+    expect(cleanValue("accountant.needs", "x".repeat(5001))).toBeNull();
   });
 });
 
@@ -78,14 +85,14 @@ describe("the link", () => {
 
 describe("saving", () => {
   it("keeps the latest value and logs every change, not repeats", async () => {
-    const a = await withTx((q) => saveAnswer(q, formId, "extra.note", "первое"));
-    const again = await withTx((q) => saveAnswer(q, formId, "extra.note", "первое"));
-    const b = await withTx((q) => saveAnswer(q, formId, "extra.note", "первое и ещё"));
+    const a = await withTx((q) => saveAnswer(q, formId, "accountant.needs", "первое"));
+    const again = await withTx((q) => saveAnswer(q, formId, "accountant.needs", "первое"));
+    const b = await withTx((q) => saveAnswer(q, formId, "accountant.needs", "первое и ещё"));
     expect([a.changed, again.changed, b.changed]).toEqual([true, false, true]);
     expect(again.savedAt).toBe(a.savedAt);
 
     const answers = await loadAnswers(query, formId);
-    expect(answers["extra.note"].value).toBe("первое и ещё");
+    expect(answers["accountant.needs"].value).toBe("первое и ещё");
     const log = await loadLog(query, formId);
     expect(log.map((l) => l.value)).toEqual(["первое", "первое и ещё"]);
   });
@@ -112,7 +119,7 @@ describe("/api/qa/<token>", () => {
   });
 
   it("refuses a wrong token, an unknown field, a value never offered, bad JSON", async () => {
-    expect((await put("wrong-token", { field: "extra.note", value: "x" })).status).toBe(404);
+    expect((await put("wrong-token", { field: "accountant.needs", value: "x" })).status).toBe(404);
     expect((await GET(new Request("http://x/api/qa/wrong-token"), ctx("wrong-token"))).status).toBe(404);
     expect((await put(TOKEN, { field: "admin.role", value: "x" })).status).toBe(400);
     expect((await put(TOKEN, { field: "pay.need", value: "SMS" })).status).toBe(400);

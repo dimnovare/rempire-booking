@@ -25,6 +25,14 @@
  * e-mails and access come later: LATER. The down alert goes to Renat after
  * the switch: DECIDED. Logins and passwords are never asked here.
  *
+ * 23.11.2026 evening (Dim): «payer» asks which side the accounts move to
+ * (the salon, rempire.ee, or the shop, rempireshop.com), not who pays; «app»
+ * and «place» are settled (no client app of our own, the installable page
+ * is enough; another business, tattoo or other, is added when Renat wants
+ * it) and left for DECIDED; «extra» left (answered 18.11, kickoff decision
+ * 37). Renat's note under DECIDED of 18.11 is in DECIDED itself (the 17 %
+ * lines), so the note field is new («decided.more») and starts empty.
+ *
  * Each field saves on its own («subs.altegio», «extra.note»…). The page sends
  * one field at a time; every change is logged (qa_answer_log), so a later
  * addition never loses what was written first.
@@ -41,7 +49,7 @@ export type Field =
 export type Question = { id: string; title: string; lead: string; fields: Field[] };
 
 export const INTRO =
-  "Ренат, здесь 14 коротких вопросов о новой системе записи. Первые пять хорошо бы до 29 ноября: " +
+  "Ренат, здесь 11 коротких вопросов о новой системе записи. Первые пять хорошо бы до 29 ноября: " +
   "с 30 ноября по 13 декабря Дима в отъезде. Остальные могут подождать. " +
   "Что ты уже ответил, внизу, в «Уже решено». " +
   "Ответы сохраняются сами: можно закрыть страницу, вернуться и дописать. Логины и пароли здесь не пиши.";
@@ -104,11 +112,14 @@ export const QUESTIONS: Question[] = [
       "По ним проверим перенос, а перед самым переходом попросим ещё раз, свежие.",
     fields: [{ id: "done", kind: "one", label: "Выгрузил и переслал?", options: ["Да, переслал", "Сделаю", "Не нашёл, как выгрузить"] }],
   },
+  /* Dim, 23.11 evening: the accounts move to Renat anyway; which side is the question */
   {
     id: "payer",
-    title: "Кто платит за новую систему",
-    lead: "Сервер и база данных новой системы сейчас идут с карты Димы, SMS пойдут через твой Messaggio. Это расходы салона.",
-    fields: [{ id: "who", kind: "one", label: "Платит:", options: ["Rempire OÜ (салон)", "Rempire Store OÜ (магазин)", "Обсудим"] }],
+    title: "На кого перевести аккаунты",
+    lead:
+      "Сервер, база данных и почта новой системы сейчас на аккаунтах Димы. Позже всё переведём на тебя. " +
+      "Нужно понять, к чему их привязать: к салону, rempire.ee, или к магазину, rempireshop.com.",
+    fields: [{ id: "side", kind: "one", label: "Аккаунты:", options: ["К салону, rempire.ee", "К магазину, rempireshop.com", "Обсудим"] }],
   },
   {
     id: "pay",
@@ -120,14 +131,6 @@ export const QUESTIONS: Question[] = [
       { id: "need", kind: "one", label: "Это нужно?", options: ["Да, всем барберам", "Только тем, кто хочет", "Нет, не нужно"] },
       { id: "note", kind: "text", label: "Как сейчас считаете деньги за визиты?" },
     ],
-  },
-  {
-    id: "app",
-    title: "Приложение Altegio для клиентов",
-    lead:
-      "Каждая восьмая запись приходит из приложения Altegio. После перехода его не будет: клиенты записываются " +
-      "по ссылке, с сайта rempire.ee или из Google Maps. Ссылку можно сохранить на телефон как приложение.",
-    fields: [{ id: "ok", kind: "one", label: "Так нормально?", options: ["Да", "Нет, нужно своё приложение", "Не знаю"] }],
   },
   {
     id: "reviews",
@@ -168,15 +171,6 @@ export const QUESTIONS: Question[] = [
     lead: "Новая система выгружает счета в Excel и PDF. Что нужно твоему бухгалтеру и как часто?",
     fields: [{ id: "needs", kind: "text", label: "Что бухгалтер берёт сейчас из Isolta или Altegio" }],
   },
-  {
-    id: "place",
-    title: "Тату-студия",
-    lead: "Ты писал, что в системе будут любые услуги: тату, массаж и другие. В Altegio у REMPIRE один филиал. Где будет тату?",
-    fields: [
-      { id: "tattoo", kind: "one", label: "Тату:", options: ["В той же системе, в салоне на Mardi 1", "Отдельно, в своём месте", "Пока не нужно"] },
-      { id: "note", kind: "text", label: "Что-то ещё?" },
-    ],
-  },
   /* Dim, round 10: «list them in the Q&A for Renat if he needs any» */
   {
     id: "skipped",
@@ -203,13 +197,6 @@ export const QUESTIONS: Question[] = [
       { id: "note", kind: "text", label: "Если что-то нужно, зачем" },
     ],
   },
-  /* first set: Renat answered it on 18.11; it stays so he can add more */
-  {
-    id: "extra",
-    title: "Что ещё важно",
-    lead: "Что не нравится в Altegio, чего не хватает, что точно нельзя потерять. Пиши сколько хочешь, можно дописывать потом.",
-    fields: [{ id: "note", kind: "text", label: "Твои мысли", rows: 6 }],
-  },
 ];
 
 /** Settled by Dim (17.11 and 20.11.2026) and by Renat's answers of 18.11. Renat can object in «decided.note». */
@@ -228,8 +215,11 @@ export const DECIDED: string[] = [
   "Новую систему сначала пробуешь ты сам, барберов добавим потом.",
   "Сделаем табличку с QR-кодом для записи: одна на салон, на ресепшн.",
   "Если после перехода онлайн-запись перестанет работать, система сразу напишет тебе: тогда можно попросить клиентов звонить.",
+  "Отдельного приложения для клиентов не делаем. Клиенты записываются по ссылке, с сайта или из Google Карт; кто хочет, сохраняет страницу записи на телефон как приложение.",
+  "Тату-студию или любое другое направление можно будет добавить в систему отдельно, со своими мастерами, услугами и онлайн-записью, когда понадобится.",
 ];
-export const DECIDED_NOTE: Field = { id: "note", kind: "text", label: "Если что-то здесь не так, напиши" };
+/** A new id on 23.11: Renat's note of 18.11 («decided.note», the 17 % lines) is in DECIDED already. */
+export const DECIDED_NOTE: Field = { id: "more", kind: "text", label: "Если что-то здесь не так, напиши" };
 
 /** Asked when the work gets there, not now (Dim, 23.11). */
 export const LATER: string[] = [
@@ -247,7 +237,7 @@ export const WE_READ: string[] = [
 /** Every field the page may save, by its full key. */
 export const FIELDS: ReadonlyMap<string, Field> = new Map([
   ...QUESTIONS.flatMap((q) => q.fields.map((f) => [`${q.id}.${f.id}`, f] as const)),
-  ["decided.note", DECIDED_NOTE] as const,
+  [`decided.${DECIDED_NOTE.id}`, DECIDED_NOTE] as const,
 ]);
 
 const TEXT_MAX = 5000;
