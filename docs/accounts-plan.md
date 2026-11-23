@@ -58,7 +58,7 @@ rempireshop.com, and so which company's card replaces Dim's (the shop's
 
 ## Asked of Renat (his page, set 4, 23.11)
 
-Dim forwards `docs/renat-before-30-11.ru.md`; no switch date is agreed
+Dim sent `docs/renat-before-30-11.ru.md` on 23.11; no switch date is agreed
 with Renat, so none is named.
 
 1. Altegio and Isolta: he checks and decides himself whether to extend

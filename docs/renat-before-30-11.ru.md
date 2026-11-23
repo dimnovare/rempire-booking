@@ -1,4 +1,7 @@
-<!-- For Dim, 23.11 evening (version 3, on your outline): one message,
+<!-- SENT: Dim sent this to Renat on 23.11.2026 evening, with his questions
+link in place of <ссылка>. Next: Renat's answers on his page and his
+«Сообщить о проблеме» reports on staging.
+For Dim, 23.11 evening (version 3, on your outline): one message,
 plain text for WhatsApp or Telegram. It informs: you are away 30.11–13.12,
 you finish what you can before, then you wait for his feedback. No switch
 date: none is agreed with Renat.
