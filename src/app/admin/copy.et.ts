@@ -1825,6 +1825,18 @@ export const et: typeof ru = {
     journal: "Kalender",
   },
 
+  bell: {
+    open: (unread: number) => (unread ? `Teavitused, uusi: ${unread}` : "Teavitused"),
+    empty: "Siin pole veel midagi",
+    unread: "Uus",
+    failed: "Laadimine ei õnnestunud. Proovige uuesti.",
+    now: "just praegu",
+    min: (n: number) => `${n} min tagasi`,
+    today: (time: string) => `täna, ${time}`,
+    yesterday: (time: string) => `eile, ${time}`,
+    day: (date: string, time: string) => `${date}, ${time}`,
+  },
+
   sale: {
     title: "Toote müük",
     when: "Päev ja kellaaeg",

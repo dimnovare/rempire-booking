@@ -96,6 +96,8 @@ test.describe("the frame", () => {
     });
 
     test("the sidebar keeps the board's sizes and colours, in both modes", async ({ page }) => {
+      // the rule for a page that asks for less motion would stop the transitions read below
+      await page.emulateMedia({ reducedMotion: "no-preference" });
       /** What the browser made of an element: its box, and the styles the board gives. */
       const look = (selector: string, pseudo?: string) =>
         page.locator(selector).first().evaluate((el, pseudo) => {
@@ -112,8 +114,8 @@ test.describe("the frame", () => {
       // the head: 47px and a 1px line
       expect(await look(".sb-head")).toMatchObject({ w: 220, h: 48 });
       expect(await page.locator(".sb-head").evaluate((el) => getComputedStyle(el).borderBottom)).toBe("1px solid rgb(51, 51, 63)");
-      expect(await look(".sb-mark")).toMatchObject({ w: 20, h: 20, bg: "rgb(255, 255, 255)", radius: "6px" });
-      expect(await look(".sb-name")).toMatchObject({ color: "rgb(223, 228, 237)", font: "500 14px/20px" });
+      expect(await look(".sb-mark")).toMatchObject({ w: 24, h: 24, bg: "rgb(255, 255, 255)", radius: "6px" });
+      expect(await look(".sb-name")).toMatchObject({ color: "rgb(255, 255, 255)", font: "500 14px/20px" });
       // the month: its title row, the weekday letters, a day with its ring and disc
       expect(await look(".sb-month-head")).toMatchObject({ w: 196, h: 28, font: "500 14px/20px" });
       expect(await look(".sb-month-head button")).toMatchObject({ w: 24, h: 24, color: "rgb(198, 203, 211)" });
@@ -148,10 +150,15 @@ test.describe("the frame", () => {
       expect(tiles[2][1]).toBe(tiles[0][1] + 108);
       // «Избранное», who is signed in, the yellow bar, the thin row
       expect(await look(".sb-fav-head")).toMatchObject({ w: 204, h: 36, radius: "8px", font: "500 14px/20px" });
+      // who: the name and the e-mail, no picture, 8px in; the way out a 24px icon
       expect(await look(".sb-me")).toMatchObject({ w: 220, h: 49 });
       expect(await look(".sb-me b")).toMatchObject({ font: "500 12px/16px" });
       expect(await look(".sb-me .who span")).toMatchObject({ color: "rgb(154, 163, 177)", font: "500 11px/14px" });
+      await expect(page.locator(".sb-me .who span")).toHaveText("owner@example.test");
+      await expect(page.locator(".sb-me img, .sb-ava")).toHaveCount(0);
+      expect(await page.locator(".sb-me b").evaluate((el) => Math.round(el.getBoundingClientRect().x))).toBe(8);
       expect(await look(".sb-out")).toMatchObject({ w: 24, h: 24 });
+      expect(await look(".sb-out svg")).toMatchObject({ w: 24, h: 24 });
       expect(await look(".sb-bar")).toMatchObject({ w: 220, h: 44, bg: "rgb(255, 203, 0)", color: "rgb(43, 49, 52)", font: "500 14px/20px", radius: "0px" });
       expect(await look(".sb-foot")).toMatchObject({ w: 220, h: 30, color: "rgb(154, 163, 177)", font: "400 11px/14px" });
       // the foot ends at the bottom of the screen
@@ -167,20 +174,35 @@ test.describe("the frame", () => {
       // «menu»
       await sb(page).getByRole("button", { name: F.all }).click();
       await menu(page).getByRole("button", { name: A.nav.clients }).click();
+      // the group's opening has run its .25s
+      await expect(page.locator(".sb-group.is-open")).toHaveCSS("padding", "4px");
+      await expect(page.locator(".sb-group.is-open > .sb-row")).toHaveCSS("background-color", "rgb(255, 217, 64)");
       expect(await look(".sb")).toMatchObject({ w: 220, bg: "rgb(8, 8, 12)" });
-      expect(await look(".sb-head")).toMatchObject({ h: 47 });
-      expect(await page.locator(".sb-menu").evaluate((el) => [getComputedStyle(el).padding, getComputedStyle(el).rowGap])).toEqual(["4px 12px", "2px"]);
-      expect(await look(".sb-menu > a.sb-row")).toMatchObject({ w: 196, h: 40, radius: "8px", color: "rgb(255, 255, 255)", font: "500 14px/24px" });
-      expect(await look(".sb-menu > a.sb-row svg")).toMatchObject({ w: 20, h: 20 });
-      expect(await look(".sb-group.is-open")).toMatchObject({ w: 196, bg: "rgb(34, 34, 46)", radius: "10px" });
+      // as Dim's video of the board at 1920 × 1080 (24.11): the head keeps its line; rows of 40px, 12px apart,
+      // 10px in from each side, 24px icons, a light 20px chevron
+      expect(await look(".sb-head")).toMatchObject({ h: 48 });
+      expect(await page.locator(".sb-head").evaluate((el) => getComputedStyle(el).borderBottom)).toBe("1px solid rgb(51, 51, 63)");
+      expect(await page.locator(".sb-menu").evaluate((el) => [getComputedStyle(el).padding, getComputedStyle(el).rowGap])).toEqual(["16px 10px", "12px"]);
+      expect(await look(".sb-menu > a.sb-row")).toMatchObject({ w: 200, h: 40, radius: "8px", color: "rgb(255, 255, 255)", font: "500 14px/20px" });
+      expect(await look(".sb-menu > a.sb-row svg")).toMatchObject({ w: 24, h: 24 });
+      expect(await look(".sb-group:not(.is-open) > .sb-row svg:last-child")).toMatchObject({ w: 20, h: 20, color: "rgb(223, 228, 237)" });
+      const tops = await page.locator(".sb-menu > *").evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().y)));
+      const closed = await page.locator(".sb-menu > *").evaluateAll((els) => els.map((el) => !el.classList.contains("is-open")));
+      for (let i = 1; i < tops.length; i++) if (closed[i - 1]) expect(tops[i] - tops[i - 1]).toBe(52);
+      // the open group: a dark card, its yellow head; its list grows in .25s (the grid's rows, 0fr → 1fr), a shut one has no height and is hidden
+      expect(await look(".sb-group.is-open")).toMatchObject({ w: 200, bg: "rgb(34, 34, 46)", radius: "10px" });
       expect(await page.locator(".sb-group.is-open").evaluate((el) => getComputedStyle(el).padding)).toBe("4px");
-      expect(await look(".sb-group.is-open > .sb-row")).toMatchObject({ w: 188, h: 40, bg: "rgb(255, 217, 64)", color: "rgb(8, 8, 12)", radius: "8px", font: "500 14px/24px" });
-      expect(await look(".sb-sub")).toMatchObject({ h: 40, color: "rgb(198, 203, 211)", font: "500 14px/20px" });
+      expect(await look(".sb-group.is-open > .sb-row")).toMatchObject({ w: 192, h: 40, bg: "rgb(255, 217, 64)", color: "rgb(8, 8, 12)", radius: "8px", font: "500 14px/20px" });
+      expect(await look(".sb-group.is-open .sb-sub")).toMatchObject({ h: 40, color: "rgb(198, 203, 211)", font: "500 14px/20px" });
+      expect(await page.locator(".sb-group.is-open > .sb-subs").evaluate((el) => [getComputedStyle(el).transitionProperty, getComputedStyle(el).transitionDuration])).toEqual(["grid-template-rows, visibility", "0.25s, 0s"]);
+      expect(await page.locator(".sb-group:not(.is-open) > .sb-subs").first().evaluate((el) => [el.getBoundingClientRect().height, getComputedStyle(el).visibility, (el as HTMLElement).inert])).toEqual([0, "hidden", true]);
       expect(await look(".sb-bar")).toMatchObject({ w: 220, h: 44, bg: "rgb(255, 203, 0)" });
       expect(await page.locator(".sb-bar").evaluate((el) => window.innerHeight - el.getBoundingClientRect().bottom)).toBe(0);
       // on its page the group's row is white and heavier
       await menu(page).getByRole("link", { name: A.nav.clientBase }).click();
       await page.waitForURL(/\/admin\/clients$/);
+      // (its colour fades in .15s)
+      await expect(page.locator('.sb-sub[aria-current="page"]')).toHaveCSS("color", "rgb(255, 255, 255)");
       expect(await look('.sb-sub[aria-current="page"]')).toMatchObject({ color: "rgb(255, 255, 255)", font: "600 14px/20px" });
       await test.info().attach("frame-sidebar-menu", { body: await sb(page).screenshot({ path: path.join(OUT, "screens", "pc-frame-sidebar-menu.png") }), contentType: "image/png" });
     });

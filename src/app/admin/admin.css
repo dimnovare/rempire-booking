@@ -158,14 +158,14 @@ html, body { background: var(--ink); }
   .sb { position: fixed; top: var(--test-h); left: 0; bottom: 0; z-index: 30; width: var(--side-w); display: flex; flex-direction: column; overflow: hidden; background: var(--sb-bg); color: #fff; font: 500 12px/16px var(--body); }
   .sb.is-menu { background: var(--sb-menu-bg); }
   .sb a { text-decoration: none; }
-  /* 47px and a 1px line under it; the menu's head has no line */
+  /* 47px and a 1px line under it, in both modes (Dim's video of the admin we follow, 24.11, at 1920 × 1080):
+     the 24px white square, the name, the bell at the right (bell.tsx) */
   .sb-head { flex: none; height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--sb-line); }
-  .sb.is-menu .sb-head { height: 47px; border-bottom: 0; }
   .sb-brand { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 47px; }
-  .sb-mark { flex: none; width: 20px; height: 20px; border-radius: 6px; background: #fff; color: var(--sb-bg); display: grid; place-items: center; }
+  .sb-mark { flex: none; width: 24px; height: 24px; border-radius: 6px; background: #fff; color: var(--sb-bg); display: grid; place-items: center; }
   .sb.is-menu .sb-mark { color: var(--sb-menu-bg); }
-  .sb-mark svg { height: 15px; width: auto; }
-  .sb-name { font-size: 14px; line-height: 20px; font-weight: 500; color: #dfe4ed; }
+  .sb-mark svg { height: 18px; width: auto; }
+  .sb-name { font-size: 14px; line-height: 20px; font-weight: 500; color: #fff; }
   .sb .adm-tag.lime { border-color: var(--lime); color: var(--lime); }
   .sb-mid { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; display: flex; flex-direction: column; }
   .sb-mid::-webkit-scrollbar { display: none; }
@@ -217,32 +217,42 @@ html, body { background: var(--ink); }
   .sb-fav-list a > svg { flex: none; color: #ffcb00; }
   .sb-fav-empty { margin: 0; padding: 4px 8px 4px 34px; color: var(--sb-dim); font-size: 12px; line-height: 16px; font-weight: 400; }
 
-  /* the menu: an accordion */
-  .sb-menu { flex: none; padding: 4px 12px; display: flex; flex-direction: column; gap: 2px; }
-  .sb-row { width: 100%; height: 40px; border-radius: 8px; color: #fff; display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 14px; line-height: 24px; font-weight: 500; }
-  .sb-row > span { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* the menu: an accordion, as measured on Dim's video (24.11, 1920 × 1080): rows of 40px, 12px apart (a
+     52px step), 10px in from each side, 24px icons, a light 20px chevron. A name too long for a line takes
+     two (the row grows to 48px), as «Цифровые платежи» does there. A group opens in .25s: its head turns
+     yellow, its card and its list grow, the rows under it move down; the one that was open folds at once.
+     The list is always drawn: a shut one has no height and is hidden (.sb-subs). */
+  .sb-menu { flex: none; padding: 16px 10px; display: flex; flex-direction: column; gap: 12px; }
+  .sb-row { width: 100%; min-height: 40px; border-radius: 8px; color: #fff; display: flex; align-items: center; gap: 8px; padding: 4px 10px; font-size: 14px; line-height: 20px; font-weight: 500; transition: background-color .15s ease-out, color .15s ease-out; }
+  .sb-row > span { flex: 1; min-width: 0; text-align: left; overflow-wrap: anywhere; }
   .sb-row > svg:first-child { flex: none; }
-  .sb-row > svg:last-child:not(:first-child) { flex: none; color: var(--sb-quiet); transition: transform .15s ease-out; }
+  .sb-row > svg:last-child:not(:first-child) { flex: none; color: #dfe4ed; transition: transform .25s ease-out; }
   .sb-row:hover { background: var(--sb-card); }
-  .sb-group.is-open { border-radius: 10px; background: var(--sb-card); padding: 4px; }
+  .sb-group { border-radius: 10px; transition: background-color .25s ease-out, padding .25s ease-out; }
+  .sb-group.is-open { background: var(--sb-card); padding: 4px; }
   .sb-group.is-open > .sb-row, a.sb-row[aria-current="page"] { background: var(--sb-on); color: var(--sb-on-fg); }
+  /* a click turns the head yellow at once, as theirs; only the hover fades */
+  .sb-group.is-open > .sb-row { transition-duration: 0s; }
   .sb-group.is-open > .sb-row > svg:last-child { color: inherit; transform: rotate(180deg); }
-  .sb-sub { display: flex; align-items: center; height: 40px; padding: 0 8px; border-radius: 8px; color: var(--sb-soft); font-size: 14px; line-height: 20px; font-weight: 500; }
+  /* the height goes from none to the list's own by the grid's 0fr → 1fr; hidden only once it has folded */
+  .sb-subs { display: grid; grid-template-rows: 0fr; visibility: hidden; transition: grid-template-rows .25s ease-out, visibility 0s linear .25s; }
+  .sb-group.is-open > .sb-subs { grid-template-rows: 1fr; visibility: visible; transition: grid-template-rows .25s ease-out, visibility 0s; }
+  .sb-subs > div { min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 2px; }
+  .sb-sub { flex: none; display: flex; align-items: center; height: 40px; padding: 0 8px; border-radius: 8px; color: var(--sb-soft); font-size: 14px; line-height: 20px; font-weight: 500; transition: color .15s ease-out; }
+  .sb-sub:first-child { margin-top: 2px; }
   .sb-sub:hover { color: #fff; }
   .sb-sub[aria-current="page"] { color: #fff; font-weight: 600; }
 
-  /* the foot: who is signed in and the way out, the yellow bar, the thin row */
-  .sb-me { flex: none; height: 49px; display: flex; align-items: center; gap: 8px; padding: 0 12px; }
-  .sb-ava { flex: none; width: 28px; height: 28px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: #7a5b6b; color: #fff; font: 600 12px/1 var(--body); }
-  .sb-ava img { width: 100%; height: 100%; object-fit: cover; }
+  /* the foot: who is signed in (the name, the e-mail; no picture) and the way out, the yellow bar, the thin row */
+  .sb-me { flex: none; height: 49px; display: flex; align-items: center; gap: 8px; padding: 0 8px; }
   .sb-me .who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .sb-me .who > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .sb-me b { font-size: 12px; line-height: 16px; font-weight: 500; }
   .sb-me .who span { font-size: 11px; line-height: 14px; color: var(--sb-dim); }
   .sb-me form { display: contents; }
-  .sb-out { flex: none; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: var(--sb-soft); }
+  .sb-out { flex: none; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: #dfe4ed; }
   .sb-out:hover { color: #fff; }
-  .sb-bar { flex: none; width: 100%; height: 44px; background: var(--sb-bar); color: var(--sb-bar-fg); display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 14px; line-height: 20px; font-weight: 500; }
+  .sb-bar { flex: none; width: 100%; height: 44px; background: var(--sb-bar); color: var(--sb-bar-fg); display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 14px; line-height: 20px; font-weight: 500; }
   .sb-bar:hover { filter: brightness(1.05); }
   .sb-foot { flex: none; height: 30px; display: flex; align-items: center; gap: 12px; padding: 0 12px; font-size: 11px; line-height: 14px; font-weight: 400; color: var(--sb-dim); }
   .sb-foot button { min-height: 24px; }
@@ -909,8 +919,8 @@ button.cal-head:hover b { color: var(--accent); }
 @media (min-width: 900px) {
   .sb.iv-side { background: #312e6b; overflow-y: auto; }
   .iv-brand { flex: none; height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 12px; color: #dfe4ed; font: 500 14px/20px var(--body); }
-  .iv-mark { flex: none; width: 20px; height: 20px; border-radius: 6px; background: #fff; color: #312e6b; display: grid; place-items: center; }
-  .iv-mark svg { height: 15px; width: auto; }
+  .iv-mark { flex: none; width: 24px; height: 24px; border-radius: 6px; background: #fff; color: #312e6b; display: grid; place-items: center; }
+  .iv-mark svg { height: 18px; width: auto; }
   .iv-brand .adm-tag { margin-left: auto; border-color: #fff; color: #fff; }
   .iv-nav { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 4px 12px; }
   .iv-nav a, .iv-foot a { height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: 8px; color: #fff; font: 500 14px/24px var(--body); }

@@ -1915,6 +1915,19 @@ export const ru = {
     journal: "Журнал",
   },
 
+  /** The bell in the sidebar head (bell.tsx): what the staff pushes say, for every login. Its title is nav.notifications. */
+  bell: {
+    open: (unread: number) => (unread ? `Уведомления, новых: ${unread}` : "Уведомления"),
+    empty: "Пока ничего нет",
+    unread: "Новое",
+    failed: "Не удалось загрузить. Попробуйте ещё раз.",
+    now: "только что",
+    min: (n: number) => `${n} мин назад`,
+    today: (time: string) => `сегодня, ${time}`,
+    yesterday: (time: string) => `вчера, ${time}`,
+    day: (date: string, time: string) => `${date}, ${time}`,
+  },
+
   /** «Продажа товара»: the front desk records a barber's sale (src/lib/admin/sale.ts). */
   sale: {
     title: "Продажа товара",

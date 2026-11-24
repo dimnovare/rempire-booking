@@ -151,6 +151,24 @@ walk-through, small gaps»):
   horizon of 365 days, the booking page's calendar seven months ahead
   (four pages asked, one at a time), a June day with its times.
 
+**The sidebar and the bell** (Dim's screen video of Altegio and ours,
+24.11 evening, Chrome at 1920 × 1080: «not that smooth … the sizes … I do
+not see the bell»). Measured frame by frame and copied:
+
+- The menu: rows 40 px, 12 px apart (ours were 2), 24 px icons (20), a
+  light chevron, the head's line in both modes, a 24 px mark, the foot's
+  name and e-mail with no picture.
+- The motion: a group's head turns yellow at once; its card and list grow
+  in .25 s, the rows under it moving down; the group that was open folds
+  at the same time (ours appeared and vanished in one frame). The list is
+  always drawn and shut lists are inert.
+- The bell (migration 046, `src/lib/bell.ts`, `bell.tsx`): what the staff
+  pushes say, for every login the push reaches, with a phone or without;
+  a red dot while something is unread; the newest 30 of 30 days, read in
+  the login's language; opened, all read. `tests/bell.test.ts` (15),
+  `e2e/notifications.spec.ts`, `e2e/frame.spec.ts`.
+- Pictures are now checked at 1920 × 969 too, not only 1440.
+
 **Waiting on Renat** (his page): paying a visit (cash / card, 81 a month,
 all Jevgeni's) and the finance rights behind it; Altegio's other reports
 (retention, workload, finance, P&L, till, by staff, service or client) and

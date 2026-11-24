@@ -111,6 +111,7 @@ import { after } from "next/server";
 import { atOf, emailText, NOTIFY_DEFAULTS, noShowDelay, readNotify, reviewDelay, sends, sendsKind, smsTemplate, type NotifySettings } from "./admin/notifications";
 import { smsWords, tokensIn, type SmsType, type SmsValues } from "./admin/notification-text";
 import { getBusinessById, type Business } from "./availability";
+import { pruneBell } from "./bell";
 import { birthdayMatch } from "./birthday";
 import { clientTakes, refusesSql, takesSql } from "./client-notify";
 import { sendPushToClient } from "./client-push";
@@ -847,6 +848,9 @@ export async function runOutbox(q: Querier, now = Date.now(), env: Env = process
   const mail = await planEmailReminders(q, now);
   const res: OutboxResult = { ...emptyResult(), planned: plan.added + mail.added + (await planBirthdays(q, now)) + (await planReviewRequests(q, now)), cancelled: plan.cancelled + mail.cancelled };
   if (pushConfigured(env)) res.planned += await planEveningPush(q, now);
+  // the bell's own: tomorrow's plan, push or no push, and nothing older than the bell lists (046_bell.sql)
+  await planEveningBell(q, now).catch((e) => console.error("[bell] the evening plan failed:", e instanceof Error ? e.message : e));
+  await pruneBell(q, now).catch((e) => console.error("[bell] pruning failed:", e instanceof Error ? e.message : e));
   await deliver(q, await claimDue(q, enabledChannels(env), now), now, env, senders, res);
   const [w] = await q<{ n: number }>(`select count(*)::int as n from notifications where status = 'queued' and send_at <= $1`, [new Date(now)]);
   res.waiting = w.n;
@@ -965,28 +969,57 @@ async function composePush(q: Querier, row: OutboxRow, now: number): Promise<Com
     // the plan as it is when it goes, not when it was queued
     const p = row.payload as { date?: string; tz?: string; staffId?: string | null };
     if (!p.date || !p.tz) return { skip: "no date" };
-    const from = new Date(startOfDay(p.date, p.tz));
-    const to = new Date(startOfDay(addDays(p.date, 1), p.tz));
-    if (row.kind === "day_plan") {
-      const [d] = await q<{ n: number; first: Date | null; total: number }>(
-        `select count(*)::int as n, min(starts_at) as first, coalesce(sum(total_cents), 0)::int as total
-           from appointments where staff_id = $1 and status in ('pending', 'booked') and starts_at >= $2 and starts_at < $3`,
-        [p.staffId, from, to],
-      );
-      payload = { ...p, count: d.n, firstAt: d.first ? new Date(d.first).toISOString() : null, totalCents: d.total };
-    } else {
-      const per = await q<{ name: string; n: number }>(
-        `select s.display_name as name, count(*)::int as n
-           from appointments a join staff s on s.id = a.staff_id
-          where a.business_id = $1 and a.status in ('pending', 'booked') and a.starts_at >= $2 and a.starts_at < $3
-          group by s.display_name, s.sort order by s.sort, s.display_name`,
-        [row.business_id, from, to],
-      );
-      payload = { ...p, count: per.reduce((n, s) => n + s.n, 0), perStaff: per };
-    }
+    payload = await planNumbers(q, row.kind, row.business_id, { ...p, date: p.date, tz: p.tz });
   }
   const text = pushText(row.kind, payload, row.locale);
   return text ? { push: text } : { skip: "no text" };
+}
+
+type PlanSeed = { date: string; tz: string; staffId?: string | null };
+
+/**
+ * The evening plan's numbers for a day, as they are now: a login's own
+ * column (day_plan), or the whole salon's, a count per barber (own_plan).
+ */
+async function planNumbers(q: Querier, kind: "day_plan" | "own_plan", businessId: string, p: PlanSeed): Promise<Record<string, unknown>> {
+  const from = new Date(startOfDay(p.date, p.tz));
+  const to = new Date(startOfDay(addDays(p.date, 1), p.tz));
+  if (kind === "day_plan") {
+    const [d] = await q<{ n: number; first: Date | null; total: number }>(
+      `select count(*)::int as n, min(starts_at) as first, coalesce(sum(total_cents), 0)::int as total
+         from appointments where staff_id = $1 and status in ('pending', 'booked') and starts_at >= $2 and starts_at < $3`,
+      [p.staffId, from, to],
+    );
+    return { ...p, count: d.n, firstAt: d.first ? new Date(d.first).toISOString() : null, totalCents: d.total };
+  }
+  const per = await q<{ name: string; n: number }>(
+    `select s.display_name as name, count(*)::int as n
+       from appointments a join staff s on s.id = a.staff_id
+      where a.business_id = $1 and a.status in ('pending', 'booked') and a.starts_at >= $2 and a.starts_at < $3
+      group by s.display_name, s.sort order by s.sort, s.display_name`,
+    [businessId, from, to],
+  );
+  return { ...p, count: per.reduce((n, s) => n + s.n, 0), perStaff: per };
+}
+
+/**
+ * Who gets tomorrow's plan, as SQL: each login with a column its own day,
+ * Renat and the front desk the salon's, if they want it. The push's rules
+ * and the bell's are these same lines; only the push asks for a live phone.
+ * $1 the business, $5 and $6 the two kinds' defaults, $7 the kinds due.
+ */
+const planAudience = (phone: boolean) =>
+  `from users u
+         cross join lateral (values ('day_plan', u.staff_id is not null), ('own_plan', u.role <> 'staff')) k(kind, fits)
+        where u.business_id = $1 and u.active and k.fits and k.kind = any($7::text[])
+          and coalesce((u.notify ->> k.kind)::boolean, case when k.kind = 'day_plan' then $5::boolean else $6::boolean end)` +
+  (phone ? `\n          and exists (select 1 from push_subscriptions p where p.user_id = u.id and p.retired_at is null)` : "");
+
+/** The kinds of the evening plan due now in this salon, and the day they are for. */
+function planDue(b: { timezone: string; ns: NotifySettings }, now: number): { kinds: ("day_plan" | "own_plan")[]; date: string } {
+  const local = localParts(now, b.timezone);
+  const kinds = (["day_plan", "own_plan"] as const).filter((k) => sends(b.ns, k, "push") && local.time >= atOf(b.ns, k));
+  return { kinds, date: addDays(local.date, 1) };
 }
 
 /**
@@ -1000,24 +1033,52 @@ async function composePush(q: Querier, row: OutboxRow, now: number): Promise<Com
 export async function planEveningPush(q: Querier, now = Date.now()): Promise<number> {
   let added = 0;
   for (const b of await businessesWithNotify(q)) {
-    const local = localParts(now, b.timezone);
-    const kinds = (["day_plan", "own_plan"] as const).filter((k) => sends(b.ns, k, "push") && local.time >= atOf(b.ns, k));
+    const { kinds, date } = planDue(b, now);
     if (!kinds.length) continue;
-    const date = addDays(local.date, 1);
     const rows = await q<{ id: string }>(
       `insert into notifications (business_id, channel, kind, recipient, user_id, locale, payload, send_at)
        select u.business_id, 'push', k.kind, u.id::text, u.id, u.locale,
               jsonb_build_object('date', $2::text, 'tz', $3::text, 'staffId', u.staff_id), $4
-         from users u
-         cross join lateral (values ('day_plan', u.staff_id is not null), ('own_plan', u.role <> 'staff')) k(kind, fits)
-        where u.business_id = $1 and u.active and k.fits and k.kind = any($7::text[])
-          and coalesce((u.notify ->> k.kind)::boolean, case when k.kind = 'day_plan' then $5::boolean else $6::boolean end)
-          and exists (select 1 from push_subscriptions p where p.user_id = u.id and p.retired_at is null)
+         ${planAudience(true)}
        on conflict (user_id, kind, (payload->>'date')) where kind in ('day_plan', 'own_plan') do nothing
        returning id`,
       [b.id, date, b.timezone, new Date(now), DEFAULT_ON.day_plan, DEFAULT_ON.own_plan, kinds],
     );
     added += rows.length;
+  }
+  return added;
+}
+
+/**
+ * The same plan into the bell (046_bell.sql) of every login the push would
+ * reach, phone or not, once per login and day, and also where push is not
+ * set up. Its numbers are those of the moment it is written, as the push's
+ * are of the moment it goes. The rows written.
+ */
+export async function planEveningBell(q: Querier, now = Date.now()): Promise<number> {
+  let added = 0;
+  for (const b of await businessesWithNotify(q)) {
+    const { kinds, date } = planDue(b, now);
+    if (!kinds.length) continue;
+    const due = await q<{ user_id: string; kind: "day_plan" | "own_plan"; staff_id: string | null; date: string; tz: string; at: Date }>(
+      `select u.id as user_id, k.kind, u.staff_id, $2::text as date, $3::text as tz, $4::timestamptz as at
+         ${planAudience(false)}
+          and not exists (select 1 from bell x where x.user_id = u.id and x.kind = k.kind and x.payload->>'date' = $2::text)`,
+      [b.id, date, b.timezone, new Date(now), DEFAULT_ON.day_plan, DEFAULT_ON.own_plan, kinds],
+    );
+    // the salon's plan is the same for each of its readers
+    let salon: Record<string, unknown> | null = null;
+    for (const r of due) {
+      const payload =
+        r.kind === "own_plan" ? (salon ??= await planNumbers(q, "own_plan", b.id, { date: r.date, tz: r.tz })) : await planNumbers(q, "day_plan", b.id, { date: r.date, tz: r.tz, staffId: r.staff_id });
+      const rows = await q<{ id: string }>(
+        `insert into bell (business_id, user_id, kind, payload, created_at) values ($1, $2, $3, $4::jsonb, $5)
+         on conflict (user_id, kind, (payload->>'date')) where kind in ('day_plan', 'own_plan') do nothing
+         returning id`,
+        [b.id, r.user_id, r.kind, JSON.stringify(payload), r.at],
+      );
+      added += rows.length;
+    }
   }
   return added;
 }

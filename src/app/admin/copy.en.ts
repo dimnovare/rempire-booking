@@ -1826,6 +1826,18 @@ export const en: typeof ru = {
     journal: "Calendar",
   },
 
+  bell: {
+    open: (unread: number) => (unread ? `Notifications, ${unread} new` : "Notifications"),
+    empty: "Nothing here yet",
+    unread: "New",
+    failed: "Could not load. Try again.",
+    now: "just now",
+    min: (n: number) => `${n} min ago`,
+    today: (time: string) => `today, ${time}`,
+    yesterday: (time: string) => `yesterday, ${time}`,
+    day: (date: string, time: string) => `${date}, ${time}`,
+  },
+
   sale: {
     title: "Product sale",
     when: "Day and time",

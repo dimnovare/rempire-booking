@@ -32,6 +32,7 @@ import { isLocalDate } from "@/lib/tz";
 import { CaretIcon, NextIcon, OutIcon, PrevIcon } from "../icons";
 import { useA } from "../lang";
 import { logout } from "./account/actions";
+import { Bell } from "./bell";
 import { useFrame } from "./frame";
 import { monthLoadAction } from "./frame-actions";
 import { inInvoices } from "./invoices/common";
@@ -122,6 +123,7 @@ function SalonSidebar({ user, demo, today, load, report }: SidebarProps) {
             {A.demoTag}
           </span>
         )}
+        <Bell />
       </div>
 
       <div className="sb-mid">
@@ -178,29 +180,27 @@ function SalonSidebar({ user, demo, today, load, report }: SidebarProps) {
         )}
       </div>
 
+      {/* as the admin we follow: the name and the e-mail, no picture; the role on a hover
+          (a login with no name has its e-mail as the name: the role takes the second line) */}
       <div className="sb-me">
-        <span className="sb-ava" aria-hidden="true">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          {user.photoUrl ? <img src={user.photoUrl} alt="" /> : user.name.charAt(0).toUpperCase()}
-        </span>
-        <div className="who" title={user.email}>
+        <div className="who" title={user.role}>
           <b>{user.name}</b>
-          <span>{user.role}</span>
+          <span>{user.name === user.email ? user.role : user.email}</span>
         </div>
         <form action={logout}>
           <button className="sb-out" aria-label={A.account.logout} title={A.account.logout}>
-            <OutIcon size={18} />
+            <OutIcon size={24} />
           </button>
         </form>
       </div>
       {mode === "till" ? (
         <button type="button" className="sb-bar" onClick={() => to("menu")}>
-          <SectionIcon name="all" size={18} />
+          <SectionIcon name="all" size={16} />
           <span>{F.all}</span>
         </button>
       ) : (
         <Link className="sb-bar" href="/admin" prefetch={false} onClick={() => to("till")}>
-          <SectionIcon name="cal" size={18} />
+          <SectionIcon name="cal" size={16} />
           <span>{F.journal}</span>
         </Link>
       )}
@@ -251,7 +251,7 @@ function Menu({ path }: { path: string }) {
           const on = sectionOpen(row.href!, path);
           return (
             <Link key={row.key} className="sb-row" href={row.href!} prefetch={false} aria-current={on ? "page" : undefined}>
-              <SectionIcon name={row.icon} size={20} />
+              <SectionIcon name={row.icon} size={24} />
               <span>{A.nav[row.key]}</span>
             </Link>
           );
@@ -259,17 +259,22 @@ function Menu({ path }: { path: string }) {
         const shown = open === row.key;
         return (
           <div key={row.key} className={shown ? "sb-group is-open" : "sb-group"}>
-            <button type="button" className="sb-row" aria-expanded={shown} onClick={() => setPicked({ path, key: shown ? null : row.key })}>
-              <SectionIcon name={row.icon} size={20} />
+            <button type="button" className="sb-row" aria-expanded={shown} aria-controls={`sb-sub-${row.key}`} onClick={() => setPicked({ path, key: shown ? null : row.key })}>
+              <SectionIcon name={row.icon} size={24} />
               <span>{A.nav[row.key]}</span>
-              <CaretIcon size={12} />
+              <CaretIcon size={20} />
             </button>
-            {shown &&
-              row.pages.map((p) => (
-                <Link key={p.href} className="sb-sub" href={p.href} prefetch={false} aria-current={sectionOpen(p.href, path) ? "page" : undefined}>
-                  {A.nav[p.key]}
-                </Link>
-              ))}
+            {/* always drawn, so the list can grow open and fold shut as the admin we follow does
+                (admin.css, .sb-subs); a shut one is inert and hidden from readers and the tab key */}
+            <div className="sb-subs" id={`sb-sub-${row.key}`} inert={!shown}>
+              <div>
+                {row.pages.map((p) => (
+                  <Link key={p.href} className="sb-sub" href={p.href} prefetch={false} aria-current={sectionOpen(p.href, path) ? "page" : undefined}>
+                    {A.nav[p.key]}
+                  </Link>
+                ))}
+              </div>
+            </div>
           </div>
         );
       })}

@@ -63,11 +63,17 @@ Not opened at all: salaries, integrations, licence and billing.
 
 ### Sidebar, admin mode
 - Ground `#08080c`. No mini month, no tiles, no «Избранное».
+- The head as in till mode: 47 px and the 1 px separator, a 24 × 24 white square with the mark, «Rempire», the bell with its red dot at the right.
 - The yellow bar reads «Цифровой журнал» with a calendar icon.
-- The menu is an accordion:
-  - Group or item row: 196 × 40, radius 8, padding 8, 14/24, 500, white, icon 24 × 24, chevron on groups.
+- The menu is an accordion. Measured again from Dim's screen video of 24.11 (Chrome at 1920 × 1080, 100 %), frame by frame:
+  - Rows 200 × 40, 10 px in from each side, 12 px apart (a step of 52 px); the first starts 16 px under the separator. Radius 8.
+  - Icon 24 × 24 at x 20; the label at x 52, 14 px, 500, white; a light chevron (about 10 × 5 in a 20 px box) centred at x 190.
+  - A label too long for one line wraps: «Цифровые платежи» takes two lines and its row 48 px.
+  - Hover: the row turns `#22222e`, fading in over about 3 frames.
   - Open group: a card `#22222e`, radius 10, padding 4. Its head is yellow `#ffd940` with text `#08080c`.
-  - Sub-rows 40 px, 14/20, 500, `#c6cbd3`; the current one white, 600.
+  - Sub-rows 40 px, about 2 px apart, 14/20, 500, `#c6cbd3`; the current one white, 600.
+  - **Motion:** a click turns the head yellow at once; then the card and its list grow to full height in about 250 ms, the rows below moving down with them. The group that was open folds at the same time.
+- Foot: the user row (name 12/16, 500, white; e-mail 11/14 grey; no picture, 8 px in; an exit icon 24 × 24 at the right), then the yellow bar (icon at x 8–24, label at x 32).
 
 ## Журнал
 
@@ -716,8 +722,8 @@ There is no «роли и права» item here.
 
 **Frame in the menu mode**
 - Sidebar: 220 px, ground `#08080c` (not `#22222e`).
-- Open group: a `#22222e` card, 204 px wide, 10 px corners, 4 px padding.
-- Group row: 196 × 40, 8 px corners, 14 px / 500 white, icon, label, chevron.
+- Open group: a `#22222e` card, 200 px wide, 10 px corners, 4 px padding (Dim's video, 24.11).
+- Group row: 200 × 40, 12 px apart, 8 px corners, 14 px / 500 white, 24 px icon, label, chevron.
 - Open group's row: yellow `#ffd940`, text `#08080c`.
 - Sub-items: 40 px rows, padding 10px 8px, 14 px / 500, `#c6cbd3`; the current one white.
 - Page head band: white, about 90 px. Menu button 36 × 36, 8 px corners, 2 px `#e0e3eb` line. Breadcrumb 12 px, `#c6cbd3`. The star is yellow when the page is a favourite.

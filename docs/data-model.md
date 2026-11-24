@@ -177,6 +177,7 @@ alter table appointments add constraint appointments_no_overlap
 | Table | Key columns | Notes |
 |---|---|---|
 | `push_subscriptions` | `user_id`, `endpoint` unique, `keys jsonb`, `last_ok_at` | Copy the shop's `200_push_subscriptions.sql`, with new VAPID keys. |
+| `bell` | `id` (identity), `business_id`, `user_id`, `kind`, `payload jsonb`, `appointment_id` (null), `created_at`; unique (`user_id`, `kind`, `payload->>'date'`) for the evening plan; `users.bell_seen_at` | The admin sidebar's bell (046; Dim, 24.11.2026). One row per login per event the staff pushes carry, written with the push in the same transaction and by the same rules (active, role or column, not the actor, `users.notify`), minus «has a live phone», so a login with no phone gets it too; the outbox rows are unchanged. The words are `pushText` at read time, in the reader's language; the evening plan keeps its 20:00 numbers. Unread = newer than `users.bell_seen_at`, which opening the bell moves to the newest row shown. The bell lists the newest 30 of 30 days; the cron deletes older rows. «Обезличить клиента» takes the client's name out of `payload`. |
 
 Everything else in Phase B reads and writes the Phase A tables.
 

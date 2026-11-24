@@ -1,0 +1,51 @@
+/* The bell in the sidebar's head (bell.tsx). The button is the product's own size, 24 × 47, at the
+   right end of the head row, a line bell in the sidebar's soft grey, white on hover, and an 8px red dot
+   at its top right when something is unread. The panel opens to the right of the sidebar (220px,
+   fixed): a white card, 360px wide, 12px corners, a light shadow. The sidebar exists from 900px only
+   (admin.css), so does the bell. */
+
+.bell { flex: none; display: flex; align-items: center; }
+.bell-btn { position: relative; width: 24px; height: 47px; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--sb-soft); cursor: pointer; }
+.bell-btn:hover, .bell-btn[aria-expanded="true"] { color: #fff; }
+.bell-btn svg { display: block; }
+.bell-dot { position: absolute; top: 12px; right: 1px; width: 8px; height: 8px; border-radius: 50%; background: #ff3b30; box-shadow: 0 0 0 2px var(--sb-bg); pointer-events: none; }
+.sb.is-menu .bell-dot { box-shadow: 0 0 0 2px var(--sb-menu-bg); }
+
+/* fixed, so the sidebar's own overflow does not cut it; beside the sidebar, level with the head */
+.bell-pop {
+  position: fixed;
+  top: calc(var(--test-h, 0px) + 8px);
+  left: calc(var(--side-w, 220px) + 8px);
+  z-index: 1;
+  width: 360px;
+  max-width: calc(100vw - var(--side-w, 220px) - 16px);
+  max-height: calc(100vh - var(--test-h, 0px) - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 0 8px;
+  border-radius: 12px;
+  background: #fff;
+  color: #2b3134;
+  box-shadow: rgba(0, 29, 102, .16) 0 6px 24px, rgba(0, 29, 102, .08) 0 0 1px;
+  font: 400 13px/18px var(--body);
+  text-align: left;
+}
+.bell-title { margin: 0; padding: 12px 16px 8px; font: 600 16px/24px var(--body); color: #2b3134; }
+.bell-note, .bell-empty { margin: 0; padding: 16px 16px 20px; color: #828995; font-size: 13px; line-height: 18px; }
+.bell-empty { text-align: center; }
+.bell-list { list-style: none; margin: 0; padding: 0; }
+.bell-list[aria-busy="true"] { opacity: .6; }
+.bell-list li + li { border-top: 1px solid #eef0f4; }
+.sb .bell-row { display: flex; flex-direction: column; gap: 2px; padding: 10px 16px; color: #2b3134; text-decoration: none; }
+.bell-row:hover { background: #f6f7f9; }
+.bell-row.is-unread { background: #fffbea; }
+.bell-row.is-unread:hover { background: #fff5cc; }
+.bell-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bell-head b { flex: 1; min-width: 0; font-weight: 600; font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+.bell-new { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #ff3b30; }
+.bell-body { font-size: 12px; line-height: 16px; color: #5b5b6b; overflow-wrap: anywhere; }
+.bell-row time { font-size: 11px; line-height: 14px; color: #828995; }
+.bell-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+/* the sidebar's focus ring is white (admin.css); on the white card it is the admin's own */
+.sb .bell-pop :focus-visible { outline: 2px solid var(--sel, #2b3134); outline-offset: -2px; }

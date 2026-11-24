@@ -131,8 +131,24 @@ gets it → send.
        платёж», is not built.
      - **«Избранное»:** a star beside each section's title; the starred
        pages are the login's own (`users.favourites`, migration 017).
-     - **Ours, not theirs:** no bell, as nothing feeds one; the way out
-       stays in the menu too.
+     - **The bell: built 24.11.2026** (`bell.tsx`, `bell.css`,
+       `bell-actions.ts`; `src/lib/bell.ts`, migration 046): their 24 × 47
+       button at the right of the head row, a line bell in the sidebar's
+       grey, white on hover, an 8 px red dot while something is unread. It
+       lists what the staff pushes say (`src/lib/push-kinds.ts`, in the
+       login's language), for every login the push would reach, phone or
+       not: a white card of 360 px beside the sidebar, newest first, the
+       newest 30 of 30 days, each row a link to where the push's tap goes.
+       Opening it marks all read. The phone keeps its bar, with no bell.
+     - **The menu, re-measured 24.11.2026** from Dim's screen video at
+       1920 × 1080 (`docs/altegio-pages.md`, «Sidebar, admin mode»): rows
+       40 px tall and 12 px apart, 24 px icons, a light chevron, the head's
+       line in both modes, a 24 px mark. A group opens as theirs does: the
+       head turns yellow, the card and its list grow in .25 s and the rows
+       under it move down; the group that was open folds at the same time.
+       The foot shows the name and the e-mail, no picture (the role on a
+       hover).
+     - **Ours, not theirs:** the way out stays in the menu too.
    - **The journal: built 19.11.2026** (`calendar.tsx`, `journal-bar.tsx`
      and `journal-side.tsx` in `src/app/admin/(app)/`; its rules in
      `src/lib/admin/journal.ts`; the two calendar blocks of `admin.css`).

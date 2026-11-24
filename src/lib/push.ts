@@ -143,8 +143,12 @@ export type PushAudience = { staffId: string } | "owners";
  * front desk. Only logins that are active,
  * have a live phone and want this kind; never the one who made the change.
  * In the caller's transaction, so the push exists only if the change does.
+ *
+ * The same event goes into the bell (046_bell.sql) of every such login,
+ * with a phone or without one.
  */
 export async function queuePush(q: Querier, m: PushMessage): Promise<number> {
+  await ringBell(q, m);
   return (await queuePushTo(q, m)).length;
 }
 
@@ -162,22 +166,60 @@ type PushMessage = {
   now?: number;
 };
 
-/** queuePush, giving the logins it queued for. */
-async function queuePushTo(q: Querier, m: PushMessage): Promise<string[]> {
-  const staffId = m.to === "owners" ? null : m.to.staffId;
-  const rows = await q<{ id: string; user_id: string }>(
-    `insert into notifications (business_id, appointment_id, channel, kind, recipient, user_id, locale, payload, send_at)
-     select $1, $2, 'push', $3, u.id::text, u.id, u.locale, $4::jsonb, $5
-       from users u
-      where u.business_id = $1 and u.active
+/**
+ * Who gets a message, as SQL over `users u`: the push's rules and the
+ * bell's are these same lines, and only the push asks for a live phone.
+ * $1 the business, $3 the kind, $6 the column (null: Renat and the front
+ * desk), $7 the login who made the change, $8 the kind's default, $9
+ * logins already told, $10 only these logins (null: any).
+ */
+const audience = (phone: boolean) =>
+  `u.business_id = $1 and u.active
         and (case when $6::uuid is null then u.role in ('owner', 'admin') else u.staff_id = $6::uuid end)
         and u.id::text is distinct from $7
         and not (u.id = any($9::uuid[]))
         and ($10::uuid[] is null or u.id = any($10::uuid[]))
-        and coalesce((u.notify ->> $3)::boolean, $8)
-        and exists (select 1 from push_subscriptions p where p.user_id = u.id and p.retired_at is null)
+        and coalesce((u.notify ->> $3)::boolean, $8)` + (phone ? `\n        and exists (select 1 from push_subscriptions p where p.user_id = u.id and p.retired_at is null)` : "");
+
+const audienceParams = (m: PushMessage) => [
+  m.businessId,
+  m.appointmentId ?? null,
+  m.kind,
+  JSON.stringify(m.payload),
+  new Date(m.now ?? Date.now()),
+  m.to === "owners" ? null : m.to.staffId,
+  m.exceptUserId ?? null,
+  DEFAULT_ON[m.kind],
+  m.exceptUserIds ?? [],
+  m.onlyUserIds ?? null,
+];
+
+/** queuePush, giving the logins it queued for. */
+async function queuePushTo(q: Querier, m: PushMessage): Promise<string[]> {
+  const rows = await q<{ id: string; user_id: string }>(
+    `insert into notifications (business_id, appointment_id, channel, kind, recipient, user_id, locale, payload, send_at)
+     select $1, $2, 'push', $3, u.id::text, u.id, u.locale, $4::jsonb, $5
+       from users u
+      where ${audience(true)}
      returning id, user_id`,
-    [m.businessId, m.appointmentId ?? null, m.kind, JSON.stringify(m.payload), new Date(m.now ?? Date.now()), staffId, m.exceptUserId ?? null, DEFAULT_ON[m.kind], m.exceptUserIds ?? [], m.onlyUserIds ?? null],
+    audienceParams(m),
+  );
+  return rows.map((r) => r.user_id);
+}
+
+/**
+ * The same message into the bell (046_bell.sql) of every login the push
+ * would reach, phone or not: one row each, in the caller's transaction.
+ * The logins it went to.
+ */
+async function ringBell(q: Querier, m: PushMessage): Promise<string[]> {
+  const rows = await q<{ user_id: string }>(
+    `insert into bell (business_id, appointment_id, kind, user_id, payload, created_at)
+     select $1, $2, $3, u.id, $4::jsonb, $5
+       from users u
+      where ${audience(false)}
+     returning user_id`,
+    audienceParams(m),
   );
   return rows.map((r) => r.user_id);
 }
@@ -188,6 +230,10 @@ async function queuePushTo(q: Querier, m: PushMessage): Promise<string[]> {
  * words are a snapshot of the visit now (time, client's name, services,
  * barber), never the phone. Nothing for a visit already over, and nothing
  * to the login that made the change.
+ *
+ * The bell (046_bell.sql) gets the same, by the same rules, for every
+ * login with or without a phone, and also where push is not set up. The
+ * number is that of the pushes queued.
  */
 export async function pushVisitChange(
   q: Querier,
@@ -202,7 +248,6 @@ export async function pushVisitChange(
     now?: number;
   },
 ): Promise<number> {
-  if (!pushConfigured()) return 0;
   const now = o.now ?? Date.now();
   const [v] = await q<{ id: string; starts_at: Date; blocked_until: Date; client: string; staff: string; tz: string; services: VisitPayload["services"] }>(
     `select a.id, a.starts_at, a.blocked_until, c.name as client, s.display_name as staff, l.timezone as tz,
@@ -225,13 +270,22 @@ export async function pushVisitChange(
     ...o.extra,
     ...(o.owners?.action ? { action: o.owners.action } : {}),
   };
+  const columns = [...new Set(o.staffIds)].map((staffId): PushMessage => ({ businessId: o.businessId, appointmentId: v.id, kind: o.kind, to: { staffId }, exceptUserId: o.actor, payload, now }));
+  const salon = (told: string[]): PushMessage | null =>
+    o.owners ? { businessId: o.businessId, appointmentId: v.id, kind: o.owners.kind, to: "owners", exceptUserId: o.actor, exceptUserIds: told, payload, now } : null;
+
   // Renat with a column of his own hears of a visit in it once: as the barber
+  const rang: string[] = [];
+  for (const m of columns) rang.push(...(await ringBell(q, m)));
+  const toSalon = salon(rang);
+  if (toSalon) await ringBell(q, toSalon);
+
+  if (!pushConfigured()) return 0;
   const told: string[] = [];
-  for (const staffId of [...new Set(o.staffIds)]) {
-    told.push(...(await queuePushTo(q, { businessId: o.businessId, appointmentId: v.id, kind: o.kind, to: { staffId }, exceptUserId: o.actor, payload, now })));
-  }
+  for (const m of columns) told.push(...(await queuePushTo(q, m)));
   let n = told.length;
-  if (o.owners) n += await queuePush(q, { businessId: o.businessId, appointmentId: v.id, kind: o.owners.kind, to: "owners", exceptUserId: o.actor, exceptUserIds: told, payload, now });
+  const pushSalon = salon(told);
+  if (pushSalon) n += (await queuePushTo(q, pushSalon)).length;
   return n;
 }
 

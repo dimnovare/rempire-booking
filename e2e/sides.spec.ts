@@ -528,7 +528,8 @@ test.describe("a wide screen", () => {
       // the month starts right under the sidebar's head, where the switch was
       const [head, month] = await Promise.all([page.locator(".sb-head").boundingBox(), page.locator(".sb-month").boundingBox()]);
       expect(Math.round(month!.y - (head!.y + head!.height))).toBe(0);
-      await expect(page.locator(".sb-me .who span")).toHaveText(M.andBarber(PRESETS.OW.ru));
+      // the foot says the role on a hover; its second line is the e-mail, as the board's
+      await expect(page.locator(".sb-me .who")).toHaveAttribute("title", M.andBarber(PRESETS.OW.ru));
 
       const mine = scope(page).getByRole("button", { name: A.app.mine });
       const salon = scope(page).getByRole("button", { name: A.app.salon });
@@ -722,7 +723,7 @@ test.describe("a wide screen", () => {
       expect(await cols(page).count()).toBeGreaterThan(1);
       await expect(page.locator(".jr-bar").getByRole("button", { name: A.cal.panel })).toBeVisible();
       await expectNoSwitch(page);
-      await expect(page.locator(".sb-me .who span")).toHaveText(PRESETS.OW.ru);
+      await expect(page.locator(".sb-me .who")).toHaveAttribute("title", PRESETS.OW.ru);
       // a barber's page has «Открыть его приложение» here too
       await page.goto(`/admin/staff/${RENAT}`);
       await hydrated(page);

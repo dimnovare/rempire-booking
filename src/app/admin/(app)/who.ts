@@ -2,7 +2,8 @@
  * Who is signed in, as the frame says it (docs/apps.md, «One app for
  * Renat»): the name, the picture of the barber the login is linked to, and
  * the role in words, «Владелец и барбер» for an owner who cuts too. The
- * sidebar's foot and the head of «Ещё» show the same.
+ * head of «Ещё» shows the role; the sidebar's foot shows the name and the
+ * e-mail, as the admin we follow, with the role on a hover.
  */
 import { PRESETS, isRoleCode } from "@/lib/auth/rights-catalogue";
 import type { StaffUser } from "@/lib/auth/sessions";

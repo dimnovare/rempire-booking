@@ -914,6 +914,8 @@ export async function anonymiseClient(business: Business, id: string, actor: str
     );
     // the barbers' own notifications about his visits named him too
     await tx("update notifications set payload = payload - 'client' where business_id = $1 and user_id is not null and appointment_id = any($2::uuid[])", [business.id, visits]);
+    // and so did the same words in their bell (046_bell.sql)
+    await tx("update bell set payload = payload - 'client' where business_id = $1 and appointment_id = any($2::uuid[])", [business.id, visits]);
     // his reviews keep their stars and words, not his name
     await tx("update reviews set author_name = '', updated_at = $2 where client_id = any($1::uuid[]) and author_name <> ''", [ids, at]);
 

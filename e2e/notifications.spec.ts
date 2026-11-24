@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { Page } from "@playwright/test";
 import { OUT } from "./env";
-import { A, asOwner, expect, expectNoSideScroll, hydrated, smallTargets, test } from "./helpers";
+import { A, asOwner, demoId, expect, expectNoSideScroll, hydrated, smallTargets, tallinnDate, test } from "./helpers";
 
 /**
  * «Настройки → Уведомления» (decision page round 11): the owner sees every
@@ -231,5 +231,77 @@ test.describe("«Уведомления» on a wide screen", () => {
     await expect(page.locator(".ntf-frame")).toBeVisible();
     await expectNoSideScroll(page);
     await shot(page, "type", true);
+  });
+
+  test("the bell in the sidebar's head: a red dot for an online booking, the row in its panel, read once opened", async ({ page }) => {
+    // booked online for a fake client through the booking's own API: Renat hears of it (own_online), phone or not
+    const CLIENT = "Bell Test Client";
+    const staff = demoId("staff", "milena");
+    const service = demoId("service", "clip");
+    const res = await page.request.get(`/api/slots?services=${service}&staff=${staff}&from=${tallinnDate(40)}&days=10`);
+    expect(res.ok()).toBe(true);
+    const day = ((await res.json()) as { days: { d: string; s: [number, string, number][] }[] }).days.find((d) => d.s.length > 0);
+    expect(day).toBeTruthy();
+    const slot = day!.s[Math.floor(day!.s.length / 2)];
+    const booked = await page.request.post("/api/bookings", {
+      headers: { "idempotency-key": "e2e-bell-online-0000" },
+      data: { serviceIds: [service], staffId: staff, startsAt: new Date(slot[0]).toISOString(), extraCents: slot[2], name: CLIENT, phone: "+372 5555 0788", locale: "ru", smsReminder: false },
+    });
+    expect([200, 201]).toContain(booked.status());
+
+    await page.goto("/admin");
+    await hydrated(page);
+    const bell = page.locator(".sb-head").getByRole("button", { name: /^Уведомления/ });
+    await expect(bell).toBeVisible();
+    await expect(bell).toHaveAttribute("aria-haspopup", "dialog");
+    await expect(bell).toHaveAttribute("aria-expanded", "false");
+    // at the right end of the head row, the product's 24 × 47, the sidebar's soft grey
+    const box = (await bell.boundingBox())!;
+    expect([Math.round(box.width), Math.round(box.height)]).toEqual([24, 47]);
+    expect(Math.round(box.x + box.width)).toBeGreaterThanOrEqual(200);
+    expect(Math.round(box.x + box.width)).toBeLessThanOrEqual(220);
+    await expect(bell).toHaveCSS("color", "rgb(198, 203, 211)");
+    // the dot: something is unread
+    const dot = bell.locator(".bell-dot");
+    await expect(dot).toBeVisible();
+    await expect(dot).toHaveCSS("background-color", "rgb(255, 59, 48)");
+
+    await bell.click();
+    await expect(bell).toHaveAttribute("aria-expanded", "true");
+    const panel = page.getByRole("dialog", { name: A.nav.notifications });
+    await expect(panel.getByRole("heading", { name: A.nav.notifications })).toBeVisible();
+    // beside the sidebar: a white card 360px wide, 12px corners
+    const pbox = (await panel.boundingBox())!;
+    expect([Math.round(pbox.x), Math.round(pbox.width)]).toEqual([228, 360]);
+    await expect(panel).toHaveCSS("border-radius", "12px");
+    await expect(panel).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    // the booking, newest first, unread, in the push's own words, a link to its day in the calendar
+    const row = panel.getByRole("link", { name: new RegExp(CLIENT) });
+    await expect(row).toHaveCount(1);
+    await expect(row.locator("b")).toHaveText("Онлайн-запись");
+    await expect(row).toHaveClass(/is-unread/);
+    await expect(row).toHaveAttribute("href", `/admin?d=${day!.d}`);
+    await expect(row.locator("time")).toHaveText(/только что|мин назад/);
+    // opened: read, the dot is gone
+    await expect(dot).toHaveCount(0);
+    await shot(page, "bell", true);
+
+    // Esc closes it and gives the focus back
+    await page.keyboard.press("Escape");
+    await expect(panel).toHaveCount(0);
+    await expect(bell).toBeFocused();
+    await expect(bell).toHaveAttribute("aria-expanded", "false");
+    // open again: the row is read now; a click outside closes it
+    await bell.press("Enter");
+    await expect(panel.getByRole("link", { name: new RegExp(CLIENT) })).not.toHaveClass(/is-unread/);
+    await expect(panel.getByRole("link", { name: new RegExp(CLIENT) })).toBeVisible();
+    // (the month's title: a click there does nothing else)
+    await page.locator(".sb-month-head span").click();
+    await expect(panel).toHaveCount(0);
+    // still read after a reload
+    await page.reload();
+    await hydrated(page);
+    await expect(bell).toBeVisible();
+    await expect(bell.locator(".bell-dot")).toHaveCount(0);
   });
 });

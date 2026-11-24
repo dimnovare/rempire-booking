@@ -124,7 +124,8 @@ barber; an owner or front desk linked to a barber («own»); one that is not
   are `e2e/.out/screens/*-a-*.png`).
 
 Not checked on a real phone or in an installed app. Differs from the boards:
-no bell in the top bar (nothing feeds one); the tower mark, not a letter;
+no bell in the phone's top bar (from 900px the sidebar's head has one,
+24.11, `docs/reference-looks.md`); the tower mark, not a letter;
 «Мой день» keeps the barber day's week strip, «Дальше» and free time; the
 order of «Салон» and the extra rows in «Ещё»; the journal's bar keeps the
 filter and the scale in «Мой день».
