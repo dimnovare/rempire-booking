@@ -74,7 +74,7 @@ shows the same, nothing else.
 | Types | `npm run typecheck` | green | green |
 | Unit (Vitest, PGlite) | `npm test` | 1216 tests, green at 19:05 and 20:40 on 23.11 (run 3); 1227 at 23:35 with the limit per address and the Postgres race | green twice in a row, at two hours of the day |
 | Postgres 18 (`tests/pg-race.test.ts`) | `PG_TEST_URL=postgres://postgres@127.0.0.1:55432/booking_test npm test` (a local `postgres:18` container; CI starts its own) | 23.11: every migration from empty, the race below, 3 runs green | green in CI on every push |
-| E2E, phone size (Playwright: Pixel 7 Chromium, iPhone 13 WebKit) | `npm run e2e` | 23.11 evening (a Monday): 275 passed, 63 skipped (by design), 1 failed: the new «Обезличить» test's own mistake, fixed, passes | green on a Monday, a Saturday and a weekday, morning and evening |
+| E2E, phone size (Playwright: Pixel 7 Chromium, iPhone 13 WebKit) | `npm run e2e` | 23.11 evening (a Monday): 275 passed, 63 skipped (by design), 1 failed: the new «Обезличить» test's own mistake, fixed, passes | green; a Monday evening and a late-night run done; a Saturday and a morning run not needed (Dim, 24.11) |
 | E2E, production build | `npm run build` then `E2E_PROD=yes npm run e2e` | 23.11: 172 passed, 8 skipped, 0 failed. Android only: WebKit keeps no Secure cookie over plain http | green |
 | Crawl: every page, every button | `E2E_PROD=yes E2E_CRAWL=yes npm run e2e -- e2e/crawl.spec.ts` | 23.11: 173 pages, 1839 buttons, 0 problems | 0 problems |
 | No index | `npm run check:noindex -- <url>` | after every deploy | staging: noindex; production after the move: indexed |
@@ -96,7 +96,9 @@ shows the same, nothing else.
 3. **Postgres in CI**: the migrations from empty and from staging's last
    state, on a real Postgres 18, not only PGlite. **From empty: built
    23.11** (the same test file; a `postgres:18` service in
-   `.github/workflows/ci.yml`). From staging's last state: still to do.
+   `.github/workflows/ci.yml`). From staging's last state: staging itself
+   runs each new migration at its deploy (041 on 23.11) and works; Dim,
+   24.11: that is enough, no separate test.
 4. **The cron over HTTP**: with the secret, one due reminder goes once;
    a second run sends nothing more.
 5. **Resend handling**: a 500, a timeout and a 429 from a stub; the row is
@@ -450,16 +452,26 @@ Not covered by run 3, still open before the switch:
 - **A limit per IP on `/api/bookings`** (§ 11 «Spam bookings»): built
   later the same evening (`src/lib/booking-limit.ts`, migration 041).
 - **iPhone on the production build**: WebKit drops the Secure login cookie
-  over plain http; the iPhone e2e ran on `next dev` only.
+  over plain http; the iPhone e2e ran on `next dev` only. BrowserStack
+  (Dim asked, 24.11): the client side already passed on real iPhones on
+  staging, which is a production build (§ 10, run 1). The staff app
+  needs a login: BrowserStack's Playwright on a real iPhone could not
+  open the login page or read the role selectors (run 2), and the free
+  Automate minutes are used up; through Device Control Claude would have
+  to type a login code on staging, which it does not. So the staff app
+  on an iPhone is checked on Dim's own phone, with the install and the
+  push (§ 10).
 - **Days and hours**: one Monday evening; a Saturday and a morning run
-  still to do. A late-night run (23:36 on 23.11 and 00:05 on 24.11, with
+  not needed (Dim, 24.11). A late-night run (23:36 on 23.11 and 00:05 on 24.11, with
   the limit and the race): 273 passed; the tests that failed depended on
   the hour, through the demo's visit «in 20 minutes» (after 23:40 it fell
   on tomorrow; after midnight it is the first, short card). Fixed in the
   seed (`tools/seed-demo.mjs`, a unit test at 23:45) and in
   `e2e/sides.spec.ts`; one rights test failed once and passed again.
 - **Real inboxes, SMS, real phones, the Altegio import** (§§ 7, 10, 12):
-  need staging with Dim, Messaggio's login and Altegio's exports.
+  need staging with Dim, Messaggio's login and Altegio's exports. Dim,
+  24.11: the inbox is chosen when we are ready; then Messaggio's access
+  is asked for, to test SMS on real phones; the import waits for Renat.
 
 ## 11. Can it go down?
 
