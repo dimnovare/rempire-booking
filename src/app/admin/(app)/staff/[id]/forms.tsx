@@ -71,7 +71,8 @@ function Remove({ onClick, disabled }: { onClick: () => void; disabled: boolean 
   );
 }
 
-type Profile = { name: string; role: { ru: string; et: string; en: string }; photoUrl: string; bookable: boolean; active: boolean };
+/** `scheduleUntil` is «График до», "YYYY-MM-DD" or "" for none (migration 042). */
+type Profile = { name: string; role: { ru: string; et: string; en: string }; photoUrl: string; bookable: boolean; active: boolean; scheduleUntil: string };
 
 /** A barber who exists saves by itself; a new one is made with the one button. */
 export function ProfileForm({ id, initial, onDone }: { id: string | null; initial: Profile; onDone?: () => void }) {
@@ -163,6 +164,21 @@ export function ProfileForm({ id, initial, onDone }: { id: string | null; initia
           <span>{A.staff.bookable}</span>
           <input type="checkbox" role="switch" className="adm-sw" checked={p.bookable} onChange={(e) => setP({ ...p, bookable: e.target.checked })} />
         </label>
+      </div>
+      {/* «График до»: the last day clients book him online; empty is none (src/lib/availability.ts) */}
+      <div className="adm-field">
+        <label htmlFor="st-until">{A.staffTable.untilField}</label>
+        <div className="adm-row">
+          <input id="st-until" type="date" aria-describedby="st-until-hint" value={p.scheduleUntil} onChange={(e) => setP({ ...p, scheduleUntil: e.target.value })} />
+          {p.scheduleUntil && (
+            <button type="button" className="adm-txt" onClick={() => setP({ ...p, scheduleUntil: "" })}>
+              {A.staffTable.untilClear}
+            </button>
+          )}
+        </div>
+        <small className="adm-meta" id="st-until-hint">
+          {A.staffTable.untilHint}
+        </small>
       </div>
       <SaveBar>
         {id ? (

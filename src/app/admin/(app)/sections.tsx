@@ -37,6 +37,8 @@ export const SECTIONS = [
   { href: "/admin/settings/brand", key: "brand", icon: "cog", bar: false },
   { href: "/admin/settings/contacts", key: "contacts", icon: "cog", bar: false },
   { href: "/admin/settings/gallery", key: "gallery", icon: "cog", bar: false },
+  // «Настройки → Онлайн-запись» (settings/online/): how clients book, the tool's online-booking settings
+  { href: "/admin/settings/online", key: "online", icon: "cog", bar: false },
   // «Уведомления»: a section of its own, not under «Настройки», as in the admin we follow (Dim, round 13)
   { href: "/admin/notifications", key: "notifications", icon: "bell", bar: false },
 ] as const;
@@ -61,7 +63,7 @@ export const ACCOUNT = { href: "/admin/account", key: "account", icon: "key" } a
  * (frame.tsx): a page by its own key, a row by `off` or its key; a group
  * with no page left is not drawn.
  */
-export type MenuPage = { href: string; key: "analytics" | "records" | "reviews" | "visits" | "messages" | "changes" | "staffList" | "schedule" | "clientBase" | "catalogue" | "brand" | "contacts" | "gallery" };
+export type MenuPage = { href: string; key: "analytics" | "records" | "reviews" | "visits" | "messages" | "changes" | "staffList" | "schedule" | "clientBase" | "catalogue" | "brand" | "contacts" | "gallery" | "online" };
 export type MenuRow = { key: "reports" | "team" | "clients" | "services" | "goods" | "requests" | "invoices" | "notifications" | "settings" | "account"; icon: string; href?: string; pages?: readonly MenuPage[]; off?: string };
 export const MENU: readonly MenuRow[] = [
   {
@@ -94,7 +96,8 @@ export const MENU: readonly MenuRow[] = [
   { key: "invoices", icon: "inv", href: "/admin/invoices" },
   // the salon's «Уведомления» (notifications/): a row of its own, as in the tool's menu, not a page of «Настройки» (Dim, round 13)
   { key: "notifications", icon: "bell", href: "/admin/notifications" },
-  // the tool's «Настройки → Локация»: «Бренд», «Контакты», «Галерея» (settings/), near the end as in its menu
+  // the tool's «Настройки → Локация»: «Бренд», «Контакты», «Галерея» (settings/), near the end as in its menu;
+  // then its «Онлайн-запись» (settings/online/: the step, the notice, the horizon, moving and cancelling, «Любой специалист»)
   {
     key: "settings",
     icon: "cog",
@@ -102,6 +105,7 @@ export const MENU: readonly MenuRow[] = [
       { href: "/admin/settings/brand", key: "brand" },
       { href: "/admin/settings/contacts", key: "contacts" },
       { href: "/admin/settings/gallery", key: "gallery" },
+      { href: "/admin/settings/online", key: "online" },
     ],
   },
   { key: "account", icon: "key", href: "/admin/account" },

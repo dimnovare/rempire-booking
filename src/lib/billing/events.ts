@@ -40,7 +40,7 @@ export type BillingEvent = {
   /** a credit invoice */
   credit: boolean;
   receiver: string;
-  /** «sent», «mail_failed»: the address */
+  /** «sent», «mail_failed», «opened»: the address; «resend»: the one the new letter goes to */
   email: string | null;
   /** «credited»: the credit invoice that took it back */
   other: { id: string; number: string } | null;
@@ -48,7 +48,8 @@ export type BillingEvent = {
   cents: number | null;
 };
 
-type AuditRow = { at: Date; action: string; after: Record<string, unknown> | null; id: string; number: string | null; kind: string; receiver: string };
+/** `letter_to`: a «resend» row's letter's address (its audit row names the letter, not the address) */
+type AuditRow = { at: Date; action: string; after: Record<string, unknown> | null; id: string; number: string | null; kind: string; receiver: string; letter_to?: string | null };
 type MailRow = { at: Date; opened_at: Date | null; status: string; recipient: string; id: string; number: string | null; kind: string; receiver: string };
 
 const ACTIONS = "('issue', 'paid', 'unpaid', 'credit', 'resend')";
@@ -59,7 +60,7 @@ const iso = (d: Date) => new Date(d).toISOString();
 
 function fromAudit(r: AuditRow): BillingEvent {
   const other = r.action === "credit" && str(r.after?.credit) ? { id: str(r.after?.credit), number: str(r.after?.number) } : null;
-  return { at: iso(r.at), kind: KIND[r.action] ?? "issued", invoiceId: r.id, number: r.number, credit: r.kind === "credit", receiver: r.receiver, email: null, other, cents: null };
+  return { at: iso(r.at), kind: KIND[r.action] ?? "issued", invoiceId: r.id, number: r.number, credit: r.kind === "credit", receiver: r.receiver, email: r.letter_to ?? null, other, cents: null };
 }
 
 const fromMail = (r: MailRow): BillingEvent => ({
@@ -88,8 +89,9 @@ const newestFirst =(a: BillingEvent, b: BillingEvent) => (a.at < b.at ? 1 : a.at
 async function invoiceRows(q: Querier, where: string, params: unknown[], limit: number): Promise<BillingEvent[]> {
   const [audit, born, mail] = await Promise.all([
     q<AuditRow>(
-      `select a.at, a.action, a.after, i.id, i.number, i.kind, coalesce(i.buyer->>'name', r.legal_name) as receiver
+      `select a.at, a.action, a.after, i.id, i.number, i.kind, coalesce(i.buyer->>'name', r.legal_name) as receiver, n.recipient as letter_to
          from audit a join invoices i on i.id = a.entity_id join invoice_receivers r on r.id = i.receiver_id
+         left join notifications n on a.action = 'resend' and n.id::text = a.after->>'letter'
         where a.entity = 'invoice' and a.action in ${ACTIONS} and ${where}
         order by a.at desc, a.id desc limit ${limit}`,
       params,

@@ -56,6 +56,8 @@ export function SentView({ inv, lines, events }: { inv: ViewInvoice; lines: View
 
   const meta: [string, React.ReactNode][] = [
     [A.inv.number, inv.number ?? ""],
+    // what the barber writes in the bank's «viitenumber» field, as printed beside the IBAN
+    ...(invoice && inv.reference ? ([[A.inv.reference, inv.reference]] as [string, React.ReactNode][]) : []),
     [A.inv.issuedOn, inv.issuedOn],
     ...(invoice && inv.termsDays != null ? ([[A.inv.payTerms, A.inv.days(inv.termsDays)]] as [string, React.ReactNode][]) : []),
     ...(invoice ? ([[A.inv.dueOn, inv.dueOn]] as [string, React.ReactNode][]) : []),
@@ -224,9 +226,10 @@ export function SentView({ inv, lines, events }: { inv: ViewInvoice; lines: View
             <Totals netCents={inv.netCents} vatCents={inv.vatCents} grossCents={inv.grossCents} />
           </div>
 
+          {/* the note is for the staff only, never printed (Isolta's «не будет видна на инвойсе») */}
           {inv.note && (
-            <div className="inv-after">
-              {A.inv.afterLines}
+            <div className="inv-after inv-memo">
+              {A.inv.noteTitle}
               <div>{inv.note}</div>
             </div>
           )}

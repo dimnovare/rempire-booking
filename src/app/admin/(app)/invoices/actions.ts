@@ -113,6 +113,8 @@ export async function saveReceiverAction(id: string | null, f: ReceiverInput): P
       vatNumber: str(f?.vatNumber, 40),
       address: str(f?.address),
       email: str(f?.email, 200),
+      // left out, the phone stays as it is (saveReceiver)
+      phone: f?.phone === undefined ? undefined : str(f.phone, 60),
       vatMode: str(f?.vatMode, 10),
       termsDays: int(f?.termsDays),
       locale: str(f?.locale, 4),

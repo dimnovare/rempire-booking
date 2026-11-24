@@ -12,6 +12,14 @@ export type BusinessSettings = {
   min_notice_min: number;
   /** A client can change or cancel online until this long before. 0 = at any time before the visit (Renat, 19.11.2026: as in Altegio). */
   cancel_cutoff_min: number;
+  /**
+   * Altegio's «Любой специалист» (settings/master_step; Dim, round 15): the
+   * booking page offers «Любой свободный барбер», every barber's times at
+   * once. Off: the client picks a barber first, and /api/slots and the
+   * booking refuse «anyone» (availability.ts, booking.ts). On until
+   * switched off, as REMPIRE's Altegio has it.
+   */
+  any_staff_on: boolean;
   /** The SMS reminder goes this long before the visit. */
   reminder_min: number;
   /** The e-mail reminder goes this long before the visit (Altegio's type 1: 12 hours; src/lib/outbox.ts). */
@@ -71,6 +79,7 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   horizon_days: 60,
   min_notice_min: 0,
   cancel_cutoff_min: 0,
+  any_staff_on: true,
   reminder_min: 120,
   reminder_email_min: 720,
   email_reminder_on: true,
@@ -82,7 +91,8 @@ export const DEFAULT_SETTINGS: BusinessSettings = {
   client_reminder: "both",
 };
 
-const LIMITS: Record<Exclude<keyof BusinessSettings, "commission_basis" | "client_reminder" | MessageSwitch>, [number, number]> = {
+/** The whole numbers and their bounds, both in; readSettings keeps a stored value only inside them («Онлайн-запись» saves through them too). */
+export const LIMITS: Record<Exclude<keyof BusinessSettings, "commission_basis" | "client_reminder" | "any_staff_on" | MessageSwitch>, [number, number]> = {
   slot_step_min: [5, 120],
   horizon_days: [1, 366],
   min_notice_min: [0, 7 * 24 * 60],
@@ -110,5 +120,7 @@ export function readSettings(raw: unknown): BusinessSettings {
     const v = (raw as Record<string, unknown>)[key];
     if (typeof v === "boolean") out[key] = v;
   }
+  const any = (raw as Record<string, unknown>).any_staff_on;
+  if (typeof any === "boolean") out.any_staff_on = any;
   return out;
 }

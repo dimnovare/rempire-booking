@@ -353,7 +353,7 @@ describe("admin: calendar data", () => {
     await addTimeOff(demo.business, { staffId: demo.staff.slava, from: at(TUE, "00:00"), to: at("2026-11-18", "00:00"), kind: "sick" }, ACTOR);
     await addSpecialTime(demo.business, { staffId: demo.staff.valentin, from: at(TUE, "20:00"), to: at(TUE, "22:00"), extraCents: 2000 }, ACTOR);
     const cal = await loadCalendar(query, demo.business, TUE, 1);
-    expect(cal.staff.map((s) => s.name)).toEqual(["Renat", "Valentin", "Jevgeni", "Slava", "Milena"]);
+    expect(cal.staff.map((s) => s.name)).toEqual(["Jevgeni", "Slava", "Renat", "Valentin", "Milena"]);
     expect(cal.work[demo.staff.renat][TUE]).toEqual([[at(TUE, "10:00"), at(TUE, "19:00")]]);
     // a dated shift that is not the template's (Tuesday to 18:00), and a dated day off
     expect(cal.work[demo.staff.slava][TUE]).toEqual([[at(TUE, "10:00"), at(TUE, "18:30")]]);

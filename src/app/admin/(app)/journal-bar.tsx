@@ -5,8 +5,9 @@
  * (docs/reference-looks.md, «The journal: built»; laid out on the design
  * board): white, 48px, every control 32px high with 8px corners and a 1px
  * line. Left to right: «Сегодня», ‹ ›, the day as the title; then «Продать»,
- * the day's numbers, «День | Неделя», the status filter, the scale and the
- * panel on the right. A new visit is a click on the grid (the bar «Новый
+ * the day's numbers, «День | Неделя», the status filter, the scale, the
+ * person-plus «Добавить сотрудника в расписание» (a day, any day: Dim,
+ * round 15) and the panel on the right. A new visit is a click on the grid (the bar «Новый
  * сеанс» under the mouse): the bar has no «Запись» of its own (Dim,
  * 20.11.2026); a phone keeps its button.
  *
@@ -25,6 +26,7 @@ import { addDays } from "@/lib/tz";
 import { Ava, CaretIcon, FunnelIcon, NextIcon, PanelIcon, PrevIcon, TickIcon, ZoomIcon } from "../icons";
 import { useA } from "../lang";
 import { useFrame } from "./frame";
+import { AddStaffButton } from "./journal-hours";
 import { Pop } from "./pop";
 
 /** Pixels a minute: 15, 10 and 5 minutes to a 15px line, as the scale we follow. */
@@ -64,10 +66,16 @@ export type JournalBarProps = {
    * way to the panel «Моё».
    */
   mine: { on: boolean; staffId: string; pick: (on: boolean) => void } | null;
+  /**
+   * The person-plus, «Добавить сотрудника в расписание» (journal-hours.tsx):
+   * on any day, for a login that may change a barber's day; null in a week
+   * and for everyone else. `staff`: the barbers who do not work that day.
+   */
+  addStaff: { staff: CalStaff[]; longDay: string; onSaid: (text: string) => void } | null;
   go: (date: string, view?: "day" | "week", staffId?: string | null) => void;
 };
 
-export function JournalBar({ view, date, today, title, dayText, staff, staffId, numbers, hidden, onHidden, zoom, onZoom, side, onSide, sell, mine, go }: JournalBarProps) {
+export function JournalBar({ view, date, today, title, dayText, staff, staffId, numbers, hidden, onHidden, zoom, onZoom, side, onSide, sell, mine, addStaff, go }: JournalBarProps) {
   const A = useA();
   const C = A.cal;
   const frame = useFrame();
@@ -235,6 +243,9 @@ export function JournalBar({ view, date, today, title, dayText, staff, staffId, 
           </div>
         )}
       </Pop>
+
+      {/* «Добавить сотрудника в расписание», on any day; not in «Мой день», where the bar is his own */}
+      {addStaff && view === "day" && !mine?.on && <AddStaffButton staff={addStaff.staff} date={date} longDay={addStaff.longDay} onSaid={addStaff.onSaid} />}
 
       {/* «Мой день» has its own panel, «Моё» */}
       {!mine?.on && (

@@ -1,15 +1,18 @@
 "use client";
 
 /**
- * A visit's card on hover, from 900px (board Journal-Hover): the client and
- * his phone with a copy button, the time and the barber, his numbers
+ * A visit's card on hover, from 900px (board Journal-Hover): the client,
+ * his phone with a copy button and his e-mail (as the card of the admin we
+ * follow: docs/altegio-pages.md, «Visit hover card»), the time and the
+ * barber, his numbers
  * (Визитов, Не пришёл, Потратил), the four status chips, the services with
  * their prices and lengths, «Итого», and «Открыть запись», the visit's
  * window. The grid opens and places it (journal-grid.tsx).
  *
  * Rights: the phone is as the journal already shows it to this login (cut on
  * the server, calendarFor), and copied only when it is whole and the login
- * may call; the numbers are the visit window's own (visitWindowAction: the
+ * may call; the e-mail is cut there the same way («a•••@example.test»
+ * without «Показывать номера телефонов», none without the client's data); the numbers are the visit window's own (visitWindowAction: the
  * client's data, the client shown to the login, his history), and none
  * without those rights; a chip writes at once with «Редактирование записи»
  * (and «…пришедшего клиента» once he came), as the window's do. No
@@ -154,6 +157,7 @@ export function VisitCard({
               )}
             </p>
           )}
+          {v.clientEmail && <p className="jr-card-mail">{v.clientEmail}</p>}
         </div>
         <div className="jr-card-when">
           <b>

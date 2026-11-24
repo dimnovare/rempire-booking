@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { chromium, type Browser, type Page, type TestInfo } from "@playwright/test";
 import { PDFDocument } from "pdf-lib";
+import { referenceNumber } from "../src/lib/billing/reference";
 import { euroText } from "../src/lib/money";
 import { readXlsx } from "../src/lib/xlsx";
 import { authFile, OUT } from "./env";
@@ -26,6 +27,12 @@ const I = A.inv;
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const MENU = [I.menu.desk, I.menu.list, I.menu.receivers, I.menu.items, I.menu.reports, I.menu.settings];
 const UUID_PAGE = /\/admin\/invoices\/[0-9a-f-]{36}$/;
+
+/** A draft's head, as Isolta's «Инвойс 423»: the number it would get now, «not reserved» beside it in the table. */
+async function draftHead(page: Page) {
+  await expect(page.getByRole("heading", { level: 1 }).filter({ visible: true })).toHaveText(new RegExp(`^${I.one("")}(TEST-)?DEMO-`));
+  await expect(page.locator(".inv-meta:visible")).toContainText(I.notReserved);
+}
 
 const shot = async (page: Page, name: string) => {
   const body = await page.screenshot({ fullPage: true, path: path.join(OUT, "screens", `${test.info().project.name}-inv-${name}.png`) });
@@ -158,8 +165,8 @@ test.describe("invoices", () => {
     await expectNoSideScroll(page);
 
     await newInvoiceFor(page, who);
-    // a draft: no number yet, the rent is there already
-    await expect(page.getByRole("heading", { level: 1, name: I.newInvoice })).toBeVisible();
+    // a draft: the number it would get, not reserved; the rent is there already
+    await draftHead(page);
     await expect(page.locator(".inv-party:visible").nth(1)).toContainText(who);
     // (the rent, and the demo barber's product sales of that month)
     await expect(lines(page).first()).toBeVisible();
@@ -242,6 +249,7 @@ test.describe("invoices", () => {
 
     const RECEIVER = "Habe ja Käärid OÜ";
     const EMAIL = "arved@example.test";
+    const PHONE = "+372 5000 0042";
     const side = (page: Page) => page.locator(".sb.iv-side");
     const sideNav = (page: Page) => side(page).getByRole("navigation", { name: I.title });
 
@@ -401,7 +409,7 @@ test.describe("invoices", () => {
       await page.goto("/admin/invoices");
       await hydrated(page);
       await expect(page.locator(".inv-table:visible")).toBeVisible();
-      await expect(page.locator(".inv-table:visible thead th")).toHaveText([I.lcols.status, I.lcols.receiver, I.lcols.number, I.lcols.date, I.lcols.due, I.lcols.net, I.lcols.gross]);
+      await expect(page.locator(".inv-table:visible thead th")).toHaveText([I.lcols.status, I.lcols.receiver, I.lcols.number, I.lcols.reference, I.lcols.date, I.lcols.due, I.lcols.net, I.lcols.gross]);
       await page.goto("/admin/invoices/month");
       await hydrated(page);
       await expect(page.locator(".adm-inv-table:visible")).toBeVisible();
@@ -423,6 +431,8 @@ test.describe("invoices", () => {
       await form.getByLabel(I.regCode).fill("12345678");
       await form.getByLabel(I.address, { exact: true }).fill("Näidise 5, 10111 Tallinn");
       await form.getByLabel(I.email).fill(EMAIL);
+      // a phone, as Isolta's contact has one (044); made up
+      await form.getByLabel(I.phone, { exact: true }).fill(PHONE);
       await form.getByLabel(I.terms).fill("14");
       // a company of its own, nobody's barber: its invoices are free ones
       await form.getByLabel(I.staff).selectOption("");
@@ -430,6 +440,7 @@ test.describe("invoices", () => {
       await page.waitForURL(/\/admin\/invoices\/receivers\/[0-9a-f-]{36}$/);
       await hydrated(page);
       await expect(page.getByRole("heading", { level: 1, name: RECEIVER })).toBeVisible();
+      await expect(page.locator(".iv-read:visible").filter({ hasText: I.phone })).toContainText(PHONE);
       await expect(page.getByRole("tab")).toHaveText([R.tabs.log, `${R.tabs.invoices} (0)`]);
       // his journal already says he was added
       await expect(page.locator(".iv-table:visible tbody tr")).toContainText([I.event.receiver_new]);
@@ -438,7 +449,7 @@ test.describe("invoices", () => {
       await expect(page.getByRole("button", { name: I.newInvoice })).toBeEnabled();
       await newInvoiceFor(page, "Habe");
       const draft = page.url();
-      await expect(page.getByRole("heading", { level: 1, name: I.newInvoice })).toBeVisible();
+      await draftHead(page);
       const card = page.locator(".inv-rcv:visible");
       await expect(card).toContainText(RECEIVER);
       await expect(card).toContainText("Näidise 5, 10111 Tallinn");
@@ -475,13 +486,14 @@ test.describe("invoices", () => {
       await lines(page).nth(2).getByRole("textbox", { name: I.qty }).fill("2");
       await lines(page).nth(2).getByRole("textbox", { name: I.qty }).blur();
       await expect(total(page)).toHaveText(euroText(10990));
-      // the note is printed under the totals: it shows in its place on the sheet
+      // the note is the staff's own, never printed (Isolta's «не будет видна на инвойсе»): it shows under the totals, saying so
       await page.getByRole("button", { name: I.note, exact: true }).click();
-      const note = page.getByRole("dialog", { name: I.note });
-      await note.getByRole("textbox", { name: I.note }).fill("Tasuda ülekandega.");
+      const note = page.getByRole("dialog", { name: I.noteTitle });
+      await note.getByRole("textbox", { name: I.noteLabel, exact: true }).fill("Tasuda ülekandega.");
       await note.getByRole("button", { name: A.save, exact: true }).click();
       await expect(note).toHaveCount(0);
-      await expect(page.locator(".inv-after:visible button")).toHaveText("Tasuda ülekandega.");
+      await expect(page.locator(".inv-memo:visible")).toContainText(I.noteTitle);
+      await expect(page.locator(".inv-memo:visible button")).toHaveText("Tasuda ülekandega.");
       // the board's sheet: white, 8px corners, the ruled table and the totals at the right
       await expect(page.locator(".inv-sheet:visible")).toHaveCSS("border-radius", "8px");
       await expect(page.locator(".inv-row-head:visible")).toBeVisible();
@@ -507,7 +519,7 @@ test.describe("invoices", () => {
       // looking changed nothing: still the draft, with its three lines
       await page.reload();
       await hydrated(page);
-      await expect(page.getByRole("heading", { level: 1, name: I.newInvoice })).toBeVisible();
+      await draftHead(page);
       await expect(lines(page)).toHaveCount(3);
       await expect(total(page)).toHaveText(euroText(10990));
 
@@ -519,6 +531,9 @@ test.describe("invoices", () => {
       const number = title.replace(I.one(""), "").trim();
       expect(number).toMatch(/DEMO-\d{4}-\d{4}$/);
       await expect(toast(page).filter({ hasText: I.issued(number) })).toBeVisible();
+      // the reference to pay with, from the number (7-3-1), as printed beside the IBAN; the note stays the staff's
+      await expect(page.locator(".inv-meta:visible")).toContainText(referenceNumber(number));
+      await expect(page.locator(".inv-memo:visible")).toContainText("Tasuda ülekandega.");
       // the sheet is read only now: nothing to type into, no «Добавить строку»
       await expect(page.locator(".inv-sheet:visible input")).toHaveCount(0);
       await expect(page.getByRole("button", { name: I.addLine })).toHaveCount(0);
@@ -575,7 +590,7 @@ test.describe("invoices", () => {
       await page.getByRole("menuitem", { name: I.copy }).click();
       await page.waitForURL((u) => UUID_PAGE.test(u.pathname) && u.href !== draft);
       await hydrated(page);
-      await expect(page.getByRole("heading", { level: 1, name: I.newInvoice })).toBeVisible();
+      await draftHead(page);
       await expect(lines(page)).toHaveCount(3);
       await expect(total(page)).toHaveText(euroText(10990));
       await tools(page).click();
@@ -631,9 +646,11 @@ test.describe("invoices", () => {
       // (the file is in the browser's own temporary folder: read from there, never copied into the repo)
       const file = readXlsx(new Uint8Array(readFileSync(await download.path())));
       const X = I.xlsx;
-      expect(file.rows[0]).toEqual([X.status, X.receiver, X.number, X.date, X.due, X.net, X.vat, X.gross]);
+      expect(file.rows[0]).toEqual([X.status, X.receiver, X.number, X.reference, X.date, X.due, X.net, X.vat, X.gross]);
       expect(file.rows).toHaveLength(3);
-      expect(file.rows.slice(1).map((r) => [r[0], r[1], r[7]])).toEqual([
+      // each with the reference its number gives
+      for (const r of file.rows.slice(1)) expect(r[3]).toBe(referenceNumber(String(r[2])));
+      expect(file.rows.slice(1).map((r) => [r[0], r[1], r[8]])).toEqual([
         [cap(I.status.credit), "Habe ja Käärid OÜ", -109.9],
         [cap(I.status.credited), "Habe ja Käärid OÜ", 109.9],
       ]);

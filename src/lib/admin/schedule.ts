@@ -8,7 +8,9 @@
  *   saveDays        the marked cells: a working day with its hours and
  *                   breaks, a day off, a vacation day or a sick day;
  *   fillTemplate    «По дням недели» or «По сменам» over a period;
- *   copySchedule    one barber's days to other barbers, for a period.
+ *   copySchedule    one barber's days to other barbers, for a period;
+ *   markDays        the journal's «Добавить рабочие дни» / «Убрать рабочие
+ *                   дни»: one barber's picked days, as a template writes.
  *
  * **What is written.** A working day and a day off are dated overrides
  * (staff_day_overrides: the day's own spans, or none), exactly what a
@@ -46,6 +48,7 @@ import { withTx, type Querier } from "../db";
 import { mergeIntervals, subtractIntervals, workWindows, type HoursRow, type Interval } from "../slots";
 import { addDays, isLocalDate, startOfDay, todayIn } from "../tz";
 import { cutVisits, daysBetween, daySpans, effectiveDay, endOfNextMonth, isDayKind, localSpans, shiftDays, SHIFT_RUN_MAX, weekdayDays, type DayKind, type Span } from "./schedule-plan";
+import { MARK_DAYS_MAX } from "./journal";
 import { cleanSpans } from "./staff";
 import { isUuid } from "./visits";
 
@@ -198,8 +201,13 @@ const stored = (spans: Span[]): Span[] => spans.map(([a, b]) => [a, b === "24:00
  * or sick leave first. Otherwise (a template, a copy) a day with such
  * visits is left as it was and named in `skipped`, and only dated days are
  * written: a vacation stays where it is, over whatever the day now says.
+ *
+ * `until` (a template): the period's last day. A barber of the change whose
+ * «График до» (migration 042) is earlier gets it moved there, in the same
+ * transaction, with an audit row of its own; one with none keeps none (no
+ * limit is wider than any date), one with a later date keeps his.
  */
-async function applyDays(business: Business, by: Holder & { id: string }, plans: DayPlan[], strict: boolean, via: string): Promise<Applied> {
+async function applyDays(business: Business, by: Holder & { id: string }, plans: DayPlan[], strict: boolean, via: string, until?: string): Promise<Applied> {
   // whatever called this: the right, and every barber named is one the login sees
   if (!mayChange(by, plans.map((p) => p.staffId))) return NO;
   if (!plans.length) return bad("days");
@@ -283,6 +291,21 @@ async function applyDays(business: Business, by: Holder & { id: string }, plans:
         JSON.stringify({ via, days: mine.length, from: mine[0].date, to: mine[mine.length - 1].date, kinds }),
       ]);
     }
+    if (until) {
+      const behind = await tx<{ id: string; was: string }>(
+        "select id, schedule_until::text as was from staff where business_id = $1 and id = any($2::uuid[]) and schedule_until < $3::date order by id",
+        [business.id, staffIds, until],
+      );
+      for (const s of behind) {
+        await tx("update staff set schedule_until = $2::date where id = $1", [s.id, until]);
+        await tx(`insert into audit (actor, entity, entity_id, action, before, after) values ($1, 'staff', $2, 'edit', $3::jsonb, $4::jsonb)`, [
+          by.id,
+          s.id,
+          JSON.stringify({ schedule_until: s.was }),
+          JSON.stringify({ schedule_until: until, via }),
+        ]);
+      }
+    }
     return { ok: true, written: go.length, skipped: strict ? [] : refused };
   });
 }
@@ -355,6 +378,7 @@ export type TemplateInput = {
  * with these hours; the other days stay as they are. «По сменам»: so many
  * days on with these hours, then so many days off, from the period's first
  * day. A day with visits the change would cut is left alone and named.
+ * A barber's «График до» earlier than the period's last day moves to it.
  */
 export async function fillTemplate(business: Business, by: Holder & { id: string }, input: TemplateInput): Promise<Applied> {
   const staffIds = Array.isArray(input?.staffIds) ? [...new Set(input.staffIds.map(String))] : [];
@@ -379,7 +403,8 @@ export async function fillTemplate(business: Business, by: Holder & { id: string
   } else return bad("mode");
   const plans: DayPlan[] = [];
   for (const staffId of staffIds) for (const d of days) plans.push({ staffId, date: d.date, kind: d.work ? "work" : "off", spans: d.work ? spans : [] });
-  return applyDays(business, by, plans, false, input.mode);
+  // «График до» follows the template to the period's end (Dim, round 15)
+  return applyDays(business, by, plans, false, input.mode, dates[dates.length - 1]);
 }
 
 /** «Скопировать график», as its window sends it. */
@@ -421,4 +446,36 @@ export async function copySchedule(business: Business, by: Holder & { id: string
   });
   if (!plans) return bad("staff");
   return applyDays(business, by, plans, false, "copy");
+}
+
+/** «Добавить рабочие дни» / «Убрать рабочие дни», as the journal's window sends them. */
+export type MarkInput = {
+  staffId: string;
+  /** the days picked in its month, in any order */
+  dates: string[];
+  /** "work": they become working days with these hours; "off": days off */
+  kind: string;
+  from?: string;
+  to?: string;
+  breaks?: Span[];
+};
+
+/**
+ * The journal's «Добавить рабочие дни» and «Убрать рабочие дни» (the head
+ * menu of the admin we follow; Dim, 24.11.2026): one barber's picked days
+ * become working days with these hours and breaks, or days off. Written as
+ * a template is: dated days only, so a vacation stays where it is, and a
+ * day whose visits the change would cut (any visit, for a day off) is left
+ * as it was and named in `skipped`; the other days are written.
+ */
+export async function markDays(business: Business, by: Holder & { id: string }, input: MarkInput): Promise<Applied> {
+  const staffId = String(input?.staffId ?? "");
+  if (!mayChange(by, [staffId])) return NO;
+  if (input?.kind !== "work" && input?.kind !== "off") return bad("kind");
+  const dates = Array.isArray(input.dates) ? [...new Set(input.dates.map(String))] : [];
+  if (!dates.length || dates.length > MARK_DAYS_MAX) return bad("days");
+  const spans = input.kind === "work" ? daySpans(input.from, input.to, input.breaks ?? []) : [];
+  if (!spans) return bad("spans");
+  const kind: DayKind = input.kind === "work" ? "work" : "off";
+  return applyDays(business, by, dates.map((date) => ({ staffId, date, kind, spans })), false, kind === "work" ? "journal-add" : "journal-remove");
 }

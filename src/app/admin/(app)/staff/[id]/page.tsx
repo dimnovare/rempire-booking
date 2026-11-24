@@ -61,7 +61,7 @@ async function Detail({ params }: { params: PageProps<"/admin/staff/[id]">["para
         <BackToStaff A={A} />
         <h1 className="adm-h1">{A.staff.add}</h1>
         <div className="adm-card-narrow">
-          <ProfileForm id={null} initial={{ name: "", role: { ru: "Барбер", et: "Barber", en: "Barber" }, photoUrl: "", bookable: true, active: true }} />
+          <ProfileForm id={null} initial={{ name: "", role: { ru: "Барбер", et: "Barber", en: "Barber" }, photoUrl: "", bookable: true, active: true, scheduleUntil: "" }} />
         </div>
       </main>
     );

@@ -38,7 +38,7 @@ async function Loaded({ searchParams }: { searchParams: PageProps<"/admin/invoic
     <>
       <Title text={A.inv.receivers} />
       <ReceiversList
-        rows={receivers.map((r) => ({ id: r.id, name: r.legalName, contact: r.staffName ?? "", person: r.kind === "person", active: r.active, ...splitAddress(r.address), invoices: counts.get(r.id) ?? 0 }))}
+        rows={receivers.map((r) => ({ id: r.id, name: r.legalName, contact: r.staffName ?? "", phone: r.phone, person: r.kind === "person", active: r.active, ...splitAddress(r.address), invoices: counts.get(r.id) ?? 0 }))}
         staff={staff.map((s) => ({ id: s.id, name: s.name, active: s.active }))}
         issuers={issuers.map((i) => ({ id: i.id, name: i.legalName }))}
         defaultStaff={free[0]?.id ?? ""}

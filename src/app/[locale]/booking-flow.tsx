@@ -219,7 +219,8 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
       }
       // the barber of last time, unless the link asked for one
       const l = JSON.parse(localStorage.getItem(LAST) || "null");
-      if (!asked && !moving && l && typeof l.barber === "string" && (l.barber === "any" || staffById.has(l.barber))) setBarber((b) => b ?? l.barber);
+      // («anyone» only while the salon offers it: «Любой специалист», catalog.anyStaff)
+      if (!asked && !moving && l && typeof l.barber === "string" && (l.barber === "any" ? catalog.anyStaff : staffById.has(l.barber))) setBarber((b) => b ?? l.barber);
       // until the visit is over
       const v = JSON.parse(localStorage.getItem(VISIT) || "null");
       if (v && typeof v.url === "string" && /^\/(ru|et|en)\/visit\/[A-Za-z0-9_-]+$/.test(v.url) && typeof v.end === "number" && v.end > Date.now()) {
@@ -776,15 +777,18 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
       </div>
       {nextVisit()}
       <div className="cells" role="radiogroup" aria-label={c.barber}>
-        <div className="cell">
-          <button type="button" className="cell-main mid" role="radio" aria-checked={barber === "any"} onClick={() => pickBarber("any")}>
-            <span className="ava">
-              <PeopleIcon />
-            </span>
-            <span>{c.anyBarber}</span>
-            <span className="radio" />
-          </button>
-        </div>
+        {/* «Любой специалист» in the salon's settings («Настройки → Онлайн-запись»): off, the barbers alone */}
+        {catalog.anyStaff && (
+          <div className="cell">
+            <button type="button" className="cell-main mid" role="radio" aria-checked={barber === "any"} onClick={() => pickBarber("any")}>
+              <span className="ava">
+                <PeopleIcon />
+              </span>
+              <span>{c.anyBarber}</span>
+              <span className="radio" />
+            </button>
+          </div>
+        )}
         {catalog.staff.map((s) => {
           const bio = pick(s.bio, lang);
           return (
@@ -879,7 +883,7 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
       return (
         <div className="empty">
           <p className="t2">{c.noneAhead(name, horizonDays)}</p>
-          {barber !== "any" && (
+          {barber !== "any" && catalog.anyStaff && (
             <button type="button" className="btn btn-primary" onClick={() => pickBarber("any")}>
               {c.anyoneInstead}
             </button>

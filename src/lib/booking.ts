@@ -12,6 +12,12 @@
  * refused as «invalid» with no field, which the booking page shows as its
  * plain «Что-то пошло не так… позвоните в салон». It never says why. The
  * staff still book him (source «admin»).
+ *
+ * «Онлайн-запись» (the salon's settings, Dim, round 15) holds here too, not
+ * only on the page: «anyone» with «Любой специалист» off is «not_offered»
+ * (field «staff»), and a start after the barber's «График до»
+ * (staff.schedule_until) is no free time of his (loadAvailability leaves
+ * those days out), so it is «slot_taken» like any time that is gone.
  */
 import { createHash, randomBytes } from "node:crypto";
 import { loadAvailability, type Business } from "./availability";
@@ -204,6 +210,8 @@ async function bookClean(q: Querier, business: Business, c: Clean, now: number):
   // a client the salon does not take online bookings from: either of his two phones.
   // No field and no code of its own: the answer is the one any refused request gets
   if (c.source === "online" && (await bannedOnline(q, business.id, c.phone))) return { ok: false, code: "invalid" };
+  // «Любой специалист» off: the page does not offer «anyone», and a request that asks for it anyway is refused
+  if (c.staffId === null && !business.settings.any_staff_on) return { ok: false, code: "not_offered", field: "staff" };
 
   const date = localParts(c.start, business.timezone).date;
   const look = await loadAvailability(q, { business, serviceIds: c.serviceIds, staffId: c.staffId, from: date, days: 1, now });

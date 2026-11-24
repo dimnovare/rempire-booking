@@ -389,7 +389,7 @@ describe("the import", () => {
     const exp = readIsoltaExport(exportFiles());
     const plan = await planIsoltaImport(query, demo.business, exp, NOW);
     const result = await applyIsoltaImport(query, plan);
-    expect(result).toEqual({ receiversCreated: 2, invoices: 5, credits: 1, lines: 5, raced: 0 });
+    expect(result).toEqual({ receiversCreated: 2, phonesFilled: 0, invoices: 5, credits: 1, lines: 5, raced: 0 });
 
     const rows = await query<{ number: string; status: string; kind: string; free: boolean; staff_id: string | null; source: string; source_ref: string; issued_on: string; due_on: string; period_from: string; credit_of: string | null; paid_at: Date | null; gross_cents: number; locale: string }>(
       `select number, status, kind, free, staff_id, source, source_ref, to_char(issued_on, 'YYYY-MM-DD') as issued_on, to_char(due_on, 'YYYY-MM-DD') as due_on,
@@ -409,12 +409,13 @@ describe("the import", () => {
     expect(rows[4].paid_at).not.toBeNull();
     expect(rows[4].locale).toBe("ru");
 
-    const made = await query<{ kind: string; legal_name: string; reg_code: string; active: boolean; vat_mode: string; terms_days: number; locale: string; email: string }>(
-      "select kind, legal_name, reg_code, active, vat_mode, terms_days, locale, email from invoice_receivers where not active order by legal_name",
+    const made = await query<{ kind: string; legal_name: string; reg_code: string; active: boolean; vat_mode: string; terms_days: number; locale: string; email: string; phone: string }>(
+      "select kind, legal_name, reg_code, active, vat_mode, terms_days, locale, email, phone from invoice_receivers where not active order by legal_name",
     );
+    // the phone is Isolta's contact's (044); the company's contact has none
     expect(made).toEqual([
-      { kind: "fie", legal_name: NEW_FIE.name, reg_code: NEW_FIE.reg, active: false, vat_mode: "none", terms_days: 5, locale: "et", email: NEW_FIE.email },
-      { kind: "person", legal_name: PERSON.name, reg_code: "", active: false, vat_mode: "none", terms_days: 14, locale: "ru", email: PERSON.email },
+      { kind: "fie", legal_name: NEW_FIE.name, reg_code: NEW_FIE.reg, active: false, vat_mode: "none", terms_days: 5, locale: "et", email: NEW_FIE.email, phone: "" },
+      { kind: "person", legal_name: PERSON.name, reg_code: "", active: false, vat_mode: "none", terms_days: 14, locale: "ru", email: PERSON.email, phone: "+37200000000" },
     ]);
 
     // the lines as printed: the item-number column's text, a quantity that was not whole
@@ -438,9 +439,50 @@ describe("the import", () => {
     expect(again.insert).toEqual([]);
     expect(again.receivers).toEqual([]);
     expect(again.existing.map((e) => e.ref).sort()).toEqual(["1001", "1002", "1003", "1006", "1007"]);
-    expect(await applyIsoltaImport(query, again)).toEqual({ receiversCreated: 0, invoices: 0, credits: 0, lines: 0, raced: 0 });
+    expect(await applyIsoltaImport(query, again)).toEqual({ receiversCreated: 0, phonesFilled: 0, invoices: 0, credits: 0, lines: 0, raced: 0 });
     expect(await counts()).toEqual(after);
     expect(isoltaReport(again, null).join("\n")).toContain("Already in the database (same Isolta id), left as they are: 5.");
+  });
+
+  it("puts Isolta's phone on ours only where it has none, and never prints it", async () => {
+    // Jevgeni's company is ours (by its registry code) and has no phone; Isolta's contact has one
+    const JEV_PHONE = "+372 5000 0003";
+    const withPhone = () => {
+      const files = exportFiles();
+      const row = `2003,${JEVGENI.name},1,${JEVGENI.street},,${JEVGENI.post},${JEVGENI.town},EE,,${JEVGENI.email},${JEV_PHONE},${JEVGENI.street},,${JEVGENI.post},${JEVGENI.town},EE,,,,et,,1,0,,,,${JEVGENI.reg},,`;
+      files.set("contacts.csv", new TextEncoder().encode([CONTACTS_CSV, row].join("\n")));
+      return readIsoltaExport(files);
+    };
+    const [jev] = await query<{ id: string; phone: string }>("select id, phone from invoice_receivers where reg_code = $1", [JEVGENI.reg]);
+    expect(jev.phone).toBe("");
+
+    const plan = await planIsoltaImport(query, demo.business, withPhone(), NOW);
+    expect(plan.receivers.find((r) => r.id === jev.id)?.fillPhone).toBe(JEV_PHONE);
+    const dry = isoltaReport(plan, null).join("\n");
+    expect(dry).toContain("phones from Isolta: 1 on the receivers to make, 1 to write on ours that had none.");
+    for (const secret of [JEV_PHONE, "+37200000000", "5000"]) expect(dry).not.toContain(secret);
+
+    const result = await applyIsoltaImport(query, plan);
+    expect(result).toMatchObject({ phonesFilled: 1, receiversCreated: 2, invoices: 5 });
+    expect((await query<{ phone: string }>("select phone from invoice_receivers where id = $1", [jev.id]))[0].phone).toBe(JEV_PHONE);
+    const [log] = await query<{ actor: string; after: Record<string, unknown> }>("select actor, after from audit where entity = 'invoice_receiver' and entity_id = $1 and action = 'edit'", [jev.id]);
+    expect(log).toMatchObject({ actor: "isolta-import", after: { source: "isolta", phone: true } });
+    // the audit says a phone came, not which
+    expect(JSON.stringify(log)).not.toContain("5000");
+    const written = isoltaReport(plan, result).join("\n");
+    expect(written).toContain("1 phones written on ours");
+    expect(written).not.toContain(JEV_PHONE);
+  });
+
+  it("leaves a phone of ours as it is, even when Isolta has another", async () => {
+    await query("update invoice_receivers set phone = '+372 5999 9999' where reg_code = $1", [JEVGENI.reg]);
+    const files = exportFiles();
+    const row = `2003,${JEVGENI.name},1,,,,,EE,,${JEVGENI.email},+372 5000 0003,,,,,EE,,,,et,,1,0,,,,${JEVGENI.reg},,`;
+    files.set("contacts.csv", new TextEncoder().encode([CONTACTS_CSV, row].join("\n")));
+    const plan = await planIsoltaImport(query, demo.business, readIsoltaExport(files), NOW);
+    expect(plan.receivers.every((r) => r.fillPhone === null)).toBe(true);
+    expect(await applyIsoltaImport(query, plan)).toMatchObject({ phonesFilled: 0 });
+    expect((await query<{ phone: string }>("select phone from invoice_receivers where reg_code = $1", [JEVGENI.reg]))[0].phone).toBe("+372 5999 9999");
   });
 
   it("shows the imported ones in our list, PDF and events, and they do not stop the month's draft", async () => {
@@ -479,6 +521,20 @@ describe("the import", () => {
     expect(plan.skipped.find((s) => s.ref === "1007")?.why).toBe("number_taken");
     expect(plan.issuers[0]).toMatchObject({ counterLast: 4, maxNumber: 4 });
     expect(isoltaReport(plan, null).join("\n")).toContain("«Последний номер Isolta» is 4, the highest imported number is 4: they agree. Our next number is 5.");
+    // the demo company numbers «DEMO-2026-0005»: the report says it does not look like Isolta's
+    expect(plan.issuers[0]).toMatchObject({ nextText: "DEMO-2026-0005", plain: false });
+    expect(isoltaReport(plan, null).join("\n")).toContain("Our next number prints as «DEMO-2026-0005», Isolta's are bare numbers");
+  });
+
+  it("a company numbered as Isolta (no prefix, no year, no padding) goes on with a bare number and no warning", async () => {
+    const [issuer] = await query<{ id: string }>("select id from invoice_issuers where is_default");
+    await query("update invoice_issuers set prefix = '', digits = 0, yearly = false where id = $1", [issuer.id]);
+    await query("insert into invoice_counters (issuer_id, year, last) values ($1, 0, 5)", [issuer.id]);
+    const plan = await planIsoltaImport(query, demo.business, readIsoltaExport(exportFiles()), NOW);
+    expect(plan.issuers[0]).toMatchObject({ counterLast: 5, maxNumber: 5, nextText: "6", plain: true });
+    const text = isoltaReport(plan, null).join("\n");
+    expect(text).toContain("they agree. Our next number is 6.");
+    expect(text).not.toContain("Our next number prints as");
   });
 
   it("a credit whose original is not there is left out and named", async () => {

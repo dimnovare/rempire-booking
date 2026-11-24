@@ -155,7 +155,7 @@ settings, 19.11). Ours does the same from `/{locale}/visit/{token}`:
 | «Powered by Altegio» | Nothing | Never their name |
 | A «Service» category chip above the list | No chip | REMPIRE has one category; a chip that does nothing is noise |
 | The reminder: 16 choices, from 1 hour to 7 days | The salon's time, or none | That is what the SMS queue does today |
-| Privacy policy and user agreement links at the tick | The tick alone | No policy page yet (open) |
+| Privacy policy and user agreement links at the tick | Our own privacy policy at the tick (`/{locale}/privacy`, 23.11) | No user agreement: nothing to agree to beyond the booking |
 | The salon's page: an Apple map you can pan; a review form | An OpenStreetMap picture, one tap to the maps app; no form | No map keys; no review form of ours yet |
 | Change or cancel until the salon's cutoff | At any time before the visit | Renat, 19.11: no «позвоните в салон». `cancel_cutoff_min` is 0 |
 
@@ -173,10 +173,7 @@ settings, 19.11). Ours does the same from `/{locale}/visit/{token}`:
 
 - **The «booked» screen** is ours in the same look: Altegio's cannot be seen
   without booking. A screenshot from Renat makes it exact.
-- **A privacy policy page** to link at the consent tick. Checked 19.11:
-  rempire.ee has none; Altegio's widget links Altegio's own policy
-  (`alteg.io/en/info/privacy`); the shop has one
-  (`rempireshop.com/…/policies/privacy-policy`), but it speaks of the shop
-  and its orders only. Booking needs its own short text.
+- **The privacy policy** (`/{locale}/privacy`, linked at the tick and on
+  the salon's page since 23.11) is a draft until Renat agrees its text.
 - **«The main page»** after the goodbye is the booking start. Once booking
   sits on rempire.ee it may be the site's home.

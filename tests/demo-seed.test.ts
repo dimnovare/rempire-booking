@@ -11,7 +11,7 @@ import { closeDb, query } from "@/lib/db";
 import { planReminders } from "@/lib/outbox";
 import { addDays, zonedToUtc } from "@/lib/tz";
 import ALTEGIO from "../tools/altegio-structure.json";
-import { BUSY, busyEnabled, DEMO, demoHours, seedDemo, seedDemoBusy, seedDemoVisits } from "../tools/seed-demo.mjs";
+import { BUSY, busyEnabled, DEMO, demoHours, seedDemo, seedDemoBusy, seedDemoLogins, seedDemoVisits } from "../tools/seed-demo.mjs";
 import { freshDemo, type Demo } from "./helpers";
 
 const TZ = "Europe/Tallinn";
@@ -164,6 +164,25 @@ describe("the structure is the salon's own", () => {
     await query("update staff_services set price_cents = 4300 where staff_id = $1 and service_id = $2", [demo.staff.renat, demo.services.clip]);
     await seedDemo(db);
     expect((await line("renat", "clip")).price_cents).toBe(4300);
+  });
+
+  it("the barbers in Altegio's order; a database in the demo's first order moves to it once, and a barber Renat moved stays (round 15)", async () => {
+    const order = async () => (await query<{ slug: string }>("select slug from staff order by sort, slug")).map((r) => r.slug);
+    expect(await order()).toEqual(["jevgeni", "slava", "renat", "valentin", "milena"]);
+    // staging before 24.11.2026: Renat, Valentin, Jevgeni, Slava, Milena
+    for (const [i, slug] of ["renat", "valentin", "jevgeni", "slava", "milena"].entries()) await query("update staff set sort = $2 where slug = $1", [slug, i]);
+    await seedDemo(db);
+    expect(await order()).toEqual(["jevgeni", "slava", "renat", "valentin", "milena"]);
+    await seedDemo(db);
+    expect(await order()).toEqual(["jevgeni", "slava", "renat", "valentin", "milena"]);
+    // Renat put Milena first: she stays there; the others still move
+    for (const [i, slug] of ["renat", "valentin", "jevgeni", "slava"].entries()) await query("update staff set sort = $2 where slug = $1", [slug, i]);
+    await query("update staff set sort = -1 where slug = 'milena'");
+    await seedDemo(db);
+    expect(await order()).toEqual(["milena", "jevgeni", "slava", "renat", "valentin"]);
+    // the owner who cuts is still linked to Renat's barber, whoever is first
+    await seedDemoLogins(db);
+    expect((await query<{ staff_id: string }>("select staff_id from users where email = 'boss@example.test'"))[0].staff_id).toBe(demo.staff.renat);
   });
 });
 

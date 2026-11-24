@@ -11,7 +11,7 @@
  * the service's window: services/actions.ts saveServiceAction.
  */
 import { refresh } from "next/cache";
-import { PHOTO_MAX_BYTES, addSpecialTime, removeSpecialTime, saveStaffPhoto, saveStaffProfile, saveWeeklyHours, setDayOverride } from "@/lib/admin/staff";
+import { PHOTO_MAX_BYTES, addSpecialTime, removeSpecialTime, saveStaffPhoto, saveStaffProfile, saveWeeklyHours, setDayOverride, setStaffBookable } from "@/lib/admin/staff";
 import { addTimeOff, removeTimeOff } from "@/lib/admin/visits";
 import { requireAdmin } from "@/lib/auth/current";
 import { can } from "@/lib/auth/rights";
@@ -25,15 +25,34 @@ const l10n = (v: unknown) => {
   return { ru: str(o.ru), et: str(o.et), en: str(o.en) };
 };
 
-export async function saveProfile(id: string | null, p: { name: string; role: { ru: string; et: string; en: string }; photoUrl: string; bookable: boolean; active: boolean }): Promise<{ ok: true; id: string } | { ok: false; field: string }> {
+/** `scheduleUntil` is «График до» ("" clears it); a form that does not send it leaves it as it is. */
+export async function saveProfile(
+  id: string | null,
+  p: { name: string; role: { ru: string; et: string; en: string }; photoUrl: string; bookable: boolean; active: boolean; scheduleUntil?: string },
+): Promise<{ ok: true; id: string } | { ok: false; field: string }> {
   const { user, business } = await requireAdmin();
   const r = await saveStaffProfile(
     business,
     id ? String(id) : null,
-    { name: str(p?.name), role: l10n(p?.role), photoUrl: str(p?.photoUrl), bookable: p?.bookable === true, active: p?.active === true },
+    {
+      name: str(p?.name),
+      role: l10n(p?.role),
+      photoUrl: str(p?.photoUrl),
+      bookable: p?.bookable === true,
+      active: p?.active === true,
+      scheduleUntil: p?.scheduleUntil === undefined || p?.scheduleUntil === null ? undefined : str(p.scheduleUntil),
+    },
     user.id,
     user,
   );
+  if (r.ok) refresh();
+  return r;
+}
+
+/** The switch «Онлайн-запись» of the staff list: writes at once (src/lib/admin/staff.ts setStaffBookable asks the right). */
+export async function setBookableAction(staffId: string, on: boolean): Promise<Result> {
+  const { user, business } = await requireAdmin();
+  const r = await setStaffBookable(business, String(staffId), on === true, user.id, user);
   if (r.ok) refresh();
   return r;
 }

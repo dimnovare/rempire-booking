@@ -2,13 +2,17 @@ import { Suspense } from "react";
 import { loadCalendar } from "@/lib/admin/calendar";
 import { listStaff } from "@/lib/admin/staff";
 import { requireAdmin } from "@/lib/auth/current";
-import { canGroup } from "@/lib/auth/rights";
+import { can, canGroup } from "@/lib/auth/rights";
 import { dbConfigured, query } from "@/lib/db";
 import { todayIn } from "@/lib/tz";
 import { getA } from "../../lang-server";
 import { StaffRail, type RailItem } from "./rail";
 
-/** «Барберы»: the list (the whole page on a phone, a rail on the left from 900px) and the barber beside it. */
+/**
+ * «Барберы»: the list (the whole page on a phone; from 900px the table of
+ * table.tsx on /admin/staff, a rail on the left of a barber's page) and the
+ * barber beside it.
+ */
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="adm-split">
@@ -42,7 +46,11 @@ async function Rail() {
       line: s.active ? `${hours}${visits > 0 ? ` · ${A.cal.visits(visits)}` : ""}` : A.staff.off,
       services: s.services,
       hidden: s.active && !s.bookable,
+      role: A.pick(s.role),
+      bookable: s.bookable,
+      scheduleUntil: s.scheduleUntil,
     };
   });
-  return <StaffRail items={items} />;
+  // the table's switch «Онлайн-запись» is «Редактирование сотрудников», as the profile's own
+  return <StaffRail items={items} today={today} mayEdit={can(user, "staff.edit")} />;
 }

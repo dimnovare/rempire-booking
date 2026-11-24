@@ -27,18 +27,21 @@
  * id. A credit invoice (INV02 / 381) is imported as ours are, linked to the
  * invoice it credits, which turns 'credited'. The receiver is ours when the
  * registry code, or else the name, matches; otherwise one is made, switched
- * off. The issuer is ours with the seller's registry code, else the default.
+ * off. The phone (044) is the contact's in contacts.csv, else the Finvoice
+ * buyer's: on a receiver made, and on ours only if it has none. The issuer
+ * is ours with the seller's registry code, else the default.
  * The number series (invoice_counters) is never touched.
  *
  * Two steps, so a dry run writes nothing at all: planIsoltaImport() only
  * reads, applyIsoltaImport() writes the plan in the caller's transaction.
  * The report (isoltaReport) names no client and prints no bank data.
  */
+import { cleanPhone } from "../admin/location-form";
 import type { Querier } from "../db";
 import { amountText, splitGross } from "../money";
 import { todayIn, zonedToUtc } from "../tz";
 import type { Party } from "./invoices";
-import type { ReceiverKind } from "./parties";
+import { formatNumber, type ReceiverKind } from "./parties";
 
 /* ---------- CSV ---------- */
 
@@ -428,7 +431,8 @@ export type IsoltaRow = {
   line: number;
 };
 
-export type IsoltaContact = { id: string; name: string; person: boolean; regCode: string; vatNumber: string; email: string; address: string; locale: string };
+/** `phone`: contacts.csv «phoneNumber», as Isolta has it (not checked here) */
+export type IsoltaContact = { id: string; name: string; person: boolean; regCode: string; vatNumber: string; email: string; phone: string; address: string; locale: string };
 
 export type IsoltaExport = {
   rows: IsoltaRow[];
@@ -494,6 +498,7 @@ export function readIsoltaExport(files: Map<string, Uint8Array>): IsoltaExport {
         regCode: clean(r.businessId),
         vatNumber: clean(r.vatNumber),
         email: clean(r.email),
+        phone: clean(r.phoneNumber),
         address: billing || addressOf(clean(r["addresses.0.streetAddress"]), clean(r["addresses.0.zipCode"]), clean(r["addresses.0.city"]), clean(r["addresses.0.countryCode"]).toUpperCase()),
         locale: clean(r.languageCode).toLowerCase(),
       });
@@ -571,7 +576,9 @@ export type PlannedReceiver = {
   id: string | null;
   invoices: number;
   numbers: string[];
-  create: { kind: ReceiverKind; legalName: string; regCode: string; vatNumber: string; address: string; email: string; vatMode: "vat" | "none"; termsDays: number; locale: "ru" | "et" | "en" } | null;
+  create: { kind: ReceiverKind; legalName: string; regCode: string; vatNumber: string; address: string; email: string; phone: string; vatMode: "vat" | "none"; termsDays: number; locale: "ru" | "et" | "en" } | null;
+  /** ours with no phone yet, and Isolta's contact has one: it is written there (044); null: nothing to fill */
+  fillPhone: string | null;
 };
 
 export type SkipWhy =
@@ -600,12 +607,13 @@ export type IsoltaPlan = {
   skipped: { ref: string; number: string; why: SkipWhy; detail?: string }[];
   warnings: { ref: string; number: string; why: WarnWhy; detail?: string }[];
   receivers: PlannedReceiver[];
-  issuers: { id: string; isDefault: boolean; byReg: number; byDefault: number; counterLast: number | null; maxNumber: number | null }[];
+  /** nextText: our next number as it will print; plain: it is a bare number, as Isolta's are */
+  issuers: { id: string; isDefault: boolean; byReg: number; byDefault: number; counterLast: number | null; maxNumber: number | null; nextText: string; plain: boolean }[];
   problems: string[];
 };
 
-type OurIssuer = { id: string; reg_code: string; is_default: boolean; active: boolean; yearly: boolean; legal_name: string; vat_number: string; address: string; email: string; phone: string; iban: string; bank_name: string; note: string };
-type OurReceiver = { id: string; legal_name: string; reg_code: string; active: boolean; staff_id: string | null };
+type OurIssuer = { id: string; reg_code: string; is_default: boolean; active: boolean; prefix: string; digits: number; yearly: boolean; legal_name: string; vat_number: string; address: string; email: string; phone: string; iban: string; bank_name: string; note: string };
+type OurReceiver = { id: string; legal_name: string; reg_code: string; active: boolean; staff_id: string | null; phone: string };
 
 const KNOWN_STATES = new Set(["NotModified", "IsModified", "Open"]);
 const LOCALES = ["ru", "et", "en"] as const;
@@ -652,13 +660,13 @@ const hasAmount = (r: FinvoiceRow) => r.grossCents != null || r.netCents != null
 export async function planIsoltaImport(q: Querier, business: { id: string; timezone: string }, exp: IsoltaExport, now = Date.now()): Promise<IsoltaPlan> {
   const today = todayIn(business.timezone, now);
   const issuers = await q<OurIssuer>(
-    `select id, reg_code, is_default, active, yearly, legal_name, vat_number, address, email, phone, iban, bank_name, note
+    `select id, reg_code, is_default, active, prefix, digits, yearly, legal_name, vat_number, address, email, phone, iban, bank_name, note
        from invoice_issuers where business_id = $1 order by is_default desc, active desc, created_at`,
     [business.id],
   );
   if (!issuers.length) throw new Error("no_issuer");
   const fallback = issuers.find((i) => i.is_default) ?? issuers.find((i) => i.active) ?? issuers[0];
-  const ours = await q<OurReceiver>("select id, legal_name, reg_code, active, staff_id from invoice_receivers where business_id = $1 order by active desc, staff_id is null, created_at", [business.id]);
+  const ours = await q<OurReceiver>("select id, legal_name, reg_code, active, staff_id, phone from invoice_receivers where business_id = $1 order by active desc, staff_id is null, created_at", [business.id]);
   const imported = await q<{ id: string; ref: string; number: string; issuer_id: string; status: string; credited: boolean }>(
     `select i.id, i.source_ref as ref, i.number, i.issuer_id, i.status, exists (select 1 from invoices c where c.credit_of = i.id) as credited
        from invoices i where i.business_id = $1 and i.source = 'isolta'`,
@@ -878,12 +886,15 @@ export async function planIsoltaImport(q: Querier, business: { id: string; timez
         how = "name";
       } else if (byName.length > 1) warn(docs[0].inv.ref, docs[0].inv.number, "ambiguous_name");
     }
-    if (match) {
-      plan.receivers.push({ key, how, id: match.id, invoices: docs.length, numbers, create: null });
-      continue;
-    }
     const last = docs[docs.length - 1];
     const contact = contactByReg.get(g.regDigits) ?? [...names].map((n) => contactByName.get(n)).find(Boolean);
+    // the contact's phone, else the newest invoice's buyer's; checked as every phone of ours (044), one that is not a number is left out
+    const phone = cleanPhone(contact?.phone || last.doc.buyer.phone) || "";
+    if (match) {
+      // ours keeps what it has: only a receiver with no phone yet gets Isolta's
+      plan.receivers.push({ key, how, id: match.id, invoices: docs.length, numbers, create: null, fillPhone: phone && !match.phone ? phone : null });
+      continue;
+    }
     const lb = last.inv.buyer;
     plan.receivers.push({
       key,
@@ -898,10 +909,12 @@ export async function planIsoltaImport(q: Querier, business: { id: string; timez
         vatNumber: (lb.vatNumber || contact?.vatNumber || "").replace(/\s/g, "").toUpperCase().slice(0, 20),
         address: cut(lb.address || contact?.address || "", 300),
         email: (lb.email || contact?.email || "").toLowerCase().slice(0, 254),
+        phone,
         vatMode: docs.every((d) => d.inv.vatCents === 0) ? "none" : "vat",
         termsDays: Math.min(120, Math.max(0, daysBetween(last.inv.issuedOn, last.inv.dueOn))),
         locale: localeOf(last.doc.language || contact?.locale || "et"),
       },
+      fillPhone: null,
     });
   }
 
@@ -912,14 +925,25 @@ export async function planIsoltaImport(q: Querier, business: { id: string; timez
     const nums = [...plan.insert.filter((i) => i.issuerId === issuer.id), ...imported.filter((i) => i.issuer_id === issuer.id)].map((i) => numeric(i.number)).filter((n): n is number => n != null);
     if (!use && !nums.length) continue;
     const [c] = await q<{ last: number }>("select last from invoice_counters where issuer_id = $1 and year = $2 and not test", [issuer.id, issuer.yearly ? year : 0]);
-    plan.issuers.push({ id: issuer.id, isDefault: issuer.is_default, byReg: use?.byReg ?? 0, byDefault: use?.byDefault ?? 0, counterLast: c ? c.last : null, maxNumber: nums.length ? Math.max(...nums) : null });
+    const n = (c ? c.last : 0) + 1;
+    plan.issuers.push({
+      id: issuer.id,
+      isDefault: issuer.is_default,
+      byReg: use?.byReg ?? 0,
+      byDefault: use?.byDefault ?? 0,
+      counterLast: c ? c.last : null,
+      maxNumber: nums.length ? Math.max(...nums) : null,
+      nextText: formatNumber(issuer, year, n),
+      plain: formatNumber(issuer, year, n) === String(n),
+    });
   }
   return plan;
 }
 
 /* ---------- writing ---------- */
 
-export type IsoltaResult = { receiversCreated: number; invoices: number; credits: number; lines: number; raced: number };
+/** phonesFilled: our receivers that had no phone and got Isolta's (044) */
+export type IsoltaResult = { receiversCreated: number; phonesFilled: number; invoices: number; credits: number; lines: number; raced: number };
 
 const ACTOR = "isolta-import";
 
@@ -930,18 +954,26 @@ const ACTOR = "isolta-import";
  * there already (another run at the same time) is left alone.
  */
 export async function applyIsoltaImport(tx: Querier, plan: IsoltaPlan, actor = ACTOR): Promise<IsoltaResult> {
-  const out: IsoltaResult = { receiversCreated: 0, invoices: 0, credits: 0, lines: 0, raced: 0 };
+  const out: IsoltaResult = { receiversCreated: 0, phonesFilled: 0, invoices: 0, credits: 0, lines: 0, raced: 0 };
   const receiverId = new Map<string, string>();
   for (const r of plan.receivers) {
     if (r.id) {
       receiverId.set(r.key, r.id);
+      // Isolta's phone on ours that had none; one typed in meanwhile is left alone
+      if (r.fillPhone) {
+        const filled = await tx<{ id: string }>("update invoice_receivers set phone = $2, updated_at = now() where id = $1 and phone = '' returning id", [r.id, r.fillPhone]);
+        if (filled.length) {
+          out.phonesFilled++;
+          await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'invoice_receiver', $2, 'edit', $3::jsonb)`, [actor, r.id, JSON.stringify({ source: "isolta", phone: true })]);
+        }
+      }
       continue;
     }
     const c = r.create!;
     const [row] = await tx<{ id: string }>(
-      `insert into invoice_receivers (business_id, kind, legal_name, reg_code, vat_number, address, email, vat_mode, terms_days, locale, active)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false) returning id`,
-      [plan.businessId, c.kind, c.legalName, c.regCode, c.vatNumber, c.address, c.email, c.vatMode, c.termsDays, c.locale],
+      `insert into invoice_receivers (business_id, kind, legal_name, reg_code, vat_number, address, email, phone, vat_mode, terms_days, locale, active)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false) returning id`,
+      [plan.businessId, c.kind, c.legalName, c.regCode, c.vatNumber, c.address, c.email, c.phone, c.vatMode, c.termsDays, c.locale],
     );
     receiverId.set(r.key, row.id);
     out.receiversCreated++;
@@ -1091,6 +1123,10 @@ export function isoltaReport(plan: IsoltaPlan, result: IsoltaResult | null): str
     const what = r.create ? `new ${kind}${r.create.regCode ? " with a registry code" : ", no registry code"}` : `ours, by ${r.how === "reg" ? "registry code" : "name"}`;
     out.push(`  ${what}: ${invoices(r.invoices)}, Isolta numbers ${numberRanges(r.numbers)}`);
   }
+  // how many, never the numbers themselves
+  const phones = plan.receivers.filter((r) => r.create?.phone).length;
+  const fills = plan.receivers.filter((r) => r.fillPhone).length;
+  if (phones || fills) out.push(`  phones from Isolta: ${phones} on the receivers ${result ? "made" : "to make"}, ${fills} ${result ? "written" : "to write"} on ours that had none.`);
 
   plan.issuers.forEach((i, n) => {
     out.push(`Issuer ${n + 1}${i.isDefault ? " (default)" : ""}: ${invoices(i.byReg)} by the seller's registry code, ${i.byDefault} as the default.`);
@@ -1101,6 +1137,8 @@ export function isoltaReport(plan: IsoltaPlan, result: IsoltaResult | null): str
       out.push(
         `  «Последний номер Isolta» is ${i.counterLast == null ? "not set" : last}, the highest imported number is ${i.maxNumber}: they DISAGREE. The import does not change it; ${last < i.maxNumber ? `set it to ${i.maxNumber} in «Счета» → «Настройки», or our next number repeats an Isolta one` : "our series is past Isolta's already"}.`,
       );
+    if (i.maxNumber != null && !i.plain)
+      out.push(`  Our next number prints as «${i.nextText}», Isolta's are bare numbers: for the same series, clear the prefix, set 0 digits and switch «по годам» off in «Счета» → «Настройки».`);
   });
 
   const warnCount = new Map<WarnWhy, string[]>();
@@ -1112,6 +1150,6 @@ export function isoltaReport(plan: IsoltaPlan, result: IsoltaResult | null): str
   if (problems.length) out.push("Not imported:");
   for (const s of problems) out.push(`  Isolta id ${s.ref}, number ${s.number || "none"}: ${SKIP_WORDS[s.why]}${s.why === "bad_finvoice" && s.detail ? ` (${s.detail})` : s.why.startsWith("credit") && s.detail ? ` (original ${s.detail})` : ""}`);
 
-  if (result) out.push(`Written: ${result.invoices} invoices (${result.credits} credits linked), ${result.lines} lines, ${result.receiversCreated} receivers made${result.raced ? `, ${result.raced} already there from a run at the same time` : ""}.`);
+  if (result) out.push(`Written: ${result.invoices} invoices (${result.credits} credits linked), ${result.lines} lines, ${result.receiversCreated} receivers made, ${result.phonesFilled} phones written on ours${result.raced ? `, ${result.raced} already there from a run at the same time` : ""}.`);
   return out;
 }

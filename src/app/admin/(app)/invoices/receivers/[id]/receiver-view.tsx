@@ -104,6 +104,7 @@ export function ReceiverView({
             <dl className="iv-read">
               {read(A.inv.staff, receiver.staffName ?? A.inv.noStaff)}
               {read(A.inv.email, receiver.email)}
+              {read(A.inv.phone, receiver.phone)}
               {read(A.inv.locale, LOCALE[receiver.locale] ?? receiver.locale)}
             </dl>
           </section>

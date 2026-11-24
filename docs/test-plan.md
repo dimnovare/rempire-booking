@@ -191,7 +191,9 @@ On a computer (Chrome, Safari, Edge, Firefox) and on Renat's phone.
 - [ ] **Login**: password, e-mail code, Google; wrong password; log out;
       log out another device.
 - [ ] **Журнал**: day and week; every barber's column; new visit (known
-      client, new client); drag to move, drag to lengthen; edit services;
+      client, new client); drag to move (a visit's length follows its
+      services: Altegio's drag to lengthen is left out,
+      `docs/reference-looks.md`); edit services;
       statuses «Пришёл», «Ожидание», «Подтвердил», «Не пришёл» (the
       no-show letter); cancel; blocks; special time; the month in the
       sidebar; selling a product from the visit.
@@ -264,8 +266,11 @@ it; the client's own opt-out stops it.
 
 - [ ] The cron runs every 5 minutes (Vercel Pro; Hobby allows one a day).
       «Сообщения» shows each run's rows.
-- [ ] A visit booked 1 h ahead gets no 2-hour reminder; one booked 3 h
-      ahead gets it.
+- [ ] A visit booked 1 h ahead gets its 2-hour reminder at once (Dim,
+      decisions round 15, 24.11.2026: the SMS still carries the address
+      and the change link); one booked 3 h ahead gets it 2 h before; one
+      under 15 minutes ahead gets none (`tests/outbox.test.ts`, «does not
+      plan too far ahead or too close to the visit»).
 - [ ] A visit moved after its reminder was planned gets the reminder for
       the new time only.
 - [ ] A cancelled visit gets no reminder.

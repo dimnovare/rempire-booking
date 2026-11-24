@@ -6,13 +6,14 @@
  * window. What a receiver is and what is checked: src/lib/billing/parties.ts.
  */
 import { useState } from "react";
+import { cleanPhone } from "@/lib/admin/location-form";
 import type { Receiver } from "@/lib/billing/parties";
 import { useA } from "../../../lang";
 import { saveReceiverAction } from "../actions";
 import { Dialog, Field } from "../ui";
 
 export type Opt = { id: string; name: string };
-type Draft = { staffId: string; issuerId: string; kind: string; legalName: string; regCode: string; vatNumber: string; address: string; email: string; vatMode: string; termsDays: string; locale: string; active: boolean };
+type Draft = { staffId: string; issuerId: string; kind: string; legalName: string; regCode: string; vatNumber: string; address: string; email: string; phone: string; vatMode: string; termsDays: string; locale: string; active: boolean };
 
 const draftOf = (r?: Receiver | null, staffId = ""): Draft => ({
   staffId: r ? (r.staffId ?? "") : staffId,
@@ -23,8 +24,9 @@ const draftOf = (r?: Receiver | null, staffId = ""): Draft => ({
   vatNumber: r?.vatNumber ?? "",
   address: r?.address ?? "",
   email: r?.email ?? "",
+  phone: r?.phone ?? "",
   vatMode: r?.vatMode ?? "vat",
-  termsDays: String(r?.termsDays ?? 7),
+  termsDays: String(r?.termsDays ?? 14), // Isolta's default term
   locale: r?.locale ?? "et",
   active: r?.active ?? true,
 });
@@ -33,6 +35,8 @@ function wrong(A: ReturnType<typeof useA>, d: Draft): string | null {
   if (!d.legalName.trim()) return A.inv.bad("legalName");
   if (d.kind !== "person" && !/^\d{6,12}$/.test(d.regCode.trim())) return A.inv.bad("regCode");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email.trim())) return A.inv.bad("email");
+  // as the salon's own numbers are checked: a plausible number, +372 when typed without a code
+  if (cleanPhone(d.phone) === null) return A.inv.bad("phone");
   const t = Number(d.termsDays);
   if (!Number.isInteger(t) || t < 0 || t > 120) return A.inv.bad("termsDays");
   return null;
@@ -61,6 +65,7 @@ export function ReceiverDialog({ receiver, defaultStaff = "", staff, issuers, on
         vatNumber: d.vatNumber,
         address: d.address,
         email: d.email,
+        phone: d.phone,
         vatMode: d.vatMode,
         termsDays: Number(d.termsDays),
         locale: d.locale,
@@ -114,6 +119,10 @@ export function ReceiverDialog({ receiver, defaultStaff = "", staff, issuers, on
           </Field>
           <Field label={A.inv.email} className="is-all">
             <input type="email" required maxLength={254} value={d.email} onChange={(e) => set("email", e.target.value)} />
+          </Field>
+          {/* Isolta's contact has «Номер телефона» (migration 044); not printed on the invoice */}
+          <Field label={A.inv.phone} className="is-all">
+            <input type="tel" inputMode="tel" autoComplete="off" maxLength={40} placeholder="+372…" value={d.phone} onChange={(e) => set("phone", e.target.value)} />
           </Field>
           <Field label={A.inv.vatMode}>
             <select value={d.vatMode} onChange={(e) => set("vatMode", e.target.value)}>

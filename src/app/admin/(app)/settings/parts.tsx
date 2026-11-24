@@ -13,9 +13,10 @@ import { useA } from "../../lang";
 import { SaveState, type AutoSave } from "../autosave";
 import { Titled } from "../star";
 
-export type LocPage = "brand" | "contacts" | "gallery";
+/** «Онлайн-запись» (online/) wears the same head and bar, with its own words for the link. */
+export type LocPage = "brand" | "contacts" | "gallery" | "online";
 
-export function LocHead({ page, view }: { page: LocPage; view: string }) {
+export function LocHead({ page, view, viewText, viewHint }: { page: LocPage; view: string; viewText?: string; viewHint?: string }) {
   const A = useA();
   return (
     <div className="adm-page-head loc-top">
@@ -26,8 +27,8 @@ export function LocHead({ page, view }: { page: LocPage; view: string }) {
         <p className="cb-crumb only-wide">{A.loc.crumb}</p>
       </div>
       {/* the booking site in the admin's language: what a client sees once a change is saved */}
-      <a className="adm-btn adm-btn-line adm-btn-sm loc-view" href={view} target="_blank" rel="noreferrer" title={A.loc.viewHint}>
-        {A.loc.view}
+      <a className="adm-btn adm-btn-line adm-btn-sm loc-view" href={view} target="_blank" rel="noreferrer" title={viewHint ?? A.loc.viewHint}>
+        {viewText ?? A.loc.view}
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
           <path d="M14 4h6v6M20 4l-9 9M18 14v6H4V6h6" />
         </svg>

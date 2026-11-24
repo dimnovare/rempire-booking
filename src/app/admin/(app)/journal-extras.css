@@ -1,6 +1,7 @@
 /* The journal's extras (journal-grid.tsx, journal-card.tsx, journal-hours.tsx), measured on the boards
    Journal-Hover, Journal-Head and Journal-DayOff: the bar «Новый сеанс» under the mouse, a visit's card on
-   hover, the menu behind a barber's head, a day nobody works and «Добавить сотрудника в расписание». The
+   hover, the menu behind a barber's head, a day nobody works, «Добавить сотрудника в расписание» and the
+   head menu's windows («Добавить / Убрать рабочие дни», «Изменить время для онлайн-записи»). The
    grid's own rules are admin.css («calendar» and «the journal from 900px»). */
 
 /* «12:00 Новый сеанс»: one line of the scale (15px from 900px), green, under the mouse */
@@ -17,6 +18,7 @@
 .jr-card-who { min-width: 0; }
 .jr-card-who h3 { margin: 0; font: 600 15px/20px var(--body); overflow-wrap: anywhere; }
 .jr-card-phone { margin: 2px 0 0; display: flex; align-items: center; gap: 4px; color: #71757f; font: 400 12px/16px var(--body); font-variant-numeric: tabular-nums; }
+.jr-card-mail { margin: 2px 0 0; color: #71757f; font: 400 12px/16px var(--body); overflow-wrap: anywhere; }
 .jr-card-copy { flex: none; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: #71757f; }
 .jr-card-copy:hover { background: #eaeef4; color: #2b3134; }
 .jr-card-when { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
@@ -67,6 +69,8 @@
 .jr-head-top { display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px; padding: 8px 10px 10px; border-bottom: 1px solid #eef1f6; }
 .jr-head-top b { font: 600 13px/16px var(--body); }
 .jr-head-top small { color: #71757f; font: 400 12px/16px var(--body); font-variant-numeric: tabular-nums; }
+/* his online hours, when they are not all his hours: in the violet of an online visit */
+.jr-head-online { color: #765c88; font: 400 12px/16px var(--body); font-variant-numeric: tabular-nums; }
 .jr-head-item { width: 100%; height: 36px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 8px; color: #2b3134; font: 500 13px/16px var(--body); text-align: left; text-decoration: none; white-space: nowrap; }
 .jr-head-item svg { flex: none; color: #71757f; }
 .jr-head-item:hover { background: #f7f9fc; }
@@ -115,3 +119,25 @@
 .jr-dlg-list small { color: #71757f; font: 400 12px/16px var(--body); }
 .jr-dlg-x { width: 24px; height: 24px; display: grid; place-items: center; border-radius: 6px; color: #71757f; font: 400 16px/1 var(--body); }
 .jr-dlg-x:hover { background: #eaeef4; color: #2b3134; }
+/* the × in the corner, as the window we follow has it; the title leaves it room */
+.jr-dlg h2 { padding-right: 28px; }
+.jr-dlg-close { position: absolute; top: 18px; right: 16px; }
+.jr-dlg-hint { margin: -4px 0 0; color: #71757f; font: 400 12px/16px var(--body); }
+.jr-dlg-note { margin: 0; padding: 8px 10px; border-radius: 8px; background: #f7f9fc; color: #2b3134; font: 400 12px/16px var(--body); }
+.jr-dlg-count { margin: 0; color: #71757f; font: 400 12px/16px var(--body); font-variant-numeric: tabular-nums; }
+/* «Сотрудники»: one select, his photo beside it once he is picked */
+.jr-dlg-who { display: flex; align-items: center; gap: 8px; }
+:where(.adm) .jr-sel { flex: 1; min-width: 0; height: 32px; min-height: 32px; padding: 0 8px; border: 1px solid #e0e3eb; border-radius: 8px; background: #fff; color: #2b3134; font: 400 13px/16px var(--body); }
+@media (max-width: 899.98px) { :where(.adm) .jr-sel { height: 44px; min-height: 44px; } }
+
+/* «Добавить рабочие дни» / «Убрать рабочие дни»: a small month, Monday first, a picked day yellow */
+.jr-month { padding: 8px; border: 1px solid #e0e3eb; border-radius: 8px; }
+.jr-month-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.jr-month-head b { font: 500 13px/16px var(--body); }
+.jr-month-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.jr-month-wd { padding: 4px 0; color: #9aa3b1; font: 500 11px/14px var(--body); text-align: center; }
+.jr-month-day { height: 32px; border-radius: 6px; color: #2b3134; font: 500 12px/16px var(--body); font-variant-numeric: tabular-nums; }
+.jr-month-day:hover { background: #eaeef4; }
+.jr-month-day[aria-current="date"] { box-shadow: inset 0 0 0 1px #c6cbd3; }
+.jr-month-day[aria-pressed="true"], .jr-month-day[aria-pressed="true"]:hover { background: #ffcb00; }
+@media (max-width: 899.98px) { .jr-month-day { height: 40px; } }

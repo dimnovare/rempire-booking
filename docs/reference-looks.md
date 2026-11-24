@@ -375,19 +375,26 @@ gets it → send.
    - **«Настройки»** (it was the tab «Компания»): the company, the bank
      account, the number series, the VAT rate and the foot text, the money
      switches, as Isolta's cards.
-   - **Ours, not theirs:** a draft has no number, so its title is «Новый
-     счёт» and the table says «при отправке»; the lines have no drag
-     handle (they are not reordered) and their discount is a sum, not a
-     per cent (it is the barber's 17 %); «№ товара» is the sold product's
-     barcode, on a sale's line only; the note is one text, printed under
-     the totals, so «Заметка к счёту» and the field after the lines are
-     the same thing.
+   - **As Isolta, since 24.11.2026** (Dim, decisions round 15): a draft's
+     title is the number it would get if issued now («Счёт 423», with «не
+     закреплён: номер даётся при отправке»; the number is taken only at
+     issue); the reference number («Viitenumber») is the invoice number
+     plus its 7-3-1 check digit, on the PDF next to the IBAN, the invoice
+     page, the list, the export and the barber's money page
+     (`src/lib/billing/reference.ts`; computed, never stored); the note
+     is internal, «Заметка (не будет видна на счёте)», never printed; an
+     invoice is not issued while the company has no IBAN or address
+     (`no_bank`, `no_address`); each receiver has a phone (044); «Отправить
+     снова» goes to the receiver's current e-mail.
+   - **Ours, not theirs:** the lines have no drag handle (they are not
+     reordered) and their discount is a sum, not a per cent (it is the
+     barber's 17 %); «№ товара» is the sold product's barcode, on a sale's
+     line only; the note holds 300 characters (Isolta's 4000).
    - **Not built:** reminders and part payments; attachments; saved
-     products and contact groups (decided against, 19.11.2026); Isolta's
-     reference number for payments, our and your reference, the six
-     detail rows and the description before the lines (none is stored);
-     another currency; a logo or an e-mail text of one's own in
-     «Настройки»; a receiver's note.
+     products and contact groups (decided against, 19.11.2026); our and
+     your reference, the six detail rows and the description before the
+     lines (none is stored); another currency; a logo or an e-mail text of
+     one's own in «Настройки»; a receiver's note.
 3. **«Клиенты»: built 19.11.2026** (`src/app/admin/(app)/clients/`,
    `src/lib/admin/clients.ts`, the «Клиенты» block of `admin.css`; Dim's
    choice in decisions round 8).

@@ -70,7 +70,7 @@ test.describe("«Услуги»", () => {
       await expect(row(page, BUZZ).locator(".sv-c-time")).toHaveText(A.mins(45));
       await expect(row(page, BUZZ).locator(".sv-price")).toHaveText(eur(3500));
       // five barbers cut: four tiles and «+1»; the fathers and sons are Valentin's alone
-      await expect(row(page, CLIP).locator(".sv-tile")).toHaveText(["R", "V", "J", "S", "+1"]);
+      await expect(row(page, CLIP).locator(".sv-tile")).toHaveText(["J", "S", "R", "V", "+1"]);
       await expect(row(page, FS).locator(".sv-tile")).toHaveText(["V"]);
       await expectNoSideScroll(page);
       await shot(page, "table");
@@ -189,7 +189,7 @@ test.describe("«Услуги»", () => {
       await w.getByRole("button", { name: A.save, exact: true }).click();
       await expect(w).toHaveCount(0);
       await expect(row(page, CUTBEARD).locator(".sv-price")).toHaveText(S.from(eur(6000)));
-      await expect(row(page, CUTBEARD).locator(".sv-tile")).toHaveText(["R", "V", "J", "M"]);
+      await expect(row(page, CUTBEARD).locator(".sv-tile")).toHaveText(["J", "R", "V", "M"]);
 
       // and back as it was
       await row(page, CUTBEARD).getByRole("button", { name: S.open(CUTBEARD) }).click();
@@ -201,7 +201,7 @@ test.describe("«Услуги»", () => {
       await w.getByRole("button", { name: A.save, exact: true }).click();
       await expect(w).toHaveCount(0);
       await expect(row(page, CUTBEARD).locator(".sv-price")).toHaveText(eur(6000));
-      await expect(row(page, CUTBEARD).locator(".sv-tile")).toHaveText(["R", "V", "J", "S", "+1"]);
+      await expect(row(page, CUTBEARD).locator(".sv-tile")).toHaveText(["J", "S", "R", "V", "+1"]);
     });
 
     test("«Добавить услугу» opens a new one; «?open=» opens a service; the round «›» closes it", async ({ page }) => {

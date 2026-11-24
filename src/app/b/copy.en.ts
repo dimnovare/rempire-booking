@@ -422,6 +422,7 @@ export const en: Copy = {
     credit: "credit note",
     due: (d: string) => `due ${d}`,
     pdf: "PDF",
+    reference: (r: string) => `reference no. ${r}`,
     sales: "Sales",
     noSales: "No sales this month.",
     mode: { client: "to a client", self: "for me" } as Record<string, string>,

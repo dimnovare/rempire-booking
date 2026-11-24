@@ -5,7 +5,10 @@
  * to change, drop or add (a line's name is picked from the shop's products
  * and the salon's services, or typed), «Заметка к счёту», and «Посмотреть
  * и отправить счёт», which shows the draft's PDF before the number is
- * given. An issued one is read only (sent-view.tsx): the status banner with
+ * given. Its head is the number it would get now, as Isolta's draft
+ * («Счёт 423»; not reserved), with the reference that number makes, and a
+ * warning while the company has no IBAN or address (it cannot be issued
+ * then). An issued one is read only (sent-view.tsx): the status banner with
  * its events, «Платежи», «Создать кредит-счёт» and «Инструменты».
  */
 import { notFound } from "next/navigation";
@@ -13,9 +16,10 @@ import { Suspense } from "react";
 import { requireAdmin } from "@/lib/auth/current";
 import { invoiceEvents } from "@/lib/billing/events";
 import { sectionRows } from "@/lib/billing/export";
-import { invoiceById, invoiceLines } from "@/lib/billing/invoices";
+import { invoiceById, invoiceLines, issueBlock, upcomingNumber } from "@/lib/billing/invoices";
 import { DEFAULT_SORT, listStatus, sortRows } from "@/lib/billing/list";
 import { issuerById, listReceivers, receiverById } from "@/lib/billing/parties";
+import { referenceNumber } from "@/lib/billing/reference";
 import { dbConfigured, query } from "@/lib/db";
 import { Title, Wait } from "../../../lang";
 import { getA } from "../../../lang-server";
@@ -61,6 +65,8 @@ async function Loaded({ params }: { params: PageProps<"/admin/invoices/[id]">["p
   const order = sortRows(list.rows, DEFAULT_SORT, list.today);
   const at = order.findIndex((r) => r.id === inv.id);
   const termsDays = draft ? (receiver?.termsDays ?? null) : inv.kind === "invoice" && inv.issuedOn && inv.dueOn ? daysBetween(inv.issuedOn, inv.dueOn) : null;
+  // a draft's head shows the number it would get now (Isolta's «Инвойс 423»), taken from nothing
+  const upcoming = draft && issuer ? await upcomingNumber(query, issuer, Number(list.today.slice(0, 4))) : null;
 
   const view: ViewInvoice = {
     id: inv.id,
@@ -68,6 +74,9 @@ async function Loaded({ params }: { params: PageProps<"/admin/invoices/[id]">["p
     kind: inv.kind,
     free: inv.free,
     number: inv.number,
+    reference: referenceNumber(inv.number ?? upcoming),
+    upcoming,
+    blocked: draft && issuer ? issueBlock(issuer) : null,
     month: inv.periodFrom.slice(0, 7),
     from: inv.seller?.name ?? issuer?.legalName ?? "",
     fromAddress: inv.seller?.address ?? issuer?.address ?? "",

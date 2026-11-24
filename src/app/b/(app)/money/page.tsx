@@ -1,13 +1,15 @@
 /**
  * /b/money?m=2026-11 «Мои расчёты» (Phase C, C4): the barber's own month.
  * What he sold and took for himself, his 17 %, the rent, and REMPIRE's
- * invoices to him with their PDFs. He sees only his own (requireStaff).
+ * invoices to him with their PDFs and the reference number to pay each
+ * with. He sees only his own (requireStaff).
  * Without `m` it is this month, still running.
  */
 import Link from "next/link";
 import { Suspense } from "react";
 import { requireStaff } from "@/lib/auth/current";
 import { monthMoments } from "@/lib/billing/invoices";
+import { referenceNumber } from "@/lib/billing/reference";
 import { monthStatement } from "@/lib/billing/statement";
 import { dbConfigured, query } from "@/lib/db";
 import { bpText, euroText } from "@/lib/money";
@@ -117,6 +119,8 @@ async function Money({ searchParams }: { searchParams: PageProps<"/b/money">["se
                   <small>
                     {dmy(i.periodFrom)}–{dmy(i.periodTo)} · {M.status[i.status] ?? i.status}
                     {i.status === "issued" && i.kind === "invoice" && i.dueOn ? ` · ${M.due(dmy(i.dueOn))}` : ""}
+                    {/* what he types in the bank's «viitenumber» field, as printed beside REMPIRE's IBAN */}
+                    {i.kind === "invoice" && referenceNumber(i.number) ? ` · ${M.reference(referenceNumber(i.number))}` : ""}
                   </small>
                 </span>
                 <span className="end">{euroText(i.grossCents)}</span>

@@ -422,6 +422,7 @@ export const et: Copy = {
     credit: "kreeditarve",
     due: (d: string) => `tasuda ${d}`,
     pdf: "PDF",
+    reference: (r: string) => `viitenumber ${r}`,
     sales: "Müük",
     noSales: "Sel kuul müüki pole.",
     mode: { client: "kliendile", self: "endale" } as Record<string, string>,

@@ -13,7 +13,9 @@
  *     barber's special-time windows, never across the edge of the two;
  *   - the chair time [start, start + duration + buffer) touches no other
  *     visit and no time off;
- *   - nothing starts before `notBefore` (now + minimum notice).
+ *   - nothing starts before `notBefore` (now + minimum notice);
+ *   - when the day has online hours («Изменить время для онлайн-записи»,
+ *     StaffDay.online), the visit also lies inside one of them.
  * Special time (Renat, 17.11.2026) is the barber's own, higher-priced time.
  * Inside his hours it replaces the normal price; outside them it adds
  * bookable time. Where two special windows overlap, the earlier one wins.
@@ -86,6 +88,13 @@ export type StaffDay = {
   bufferMin: number;
   bookings: number; // visits already that day, for «anyone»
   sort: number;
+  /**
+   * The hours clients may book him online that day («Изменить время для
+   * онлайн-записи», 043): a visit starts and ends inside one of them.
+   * Missing or null: all of his time, the usual. Only the client's
+   * booking sets it (availability.ts); [] would leave him nothing.
+   */
+  online?: Interval[] | null;
 };
 
 export type HoursRow = { weekday: number; starts: string; ends: string; valid_from: string | null; valid_to: string | null };
@@ -167,6 +176,24 @@ export function pricedWindows(windows: Interval[], special: Special[] = []): Pri
   return out;
 }
 
+/**
+ * The priced windows cut to the hours clients may book online (StaffDay.online):
+ * each window keeps only its overlap with those hours, at its own price, so a
+ * visit fits inside both. Touching online spans are one. Null: nothing is cut.
+ */
+export function onlyOnline(windows: PricedWindow[], online: Interval[] | null | undefined): PricedWindow[] {
+  if (!online) return windows;
+  const spans = mergeIntervals(online.map(([a, b]) => [a, b] as Interval));
+  const out: PricedWindow[] = [];
+  for (const w of windows)
+    for (const [a, b] of spans) {
+      const from = Math.max(w.from, a);
+      const to = Math.min(w.to, b);
+      if (to > from) out.push({ ...w, from, to });
+    }
+  return out;
+}
+
 const overlaps = (a: Interval, b: Interval) => a[0] < b[1] && b[0] < a[1];
 
 /** A free start and its special-time extra in money, for this barber's price for the chosen services. */
@@ -189,9 +216,12 @@ export type PricedStart = { start: number; extraCents: number };
  */
 export function freeStartsPriced(day: StaffDay, opts: { tz: string; stepMin: number; notBefore: number }): PricedStart[] {
   const { stepMin, notBefore } = opts;
-  const windows = pricedWindows(day.windows, day.special);
+  const priced = pricedWindows(day.windows, day.special);
+  // the client's booking: only inside his online hours, if they are set for the day
+  const windows = onlyOnline(priced, day.online);
   if (day.durationMin <= 0 || stepMin <= 0 || !windows.length) return [];
-  const origin = mergeIntervals(day.windows)[0]?.[0] ?? windows[0].from;
+  // (the grid still counts from the start of his day, not of his online hours)
+  const origin = mergeIntervals(day.windows)[0]?.[0] ?? priced[0].from;
   const step = stepMin * MIN;
   const dur = day.durationMin * MIN;
   const chair = (day.durationMin + day.bufferMin) * MIN;

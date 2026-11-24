@@ -1,0 +1,22 @@
+-- 042_staff_schedule_until.sql: each barber's «График до», Altegio's
+-- schedule_till (Dim, decisions round 15: copy it before the switch).
+--
+-- Altegio offers a barber online only up to the last day his schedule is
+-- set (on 24.11.2026 Renat to 19.12, the others to 30.12); we offered the
+-- whole horizon (60 days) wherever weekly hours exist. Now:
+--
+--   schedule_until  the last local day the booking page offers him: no day
+--                   and no time after it, for him or under «Любой», and
+--                   the booking itself and the client's own move refuse a
+--                   start after it (src/lib/availability.ts). Null: no
+--                   limit of his own, only the salon's horizon, as before.
+--
+-- The admin's journal and the barber app are not limited by it: the staff
+-- still book later days. It is set in the barber's profile («График до»),
+-- and «График работы» moves it to a template's last day when that is later
+-- (src/lib/admin/schedule.ts, fillTemplate). Every barber starts with
+-- none, so nothing changes until it is set.
+--
+-- Never edit this file once it has run anywhere; add a new one.
+
+alter table staff add column schedule_until date;

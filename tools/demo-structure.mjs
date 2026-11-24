@@ -77,8 +77,10 @@ const ET = {
   fs: "Isa ja poeg",
 };
 // Photos: the portraits from rempire.ee/en/barbershop, 480 x 640, grey
-// (public/barbers/, 17.11.2026). The order is the demo's own.
-const NAMES = ["Renat", "Valentin", "Jevgeni", "Slava", "Milena"];
+// (public/barbers/, 17.11.2026). The order is Altegio's, as its widget and
+// journal show them (Dim, decisions round 15, 24.11.2026); it was Renat,
+// Valentin, Jevgeni, Slava, Milena before (tools/seed-demo.mjs, OLD_SORT).
+const NAMES = ["Jevgeni", "Slava", "Renat", "Valentin", "Milena"];
 
 export const DEMO = {
   /** Which structure this is; a new one is written over the old once (seedDemo). */

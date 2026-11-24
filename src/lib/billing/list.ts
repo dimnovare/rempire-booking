@@ -25,6 +25,8 @@ export type ListRow = {
   /** the barber and the month it bills: searched, and a phone's second line */
   sub: string;
   number: string;
+  /** the reference for the payment, from the number (src/lib/billing/reference.ts); "" for a draft, as Isolta's list */
+  reference: string;
   /** YYYY-MM-DD; "" for a draft: its date is given when it is issued */
   date: string;
   due: string;
@@ -63,7 +65,7 @@ export const STATUS_FILTERS = ["", "draft", "issued", "overdue", "paid", "credit
 export type StatusFilter = (typeof STATUS_FILTERS)[number];
 export const isStatusFilter = (v: unknown): v is StatusFilter => typeof v === "string" && (STATUS_FILTERS as readonly string[]).includes(v);
 
-export const SORT_KEYS = ["status", "receiver", "number", "date", "due", "net", "gross"] as const;
+export const SORT_KEYS = ["status", "receiver", "number", "reference", "date", "due", "net", "gross"] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
 export type Sort = { key: SortKey; dir: "asc" | "desc" };
 /** As the list opens: the newest date first, drafts on top (they would be dated today). */
@@ -118,7 +120,7 @@ export function filterRows<R extends ListRow>(rows: readonly R[], f: Pick<ListQu
     const day = dayOf(r, today);
     if (f.from && day < f.from) return false;
     if (f.to && day > f.to) return false;
-    return !needle || fold(r.receiver).includes(needle) || fold(r.number).includes(needle) || fold(r.sub).includes(needle);
+    return !needle || fold(r.receiver).includes(needle) || fold(r.number).includes(needle) || r.reference.includes(needle) || fold(r.sub).includes(needle);
   });
 }
 
@@ -139,6 +141,9 @@ function compare(a: ListRow, b: ListRow, key: SortKey, today: string): number {
     case "number":
       // a draft has no number yet: it sorts as the newest
       return a.number && b.number ? byNumber.compare(a.number, b.number) : a.number ? -1 : b.number ? 1 : 0;
+    case "reference":
+      // all digits: as numbers, a draft (none yet) as the newest
+      return a.reference && b.reference ? byNumber.compare(a.reference, b.reference) : a.reference ? -1 : b.reference ? 1 : 0;
     case "date":
       return dayOf(a, today) < dayOf(b, today) ? -1 : dayOf(a, today) > dayOf(b, today) ? 1 : 0;
     case "due":

@@ -28,6 +28,16 @@ export { addDays, datedDays, DEMO, DEMO_REVIEWS, demoHours, demoWorkday, weekday
 
 const ROLE = T("Барбер", "Barber", "Barber");
 
+/** The demo's first order of the barbers (17.11 to 24.11.2026), before Altegio's (DEMO.staff). */
+const OLD_SORT = { renat: 0, valentin: 1, jevgeni: 2, slava: 3, milena: 4 };
+
+/**
+ * The barbers in that first order. The demo visits are seeded in it, so
+ * each barber keeps his «Demo client» numbers (Renat's 1–5 today and 26–30
+ * on his next working day), which the tests and the e-2-e know.
+ */
+const inFirstOrder = () => [...DEMO.staff].sort((a, b) => (OLD_SORT[a.slug] ?? 99) - (OLD_SORT[b.slug] ?? 99));
+
 /**
  * Fixed ids, derived from the slugs. Each serverless instance of the
  * in-memory demo database (DB_DRIVER=auto, no DATABASE_URL) seeds itself,
@@ -125,6 +135,10 @@ export async function seedDemo(db) {
     const staffId = inserted?.id ?? (await one("select id from staff where business_id = $1 and slug = $2", [biz.id, st.slug])).id;
     // a barber seeded before the photos existed gets one; a photo set since is kept
     if (!inserted) await db.query("update staff set photo_url = $2 where id = $1 and photo_url is null", [staffId, photo]);
+    // a barber still at his place in the demo's first order moves to
+    // Altegio's (round 15); one Renat has since moved stays where he is
+    const was = OLD_SORT[st.slug];
+    if (!inserted && was !== undefined && was !== i) await db.query("update staff set sort = $2 where id = $1 and sort = $3", [staffId, i, was]);
     // his lines, hours and dated shifts as the file has them, for a new barber
     // or a new structure; otherwise only a line that is missing is added
     const whole = renew || !!inserted;
@@ -400,7 +414,7 @@ export async function seedDemoVisits(db, now = Date.now()) {
   for (const st of DEMO.staff) lines[st.slug] = await demoLines(db, demoId("staff", st.slug));
   let k = 0;
   for (let i = 0; i < 2; i++) {
-    for (const st of DEMO.staff) {
+    for (const st of inFirstOrder()) {
       // today whatever the day is, then the next day he works
       const date = i === 0 ? today : demoWorkday(st.slug, addDays(today, 1));
       const staffId = demoId("staff", st.slug);
@@ -463,7 +477,7 @@ export async function seedDemoVisits(db, now = Date.now()) {
   const STEP = 5 * 60_000;
   const target = now + 20 * 60_000;
   let j = 2 * DEMO.staff.length * DEMO_VISITS.length;
-  for (const st of DEMO.staff) {
+  for (const st of inFirstOrder()) {
     const k = ++j;
     const staffId = demoId("staff", st.slug);
     const [line] = [...lines[st.slug]].sort((a, b) => a.dur - b.dur);
@@ -547,7 +561,7 @@ export async function seedDemoLogins(db) {
   };
   await add("owner@example.test", "Owner (demo)", "owner", null);
   // an owner who cuts too, as Renat does: his login is linked to his barber (docs/apps.md)
-  await add("boss@example.test", "Owner and barber (demo)", "owner", demoId("staff", DEMO.staff[0].slug));
+  await add("boss@example.test", "Owner and barber (demo)", "owner", demoId("staff", "renat"));
   for (const st of DEMO.staff) await add(`${st.slug}@example.test`, st.name, "staff", demoId("staff", st.slug));
   return added;
 }

@@ -28,6 +28,8 @@ export function offFor(user: Holder): string[] {
     ...(user.role === "owner" ? [] : ["changes"]),
     // «Настройки → Локация»: its three pages with «Доступ к настройкам локации»; with none left the group is not drawn
     ...(can(user, "settings.location") ? [] : ["brand", "contacts", "gallery"]),
+    // «Настройки → Онлайн-запись» with the switch of the group «Онлайн-запись» (src/lib/admin/online-settings.ts)
+    ...(canGroup(user, "online") ? [] : ["online"]),
     // «Уведомления» with «Доступ к разделу Типы уведомлений»
     ...(can(user, "notify.types") ? [] : ["notifications"]),
     ...(can(user, "visit.sell") && can(user, "visit.sell.create") ? [] : ["sale"]),
@@ -81,7 +83,7 @@ export function litTab(path: string, bar: readonly BarKey[]): BarKey | null {
 
 export type MineRow = "time" | "sell" | "money";
 export type SalonRow = "staff" | "schedule" | "services" | "catalogue" | "analytics" | "records" | "reviews" | "visits" | "messages" | "changes" | "requests" | "invoices" | "notifications" | "sale";
-export type SettingsRow = "brand" | "contacts" | "gallery";
+export type SettingsRow = "brand" | "contacts" | "gallery" | "online";
 export type AccountRow = "account" | "notify" | "language" | "logout";
 export type MoreRows = { mine: MineRow[]; salon: SalonRow[]; settings: SettingsRow[]; account: AccountRow[] };
 
@@ -99,7 +101,8 @@ const TAB_ROW: Partial<Record<BarKey, SalonRow>> = { reports: "analytics", invoi
  *     «Уведомления»: Dim, round 13, as the admin we follow), and «Продажа
  *     товара»;
  *   - «Настройки»: the salon's page on the booking site, «Бренд»,
- *     «Контакты», «Галерея», with the right to change it;
+ *     «Контакты», «Галерея», with the right to change it; and
+ *     «Онлайн-запись», with the switch of its group;
  *   - «Аккаунт»: the logins and rights, his own «Уведомления» (this
  *     device's pushes; the same name, as in the admin we follow), the
  *     language, the way out.
@@ -110,6 +113,6 @@ export function moreOf(user: Holder): MoreRows {
   const mine: MineRow[] = appKind(user) === "own" ? ["time", ...(can(user, "visit.sell") ? (["sell"] as const) : []), "money"] : [];
   const tabs = bar.map((k) => TAB_ROW[k]);
   const salon = SALON.filter((k) => !off.includes(k) && !tabs.includes(k));
-  const settings = (["brand", "contacts", "gallery"] as const).filter((k) => !off.includes(k));
+  const settings = (["brand", "contacts", "gallery", "online"] as const).filter((k) => !off.includes(k));
   return { mine, salon, settings, account: ["account", "notify", "language", "logout"] };
 }

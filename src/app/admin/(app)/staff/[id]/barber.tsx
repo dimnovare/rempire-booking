@@ -75,7 +75,11 @@ export function BarberPage({
   const firstSp = d.special[0];
 
   const rows: { k: Part; title: string; value: string }[] = [
-    { k: "profile", title: A.staff.profile, value: [A.pick(d.role) || "—", d.active ? A.staff.active : A.staff.off].join(" · ") },
+    {
+      k: "profile",
+      title: A.staff.profile,
+      value: [A.pick(d.role) || "—", d.active ? A.staff.active : A.staff.off, ...(d.scheduleUntil ? [`${A.staffTable.untilField} ${dOnly(A, d.scheduleUntil)}`] : [])].join(" · "),
+    },
     { k: "offers", title: A.staff.offersRow, value: offered.length ? `${A.staff.servicesN(offered.length)} · ${lo === hi ? eur(lo) : `${eur(lo).replace(" €", "")}–${eur(hi)}`}` : A.staff.none },
     { k: "hours", title: A.staff.hours, value: weekText(A, d.hours) },
     { k: "days", title: A.staff.overrides, value: firstDay ? `${dOnly(A, firstDay.date)}: ${spansText(A, firstDay.spans)}${more(A, d.overrides.length)}` : A.staff.none },
@@ -91,7 +95,11 @@ export function BarberPage({
   const form = (k: Part) => {
     if (k === "profile")
       return (
-        <ProfileForm id={d.id} onDone={done} initial={{ name: d.name, role: { ru: d.role.ru ?? "", et: d.role.et ?? "", en: d.role.en ?? "" }, photoUrl: d.photoUrl ?? "", bookable: d.bookable, active: d.active }} />
+        <ProfileForm
+          id={d.id}
+          onDone={done}
+          initial={{ name: d.name, role: { ru: d.role.ru ?? "", et: d.role.et ?? "", en: d.role.en ?? "" }, photoUrl: d.photoUrl ?? "", bookable: d.bookable, active: d.active, scheduleUntil: d.scheduleUntil ?? "" }}
+        />
       );
     if (k === "offers") return <OffersList offers={d.offers} link={services} />;
     if (k === "hours") return <HoursForm staffId={d.id} hours={d.hours} onDone={done} />;

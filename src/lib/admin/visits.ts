@@ -441,7 +441,9 @@ export async function adminUpdateVisit(business: Business, id: string, patch: Vi
           appointmentId: id,
           staffIds: [cur.staff_id, staffId],
           kind: "visit_moved",
-          owners: scope.onlyStaffId ? { kind: "own_barber", action: "moved" } : null,
+          // Renat hears of a barber's own move, and of a client's (online,
+          // src/lib/client-move.ts), as «Уведомления» says
+          owners: scope.onlyStaffId ? { kind: "own_barber", action: "moved" } : actor === "client" ? { kind: "own_client", action: "moved" } : null,
           actor,
           extra: { fromStart: new Date(cur.starts_at).toISOString() },
           now,

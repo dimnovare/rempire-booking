@@ -15,6 +15,7 @@ import { todayIn } from "../tz";
 import { writeXlsx, type XCell } from "../xlsx";
 import { listInvoices, monthRange, type Invoice } from "./invoices";
 import { filterRows, listQueryOf, listStatus, sortRows, type ListRow, type ListStatus } from "./list";
+import { referenceNumber } from "./reference";
 
 const dmy = (iso: string) => (iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}` : "");
 
@@ -34,6 +35,7 @@ export function rowOf(i: Invoice & { receiverKind?: string }, today: string, mon
     person: i.receiverKind === "person",
     sub: [i.staffName, range && month ? month(new Date(`${range.from}T12:00:00Z`)) : ""].filter(Boolean).join(", "),
     number: i.number ?? "",
+    reference: referenceNumber(i.number),
     date: i.issuedOn ?? "",
     due: i.kind === "invoice" ? (i.dueOn ?? "") : "",
     netCents: i.netCents,
@@ -52,7 +54,7 @@ export async function sectionRows(q: Querier, business: Pick<Business, "id" | "t
 
 export type ExportWords = {
   sheet: string;
-  cols: { status: string; receiver: string; number: string; date: string; due: string; net: string; vat: string; gross: string };
+  cols: { status: string; receiver: string; number: string; reference: string; date: string; due: string; net: string; vat: string; gross: string };
   status: Record<ListStatus, string>;
 };
 
@@ -69,9 +71,9 @@ export async function exportInvoices(business: Business, by: { id: string }, raw
   const euros = (cents: number) => cents / 100;
   const bytes = writeXlsx({
     name: words.sheet,
-    header: [C.status, C.receiver, C.number, C.date, C.due, C.net, C.vat, C.gross],
-    rows: rows.map((r): XCell[] => [words.status[r.status], r.receiver, r.number, dmy(r.date), dmy(r.due), euros(r.netCents), euros(r.vatCents), euros(r.grossCents)]),
-    widths: [14, 36, 20, 12, 12, 12, 12, 12],
+    header: [C.status, C.receiver, C.number, C.reference, C.date, C.due, C.net, C.vat, C.gross],
+    rows: rows.map((r): XCell[] => [words.status[r.status], r.receiver, r.number, r.reference, dmy(r.date), dmy(r.due), euros(r.netCents), euros(r.vatCents), euros(r.grossCents)]),
+    widths: [14, 36, 20, 14, 12, 12, 12, 12, 12],
   });
   await withTx(async (tx) => {
     await tx(`insert into audit (actor, entity, action, after) values ($1, 'invoice', 'export', $2::jsonb)`, [by.id, JSON.stringify({ by: "admin", rows: rows.length, status: asked.status || "all", from: asked.from || null, to: asked.to || null })]);

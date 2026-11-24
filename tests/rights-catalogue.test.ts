@@ -94,8 +94,11 @@ describe("the catalogue is the list", () => {
     // reports: «Записи» (3), «Отзывы» (2), «Основные показатели» and «Визиты» with its phones (3), «Сообщения» with its phones (2)
     expect(Object.fromEntries(GROUP_KEYS.map((g) => [g, built(g)]))).toEqual({ journal: 6, visit: 15, finance: 0, goods: 0, staff: 4, services: 8, notify: 3, settings: 7, clients: 16, reports: 10, loyalty: 0, licence: 0, online: 0, single: 1 });
     expect(RIGHTS.filter((r) => r.built).length).toBe(70);
-    // a group's switch does something exactly where a right inside it works
-    for (const g of GROUP_KEYS) expect(GROUPS[g].built, g).toBe(built(g) > 0);
+    // a group's switch does something exactly where a right inside it works; but «Онлайн-запись», whose own switch
+    // is the list's right on the online-booking settings, the door of «Настройки → Онлайн-запись» (round 15)
+    for (const g of GROUP_KEYS) expect(GROUPS[g].built, g).toBe(built(g) > 0 || g === "online");
+    expect(GROUPS.online.built).toBe(true);
+    expect(rightsOf("online").map((r) => [r.key, r.built])).toEqual([["online.personal_data", false]]);
   });
 });
 

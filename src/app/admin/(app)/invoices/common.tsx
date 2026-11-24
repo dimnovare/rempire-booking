@@ -114,7 +114,8 @@ export function eventText(A: Copy, e: BillingEvent): string {
     case "credited":
       return E.credited(n, e.other?.number ?? "");
     case "resend":
-      return E.resend(n);
+      // the address it went to this time: the receiver's current e-mail
+      return E.resend(n, e.email ?? "");
     case "imported":
       return E.imported(n);
     case "receiver_new":

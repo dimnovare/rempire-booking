@@ -6,7 +6,7 @@
  */
 import { randomBytes } from "node:crypto";
 import type { Business } from "./availability";
-import { hashToken } from "./booking";
+import { hashToken, queueChangeLetter } from "./booking";
 import { withTx, type Querier } from "./db";
 import { photoOk, type L10n } from "./catalog";
 import { pushVisitChange } from "./push";
@@ -143,6 +143,10 @@ export async function cancelByClient(business: Business, token: string, now = Da
        values ('client', 'appointment', $1, 'cancel', $2::jsonb, '{"status":"cancelled"}'::jsonb)`,
       [row.id, JSON.stringify({ status: row.status })],
     );
+    // the «cancelled» letter, as when the salon cancels (Dim, round 15,
+    // 24.11.2026: a record in his inbox); only at the address the
+    // confirmation went to, and not when he switched these letters off
+    await queueChangeLetter(tx, business.id, row.id, "cancelled", null, now);
     // Phase B: the barber, and Renat if he wants it, hear of it by push
     await pushVisitChange(tx, { businessId: business.id, appointmentId: row.id, staffIds: [row.staff_id], kind: "visit_cancelled", owners: { kind: "own_client", action: "cancelled" }, actor: null, now });
     return "cancelled";

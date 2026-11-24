@@ -22,7 +22,8 @@ import { useFrame } from "../frame";
 import { dmy, INV_ROOT, SortArrow, StatusTag, ToolIcon } from "./common";
 import { Dialog, downloadPost, Field, IvTop, MenuButton, Period, type PeriodValue } from "./ui";
 
-const COLS: { key: SortKey; num?: boolean }[] = [{ key: "status" }, { key: "receiver" }, { key: "number", num: true }, { key: "date" }, { key: "due" }, { key: "net", num: true }, { key: "gross", num: true }];
+// «Референц-номер» after the number, as Isolta's list has «Референц-номер для оплаты»
+const COLS: { key: SortKey; num?: boolean }[] = [{ key: "status" }, { key: "receiver" }, { key: "number", num: true }, { key: "reference", num: true }, { key: "date" }, { key: "due" }, { key: "net", num: true }, { key: "gross", num: true }];
 
 export function InvoiceList({ rows, today, initial, canNew = true, embedded = false }: { rows: ListRow[]; today: string; initial: ListQuery; canNew?: boolean; embedded?: boolean }) {
   const A = useA();
@@ -110,6 +111,7 @@ export function InvoiceList({ rows, today, initial, canNew = true, embedded = fa
                       </Link>
                     </td>
                     <td className="n">{r.number}</td>
+                    <td className="n">{r.reference}</td>
                     <td>{dmy(r.date)}</td>
                     <td>{dmy(r.due)}</td>
                     <td className="n">{euroText(r.netCents)}</td>

@@ -13,9 +13,10 @@
  * Nothing here is deleted: a receiver or issuer is switched off. Every
  * change leaves an audit row with who made it.
  */
+import { cleanPhone } from "../admin/location-form";
+import { isUuid } from "../admin/visits";
 import type { Business } from "../availability";
 import { withTx, type Querier } from "../db";
-import { isUuid } from "../admin/visits";
 
 export type Issuer = {
   id: string;
@@ -51,6 +52,8 @@ export type Receiver = {
   vatNumber: string;
   address: string;
   email: string;
+  /** as Isolta's contacts have it (044): as typed, with its country code; '' for none. Not printed. */
+  phone: string;
   vatMode: "vat" | "none";
   termsDays: number;
   locale: "ru" | "et" | "en";
@@ -255,6 +258,7 @@ type ReceiverRow = {
   vat_number: string;
   address: string;
   email: string;
+  phone: string;
   vat_mode: "vat" | "none";
   terms_days: number;
   locale: "ru" | "et" | "en";
@@ -272,6 +276,7 @@ const receiverOf = (r: ReceiverRow): Receiver => ({
   vatNumber: r.vat_number,
   address: r.address,
   email: r.email,
+  phone: r.phone ?? "",
   vatMode: r.vat_mode,
   termsDays: r.terms_days,
   locale: r.locale,
@@ -306,6 +311,8 @@ export type ReceiverInput = {
   vatNumber: string;
   address: string;
   email: string;
+  /** checked as the salon's own phones are (cleanPhone); left out, a receiver's phone stays as it is */
+  phone?: string;
   vatMode: string;
   termsDays: number;
   locale: string;
@@ -325,6 +332,8 @@ export async function saveReceiver(business: Business, id: string | null, input:
   const email = s(input.email, 254).toLowerCase();
   // the invoice goes by e-mail (decision 19)
   if (!EMAIL.test(email)) return { ok: false, field: "email" };
+  const phone = input.phone === undefined ? null : cleanPhone(input.phone);
+  if (phone === null && input.phone !== undefined) return { ok: false, field: "phone" };
   const vatMode = input.vatMode === "none" ? "none" : "vat";
   const termsDays = Number(input.termsDays);
   if (!Number.isInteger(termsDays) || termsDays < 0 || termsDays > 120) return { ok: false, field: "termsDays" };
@@ -347,22 +356,23 @@ export async function saveReceiver(business: Business, id: string | null, input:
       const [is] = await tx("select 1 from invoice_issuers where id = $1 and business_id = $2", [issuerId, business.id]);
       if (!is) return { ok: false as const, field: "issuerId" };
     }
-    const params = [business.id, staffId, issuerId, kind, legalName, regCode, vatNumber, s(input.address, 300), email, vatMode, termsDays, locale, active];
+    // $14: the phone, or null to keep the one there is (none for a new receiver)
+    const params = [business.id, staffId, issuerId, kind, legalName, regCode, vatNumber, s(input.address, 300), email, vatMode, termsDays, locale, active, phone];
     let rowId: string;
     if (id) {
       if (!isUuid(id)) return { ok: false as const, field: "id" };
       const [row] = await tx<{ id: string }>(
         `update invoice_receivers set staff_id = $2, issuer_id = $3, kind = $4, legal_name = $5, reg_code = $6, vat_number = $7, address = $8,
-                email = $9, vat_mode = $10, terms_days = $11, locale = $12, active = $13, updated_at = now()
-          where id = $14 and business_id = $1 returning id`,
+                email = $9, vat_mode = $10, terms_days = $11, locale = $12, active = $13, phone = coalesce($14::text, phone), updated_at = now()
+          where id = $15 and business_id = $1 returning id`,
         [...params, id],
       );
       if (!row) return { ok: false as const, field: "id" };
       rowId = row.id;
     } else {
       const [row] = await tx<{ id: string }>(
-        `insert into invoice_receivers (business_id, staff_id, issuer_id, kind, legal_name, reg_code, vat_number, address, email, vat_mode, terms_days, locale, active)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) returning id`,
+        `insert into invoice_receivers (business_id, staff_id, issuer_id, kind, legal_name, reg_code, vat_number, address, email, vat_mode, terms_days, locale, active, phone)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, coalesce($14::text, '')) returning id`,
         params,
       );
       rowId = row.id;

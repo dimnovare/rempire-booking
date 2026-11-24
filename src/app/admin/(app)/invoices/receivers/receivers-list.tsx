@@ -11,9 +11,12 @@ import { Pager } from "../list-view";
 import { Field, IvTop } from "../ui";
 import { ReceiverDialog, type Opt } from "./receiver-dialog";
 
-export type ReceiverRow = { id: string; name: string; contact: string; person: boolean; active: boolean; street: string; postcode: string; town: string; invoices: number };
+export type ReceiverRow = { id: string; name: string; contact: string; phone: string; person: boolean; active: boolean; street: string; postcode: string; town: string; invoices: number };
 
 const has = (text: string, q: string) => text.toLocaleLowerCase().includes(q);
+/** «5123 4567» finds «+372 5123 4567»: the digits only, from three on. */
+const digits = (s: string) => s.replace(/\D/g, "");
+const hasPhone = (phone: string, q: string) => digits(q).length >= 3 && digits(phone).includes(digits(q));
 
 /** «Получатели»: a search, the count, one table sorted by name; a row opens the receiver. */
 export function ReceiversList({ rows, staff, issuers, defaultStaff, without, startNew }: { rows: ReceiverRow[]; staff: (Opt & { active: boolean })[]; issuers: Opt[]; defaultStaff: string; without: string[]; startNew: boolean }) {
@@ -27,7 +30,7 @@ export function ReceiversList({ rows, staff, issuers, defaultStaff, without, sta
   const found = useMemo(() => {
     const needle = q.trim().toLocaleLowerCase();
     const by = new Intl.Collator(["ru", "et", "en"], { sensitivity: "base", numeric: true });
-    return rows.filter((r) => !needle || has(r.name, needle) || has(r.contact, needle) || has(`${r.street} ${r.postcode} ${r.town}`, needle)).sort((a, b) => Number(b.active) - Number(a.active) || by.compare(a.name, b.name));
+    return rows.filter((r) => !needle || has(r.name, needle) || has(r.contact, needle) || has(`${r.street} ${r.postcode} ${r.town}`, needle) || hasPhone(r.phone, needle)).sort((a, b) => Number(b.active) - Number(a.active) || by.compare(a.name, b.name));
   }, [rows, q]);
   const pg = pageOf(found, page, size);
   const open = (id: string) => router.push(`${INV_ROOT}/receivers/${id}`);
@@ -96,7 +99,7 @@ export function ReceiversList({ rows, staff, issuers, defaultStaff, without, sta
                         <Link href={`${INV_ROOT}/receivers/${r.id}`} prefetch={false} onClick={(e) => e.stopPropagation()}>
                           {r.name}
                         </Link>
-                        {(r.contact || !r.active) && <small>{[r.contact, r.active ? "" : A.inv.off].filter(Boolean).join(", ")}</small>}
+                        {(r.contact || r.phone || !r.active) && <small>{[r.contact, r.phone, r.active ? "" : A.inv.off].filter(Boolean).join(", ")}</small>}
                       </td>
                       <td>{r.street}</td>
                       <td>{r.postcode}</td>
@@ -118,7 +121,7 @@ export function ReceiversList({ rows, staff, issuers, defaultStaff, without, sta
                       </span>
                       <span className="txt">
                         <b>{r.name}</b>
-                        <small>{[r.contact, r.street, r.postcode, r.town, r.active ? "" : A.inv.off].filter(Boolean).join(", ")}</small>
+                        <small>{[r.contact, r.phone, r.street, r.postcode, r.town, r.active ? "" : A.inv.off].filter(Boolean).join(", ")}</small>
                       </span>
                       <span className="end">{r.invoices}</span>
                     </Link>

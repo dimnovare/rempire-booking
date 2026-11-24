@@ -6,7 +6,7 @@
  * The grid maths that needs no database (bounds, snapping, the week) is in
  * src/lib/admin/grid.ts, so the browser uses the same rules.
  */
-import { can, historyFrom, maskPhone, seenStaff, type Holder } from "../auth/rights";
+import { can, historyFrom, maskEmail, maskPhone, seenStaff, type Holder } from "../auth/rights";
 import type { Business } from "../availability";
 import type { L10n } from "../catalog";
 import type { Querier } from "../db";
@@ -50,6 +50,8 @@ export type CalVisit = {
   clientId: string;
   clientName: string;
   clientPhone: string | null;
+  /** his e-mail, cut by the login's rights as the phone is (calendarFor) */
+  clientEmail: string | null;
   clientNote: string;
   comment: string;
   staffNote: string;
@@ -73,6 +75,12 @@ export type CalendarData = {
   visits: CalVisit[];
   blocks: CalBlock[];
   special: CalSpecial[];
+  /**
+   * staffId → date → the hours clients may book him online that day, as
+   * wall-clock spans («Изменить время для онлайн-записи», 043); a day that
+   * is not here has all his working hours. Only the journal's own data has it.
+   */
+  online?: Record<string, Record<string, [string, string][]>>;
 };
 
 const ms = (v: unknown) => (v instanceof Date ? v.getTime() : Date.parse(String(v)));
@@ -86,7 +94,7 @@ export async function loadCalendar(q: Querier, business: Business, from: string,
   const toMs = startOfDay(addDays(dates[n - 1], 1), tz);
   const range = [business.id, new Date(fromMs), new Date(toMs)];
 
-  const [staffRows, serviceRows, offerRows, hours, overrides, visitRows, lines, offRows, specialRows] = await Promise.all([
+  const [staffRows, serviceRows, offerRows, hours, overrides, visitRows, lines, offRows, specialRows, onlineRows] = await Promise.all([
     q<{ id: string; display_name: string; role: L10n; photo_url: string | null; sort: number; bookable: boolean; active: boolean }>(
       `select id, display_name, role, photo_url, sort, bookable, active from staff
         where business_id = $1 order by sort, display_name`,
@@ -127,6 +135,7 @@ export async function loadCalendar(q: Querier, business: Business, from: string,
       client_id: string;
       client_name: string;
       phone_e164: string | null;
+      email: string | null;
       client_note: string;
       client_comment: string;
       staff_note: string;
@@ -135,7 +144,7 @@ export async function loadCalendar(q: Querier, business: Business, from: string,
       extra_cents: number;
     }>(
       `select a.id, a.staff_id, a.starts_at, a.ends_at, a.blocked_until, a.status, a.confirmed_at is not null as confirmed, a.source, a.any_staff,
-              a.client_id, c.name as client_name, c.phone_e164, c.staff_note as client_note,
+              a.client_id, c.name as client_name, c.phone_e164, c.email, c.staff_note as client_note,
               a.client_comment, a.staff_note, a.reminder_min, a.total_cents, a.extra_cents
          from appointments a join clients c on c.id = a.client_id
         where a.business_id = $1 and a.status <> 'cancelled' and a.starts_at < $3 and a.blocked_until > $2
@@ -160,6 +169,11 @@ export async function loadCalendar(q: Querier, business: Business, from: string,
       `select id, staff_id, starts_at, ends_at, extra_cents, extra_pct, note from special_time
         where business_id = $1 and starts_at < $3 and ends_at > $2 order by starts_at, created_at`,
       range,
+    ),
+    q<{ staff_id: string; day: string; spans: [string, string][] }>(
+      `select o.staff_id, o.day::text as day, o.spans from staff_online_hours o join staff s on s.id = o.staff_id
+        where s.business_id = $1 and o.day between $2::date and $3::date`,
+      [business.id, dates[0], dates[n - 1]],
     ),
   ]);
 
@@ -214,6 +228,7 @@ export async function loadCalendar(q: Querier, business: Business, from: string,
       clientId: v.client_id,
       clientName: v.client_name,
       clientPhone: v.phone_e164,
+      clientEmail: v.email,
       clientNote: v.client_note,
       comment: v.client_comment,
       staffNote: v.staff_note,
@@ -224,6 +239,10 @@ export async function loadCalendar(q: Querier, business: Business, from: string,
     })),
     blocks: offRows.map((t) => ({ id: t.id, staffId: t.staff_id, from: ms(t.starts_at), to: ms(t.ends_at), kind: t.kind, note: t.note, status: t.status })),
     special: specialRows.map((x) => ({ id: x.id, staffId: x.staff_id, from: ms(x.starts_at), to: ms(x.ends_at), extraCents: x.extra_cents, extraPct: x.extra_pct, note: x.note })),
+    online: onlineRows.reduce<NonNullable<CalendarData["online"]>>((all, r) => {
+      (all[r.staff_id] ??= {})[r.day] = r.spans;
+      return all;
+    }, {}),
   };
 }
 
@@ -251,6 +270,7 @@ export async function loadVisitData(q: Querier, business: Business, id: string):
     client_id: string;
     client_name: string;
     phone_e164: string | null;
+    email: string | null;
     client_note: string;
     client_comment: string;
     staff_note: string;
@@ -260,7 +280,7 @@ export async function loadVisitData(q: Querier, business: Business, id: string):
     day: string;
   }>(
     `select a.id, a.staff_id, a.starts_at, a.ends_at, a.blocked_until, a.status, a.confirmed_at is not null as confirmed, a.source, a.any_staff,
-            a.client_id, c.name as client_name, c.phone_e164, c.staff_note as client_note,
+            a.client_id, c.name as client_name, c.phone_e164, c.email, c.staff_note as client_note,
             a.client_comment, a.staff_note, a.reminder_min, a.total_cents, a.extra_cents,
             to_char(a.starts_at at time zone $3::text, 'YYYY-MM-DD') as day
        from appointments a join clients c on c.id = a.client_id
@@ -317,6 +337,7 @@ export async function loadVisitData(q: Querier, business: Business, id: string):
         clientId: v.client_id,
         clientName: v.client_name,
         clientPhone: v.phone_e164,
+        clientEmail: v.email,
         clientNote: v.client_note,
         comment: v.client_comment,
         staffNote: v.staff_note,
@@ -392,7 +413,10 @@ export function calendarMay(who: Holder, today: string): CalMay {
  *   - only the columns of the barbers it sees (journal.staff);
  *   - nothing before its history limit (journal.history);
  *   - a client's phone only with «Доступ к данным клиентов», and in full
- *     only with «Показывать номера телефонов» (else «+3725•••••45»);
+ *     only with «Показывать номера телефонов» (else «+3725•••••45»); his
+ *     e-mail the same way (else «a•••@example.test»);
+ *   - the online hours only of the barbers it sees, and none before its
+ *     history limit;
  *   - the client's note only with the client's data and «Просматривать
  *     примечание».
  * The data leaves the server already cut: the screen cannot show more.
@@ -415,9 +439,21 @@ export function calendarFor(who: Holder, data: CalendarData, today: string): Cal
     services: data.services.map((sv) => ({ ...sv, offers: Object.fromEntries(Object.entries(sv.offers).filter(([id]) => sees(id))) })),
     visits: data.visits
       .filter((v) => sees(v.staffId) && (fromMs === null || v.start >= fromMs))
-      .map((v) => ({ ...v, clientPhone: !clientData ? null : phones ? v.clientPhone : maskPhone(v.clientPhone), clientNote: note ? v.clientNote : "" })),
+      .map((v) => ({
+        ...v,
+        clientPhone: !clientData ? null : phones ? v.clientPhone : maskPhone(v.clientPhone),
+        clientEmail: !clientData ? null : phones ? v.clientEmail : maskEmail(v.clientEmail),
+        clientNote: note ? v.clientNote : "",
+      })),
     blocks: data.blocks.filter((b) => sees(b.staffId) && (fromMs === null || b.to > fromMs)),
     special: data.special.filter((x) => sees(x.staffId) && (fromMs === null || x.to > fromMs)),
+    ...(data.online && {
+      online: Object.fromEntries(
+        Object.entries(data.online)
+          .filter(([id]) => sees(id))
+          .map(([id, days]) => [id, Object.fromEntries(Object.entries(days).filter(([date]) => !from || date >= from))]),
+      ),
+    }),
   };
 }
 

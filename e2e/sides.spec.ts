@@ -203,8 +203,8 @@ test.describe("an owner who cuts too, on a phone", () => {
     await expect(group(M.mineGroup).locator(".mo-row small").first()).toHaveText(M.timeHint);
     // «Основные показатели» is the tab «Отчёты»; «Запросы» a row
     await expect(group(M.salonGroup).locator(".mo-row b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.nav.invoices, A.nav.notifications, A.sale.title]);
-    // «Настройки»: the salon's page on the booking site, the owner's
-    await expect(group(M.settingsGroup).locator(".mo-row b")).toHaveText([A.nav.brand, A.nav.contacts, A.nav.gallery]);
+    // «Настройки»: the salon's page on the booking site and «Онлайн-запись», the owner's
+    await expect(group(M.settingsGroup).locator(".mo-row b")).toHaveText([A.nav.brand, A.nav.contacts, A.nav.gallery, A.nav.online]);
     await expect(group(M.accountGroup).locator(".mo-row b")).toHaveText([M.access, M.notify, M.language, M.logout]);
     await expect(group(M.accountGroup).locator(".mo-row", { hasText: M.language }).locator("small")).toHaveText("Русский");
     await expectNoSideScroll(page);

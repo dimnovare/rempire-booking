@@ -51,19 +51,19 @@ const names = async (date: string) => {
 
 describe("who gets a column on a day", () => {
   it("only the barbers who work that day", async () => {
-    expect(await names(TUE)).toEqual(["Renat", "Jevgeni", "Slava"]);
+    expect(await names(TUE)).toEqual(["Jevgeni", "Slava", "Renat"]);
     // a Sunday: nobody
     expect(await names(SUN)).toEqual([]);
   });
 
   it("a visit on his day off gives a barber a column; cancelled, it takes it away", async () => {
     const id = await book("valentin", TUE, "12:00");
-    expect(await names(TUE)).toEqual(["Renat", "Valentin", "Jevgeni", "Slava"]);
+    expect(await names(TUE)).toEqual(["Jevgeni", "Slava", "Renat", "Valentin"]);
     // a visit on another day is not this day's
     await book("milena", WED, "12:00");
-    expect(await names(TUE)).toEqual(["Renat", "Valentin", "Jevgeni", "Slava"]);
+    expect(await names(TUE)).toEqual(["Jevgeni", "Slava", "Renat", "Valentin"]);
     await adminCancelVisit(demo.business, id, ACTOR);
-    expect(await names(TUE)).toEqual(["Renat", "Jevgeni", "Slava"]);
+    expect(await names(TUE)).toEqual(["Jevgeni", "Slava", "Renat"]);
   });
 
   it("special time is working time; a day turned into a day off is not", async () => {
@@ -74,7 +74,7 @@ describe("who gets a column on a day", () => {
 
   it("time off does not take the column away: the block is shown in it", async () => {
     await addTimeOff(demo.business, { staffId: demo.staff.slava, from: at(TUE, "00:00"), to: at(WED, "00:00"), kind: "sick" }, ACTOR);
-    expect(await names(TUE)).toEqual(["Renat", "Jevgeni", "Slava"]);
+    expect(await names(TUE)).toEqual(["Jevgeni", "Slava", "Renat"]);
   });
 
   it("a barber who no longer works has a column only for a visit", async () => {
@@ -82,7 +82,7 @@ describe("who gets a column on a day", () => {
     for (const who of ["jevgeni", "slava"]) {
       expect(await saveStaffProfile(demo.business, demo.staff[who], { name: who, bookable: false, active: false }, ACTOR)).toMatchObject({ ok: true });
     }
-    expect(await names(TUE)).toEqual(["Renat", "jevgeni"]);
+    expect(await names(TUE)).toEqual(["jevgeni", "Renat"]);
   });
 });
 

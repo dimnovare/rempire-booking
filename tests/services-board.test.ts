@@ -96,7 +96,7 @@ describe("«Услуги» on the demo", () => {
     expect(b.categories.map((c) => c.name.ru)).toEqual(["Барберинг"]);
     expect(b.services).toHaveLength(8);
     expect(b.services.every((s) => s.categoryId === b.categories[0].id)).toBe(true);
-    expect(b.barbers.map((x) => x.name)).toEqual(["Renat", "Valentin", "Jevgeni", "Slava", "Milena"]);
+    expect(b.barbers.map((x) => x.name)).toEqual(["Jevgeni", "Slava", "Renat", "Valentin", "Milena"]);
     const clip = await svc("clip");
     expect(clip.offers.map((o) => o.staffId)).toEqual(b.barbers.map((x) => x.id));
     // Renat cuts in 45 minutes, the others in 60

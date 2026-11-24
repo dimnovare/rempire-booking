@@ -54,6 +54,7 @@ import * as requests from "@/app/admin/(app)/requests/actions";
 import * as schedule from "@/app/admin/(app)/schedule/actions";
 import * as services from "@/app/admin/(app)/services/actions";
 import * as settingsActs from "@/app/admin/(app)/settings/actions";
+import * as onlineActs from "@/app/admin/(app)/settings/online/actions";
 import * as notif from "@/app/admin/(app)/notifications/actions";
 import * as staffActs from "@/app/admin/(app)/staff/actions";
 import * as bSell from "@/app/b/(app)/sell/actions";
@@ -527,6 +528,19 @@ describe("Сотрудники", () => {
     // the profile is another right, and stays
     expect((await staffActs.saveProfile(c.val, profile())).ok).toBe(true);
   });
+
+  it("staff.edit: the staff list's switch «Онлайн-запись» and the profile's «График до» are behind it too", async () => {
+    for (const has of [true, false]) {
+      const c = await fresh("desk");
+      await grant(c.me, "staff.edit", has);
+      const r = await staffActs.setBookableAction(c.val, false);
+      expect(r.ok, `the switch, ${has ? "with" : "without"} it`).toBe(has);
+      if (!has) expect(r).toEqual({ ok: false, field: "forbidden" });
+      const [row] = await query<{ bookable: boolean }>("select bookable from staff where id = $1", [c.val]);
+      expect(row.bookable).toBe(!has);
+      expect((await staffActs.saveProfile(c.val, { ...profile(), scheduleUntil: c.tomorrow })).ok, "«График до»").toBe(has);
+    }
+  });
 });
 
 describe("Услуги", () => {
@@ -909,6 +923,21 @@ describe("a section whose group switch is off", () => {
     expect((await frame.serviceListAction()).length).toBeGreaterThan(0);
     await grant(c.me, groupKey("services"), false);
     expect(await frame.serviceListAction()).toEqual([]);
+  });
+
+  it("«Онлайн-запись»: «Настройки → Онлайн-запись» saves with the group's own switch, and refuses without it", async () => {
+    for (const has of [true, false]) {
+      const c = await fresh("owner");
+      await grant(c.me, groupKey("online"), has);
+      const r = await onlineActs.saveOnlineAction({ slot_step_min: 15, any_staff_on: false });
+      expect(r.ok, `${has ? "with" : "without"} the switch`).toBe(has);
+      if (!has) expect(r).toEqual({ ok: false, field: "forbidden" });
+      const [b] = await query<{ settings: Record<string, unknown> }>("select settings from businesses where id = $1", [c.demo.business.id]);
+      expect(b.settings.any_staff_on === false, "written").toBe(has);
+    }
+    // the front desk starts without it
+    await fresh("desk");
+    expect(await onlineActs.saveOnlineAction({ any_staff_on: false })).toEqual({ ok: false, field: "forbidden" });
   });
 
   it("a barber's login has no way into the admin's doors, whatever its rights", async () => {

@@ -26,8 +26,11 @@
  *
  * From 900px a visit under the mouse (or the keyboard) shows its card
  * (journal-card.tsx): the client, his numbers, the status chips, the
- * services; a barber's head opens his day's hours (journal-hours.tsx), and
- * a day nobody works offers the schedule and «Добавить сотрудников в день».
+ * services, his e-mail; a barber's head opens his day's menu of six
+ * (journal-hours.tsx: his hours, his day off, working days added or taken
+ * away, the schedule, his online hours); the bar's person-plus adds a
+ * barber to any day, and a day nobody works offers the schedule and
+ * «Добавить сотрудников в день».
  * A click, a drag and the bar snap to the line the scale shows: 15, 10 or 5
  * minutes (ZOOM_STEP); a phone to the salon's booking step.
  *
@@ -50,7 +53,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { CalBlock, CalendarData, CalMay, CalVisit } from "@/lib/admin/calendar";
 import { daySpan, hhmm, minutesInDay, momentAt, snap, weekStart } from "@/lib/admin/grid";
-import { dayNumbers, dayStaff, isVisitState, visitLook, type MineToday } from "@/lib/admin/journal";
+import { addableStaff, dayNumbers, dayStaff, isVisitState, visitLook, type MineToday } from "@/lib/admin/journal";
 import type { AdminOutcome } from "@/lib/admin/visits";
 import { shownName } from "@/lib/client-anon";
 import { extraText } from "@/lib/slots";
@@ -386,7 +389,17 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step: bookS
     return (
       <div key={c.key} className="cal-head" data-mine={own ? "" : undefined}>
         {wide && s ? (
-          <HeadMenu staff={s} date={c.date} today={today} tz={tz} work={work} dayText={dayFmt(c.date, { day: "numeric", month: "long" })} may={hours} onSaid={say}>
+          <HeadMenu
+            staff={s}
+            date={c.date}
+            today={today}
+            tz={tz}
+            work={work}
+            online={data.online?.[c.staffId]?.[c.date] ?? null}
+            dayText={dayFmt(c.date, { day: "numeric", month: "long" })}
+            may={hours}
+            onSaid={say}
+          >
             {inner}
             <CaretIcon size={10} />
           </HeadMenu>
@@ -480,6 +493,8 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step: bookS
         side={side}
         onSide={() => setSideRaw(side ? "0" : "1")}
         mine={mineId ? { on: mineOn, staffId: mineId, pick: pickMine } : null}
+        // the person-plus on any day: the barbers who do not work it
+        addStaff={hours.edit && view === "day" ? { staff: addableStaff(data, date), longDay: longDay(date), onSaid: say } : null}
         go={go}
       />
       {moving && (
@@ -495,7 +510,7 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step: bookS
         {!cols.length ? (
           data.staff.length > 0 && view === "day" ? (
             // nobody works this day and nobody is booked
-            <DayOff staff={data.staff} date={date} dayText={dayText} longDay={longDay(date)} may={hours} onSaid={say} />
+            <DayOff staff={addableStaff(data, date)} date={date} dayText={dayText} longDay={longDay(date)} may={hours} onSaid={say} />
           ) : (
             <p className="adm-wait">{A.cal.noStaff}</p>
           )

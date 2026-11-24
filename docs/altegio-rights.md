@@ -408,7 +408,9 @@ Sources: https://alteg.io/ru/support/knowledge-base/19029472943261/ and https://
 | Single rights | 4 | 1 | 3 |
 | **Total** | **214** | **70** | **144** |
 
-A group's switch works in the seven groups that have an enforced right: with it off, everything inside answers no, and for «Сотрудники», «Услуги» and «Клиентская база» the section itself is closed (its page says «Нет доступа», the menus leave it out). «Сотрудники» is two pages now, the barbers' list and «График работы»; with «Отчёты» off, or without «Просматривать список записей», «Записи» is closed the same way.
+*«Онлайн-запись», 24.11.2026 (round 15):* the group's switch alone is enforced, as the door of «Настройки → Онлайн-запись»; its one right stays locked, so the table above still counts it so.
+
+A group's switch works in the seven groups that have an enforced right, and in «Онлайн-запись»: with it off, everything inside answers no, and for «Сотрудники», «Услуги» and «Клиентская база» the section itself is closed (its page says «Нет доступа», the menus leave it out). «Сотрудники» is two pages now, the barbers' list and «График работы»; with «Отчёты» off, or without «Просматривать список записей», «Записи» is closed the same way.
 
 *«Отчёты», 19.11.2026:* its first three rights came alive with the page «Записи» (`/admin/records`). They were locked until then, so every login had kept its role's default for them: the owner and the front desk have all three from the start (the list gives «Администратор» the file too, unlike the client base's), a barber's login none.
 
@@ -445,7 +447,7 @@ Paths are under `src/`. «→» names the function.
 | Создание сотрудников | `staff.create` | `lib/admin/staff.ts` → `saveStaffProfile` |
 | Редактирование сотрудников | `staff.edit` | `lib/admin/staff.ts` → `saveStaffProfile`; `app/admin/(app)/staff/actions.ts` → `uploadPhoto` |
 | Увольнение сотрудников (ours: the barber's «active» switch) | `staff.dismiss` | `lib/admin/staff.ts` → `saveStaffProfile` |
-| Редактирование графика работы | `staff.schedule` | `app/admin/(app)/staff/actions.ts` → `saveHours`, `saveDay`, `addOff`, `removeOff`, `addSpecial`, `removeSpecial`; `lib/admin/schedule.ts` → `saveDays`, `fillTemplate`, `copySchedule` («График работы»: the marked cells, a template, a copy) |
+| Редактирование графика работы | `staff.schedule` | `app/admin/(app)/staff/actions.ts` → `saveHours`, `saveDay`, `addOff`, `removeOff`, `addSpecial`, `removeSpecial`; `lib/admin/schedule.ts` → `saveDays`, `fillTemplate`, `copySchedule` («График работы»: the marked cells, a template, a copy), `markDays` (the journal's «Добавить/Убрать рабочие дни», with `journal.staff`); `lib/admin/journal-online.ts` → `saveOnlineHours` («Изменить время для онлайн-записи», with `journal.staff`) |
 | **6. Услуги** | | |
 | Создание услуг (with «Редактирование услуг») | `services.create` | `lib/admin/services.ts` → `saveService` |
 | Редактирование услуг | `services.edit` | `lib/admin/services.ts` → `saveService` |
@@ -484,6 +486,8 @@ Paths are under `src/`. «→» names the function.
 | ↳ Показывать номера телефонов в записях | `reports.bookings.phones` | `lib/admin/records.ts` → `listRecords` (masked without it), `recordWhere` (digits then find nobody), `exportRecords` (no phone column) |
 | Просматривать отзывы (ours: the page «Отзывы»; the phone of a linked client only with `clients.list_contacts`) | `reports.reviews` | `lib/reviews.ts` → `listReviews`, `reviewsMay`; `app/admin/(app)/reviews/page.tsx` («Нет доступа» without it); `lib/admin/app-nav.ts` (the menus) |
 | ↳ Удалять отзывы (ours: «Скрыть» takes a review off the booking page and keeps it listed; «Показать» puts it back) | `reports.reviews.delete` | `lib/reviews.ts` → `setReviewHidden` (each change an audit row); `app/admin/(app)/reviews/actions.ts` → `setReviewHiddenAction` |
+| **13. Онлайн-запись** | | |
+| The group's own switch (the list: it «gives almost all online-booking settings»; its one right, «Управление обработкой персональных данных», stays locked) | `group:online` | `lib/admin/online-settings.ts` → `onlineMay`, `saveOnlineSettings`; `app/admin/(app)/settings/online/page.tsx` («Нет доступа» without it) and `actions.ts`; `lib/admin/app-nav.ts` (the menus) |
 | **Single** | | |
 | Совершать SMS рассылки клиентам (ours: a mass message by any channel, and a message by hand) | `single.bulk_sms` | `lib/admin/client-bulk.ts` → `queueMassMessage`; `app/admin/(app)/clients/actions.ts` → `massPreviewAction`, `sendMessageAction` |
 

@@ -59,6 +59,7 @@ const ADMIN = [
   "/admin/settings/brand",
   "/admin/settings/contacts",
   "/admin/settings/gallery",
+  "/admin/settings/online",
   "/admin/staff",
 ];
 const BARBER = ["/b", "/b/week", "/b/time", "/b/money", "/b/more", "/b/sell", "/b/install"];

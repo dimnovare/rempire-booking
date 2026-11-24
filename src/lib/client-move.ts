@@ -10,6 +10,12 @@
  * (adminUpdateVisit): it locks the barber, checks the place again, re-prices
  * special time, keeps the audit row, tells the barber by push and the client
  * by the «moved» letter.
+ *
+ * The salon's «Онлайн-запись» settings hold as on the booking page: until
+ * how long before the visit it may still change (cancel_cutoff_min, in
+ * canChange), the notice, the horizon, and the barber's own «График до»
+ * (staff.schedule_until): no day after it is offered, and a time after it
+ * is «slot_taken» (loadAvailability leaves those days out).
  */
 import { adminUpdateVisit } from "./admin/visits";
 import { loadAvailability, type AvailabilityQuery, type Business, type DayAvailability } from "./availability";

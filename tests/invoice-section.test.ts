@@ -33,6 +33,7 @@ import {
   type ListRow,
 } from "@/lib/billing/list";
 import { listIssuers, receiverForStaff, saveReceiver, setRent } from "@/lib/billing/parties";
+import { referenceNumber } from "@/lib/billing/reference";
 import { findLineItems, pickedVat, serviceItems } from "@/lib/billing/picker";
 import { draftPdf, invoicePdf } from "@/lib/billing/send";
 import { closeDb, query } from "@/lib/db";
@@ -48,7 +49,7 @@ const TODAY = "2026-11-19";
 const NOW = zonedToUtc(TODAY, "10:00", TZ);
 const DEV = { NODE_ENV: "development", VITEST: "true", ALLOW_INDEXING: "yes" } as Record<string, string>;
 
-const row = (o: Partial<ListRow> & { id: string }): ListRow => ({ status: "issued", receiverId: o.receiver ?? "r", receiver: "A", person: false, sub: "", number: "", date: "", due: "", netCents: 0, vatCents: 0, grossCents: 0, ...o });
+const row = (o: Partial<ListRow> & { id: string }): ListRow => ({ status: "issued", receiverId: o.receiver ?? "r", receiver: "A", person: false, sub: "", number: "", reference: referenceNumber(o.number), date: "", due: "", netCents: 0, vatCents: 0, grossCents: 0, ...o });
 
 /** A draft, one not due, one overdue, one paid, one credited and the credit invoice that took it back. */
 const ROWS: ListRow[] = [
@@ -90,6 +91,8 @@ describe("the list: status, search, period", () => {
     expect(ids(filterRows(ROWS, { ...all, q: "  habe " }, TODAY))).toEqual(["d1", "p1"]);
     expect(ids(filterRows(ROWS, { ...all, q: "48" }, TODAY))).toEqual(["i1", "o1"]);
     expect(ids(filterRows(ROWS, { ...all, q: "MART" }, TODAY))).toEqual(["d1"]);
+    // the reference too, as Isolta's list finds it: 481 pays with 4815
+    expect(ids(filterRows(ROWS, { ...all, q: "4815" }, TODAY))).toEqual(["i1"]);
     expect(filterRows(ROWS, { ...all, q: "nobody" }, TODAY)).toEqual([]);
   });
 
@@ -580,7 +583,7 @@ describe("«Экспорт счетов в таблицу»", () => {
   withDb();
   const WORDS = {
     sheet: "Счета",
-    cols: { status: "Статус", receiver: "Получатель", number: "№ счёта", date: "Дата счёта", due: "Срок оплаты", net: "без НДС, €", vat: "НДС, €", gross: "с НДС, €" },
+    cols: { status: "Статус", receiver: "Получатель", number: "№ счёта", reference: "Референц-номер", date: "Дата счёта", due: "Срок оплаты", net: "без НДС, €", vat: "НДС, €", gross: "с НДС, €" },
     status: { draft: "Черновик", issued: "Выставлен", overdue: "Просрочен", paid: "Оплачен", credited: "Кредитован", credit: "Кредит-счёт" },
   };
 
@@ -601,11 +604,11 @@ describe("«Экспорт счетов в таблицу»", () => {
     expect(all.rows).toBe(2);
     const sheet = readXlsx(all.bytes);
     expect(sheet.name).toBe("Счета");
-    expect(sheet.rows[0]).toEqual(["Статус", "Получатель", "№ счёта", "Дата счёта", "Срок оплаты", "без НДС, €", "НДС, €", "с НДС, €"]);
+    expect(sheet.rows[0]).toEqual(["Статус", "Получатель", "№ счёта", "Референц-номер", "Дата счёта", "Срок оплаты", "без НДС, €", "НДС, €", "с НДС, €"]);
     // the list's own order: the draft first, then the issued one, with sums as numbers in euros
-    expect(sheet.rows[1].slice(0, 3)).toEqual(["Черновик", "Näidis Klient OÜ", null]);
+    expect(sheet.rows[1].slice(0, 4)).toEqual(["Черновик", "Näidis Klient OÜ", null, null]);
     const inv = (await invoiceById(query, biz.id, d.id))!;
-    expect(sheet.rows[2]).toEqual(["Выставлен", v.legalName, issued.number, "19.11.2026", sheet.rows[2][4], inv.netCents / 100, inv.vatCents / 100, inv.grossCents / 100]);
+    expect(sheet.rows[2]).toEqual(["Выставлен", v.legalName, issued.number, referenceNumber(issued.number), "19.11.2026", sheet.rows[2][5], inv.netCents / 100, inv.vatCents / 100, inv.grossCents / 100]);
 
     const some = await exportInvoices(biz, { id: owner }, { status: "issued", q: "näidis" }, WORDS, undefined, NOW);
     expect(some.rows).toBe(1);

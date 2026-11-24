@@ -35,8 +35,9 @@ const draftOf = (i: Issuer | null): Draft => ({
   iban: i?.iban ?? "",
   bankName: i?.bankName ?? "",
   prefix: i?.prefix ?? "",
-  digits: String(i?.digits ?? 4),
-  yearly: i?.yearly ?? true,
+  // a new company numbers as Isolta did: plain 1, 2, … 423 (no year, no padding)
+  digits: String(i?.digits ?? 0),
+  yearly: i?.yearly ?? false,
   note: i?.note ?? "",
 });
 

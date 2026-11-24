@@ -1,7 +1,12 @@
 /**
  * Rows → free slots. Loads one business's barbers, hours, day overrides,
- * visits, time off and special time for a range of local days, then runs
- * src/lib/slots.ts.
+ * visits, time off, special time and online hours for a range of local
+ * days, then runs src/lib/slots.ts.
+ * Every caller is the client's own booking (the booking page, «Любой», the
+ * booking itself, the client's move), so the online hours a day may have
+ * («Изменить время для онлайн-записи», 043) always apply here. The salon's
+ * bookings (src/lib/admin/visits.ts, src/lib/barber/book.ts) do not come
+ * here and are not limited by them.
  * Takes a Querier, so the booking transaction can run the same check
  * inside its lock.
  */
@@ -43,14 +48,16 @@ export type StaffQuote = {
   durationMin: number;
   bufferMin: number;
   priceCents: number;
+  /** his «График до» (042): the last local day he is offered online; null = no limit of his own */
+  scheduleUntil: string | null;
 };
 
 /** Barbers who do every one of `serviceIds`, with their own time and price. */
 export async function quoteStaff(q: Querier, businessId: string, serviceIds: string[], staffId?: string | null): Promise<StaffQuote[]> {
   const ids = [...new Set(serviceIds)];
   if (!ids.length) return [];
-  const rows = await q<{ id: string; location_id: string; sort: number; duration_min: number; buffer_min: number; price_cents: number }>(
-    `select s.id, s.location_id, s.sort,
+  const rows = await q<{ id: string; location_id: string; sort: number; duration_min: number; buffer_min: number; price_cents: number; schedule_until: string | null }>(
+    `select s.id, s.location_id, s.sort, s.schedule_until::text as schedule_until,
             sum(coalesce(ss.duration_min, sv.duration_min))::int as duration_min,
             max(sv.buffer_after_min)::int as buffer_min,
             sum(coalesce(ss.price_cents, sv.price_cents))::int as price_cents
@@ -72,6 +79,7 @@ export async function quoteStaff(q: Querier, businessId: string, serviceIds: str
     durationMin: r.duration_min,
     bufferMin: r.buffer_min,
     priceCents: r.price_cents,
+    scheduleUntil: r.schedule_until,
   }));
 }
 
@@ -97,8 +105,11 @@ export type AvailabilityQuery = {
 const ms = (v: unknown) => (v instanceof Date ? v.getTime() : Date.parse(String(v)));
 
 /**
- * Free slots per local day. `staffId` null or missing = «anyone».
- * Only days from today to the end of the booking horizon are returned.
+ * Free slots per local day. `staffId` null or missing = «anyone», which
+ * the salon may switch off («Любой специалист», any_staff_on): then nobody
+ * is quoted for it, so nothing is offered and nothing can be booked.
+ * Only days from today to the end of the booking horizon are returned, and
+ * a barber only up to his own «График до» (staff.schedule_until, 042).
  */
 export async function loadAvailability(q: Querier, a: AvailabilityQuery): Promise<{ quotes: StaffQuote[]; days: DayAvailability[] }> {
   const { business } = a;
@@ -112,13 +123,13 @@ export async function loadAvailability(q: Querier, a: AvailabilityQuery): Promis
     const d = addDays(a.from, i);
     if (d >= today && d <= lastDay) dates.push(d);
   }
-  const quotes = await quoteStaff(q, business.id, a.serviceIds, a.staffId);
+  const quotes = !a.staffId && !s.any_staff_on ? [] : await quoteStaff(q, business.id, a.serviceIds, a.staffId);
   if (!dates.length || !quotes.length) return { quotes, days: dates.map((date) => ({ date, open: false, slots: [] })) };
 
   const staffIds = quotes.map((x) => x.staffId);
   const fromMs = startOfDay(dates[0], tz);
   const toMs = startOfDay(addDays(dates[dates.length - 1], 1), tz);
-  const [hours, overrides, visits, off, special] = await Promise.all([
+  const [hours, overrides, visits, off, special, onlineRows] = await Promise.all([
     q<HoursRow & { staff_id: string }>(
       `select staff_id, weekday, to_char(starts, 'HH24:MI') as starts, to_char(ends, 'HH24:MI') as ends,
               valid_from::text as valid_from, valid_to::text as valid_to
@@ -150,14 +161,22 @@ export async function loadAvailability(q: Querier, a: AvailabilityQuery): Promis
         order by starts_at, created_at`,
       [staffIds, new Date(fromMs), new Date(toMs), business.id],
     ),
+    // «Изменить время для онлайн-записи» (043): the hours clients may book him that day
+    q<{ staff_id: string; day: string; spans: [string, string][] }>(
+      `select staff_id, day::text as day, spans from staff_online_hours
+        where staff_id = any($1::uuid[]) and day between $2::date and $3::date`,
+      [staffIds, dates[0], dates[dates.length - 1]],
+    ),
   ]);
 
   const opts = { tz, stepMin: s.slot_step_min, notBefore: now + s.min_notice_min * 60_000 };
   const days = dates.map((date) => {
     const dayFrom = startOfDay(date, tz);
     const dayTo = startOfDay(addDays(date, 1), tz);
-    const staffDays: StaffDay[] = quotes.map((qt) => {
+    // a barber past his «График до» is not there that day at all: no hours, no special time, not «open»
+    const staffDays: StaffDay[] = quotes.filter((qt) => !qt.scheduleUntil || date <= qt.scheduleUntil).map((qt) => {
       const ov = overrides.find((o) => o.staff_id === qt.staffId && o.day === date);
+      const on = onlineRows.find((o) => o.staff_id === qt.staffId && o.day === date);
       const busy: Interval[] = [];
       let bookings = 0;
       for (const v of visits) {
@@ -188,6 +207,8 @@ export async function loadAvailability(q: Querier, a: AvailabilityQuery): Promis
         bufferMin: qt.bufferMin,
         bookings,
         sort: qt.sort,
+        // wall-clock spans of that day as moments, as an override's are; no row: all his time
+        online: on ? workWindows(date, tz, [], on.spans) : null,
       };
     });
     return { date, open: staffDays.some((d) => d.windows.length > 0 || (d.special?.length ?? 0) > 0), slots: mergeSlots(staffDays, opts) };

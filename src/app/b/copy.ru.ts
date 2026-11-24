@@ -442,6 +442,7 @@ export const ru = {
     credit: "кредит-счёт",
     due: (d: string) => `оплатить до ${d}`,
     pdf: "PDF",
+    reference: (r: string) => `референц-номер ${r}`,
     sales: "Продажи",
     noSales: "В этом месяце продаж нет.",
     mode: { client: "клиенту", self: "себе" } as Record<string, string>,

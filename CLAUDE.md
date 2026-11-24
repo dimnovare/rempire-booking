@@ -102,4 +102,6 @@ Goal: as simple as Altegio or Fresha. Copy their flows and features freely.
   - `npm run check:noindex -- <url>`
 - **Database:** plain SQL migrations + `pg`, as in the shop (Dim, 17.11).
   The draft schema is `docs/data-model.md`.
-- **Repo:** `dimnovare/rempire-booking`, private.
+- **Repo:** `dimnovare/rempire-booking`, **public** (Dim kept it public,
+  24.11.2026). Anyone can read it, so the no-secrets and no-real-client-data
+  rules above matter all the more.

@@ -13,6 +13,7 @@
  * invoice's own rule. «Посмотреть и отправить счёт» shows the draft's PDF
  * (no number, the draft stamp); only «Выставить и отправить» there issues.
  */
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { LineItem, LinePick } from "@/lib/billing/picker";
@@ -68,8 +69,20 @@ export function DraftView({ inv, lines, receivers }: { inv: ViewInvoice; lines: 
     }
   };
 
+  // the number it would get now, as Isolta's draft shows it; nothing is reserved, so it says so
   const meta: [string, React.ReactNode][] = [
-    [A.inv.number, later],
+    [
+      A.inv.number,
+      inv.upcoming ? (
+        <>
+          {inv.upcoming}
+          <i style={{ display: "block", fontSize: 12, lineHeight: "16px" }}>{A.inv.notReserved}</i>
+        </>
+      ) : (
+        later
+      ),
+    ],
+    [A.inv.reference, inv.reference || later],
     [A.inv.issuedOn, later],
     ...(inv.termsDays != null ? ([[A.inv.payTerms, A.inv.days(inv.termsDays)]] as [string, React.ReactNode][]) : []),
     [A.inv.dueOn, inv.termsDays != null ? <i>{A.inv.termsIn(inv.termsDays)}</i> : later],
@@ -78,7 +91,7 @@ export function DraftView({ inv, lines, receivers }: { inv: ViewInvoice; lines: 
 
   return (
     <>
-      <IvTop title={A.inv.newInvoice}>
+      <IvTop title={inv.upcoming ? A.inv.one(inv.upcoming) : A.inv.newInvoice}>
         <button type="button" className="iv-btn is-main" disabled={!lines.length || (adding && dirty)} onClick={() => setPreviewing(true)}>
           {A.inv.preview}
         </button>
@@ -121,6 +134,7 @@ export function DraftView({ inv, lines, receivers }: { inv: ViewInvoice; lines: 
 
       <div className="iv-body is-doc">
         <DocBar prev={inv.prev} next={inv.next} />
+        {inv.blocked && <Blocked code={inv.blocked} />}
         <section className="inv-sheet">
           <div className="inv-parties">
             <div className="inv-who">
@@ -165,12 +179,15 @@ export function DraftView({ inv, lines, receivers }: { inv: ViewInvoice; lines: 
             <Totals netCents={inv.netCents} vatCents={inv.vatCents} grossCents={inv.grossCents} />
           </div>
 
-          <div className="inv-after">
-            {A.inv.afterLines}
-            <button type="button" aria-label={`${A.inv.afterLines}: ${A.inv.note}`} onClick={() => setNoting(true)}>
-              {inv.note}
-            </button>
-          </div>
+          {/* the note is for the staff only, never printed: shown here once there is one */}
+          {inv.note && (
+            <div className="inv-after inv-memo">
+              {A.inv.noteTitle}
+              <button type="button" aria-label={`${A.inv.noteTitle}: ${inv.note}`} onClick={() => setNoting(true)}>
+                {inv.note}
+              </button>
+            </div>
+          )}
         </section>
       </div>
 
@@ -449,7 +466,7 @@ function NewLine({ invoiceId, count, onDirty, onClose }: { invoiceId: string; co
   );
 }
 
-/* ---------- «Заметка к счёту» ---------- */
+/* ---------- «Заметка к счёту»: internal, as Isolta's «Заметка (не будет видна на инвойсе)» ---------- */
 
 function NoteDialog({ invoiceId, note, onClose }: { invoiceId: string; note: string; onClose: () => void }) {
   const A = useA();
@@ -466,7 +483,7 @@ function NoteDialog({ invoiceId, note, onClose }: { invoiceId: string; note: str
   };
   return (
     <Dialog
-      title={A.inv.note}
+      title={A.inv.noteTitle}
       onClose={() => !busy && onClose()}
       foot={
         <>
@@ -479,8 +496,7 @@ function NoteDialog({ invoiceId, note, onClose }: { invoiceId: string; note: str
         </>
       }
     >
-      <p className="iv-mute">{A.inv.noteHint}</p>
-      <Field label={A.inv.note}>
+      <Field label={A.inv.noteLabel}>
         {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
         <textarea rows={4} maxLength={NOTE_MAX} autoFocus value={v} onChange={(e) => setV(e.target.value)} />
       </Field>
@@ -506,6 +522,8 @@ function PreviewDialog({ inv, onClose }: { inv: ViewInvoice; onClose: () => void
   const frame = useFrame();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // refused for want of the company's IBAN or address: said with the way to «Настройки»
+  const [blocked, setBlocked] = useState<string | null>(null);
   const [inline, setInline] = useState(false);
   const src = `${INV_ROOT}/${inv.id}/preview`;
   useEffect(() => {
@@ -515,10 +533,12 @@ function PreviewDialog({ inv, onClose }: { inv: ViewInvoice; onClose: () => void
   const issue = async () => {
     setBusy(true);
     setErr(null);
+    setBlocked(null);
     try {
       const r = await issueAction(inv.id);
       if (!r.ok) {
         setBusy(false);
+        if (A.inv.blocked[r.code]) return setBlocked(r.code);
         return setErr(A.inv.fail[r.code] ?? A.error);
       }
       frame.say(A.inv.issued(r.number));
@@ -559,6 +579,25 @@ function PreviewDialog({ inv, onClose }: { inv: ViewInvoice; onClose: () => void
           {err}
         </p>
       )}
+      {blocked && <Blocked code={blocked} alert />}
     </Dialog>
+  );
+}
+
+/**
+ * Why a draft cannot be issued yet, in plain words, with the way to the
+ * company's card in «Настройки» (Isolta refuses to send without the bank
+ * account and the sender's address). Above the sheet, and again in the
+ * preview if «Выставить и отправить» was refused.
+ */
+function Blocked({ code, alert = false }: { code: string; alert?: boolean }) {
+  const A = useA();
+  return (
+    <p className="iv-warn" role={alert ? "alert" : undefined}>
+      {A.inv.blocked[code] ?? A.error}{" "}
+      <Link className="iv-link" href={`${INV_ROOT}/settings`} prefetch={false}>
+        {A.inv.toSettings}
+      </Link>
+    </p>
   );
 }

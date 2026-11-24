@@ -11,7 +11,7 @@
  */
 import type { L10n } from "../catalog";
 import { addDays, startOfDay } from "../tz";
-import type { CalendarData, CalVisit } from "./calendar";
+import type { CalendarData, CalStaff, CalVisit } from "./calendar";
 
 /**
  * The barbers who get a column on a day, in the list's order: the ones who
@@ -98,6 +98,71 @@ export function dayNumbers(visits: Pick<CalVisit, "start" | "status" | "clientId
     doneCents: sum(mine.filter((v) => v.status === "arrived" || v.status === "done")),
   };
 }
+
+/* ---------- «Добавить сотрудника в расписание» ---------- */
+
+/**
+ * The barbers the window offers on a day, in the list's order: the active
+ * ones with no working hours that day (a barber on vacation still has his
+ * hours, shown as time off in his column). Any day, not only one nobody
+ * works: the person-plus is always in the bar of the admin we follow.
+ */
+export function addableStaff(data: Pick<CalendarData, "staff" | "work">, date: string): CalStaff[] {
+  return data.staff.filter((s) => s.active && !(data.work[s.id]?.[date] ?? []).length);
+}
+
+/* ---------- «Добавить рабочие дни» / «Убрать рабочие дни» ---------- */
+
+/** Days one «Добавить рабочие дни» or «Убрать рабочие дни» marks, at most: two months (schedule.ts, markDays). */
+export const MARK_DAYS_MAX = 62;
+
+/* ---------- «Изменить время для онлайн-записи» ---------- */
+
+/** A piece of a day by the wall clock: «12:00»–«15:00»; an end may be «24:00» (schedule-plan.ts, Span). */
+type Span = [string, string];
+
+/** Online spans in one day, at most: as many as a dated day holds (staff.ts, cleanSpans). */
+export const ONLINE_SPANS_MAX = 6;
+
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const minutesOf = (t: string) => (t === "24:00" ? 1440 : Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5)));
+/** «23:59» is how a day that runs to midnight is stored (staff.ts, setDayOverride): it is midnight here. */
+const endOf = (t: string) => (t === "23:59" ? 1440 : minutesOf(t));
+
+/**
+ * The hours clients may book a barber online on one day, as the journal's
+ * window sends them, checked against his working hours that day (`work`,
+ * wall-clock spans; a gap between two is a break):
+ *   - [] is «all his working hours», the usual, and needs no hours;
+ *   - otherwise at most six spans, each a start before its end, none over
+ *     another, sorted; each one inside his working day, from its first
+ *     start to its last end. A span may run over a break: nobody is booked
+ *     in a break anyway, so the time clients get is the spans' overlap with
+ *     his hours (slots.ts, onlyOnline);
+ *   - a day he does not work has no online hours to set.
+ * Null when any of that fails.
+ */
+export function cleanOnline(spans: unknown, work: readonly Span[]): Span[] | null {
+  if (!Array.isArray(spans) || spans.length > ONLINE_SPANS_MAX) return null;
+  if (!spans.length) return [];
+  if (!work.length) return null;
+  const lo = Math.min(...work.map(([a]) => minutesOf(a)));
+  const hi = Math.max(...work.map(([, b]) => endOf(b)));
+  const out: Span[] = [];
+  for (const s of spans) {
+    if (!Array.isArray(s) || s.length !== 2) return null;
+    const [a, b] = s.map(String);
+    if (!TIME_RE.test(a) || !(TIME_RE.test(b) || b === "24:00")) return null;
+    if (minutesOf(b) <= minutesOf(a) || minutesOf(a) < lo || minutesOf(b) > hi) return null;
+    out.push([a, b]);
+  }
+  out.sort((x, y) => minutesOf(x[0]) - minutesOf(y[0]));
+  for (let i = 1; i < out.length; i++) if (minutesOf(out[i][0]) < minutesOf(out[i - 1][1])) return null;
+  return out;
+}
+
+/** «12:00–15:00, 16:00–19:00» */
+export const spansText = (spans: readonly Span[]) => spans.map(([a, b]) => `${a}–${b === "23:59" ? "24:00" : b}`).join(", ");
 
 /* ---------- «Моё»: the panel beside a login's own column ---------- */
 

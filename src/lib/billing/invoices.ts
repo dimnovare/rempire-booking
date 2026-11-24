@@ -11,7 +11,8 @@
  *   issued     «Выставить»: the next number of the issuer's series, from
  *              invoice_counters in the same transaction (no gaps, no twins),
  *              both parties frozen as printed, the PDF letter queued in the
- *              outbox. Never edited again.
+ *              outbox. Never edited again. Refused, as Isolta refuses to
+ *              send, while the issuer has no IBAN or no address.
  *   paid       «Оплачен» when the money is in.
  *   credited   a credit invoice (its own number, every line negated) took it
  *              back. Its sales and its month are free again for a new draft.
@@ -702,17 +703,43 @@ async function nextNumber(tx: Querier, issuer: Issuer, year: number, env: Env = 
   return (test ? TEST_NUMBER_PREFIX : "") + formatNumber(issuer, year, c.last);
 }
 
-/** The letter with the PDF, built at send time by the outbox (src/lib/outbox.ts). */
-async function queueInvoiceLetter(tx: Querier, businessId: string, invoiceId: string, email: string, locale: string) {
-  await tx(
-    `insert into notifications (business_id, channel, kind, recipient, locale, payload) values ($1, 'email', 'invoice', $2, $3, $4::jsonb)`,
-    [businessId, email, locale === "ru" || locale === "en" ? locale : "et", JSON.stringify({ invoiceId })],
-  );
+/**
+ * The number a draft would get if it were issued now, for its head (Isolta's
+ * draft reads «Инвойс 423»): the next one of the issuer's series this year,
+ * as nextNumber() would hand it out. Read only: nothing is reserved, so an
+ * invoice issued before this one takes it and this one gets the one after.
+ */
+export async function upcomingNumber(q: Querier, issuer: Pick<Issuer, "id" | "prefix" | "digits" | "yearly">, year: number, env: Env = process.env): Promise<string> {
+  const test = testRun(env);
+  const [c] = await q<{ last: number }>("select last from invoice_counters where issuer_id = $1 and year = $2 and test = $3", [issuer.id, counterYear(issuer, year), test]);
+  return (test ? TEST_NUMBER_PREFIX : "") + formatNumber(issuer, year, (c?.last ?? 0) + 1);
 }
 
-export type IssueResult = { ok: true; number: string } | Fail<"not_draft" | "empty" | "no_email" | "no_issuer">;
+/** The letter with the PDF, built at send time by the outbox (src/lib/outbox.ts). Its id, for the audit row that names it. */
+async function queueInvoiceLetter(tx: Querier, businessId: string, invoiceId: string, email: string, locale: string): Promise<string> {
+  const [n] = await tx<{ id: string }>(
+    `insert into notifications (business_id, channel, kind, recipient, locale, payload) values ($1, 'email', 'invoice', $2, $3, $4::jsonb) returning id`,
+    [businessId, email, locale === "ru" || locale === "en" ? locale : "et", JSON.stringify({ invoiceId })],
+  );
+  return n.id;
+}
 
-/** «Выставить»: number, frozen parties, due date, the letter queued. */
+/**
+ * What stops an invoice from going out, as Isolta refuses to send one: no
+ * bank account to pay to («Невозможно отправить инвойс без указания номера
+ * банковского счета»), then no sender's address («Добавить адрес
+ * отправителя инвойса»). Both are the issuer's, set in «Счета» →
+ * «Настройки». A draft may be made and changed without them.
+ */
+export function issueBlock(issuer: Pick<Issuer, "iban" | "address">): "no_bank" | "no_address" | null {
+  if (!issuer.iban.trim()) return "no_bank";
+  if (!issuer.address.trim()) return "no_address";
+  return null;
+}
+
+export type IssueResult = { ok: true; number: string } | Fail<"not_draft" | "empty" | "no_email" | "no_issuer" | "no_bank" | "no_address">;
+
+/** «Выставить»: number, frozen parties, due date, the letter queued. Refused, before a number is taken, without the issuer's IBAN and address (issueBlock). */
 export async function issueInvoice(business: Business, invoiceId: string, actor: string, now = Date.now()): Promise<IssueResult> {
   return withTx(async (tx) => {
     const inv = await lockDraft(tx, business.id, invoiceId);
@@ -723,6 +750,8 @@ export async function issueInvoice(business: Business, invoiceId: string, actor:
     const issuer = await issuerById(tx, business.id, inv.issuer_id);
     const receiver = await receiverById(tx, business.id, inv.receiver_id);
     if (!issuer || !receiver) return { ok: false as const, code: "no_issuer" as const };
+    const blocked = issueBlock(issuer);
+    if (blocked) return { ok: false as const, code: blocked };
     if (!receiver.email) return { ok: false as const, code: "no_email" as const };
     const today = todayIn(business.timezone, now);
     const number = await nextNumber(tx, issuer, Number(today.slice(0, 4)));
@@ -826,13 +855,25 @@ export async function creditInvoice(business: Business, invoiceId: string, actor
   });
 }
 
-/** Send the letter again (a barber lost it, or the first try failed for good). */
+/**
+ * «Отправить ещё раз» (a barber lost the letter, the first try failed for
+ * good, or he has a new address): the same invoice, to the receiver's
+ * e-mail as it is now, as Isolta's send window takes «Получатель» from the
+ * contact card. The invoice stays as it was issued, its frozen buyer and
+ * that buyer's e-mail included; only when the receiver has no address any
+ * more does the letter go to the one the invoice was issued to. The
+ * «resend» audit row names the letter (`letter`), so the event can say
+ * where it went without the address being copied into the audit log.
+ */
 export async function resendInvoice(business: Business, invoiceId: string, actor: string): Promise<boolean> {
   const inv = await invoiceById(query, business.id, invoiceId);
-  if (!inv || inv.status === "draft" || inv.status === "discarded" || !inv.buyer?.email) return false;
+  if (!inv || inv.status === "draft" || inv.status === "discarded") return false;
+  const receiver = await receiverById(query, business.id, inv.receiverId);
+  const email = receiver?.email || inv.buyer?.email || "";
+  if (!email) return false;
   await withTx(async (tx) => {
-    await queueInvoiceLetter(tx, business.id, invoiceId, inv.buyer!.email, inv.locale);
-    await tx(`insert into audit (actor, entity, entity_id, action) values ($1, 'invoice', $2, 'resend')`, [actor, invoiceId]);
+    const letter = await queueInvoiceLetter(tx, business.id, invoiceId, email, inv.locale);
+    await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'invoice', $2, 'resend', $3::jsonb)`, [actor, invoiceId, JSON.stringify({ letter })]);
   });
   return true;
 }

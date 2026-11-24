@@ -9,7 +9,13 @@
  * the seller with address, registry code and KMKR number; the buyer with
  * address (and VAT number when given); the serial number, issue and due
  * dates; the period; each line with quantity, unit price, discount, net,
- * VAT rate and total; the totals with VAT per rate; and how to pay.
+ * VAT rate and total; the totals with VAT per rate; and how to pay, with
+ * the reference number (src/lib/billing/reference.ts) beside the IBAN, as
+ * Isolta fills it.
+ *
+ * The invoice's own note is not printed: it is internal, as Isolta's
+ * «Заметка (не будет видна на инвойсе)» (Dim, 24.11.2026). The issuer's
+ * foot text («Текст внизу счёта») is.
  *
  * Pure: renderInvoicePdf() prints only what it is handed (the invoice's own
  * frozen parties and lines), so the same issued invoice always prints the
@@ -22,6 +28,7 @@ import { degrees, PDFDocument, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { amountText } from "../money";
 import { TEST_NUMBER_PREFIX, testRun } from "../test-run";
 import type { Party } from "./invoices";
+import { referenceNumber } from "./reference";
 
 export type PdfLang = "ru" | "et" | "en";
 
@@ -43,7 +50,6 @@ export type InvoicePdfData = {
   netCents: number;
   vatCents: number;
   grossCents: number;
-  note: string;
   /** staging (src/lib/test-run.ts): the «ТЕСТ / NÄIDIS» stamp on every page; a TEST- number gets it too */
   test?: boolean;
   /**
@@ -87,7 +93,8 @@ const W = {
   payment: { et: "Maksmine", en: "Payment", ru: "Оплата" },
   beneficiary: { et: "Saaja", en: "Beneficiary", ru: "Получатель" },
   bank: { et: "Pank", en: "Bank", ru: "Банк" },
-  reference: { et: "Selgitus", en: "Reference", ru: "Пояснение платежа" },
+  viite: { et: "Viitenumber", en: "Reference no", ru: "Референц-номер" },
+  reference: { et: "Selgitus", en: "Payment details", ru: "Пояснение платежа" },
   amount: { et: "Summa", en: "Amount", ru: "Сумма" },
   page: { et: "lk", en: "page", ru: "стр." },
   draftNo: { et: "mustand", en: "draft", ru: "черновик" },
@@ -384,12 +391,14 @@ export async function renderInvoicePdf(data: InvoicePdfData): Promise<Uint8Array
   totals.push([`${lab(credit ? W.refund : W.dueTotal, L)} (EUR)`, euro(data.grossCents), true]);
 
   const pay = !credit && data.grossCents > 0;
+  // the payer quotes the invoice's reference and number: a draft has neither yet
+  const ref = data.draft ? "" : referenceNumber(number);
   const payRows: [string, string, PDFFont][] = pay
     ? [
         [lab(W.beneficiary, L), clean(s.name, 120), F.body],
         ["IBAN", clean(s.iban, 42) || "—", F.mono],
+        ...(ref ? ([[lab(W.viite, L), ref, F.mono]] as [string, string, PDFFont][]) : []),
         ...(s.bankName ? ([[lab(W.bank, L), clean(s.bankName, 60), F.body]] as [string, string, PDFFont][]) : []),
-        // the payer writes the invoice's number: a draft has none yet
         ...(data.draft ? [] : ([[lab(W.reference, L), `${lab(W.number, "et").split(" / ")[0]} ${number}`, F.mono]] as [string, string, PDFFont][])),
         [lab(W.amount, L), euro(data.grossCents), F.body],
         [lab(W.due, L), humanDate(data.dueDate), F.body],
@@ -427,7 +436,8 @@ export async function renderInvoicePdf(data: InvoicePdfData): Promise<Uint8Array
     }
     y = top - boxH - 14;
   }
-  const notes = [clean(data.note, 300), clean(s.note, 300)].filter(Boolean);
+  // the issuer's foot text only: the invoice's note is internal and never printed
+  const notes = [clean(s.note, 300)].filter(Boolean);
   for (const n of notes) {
     for (const line of wrapText(n, F.body, 8.5, A4_W - 2 * M, 3)) {
       page.drawText(line, { x: M, y, size: 8.5, font: F.body, color: MUTED });
@@ -443,7 +453,7 @@ export async function renderInvoicePdf(data: InvoicePdfData): Promise<Uint8Array
 
 /** An issued invoice from the database, as printed. */
 export function pdfDataOf(
-  inv: { kind: "invoice" | "credit"; number: string | null; issuedOn: string | null; dueOn: string | null; periodFrom: string; periodTo: string; creditOfNumber: string | null; locale: string; seller: Party | null; buyer: Party | null; netCents: number; vatCents: number; grossCents: number; note: string },
+  inv: { kind: "invoice" | "credit"; number: string | null; issuedOn: string | null; dueOn: string | null; periodFrom: string; periodTo: string; creditOfNumber: string | null; locale: string; seller: Party | null; buyer: Party | null; netCents: number; vatCents: number; grossCents: number },
   lines: PdfLine[],
 ): InvoicePdfData {
   if (!inv.number || !inv.issuedOn || !inv.seller || !inv.buyer) throw new Error("not_issued");
@@ -462,7 +472,6 @@ export function pdfDataOf(
     netCents: inv.netCents,
     vatCents: inv.vatCents,
     grossCents: inv.grossCents,
-    note: inv.note,
     test: testRun(),
   };
 }

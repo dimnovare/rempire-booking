@@ -59,7 +59,7 @@ moved to rempire.ee.
 | Question | Answer |
 |---|---|
 | Repo and app name | `rempire-booking` |
-| Repo owner | `dimnovare`, private; move later if needed |
+| Repo owner | `dimnovare`, public (Dim kept it public, 24.11.2026); move later if needed |
 | Staging address | `rempire-booking.diipsolutions.eu` |
 | Where the app runs (decision 11) | A new project on Rempire's Vercel Pro team. **Catch:** that team signs in as GitHub `rempireshop`, and Dim's Vercel login is not a member (see §11 status). |
 | Booking database | The shop's Railway account, a project of its own. The same catch applies: the shop's Railway signs in as `rempireshop`. |

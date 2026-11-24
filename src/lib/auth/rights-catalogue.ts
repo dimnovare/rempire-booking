@@ -10,6 +10,9 @@
  *   built   true: our system has the function, so the switch works;
  *           false: shown, locked («нет в системе»), and comes alive when
  *           the function is built: flip the flag and wire a check.
+ *           A group's `built` follows its rights, but for «Онлайн-запись»,
+ *           whose own switch is the right (the list: it «gives almost all
+ *           online-booking settings»).
  *
  * RU and EN are the published words of the list we follow; ET is ours,
  * plain. Nothing here knows about logins or the database.
@@ -62,7 +65,9 @@ export const GROUPS: Record<GroupKey, Words & { size: number; on: string; built:
   reports: { ru: "Отчёты", et: "Aruanded", en: "Reports", size: 25, on: "SM VW AD MG OW", built: true },
   loyalty: { ru: "Лояльность", et: "Lojaalsus", en: "Loyalty", size: 8, on: "SM VW AD CC MG OW", built: false },
   licence: { ru: "Лицензия", et: "Litsents", en: "Billing", size: 1, on: "SM AC MG OW", built: false },
-  online: { ru: "Онлайн-запись", et: "Veebibroneering", en: "Online booking", size: 1, on: "SM MG OW", built: false },
+  // the list: «the group switch gives almost all online-booking settings»; so its switch is the door of
+  // «Настройки → Онлайн-запись» (src/lib/admin/online-settings.ts, Dim, round 15), and its one right stays locked
+  online: { ru: "Онлайн-запись", et: "Veebibroneering", en: "Online booking", size: 1, on: "SM MG OW", built: true },
   // no switch of its own: four rights that stand alone
   single: { ru: "Отдельные права", et: "Üksikõigused", en: "Single rights", size: 4, on: ALL, built: true },
 };

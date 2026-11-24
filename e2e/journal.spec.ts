@@ -151,7 +151,7 @@ test.describe("the journal", () => {
       const buttons = bar(page).locator("button:visible");
       const names = await buttons.evaluateAll((els) => els.map((el) => (el.getAttribute("aria-label") || el.textContent || "").trim()));
       // (no «Запись» from 900px: a free time under the mouse books, as the board's)
-      expect(names).toEqual([C.today, C.prev, C.next, C.sell, `${C.numbers}: € 0`, C.day, C.week, C.filter, C.scale, C.panel]);
+      expect(names).toEqual([C.today, C.prev, C.next, C.sell, `${C.numbers}: € 0`, C.day, C.week, C.filter, C.scale, C.addStaffTitle, C.panel]);
       // every one 32px high, 12px / 500, with a 1px line
       const looks = await buttons.evaluateAll((els) =>
         els.map((el) => {
@@ -164,7 +164,7 @@ test.describe("the journal", () => {
       const today = bar(page).getByRole("button", { name: C.today, exact: true });
       expect(await today.evaluate((el) => [getComputedStyle(el).backgroundColor, getComputedStyle(el).borderTopColor, getComputedStyle(el).borderRadius, getComputedStyle(el).color])).toEqual([WHITE, LINE, "8px", INK]);
       // the square ones are 32 × 32
-      for (const name of [C.prev, C.next, C.filter, C.scale, C.panel]) expect((await bar(page).getByRole("button", { name, exact: true }).boundingBox())!.width).toBe(32);
+      for (const name of [C.prev, C.next, C.filter, C.scale, C.addStaffTitle, C.panel]) expect((await bar(page).getByRole("button", { name, exact: true }).boundingBox())!.width).toBe(32);
       // 12px in from the edges, 8px between two controls, the title 12px further
       const xs = async (l: Locator) => {
         const b = (await l.boundingBox())!;
@@ -192,6 +192,17 @@ test.describe("the journal", () => {
       await expect(cal(page).getByRole("navigation", { name: C.days })).toBeHidden();
       await expect(page.locator(`.sb-month a[href="/admin?d=${day}"]`)).toHaveAttribute("aria-current", "date");
       await expectNoSideScroll(page);
+
+      // the person-plus on a day some work: «Сотрудники» offers the ones who do not; Escape closes it, the keyboard back on it
+      const plus = bar(page).getByRole("button", { name: C.addStaffTitle, exact: true });
+      await plus.click();
+      const dialog = page.getByRole("dialog", { name: C.addStaffTitle });
+      const who = dialog.getByRole("combobox", { name: C.addStaffWho, exact: true });
+      await expect(who).toBeFocused();
+      await expect(who.locator("option")).toHaveText([C.addStaffPick, ...DEMO.staff.filter((s) => !working(day).includes(s)).map((s) => s.name)]);
+      await page.keyboard.press("Escape");
+      await expect(dialog).toHaveCount(0);
+      await expect(plus).toBeFocused();
 
       // › and ‹ go a day on and back
       await bar(page).getByRole("button", { name: C.next, exact: true }).click();
@@ -300,29 +311,24 @@ test.describe("the journal", () => {
       await expectNoSideScroll(page);
       await shot(page, "empty");
 
-      // «Добавить сотрудников в день»: every barber to tick, the hours, breaks
+      // «Добавить сотрудника в расписание»: «Сотрудники» (every barber, nobody works that day), the hours, breaks
       await add.click();
       const dialog = page.getByRole("dialog", { name: C.addStaffTitle });
       await expect(dialog).toBeVisible();
-      const boxes = dialog.getByRole("checkbox");
-      await expect(boxes).toHaveCount(DEMO.staff.length);
-      // nobody ticked: it says so and writes nothing
-      await dialog.getByRole("button", { name: C.addStaffGo, exact: true }).click();
-      await expect(dialog.getByRole("alert")).toHaveText(C.pickSomeone);
-      // «Выбрать всех», and again: nobody
-      await dialog.getByRole("button", { name: C.pickAll }).click();
-      for (const box of await boxes.all()) await expect(box).toBeChecked();
-      await dialog.getByRole("button", { name: C.pickAll }).click();
-      for (const box of await boxes.all()) await expect(box).not.toBeChecked();
+      const who = dialog.getByRole("combobox", { name: C.addStaffWho, exact: true });
+      await expect(who.locator("option")).toHaveText([C.addStaffPick, ...DEMO.staff.map((s) => s.name)]);
+      // nobody picked: it says so and writes nothing
+      await dialog.getByRole("button", { name: A.save, exact: true }).click();
+      await expect(dialog.getByRole("alert")).toHaveText(A.schedule.bad.staff);
       // Slava, 11:00–17:00, a break 13:00–14:00
-      await dialog.getByRole("checkbox", { name: /Slava/ }).check();
+      await who.selectOption({ label: "Slava" });
       await dialog.getByRole("combobox", { name: `${C.workTime}: ${C.timeFrom}`, exact: true }).selectOption("11:00");
       await dialog.getByRole("combobox", { name: `${C.workTime}: ${C.timeTo}`, exact: true }).selectOption("17:00");
       await dialog.getByRole("button", { name: A.schedule.addBreak }).click();
       await expect(dialog.getByRole("combobox", { name: A.schedule.breakFrom, exact: true })).toHaveValue("13:00");
       await expect(dialog.getByRole("combobox", { name: A.schedule.breakTo, exact: true })).toHaveValue("14:00");
       await shot(page, "add-staff");
-      await dialog.getByRole("button", { name: C.addStaffGo, exact: true }).click();
+      await dialog.getByRole("button", { name: A.save, exact: true }).click();
       await expect(calToast(page)).toHaveText(C.addedN(1));
       await expect(dialog).toHaveCount(0);
       // his column, those hours, the break as time he does not work
@@ -338,7 +344,7 @@ test.describe("the journal", () => {
       const menu = cal(page).getByRole("menu", { name: C.headMenu("Slava") });
       await expect(menu.locator(".jr-head-top b")).toHaveText("Slava");
       await expect(menu.locator(".jr-head-top small")).toHaveText(C.headDay(dayText, "11:00–13:00, 14:00–17:00"));
-      await expect(menu.getByRole("menuitem")).toHaveText([C.changeHours, C.makeOff, C.openSchedule]);
+      await expect(menu.getByRole("menuitem")).toHaveText([C.changeHours, C.makeOff, C.addDays, C.removeDays, C.openSchedule, C.onlineTime]);
       await expect(menu.getByRole("menuitem", { name: C.openSchedule })).toHaveAttribute("href", `/admin/schedule?d=${day}`);
       expect(await menu.evaluate((el) => `${el.getBoundingClientRect().width} ${getComputedStyle(el).backgroundColor}`)).toBe(`244 ${WHITE}`);
       await shot(page, "head-menu");

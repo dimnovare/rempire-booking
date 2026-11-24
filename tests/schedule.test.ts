@@ -162,7 +162,7 @@ describe("a day on the grid is the day booking sees", () => {
     expect(totalsOf(cells, [SUN, MON])).toEqual({ shifts: 0, minutes: 0 });
     // every working barber has a row, in the list's order
     const all = await loadSchedule(query, demo.business, WEEK, owner);
-    expect(all.staff.map((s) => s.name)).toEqual(["Renat", "Valentin", "Jevgeni", "Slava", "Milena"]);
+    expect(all.staff.map((s) => s.name)).toEqual(["Jevgeni", "Slava", "Renat", "Valentin", "Milena"]);
     expect(all.staff.find((s) => s.id === renat)!.cells[TUE].visits).toBe(1);
   });
 });

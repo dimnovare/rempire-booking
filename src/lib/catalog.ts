@@ -10,6 +10,7 @@
 import type { Querier } from "./db";
 import { phonesOf, type PhoneEntry } from "./admin/location-form";
 import { salonRating, staffRatings } from "./reviews";
+import { readSettings } from "./settings";
 
 export type L10n = { ru?: string; et?: string; en?: string };
 
@@ -71,6 +72,12 @@ export type CatalogLocation = {
 
 export type Catalog = {
   business: { name: string; timezone: string };
+  /**
+   * «Любой специалист» (businesses.settings.any_staff_on, «Настройки →
+   * Онлайн-запись»): the first step offers «Любой свободный барбер». Off:
+   * only the barbers, and /api/slots and the booking refuse «anyone».
+   */
+  anyStaff: boolean;
   location: CatalogLocation;
   services: CatalogService[];
   staff: CatalogStaff[];
@@ -163,7 +170,7 @@ function locationOf(r: LocationRow, reviews: { count: number; rating: number | n
 
 export async function loadCatalog(q: Querier, businessId: string): Promise<Catalog> {
   const [biz, locs, services, staff, offers, ratings, salonReviews] = await Promise.all([
-    q<{ name: string; timezone: string }>("select name, timezone from businesses where id = $1", [businessId]),
+    q<{ name: string; timezone: string; settings: unknown }>("select name, timezone, settings from businesses where id = $1", [businessId]),
     q<LocationRow>(
       `select name, logo, address, country, postcode, phone, phones, schedule, website, about, photos, lat, lng, instagram, facebook, whatsapp, telegram, viber
          from locations where business_id = $1 and active order by sort, name limit 1`,
@@ -191,7 +198,8 @@ export async function loadCatalog(q: Querier, businessId: string): Promise<Catal
     salonRating(q, businessId),
   ]);
   return {
-    business: biz[0] ?? { name: "REMPIRE", timezone: "Europe/Tallinn" },
+    business: biz[0] ? { name: biz[0].name, timezone: biz[0].timezone } : { name: "REMPIRE", timezone: "Europe/Tallinn" },
+    anyStaff: readSettings(biz[0]?.settings).any_staff_on,
     location: locationOf(locs[0] ?? NO_LOCATION, salonReviews),
     services: services.map((s) => ({ id: s.id, slug: s.slug, name: s.name, durationMin: s.duration_min, sort: s.sort })),
     staff: staff.map((s) => ({

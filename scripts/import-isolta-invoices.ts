@@ -15,6 +15,8 @@
  *     «просрочен» past their due day, as Isolta did;
  *   - the receiver is ours by registry code, else by name; otherwise one is
  *     made, switched off, and listed in the report;
+ *   - the phone of Isolta's contact goes on a receiver made, and on ours
+ *     only where it has none (the report counts them, never prints them);
  *   - idempotent: each invoice keeps Isolta's id (source_ref), so a second
  *     run inserts nothing twice and changes nothing that is there;
  *   - our own invoices and the number series are never touched. The report
@@ -28,7 +30,7 @@
  * The export is the salon's real business data: keep it outside the
  * repository (the script refuses a path inside it), never commit it. The
  * report prints counts, years, sums and Isolta's numbers and ids: no
- * receiver's name, code, address or e-mail, and no bank account.
+ * receiver's name, code, address, e-mail or phone, and no bank account.
  */
 import fs from "node:fs";
 import path from "node:path";

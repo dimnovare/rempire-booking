@@ -6,7 +6,9 @@
  * Rights (src/lib/auth/rights.ts): saveStaffProfile asks them when it is
  * handed a login: a new barber is «Создание сотрудников», a change
  * «Редактирование сотрудников», and switching a barber off or on again
- * «Увольнение сотрудников» (nobody is deleted here). The schedule is asked
+ * «Увольнение сотрудников» (nobody is deleted here). The switch
+ * «Онлайн-запись» of the staff list (setStaffBookable) and «График до» of
+ * the profile are «Редактирование сотрудников» too. The schedule is asked
  * by the actions (staff/actions.ts). Which services he does, at what price
  * and time, is only shown here: it is set in the service's window.
  */
@@ -29,16 +31,35 @@ export type StaffRow = {
   active: boolean;
   sort: number;
   services: number;
+  /**
+   * «График до» (migration 042), "YYYY-MM-DD" or null: the last day clients
+   * book him online; null is no limit of his own. The journal and the barber
+   * app are not held by it.
+   */
+  scheduleUntil: string | null;
 };
 
 export async function listStaff(q: Querier, businessId: string): Promise<StaffRow[]> {
-  const rows = await q<{ id: string; slug: string; display_name: string; role: L10n; bio: L10n; photo_url: string | null; bookable: boolean; active: boolean; sort: number; services: number }>(
+  const rows = await q<{ id: string; slug: string; display_name: string; role: L10n; bio: L10n; photo_url: string | null; bookable: boolean; active: boolean; sort: number; services: number; schedule_until: string | null }>(
     `select s.id, s.slug, s.display_name, s.role, s.bio, s.photo_url, s.bookable, s.active, s.sort,
-            (select count(*)::int from staff_services ss where ss.staff_id = s.id and ss.active) as services
+            (select count(*)::int from staff_services ss where ss.staff_id = s.id and ss.active) as services,
+            s.schedule_until::text as schedule_until
        from staff s where s.business_id = $1 order by s.active desc, s.sort, s.display_name`,
     [businessId],
   );
-  return rows.map((r) => ({ id: r.id, slug: r.slug, name: r.display_name, role: r.role, bio: r.bio, photoUrl: r.photo_url, bookable: r.bookable, active: r.active, sort: r.sort, services: r.services }));
+  return rows.map((r) => ({
+    id: r.id,
+    slug: r.slug,
+    name: r.display_name,
+    role: r.role,
+    bio: r.bio,
+    photoUrl: r.photo_url,
+    bookable: r.bookable,
+    active: r.active,
+    sort: r.sort,
+    services: r.services,
+    scheduleUntil: r.schedule_until,
+  }));
 }
 
 /** A service on the barber page, read only: his own numbers (null = the service's) are set in the service's window (/admin/services?open=<id>). */
@@ -161,7 +182,22 @@ export function slugify(s: string): string {
   );
 }
 
-export type StaffProfileInput = { name: string; role?: L10n; bio?: L10n; photoUrl?: string | null; bookable: boolean; active: boolean; sort?: number | null };
+/**
+ * `scheduleUntil` is «График до» ("YYYY-MM-DD"; "" or null clears it). Not
+ * sent (undefined), it stays as it is: a form that does not show it never
+ * changes it.
+ */
+export type StaffProfileInput = { name: string; role?: L10n; bio?: L10n; photoUrl?: string | null; bookable: boolean; active: boolean; sort?: number | null; scheduleUntil?: string | null };
+
+/**
+ * «График до» as sent: undefined is «leave it», null is «none», a date is a
+ * date; anything else is wrong (false).
+ */
+function untilOf(v: unknown): string | null | undefined | false {
+  if (v === undefined) return undefined;
+  if (v === null || v === "") return null;
+  return typeof v === "string" && isLocalDate(v) ? v : false;
+}
 
 /** Add (id null) or change a barber. A new barber gets the template week of nothing: Renat sets the hours next. */
 export async function saveStaffProfile(business: Business, id: string | null, input: StaffProfileInput, actor: string, who?: Holder): Promise<{ ok: true; id: string } | { ok: false; field: string }> {
@@ -173,6 +209,8 @@ export async function saveStaffProfile(business: Business, id: string | null, in
   const role = l10n(input.role, 40);
   const bio = l10n(input.bio, 600);
   const sort = Number.isInteger(input.sort) ? Math.max(0, Math.min(999, input.sort as number)) : null;
+  const until = untilOf(input.scheduleUntil);
+  if (until === false) return { ok: false, field: "scheduleUntil" };
   return withTx(async (tx) => {
     if (id) {
       if (!isUuid(id)) return { ok: false as const, field: "id" };
@@ -181,14 +219,17 @@ export async function saveStaffProfile(business: Business, id: string | null, in
         if (!cur) return { ok: false as const, field: "id" };
         if (cur.active !== !!input.active && !can(who, "staff.dismiss")) return { ok: false as const, field: "forbidden" };
       }
+      // «График до» only when sent ($10): a form without it leaves it
       const [row] = await tx<{ id: string }>(
         `update staff set display_name = $3, role = $4::jsonb, bio = $5::jsonb, photo_url = $6, bookable = $7, active = $8,
-                sort = coalesce($9, sort)
+                sort = coalesce($9, sort),
+                schedule_until = case when $10::boolean then $11::date else schedule_until end
           where id = $1 and business_id = $2 returning id`,
-        [id, business.id, name, JSON.stringify(role), JSON.stringify(bio), photo || null, !!input.bookable, !!input.active, sort],
+        [id, business.id, name, JSON.stringify(role), JSON.stringify(bio), photo || null, !!input.bookable, !!input.active, sort, until !== undefined, until ?? null],
       );
       if (!row) return { ok: false as const, field: "id" };
-      await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'staff', $2, 'edit', $3::jsonb)`, [actor, id, JSON.stringify({ name, bookable: !!input.bookable, active: !!input.active })]);
+      const after = { name, bookable: !!input.bookable, active: !!input.active, ...(until !== undefined ? { schedule_until: until } : {}) };
+      await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'staff', $2, 'edit', $3::jsonb)`, [actor, id, JSON.stringify(after)]);
       return { ok: true as const, id };
     }
     const [loc] = await tx<{ id: string }>("select id from locations where business_id = $1 and active order by sort, name limit 1", [business.id]);
@@ -199,12 +240,37 @@ export async function saveStaffProfile(business: Business, id: string | null, in
     for (let i = 2; taken.has(slug); i++) slug = `${base}-${i}`;
     const [max] = await tx<{ n: number }>("select coalesce(max(sort), -1)::int + 1 as n from staff where business_id = $1", [business.id]);
     const [row] = await tx<{ id: string }>(
-      `insert into staff (business_id, location_id, slug, display_name, role, bio, photo_url, bookable, active, sort)
-       values ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9, $10) returning id`,
-      [business.id, loc.id, slug, name, JSON.stringify(Object.keys(role).length ? role : { ru: "Барбер", et: "Barber", en: "Barber" }), JSON.stringify(bio), photo || null, !!input.bookable, !!input.active, sort ?? max.n],
+      `insert into staff (business_id, location_id, slug, display_name, role, bio, photo_url, bookable, active, sort, schedule_until)
+       values ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9, $10, $11::date) returning id`,
+      [business.id, loc.id, slug, name, JSON.stringify(Object.keys(role).length ? role : { ru: "Барбер", et: "Barber", en: "Barber" }), JSON.stringify(bio), photo || null, !!input.bookable, !!input.active, sort ?? max.n, until ?? null],
     );
     await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'staff', $2, 'create', $3::jsonb)`, [actor, row.id, JSON.stringify({ name, slug })]);
     return { ok: true as const, id: row.id };
+  });
+}
+
+/**
+ * The switch «Онлайн-запись» in the column of the staff list (Dim, round
+ * 15): it writes at once, as the services table's switch does. The same
+ * right as the profile's own switch, «Редактирование сотрудников». A tap
+ * that changes nothing writes nothing; a change is audited as the profile
+ * is (entity «staff», action «edit»), with what it was before.
+ */
+export async function setStaffBookable(business: Pick<Business, "id">, staffId: string, on: boolean, actor: string, who: Holder): Promise<{ ok: true } | { ok: false; field: string }> {
+  if (!can(who, "staff.edit")) return { ok: false, field: "forbidden" };
+  if (!isUuid(staffId) || typeof on !== "boolean") return { ok: false, field: "id" };
+  return withTx(async (tx) => {
+    const [cur] = await tx<{ bookable: boolean; display_name: string }>("select bookable, display_name from staff where id = $1 and business_id = $2 for update", [staffId, business.id]);
+    if (!cur) return { ok: false as const, field: "id" };
+    if (cur.bookable === on) return { ok: true as const };
+    await tx("update staff set bookable = $2 where id = $1", [staffId, on]);
+    await tx(`insert into audit (actor, entity, entity_id, action, before, after) values ($1, 'staff', $2, 'edit', $3::jsonb, $4::jsonb)`, [
+      actor,
+      staffId,
+      JSON.stringify({ name: cur.display_name, bookable: cur.bookable }),
+      JSON.stringify({ name: cur.display_name, bookable: on }),
+    ]);
+    return { ok: true as const };
   });
 }
 
