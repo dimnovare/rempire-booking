@@ -78,7 +78,9 @@ export type CalendarData = {
   /**
    * staffId → date → the hours clients may book him online that day, as
    * wall-clock spans («Изменить время для онлайн-записи», 043); a day that
-   * is not here has all his working hours. Only the journal's own data has it.
+   * is not here has all his working hours. Only the journal's own data has it:
+   * his head's menu says them, and his column carries them as a strip
+   * (journal-grid.tsx, `online`; journal.ts, onlineStrip).
    */
   online?: Record<string, Record<string, [string, string][]>>;
 };

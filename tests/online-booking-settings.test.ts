@@ -21,8 +21,8 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { CUTOFF_OPTIONS, HORIZON_MAX, HORIZON_OPTIONS, NOTICE_OPTIONS, ONLINE_KEYS, onlineOf, STEP_OPTIONS, validOnline, withValue } from "@/lib/admin/online-form";
 import { onlineMay, saveOnlineSettings } from "@/lib/admin/online-settings";
-import { fillTemplate } from "@/lib/admin/schedule";
-import { listStaff, saveStaffProfile, setStaffBookable } from "@/lib/admin/staff";
+import { copySchedule, fillTemplate, markDays, saveDays } from "@/lib/admin/schedule";
+import { listStaff, saveStaffProfile, saveWeeklyHours, setDayOverride, setStaffBookable } from "@/lib/admin/staff";
 import { adminCreateVisit } from "@/lib/admin/visits";
 import { getBusiness, loadAvailability, type Business } from "@/lib/availability";
 import type { Holder } from "@/lib/auth/rights";
@@ -33,10 +33,14 @@ import { loadCatalog } from "@/lib/catalog";
 import { moveByClient, moveSlots } from "@/lib/client-move";
 import { closeDb, query } from "@/lib/db";
 import { DEFAULT_SETTINGS, readSettings } from "@/lib/settings";
+import { monthEnd, monthStep, nextPage, pageDays, pageToAsk, SLOT_PAGE, SLOTS_DAYS_MAX } from "@/lib/slot-pages";
+import { addDays, localParts, todayIn } from "@/lib/tz";
+import { GET as slotsRoute } from "@/app/api/slots/route";
 import { freshDemo, zonedToUtc, type Demo } from "./helpers";
 
 const TZ = "Europe/Tallinn";
 const at = (date: string, time: string) => zonedToUtc(date, time, TZ);
+const hm = (ms: number) => localParts(ms, TZ).time;
 const NOW = at("2026-11-16", "10:00");
 const TUE = "2026-11-17";
 const WED = "2026-11-18";
@@ -103,13 +107,25 @@ describe("«Онлайн-запись»: what the page may save", () => {
     expect(withValue(STEP_OPTIONS, 30)).toEqual([...STEP_OPTIONS]);
   });
 
-  it("refuses what is not of its kind: off the five-minute grid, outside the limits, a horizon past 90 days, a cut-off in minutes, a switch that is no boolean", () => {
+  it("refuses what is not of its kind: off the five-minute grid, outside the limits, a horizon past 365 days, a cut-off in minutes, a switch that is no boolean", () => {
     for (const v of [0, 3, 7, 125, 30.5, "30", null]) expect(validOnline("slot_step_min", v), `step ${v}`).toBe(false);
     for (const v of [-1, 7 * 24 * 60 + 1, 1.5]) expect(validOnline("min_notice_min", v), `notice ${v}`).toBe(false);
-    for (const v of [0, 91, 365]) expect(validOnline("horizon_days", v), `horizon ${v}`).toBe(false);
+    // (366 is inside what readSettings keeps, but past the page's year)
+    for (const v of [0, -7, 366, 400, 120.5, "120"]) expect(validOnline("horizon_days", v), `horizon ${v}`).toBe(false);
     for (const v of [30, 90, -60, 7 * 24 * 60 + 60]) expect(validOnline("cancel_cutoff_min", v), `cutoff ${v}`).toBe(false);
     for (const v of ["yes", 1, null, undefined]) expect(validOnline("any_staff_on", v), `switch ${v}`).toBe(false);
     expect(validOnline("any_staff_on", false)).toBe(true);
+  });
+
+  it("the horizon goes up to a year: 120, 180 and 365 days are offered and saved, and the next request reads them", async () => {
+    expect(HORIZON_MAX).toBe(365);
+    expect(HORIZON_OPTIONS).toEqual([7, 14, 21, 30, 45, 60, 90, 120, 180, 365]);
+    for (const v of [91, 120, 180, 200, 365]) expect(validOnline("horizon_days", v), `horizon ${v}`).toBe(true);
+    for (const v of [120, 180, 365]) {
+      expect(await saveOnlineSettings(demo.business, owner, { horizon_days: v }), `save ${v}`).toMatchObject({ ok: true, changed: ["horizon_days"] });
+      expect((await business()).settings.horizon_days).toBe(v);
+    }
+    expect((await audits("business", "settings")).map((a) => a.after)).toEqual([{ horizon_days: 120 }, { horizon_days: 180 }, { horizon_days: 365 }]);
   });
 
   it("«Любой специалист» is on unless stored off; anything else stored is the default", () => {
@@ -152,7 +168,7 @@ describe("«Онлайн-запись»: what the page may save", () => {
 
   it("a value not of its kind refuses the whole save, by the key's name", async () => {
     const before = await stored();
-    expect(await saveOnlineSettings(demo.business, owner, { slot_step_min: 15, horizon_days: 120 })).toEqual({ ok: false, field: "horizon_days" });
+    expect(await saveOnlineSettings(demo.business, owner, { slot_step_min: 15, horizon_days: 366 })).toEqual({ ok: false, field: "horizon_days" });
     expect(await saveOnlineSettings(demo.business, owner, { slot_step_min: 7 })).toEqual({ ok: false, field: "slot_step_min" });
     expect(await saveOnlineSettings(demo.business, owner, { cancel_cutoff_min: 90 })).toEqual({ ok: false, field: "cancel_cutoff_min" });
     expect(await saveOnlineSettings(demo.business, owner, { any_staff_on: "off" })).toEqual({ ok: false, field: "any_staff_on" });
@@ -210,6 +226,97 @@ describe("«Любой специалист» off", () => {
     // on again: «anyone» books
     const [later] = (await free(demo.business, null, WED)).starts;
     expect(await book(query, demo.business, input(null, later, "+372 5555 0702"), { now: NOW })).toMatchObject({ ok: true });
+  });
+});
+
+describe("a horizon of a year", () => {
+  // 200 days after «now» (Monday 16.11.2026): Friday 4.6.2027, a working day of Slava's for these tests
+  const FAR = addDays("2026-11-16", 200);
+  const year = () => withSettings({ horizon_days: 365 });
+  const ninety = () => withSettings({ horizon_days: 90 });
+  const worksFar = async () => {
+    expect(await saveDays(demo.business, owner, { cells: [{ staffId: demo.staff.slava, date: FAR }], kind: "work", from: "10:00", to: "18:00", breaks: [] })).toMatchObject({ ok: true });
+  };
+
+  it("a day 200 days ahead: offered and booked with 365 days, refused with 90", async () => {
+    expect(FAR).toBe("2027-06-04");
+    await worksFar();
+    const far = await free(year(), demo.staff.slava, FAR);
+    expect(far.starts.length).toBeGreaterThan(0);
+    expect(hm(far.starts[0])).toBe("10:00");
+    // «anyone» too
+    expect((await free(year(), null, FAR)).who.has(demo.staff.slava)).toBe(true);
+    // with 90 days the booking page has no such day, and the booking itself refuses it
+    const near = await free(ninety(), demo.staff.slava, FAR);
+    expect(near.day).toBeUndefined();
+    expect(await book(query, ninety(), input(demo.staff.slava, far.starts[0]), { now: NOW })).toEqual({ ok: false, code: "slot_taken" });
+    expect(await book(query, ninety(), input(null, far.starts[0]), { now: NOW })).toEqual({ ok: false, code: "slot_taken" });
+    expect(await query("select 1 from appointments where starts_at = $1", [new Date(far.starts[0])])).toHaveLength(0);
+    expect(await book(query, year(), input(demo.staff.slava, far.starts[0]), { now: NOW })).toMatchObject({ ok: true });
+  });
+
+  it("the client's own move to that day: with 365 days, not with 90", async () => {
+    await worksFar();
+    const [tue] = (await free(demo.business, demo.staff.slava, TUE)).starts;
+    const r = await book(query, demo.business, input(demo.staff.slava, tue), { now: NOW });
+    if (!r.ok || !r.manageToken) throw new Error("book");
+    // its own link asks the far page by itself (from), not the whole year
+    const page = (await moveSlots(year(), r.manageToken, 7, NOW, FAR))!;
+    expect(page.days.map((d) => d.date)).toEqual(Array.from({ length: 7 }, (_, i) => addDays(FAR, i)));
+    const to = page.days[0].slots[1].start;
+    expect((await moveSlots(ninety(), r.manageToken, 7, NOW, FAR))!.days).toEqual([]);
+    expect(await moveByClient(ninety(), r.manageToken, { startsAt: new Date(to).toISOString() }, NOW)).toEqual({ ok: false, code: "slot_taken" });
+    expect(await moveByClient(year(), r.manageToken, { startsAt: new Date(to).toISOString() }, NOW)).toMatchObject({ ok: true, startsAt: new Date(to).toISOString() });
+  });
+
+  it("/api/slots answers a page of days and says where the next one starts; the booking page never asks for the whole year", async () => {
+    await saveOnlineSettings(demo.business, owner, { horizon_days: 365 });
+    const today = todayIn(TZ);
+    const ask = async (q: string) => {
+      const res = await slotsRoute(new Request(`http://x/api/slots?services=${demo.services.clip}&${q}`));
+      expect(res.status).toBe(200);
+      return (await res.json()) as { days: { d: string }[]; next: string | null };
+    };
+    // the booking page's first page: two months, then the next from the day after
+    const first = await ask(`staff=any&days=${SLOT_PAGE}`);
+    expect(first.days).toHaveLength(SLOT_PAGE);
+    expect(first.days[0].d).toBe(today);
+    expect(first.next).toBe(addDays(today, SLOT_PAGE));
+    // more is never answered at once
+    const big = await ask("staff=any&days=365");
+    expect(big.days).toHaveLength(SLOTS_DAYS_MAX);
+    expect(big.next).toBe(addDays(today, SLOTS_DAYS_MAX));
+    // the last page: up to the horizon's last day, and no next
+    const last = await ask(`staff=any&from=${addDays(today, 330)}&days=${SLOT_PAGE}`);
+    expect(last.days.map((d) => d.d)).toEqual(Array.from({ length: 35 }, (_, i) => addDays(today, 330 + i)));
+    expect(last.next).toBeNull();
+    // a barber whose «График до» ends sooner: no next page past it
+    await setUntil(demo.staff.slava, addDays(today, 40));
+    expect((await ask(`staff=${demo.staff.slava}&days=${SLOT_PAGE}`)).next).toBeNull();
+    await setUntil(demo.staff.slava, addDays(today, 100));
+    expect((await ask(`staff=${demo.staff.slava}&days=${SLOT_PAGE}`)).next).toBe(addDays(today, SLOT_PAGE));
+    // the salon's usual 60 days fit in the first page, as one ask did before
+    await saveOnlineSettings(demo.business, owner, { horizon_days: 60 });
+    const usual = await ask(`staff=any&days=${SLOT_PAGE}`);
+    expect(usual.days).toHaveLength(60);
+    expect(usual.next).toBeNull();
+  });
+
+  it("the pages' rules: how many days, where the next starts, and when the booking page asks for it", () => {
+    expect([pageDays(null), pageDays(""), pageDays("abc"), pageDays("0"), pageDays("-5"), pageDays("62"), pageDays("1000")]).toEqual([60, 60, 60, 60, 1, 62, SLOTS_DAYS_MAX]);
+    expect(nextPage("2026-11-16", 62, "2027-11-15")).toBe("2027-01-17");
+    expect(nextPage("2026-11-16", 62, "2027-01-17")).toBe("2027-01-17");
+    expect(nextPage("2026-11-16", 62, "2027-01-16")).toBeNull();
+    expect(nextPage("2026-11-16", 62, null)).toBeNull();
+    expect([monthEnd("2027-02"), monthEnd("2028-02"), monthEnd("2026-12")]).toEqual(["2027-02-28", "2028-02-29", "2026-12-31"]);
+    expect([monthStep("2026-12", 1), monthStep("2027-01", -1), monthStep("2026-11", 12)]).toEqual(["2027-01", "2026-12", "2027-11"]);
+    // no free day yet: the next page, whatever the calendar shows
+    expect(pageToAsk("2027-01-17", false, "2026-11-30")).toBe("2027-01-17");
+    // a free day found: only when the calendar goes into the next page
+    expect(pageToAsk("2027-01-17", true, "2026-12-31")).toBeNull();
+    expect(pageToAsk("2027-01-17", true, "2027-01-31")).toBe("2027-01-17");
+    // the horizon is all here: nothing more
+    expect(pageToAsk(null, false, "2027-12-31")).toBeNull();
   });
 });
 
@@ -332,6 +439,98 @@ describe("the template of «График работы» and «График до�
     await setUntil(demo.staff.slava, "2027-01-10");
     expect(await fillTemplate(demo.business, without(owner, "staff.schedule"), ask([demo.staff.slava]))).toEqual({ ok: false, code: "forbidden" });
     expect(await untilOf(demo.staff.slava)).toBe("2027-01-10");
+  });
+});
+
+describe("«График до» follows a working day added after it", () => {
+  // January 2027: past the demo's dated shifts
+  const JAN = (d: number) => `2027-01-${String(d).padStart(2, "0")}`;
+  const moves = async (id: string) => (await audits("staff", "edit", id)).filter((r) => "schedule_until" in r.after);
+  const work = (staffId: string, dates: string[], from = "10:00", to = "18:00") => markDays(demo.business, owner, { staffId, dates, kind: "work", from, to });
+
+  it("the journal's «Добавить рабочие дни»: to the last day added, audited; a day before it, or days made off, move nothing", async () => {
+    const id = demo.staff.slava;
+    await setUntil(id, JAN(5));
+    expect(await work(id, [JAN(8), JAN(6)])).toMatchObject({ ok: true, written: 2 });
+    expect(await untilOf(id)).toBe(JAN(8));
+    const rows = await moves(id);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ actor: owner.id, before: { schedule_until: JAN(5) }, after: { schedule_until: JAN(8), via: "journal-add" } });
+    // a working day up to it: it stays
+    expect(await work(id, [JAN(4), JAN(8)])).toMatchObject({ ok: true });
+    expect(await untilOf(id)).toBe(JAN(8));
+    // «Убрать рабочие дни» after it, or on its own last day: never back, never on
+    expect(await markDays(demo.business, owner, { staffId: id, dates: [JAN(8), JAN(20)], kind: "off" })).toMatchObject({ ok: true });
+    expect(await untilOf(id)).toBe(JAN(8));
+    expect(await moves(id)).toHaveLength(1);
+  });
+
+  it("no «График до» stays none, whatever is added; one later than the day added stays", async () => {
+    expect(await work(demo.staff.renat, [JAN(25)])).toMatchObject({ ok: true, written: 1 });
+    expect(await untilOf(demo.staff.renat)).toBeNull();
+    await setUntil(demo.staff.slava, "2027-03-31");
+    expect(await work(demo.staff.slava, [JAN(25)])).toMatchObject({ ok: true, written: 1 });
+    expect(await untilOf(demo.staff.slava)).toBe("2027-03-31");
+    expect((await audits("staff", "edit")).filter((r) => "schedule_until" in r.after)).toHaveLength(0);
+  });
+
+  it("a day left as it was (its visits would be cut) moves nothing; the days written do", async () => {
+    const id = demo.staff.slava;
+    expect(await saveDays(demo.business, owner, { cells: [{ staffId: id, date: JAN(12) }], kind: "work", from: "10:00", to: "19:00", breaks: [] })).toMatchObject({ ok: true });
+    const v = await adminCreateVisit(demo.business, { staffId: id, start: at(JAN(12), "17:00"), serviceIds: [demo.services.clip], name: "Walk In", phone: null, idempotencyKey: `until-follows-${Math.random()}`, force: true }, owner.id);
+    expect(v).toMatchObject({ ok: true });
+    await setUntil(id, JAN(5));
+    expect(await work(id, [JAN(12)], "10:00", "15:00")).toEqual({ ok: true, written: 0, skipped: [{ staffId: id, date: JAN(12), visits: 1 }] });
+    expect(await untilOf(id)).toBe(JAN(5));
+    expect(await work(id, [JAN(9), JAN(12)], "10:00", "15:00")).toMatchObject({ ok: true, written: 1 });
+    expect(await untilOf(id)).toBe(JAN(9));
+  });
+
+  it("«График работы»: a working cell after it moves it (all the barbers marked), a day off, a vacation or a sick day does not", async () => {
+    await setUntil(demo.staff.slava, JAN(5));
+    await setUntil(demo.staff.renat, JAN(5));
+    for (const kind of ["off", "vacation", "sick"]) {
+      expect(await saveDays(demo.business, owner, { cells: [{ staffId: demo.staff.slava, date: JAN(14) }], kind }), kind).toMatchObject({ ok: true });
+      expect(await untilOf(demo.staff.slava), kind).toBe(JAN(5));
+    }
+    const cells = [
+      { staffId: demo.staff.slava, date: JAN(14) },
+      { staffId: demo.staff.renat, date: JAN(7) },
+      { staffId: demo.staff.renat, date: JAN(11) },
+    ];
+    expect(await saveDays(demo.business, owner, { cells, kind: "work", from: "11:00", to: "17:00", breaks: [] })).toMatchObject({ ok: true, written: 3 });
+    expect(await untilOf(demo.staff.slava)).toBe(JAN(14));
+    expect(await untilOf(demo.staff.renat)).toBe(JAN(11));
+    expect((await moves(demo.staff.renat))[0].after).toEqual({ schedule_until: JAN(11), via: "cells" });
+    // refused (no right): nothing moves
+    await setUntil(demo.staff.slava, JAN(5));
+    expect(await saveDays(demo.business, without(owner, "staff.schedule"), { cells: [{ staffId: demo.staff.slava, date: JAN(20) }], kind: "work", from: "11:00", to: "17:00", breaks: [] })).toEqual({ ok: false, code: "forbidden" });
+    expect(await untilOf(demo.staff.slava)).toBe(JAN(5));
+  });
+
+  it("«Скопировать график»: the barbers it is copied to, by their last working day copied", async () => {
+    // Slava works 13.1.2027 and is off the 14th; Renat's «График до» is the 5th; the copy is made on the 4th
+    expect(await saveDays(demo.business, owner, { cells: [{ staffId: demo.staff.slava, date: JAN(13) }], kind: "work", from: "10:00", to: "18:00", breaks: [] })).toMatchObject({ ok: true });
+    expect(await saveDays(demo.business, owner, { cells: [{ staffId: demo.staff.slava, date: JAN(14) }], kind: "off" })).toMatchObject({ ok: true });
+    await setUntil(demo.staff.renat, JAN(5));
+    const r = await copySchedule(demo.business, owner, { fromStaffId: demo.staff.slava, toStaffIds: [demo.staff.renat], dateFrom: JAN(13), dateTo: JAN(14), breaks: true }, at(JAN(4), "08:00"));
+    expect(r).toMatchObject({ ok: true, written: 2 });
+    // to his last working day copied, not to the day off after it
+    expect(await untilOf(demo.staff.renat)).toBe(JAN(13));
+    expect((await moves(demo.staff.renat))[0].after).toEqual({ schedule_until: JAN(13), via: "copy" });
+  });
+
+  it("the profile's «Особые дни»: a working day after it moves it; a day off or one taken away does not; the weekly hours never do", async () => {
+    const id = demo.staff.slava;
+    await setUntil(id, JAN(5));
+    expect(await setDayOverride(demo.business, id, JAN(20), [], "", owner.id)).toEqual({ ok: true });
+    expect(await setDayOverride(demo.business, id, JAN(20), null, "", owner.id)).toEqual({ ok: true });
+    expect(await untilOf(id)).toBe(JAN(5));
+    expect(await saveWeeklyHours(demo.business, id, { 1: [["10:00", "18:00"]], 3: [["10:00", "18:00"]] }, owner.id)).toEqual({ ok: true });
+    expect(await untilOf(id)).toBe(JAN(5));
+    expect(await setDayOverride(demo.business, id, JAN(15), [["12:00", "18:00"]], "", owner.id)).toEqual({ ok: true });
+    expect(await untilOf(id)).toBe(JAN(15));
+    expect((await moves(id))[0]).toMatchObject({ before: { schedule_until: JAN(5) }, after: { schedule_until: JAN(15), via: "day" } });
   });
 });
 

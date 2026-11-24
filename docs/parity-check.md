@@ -118,6 +118,39 @@ page; production: one slow «Перенести на» on the iPhone, whose visi
 filled Jevgeni's short Wednesday for the three tests after it). Two real
 ones, the barbers' tiles in «Услуги» in the old order, were fixed.
 
+**The gaps left after that, closed the same evening** (Dim: «live
+walk-through, small gaps»):
+
+- Online hours on the journal's grid: a thin strip down the barber's
+  column over his online spans, «Онлайн-запись: 10:00–14:00» on it; a
+  click goes through to the column (`journal-grid.tsx`, `onlineStrip`). Not
+  in the barber app's day: he cannot set them there.
+- «График до» moves forward with any working day added after it: «График
+  работы»'s cells, templates and copies, the journal's «Добавить рабочие
+  дни» and «Добавить сотрудника в расписание», the profile's special days
+  (`scheduleUntilFollows`). None stays none; taking days away never moves
+  it back.
+- «Запись открыта на» up to 365 days (120, 180, 365 added). The booking
+  page asks its free times a page at a time (`src/lib/slot-pages.ts`: 62
+  days first, more only while no free day is found or the calendar goes
+  further); the APIs answer 92 days at most and say where the next page
+  starts.
+- An invoice's note holds 4000 characters, as Isolta's (045); the issuer's
+  printed foot text keeps 300.
+- A credit note is refused without the company's IBAN or address, as an
+  invoice is, before a number is taken.
+- The walk-through (production build, fake data, owner and barber):
+  «Онлайн-запись», «Сотрудники», the journal's head menu, online hours,
+  «Добавить сотрудника», the hover card, an invoice draft (number «не
+  закреплён», reference), the barber's «Мои расчёты», the booking page. One
+  fix: «Расписание» in the staff list was blank for a barber with no
+  «График до»; it now says «без даты».
+- Runs with all of it: 1373 unit tests; `tests/pg-race.test.ts` on
+  Postgres 18 (045 from empty); typecheck; the e2e on the production build,
+  both phones: 279 passed, none failed. By hand on the production build: a
+  horizon of 365 days, the booking page's calendar seven months ahead
+  (four pages asked, one at a time), a June day with its times.
+
 **Waiting on Renat** (his page): paying a visit (cash / card, 81 a month,
 all Jevgeni's) and the finance rights behind it; Altegio's other reports
 (retention, workload, finance, P&L, till, by staff, service or client) and

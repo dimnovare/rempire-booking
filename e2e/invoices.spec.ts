@@ -489,7 +489,10 @@ test.describe("invoices", () => {
       // the note is the staff's own, never printed (Isolta's «не будет видна на инвойсе»): it shows under the totals, saying so
       await page.getByRole("button", { name: I.note, exact: true }).click();
       const note = page.getByRole("dialog", { name: I.noteTitle });
+      // as long as Isolta's: 4000 characters (045)
+      await expect(note.getByRole("textbox", { name: I.noteLabel, exact: true })).toHaveAttribute("maxlength", "4000");
       await note.getByRole("textbox", { name: I.noteLabel, exact: true }).fill("Tasuda ülekandega.");
+      await expect(note).toContainText(I.noteCount(18, 4000));
       await note.getByRole("button", { name: A.save, exact: true }).click();
       await expect(note).toHaveCount(0);
       await expect(page.locator(".inv-memo:visible")).toContainText(I.noteTitle);

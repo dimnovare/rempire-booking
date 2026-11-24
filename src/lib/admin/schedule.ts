@@ -49,7 +49,7 @@ import { mergeIntervals, subtractIntervals, workWindows, type HoursRow, type Int
 import { addDays, isLocalDate, startOfDay, todayIn } from "../tz";
 import { cutVisits, daysBetween, daySpans, effectiveDay, endOfNextMonth, isDayKind, localSpans, shiftDays, SHIFT_RUN_MAX, weekdayDays, type DayKind, type Span } from "./schedule-plan";
 import { MARK_DAYS_MAX } from "./journal";
-import { cleanSpans } from "./staff";
+import { cleanSpans, scheduleUntilFollows } from "./staff";
 import { isUuid } from "./visits";
 
 export type { DayKind, Span };
@@ -202,10 +202,13 @@ const stored = (spans: Span[]): Span[] => spans.map(([a, b]) => [a, b === "24:00
  * visits is left as it was and named in `skipped`, and only dated days are
  * written: a vacation stays where it is, over whatever the day now says.
  *
- * `until` (a template): the period's last day. A barber of the change whose
- * «График до» (migration 042) is earlier gets it moved there, in the same
- * transaction, with an audit row of its own; one with none keeps none (no
- * limit is wider than any date), one with a later date keeps his.
+ * «График до» (migration 042) follows, in the same transaction, with an
+ * audit row of its own (staff.ts, scheduleUntilFollows): a barber whose
+ * «График до» is earlier than the last working day written for him gets it
+ * moved to that day, and `until` (a template: the period's last day) moves
+ * every barber of the change to it, as before. One with none keeps none (no
+ * limit is wider than any date), one with a later date keeps his, and a day
+ * made off, a vacation or a sick day never moves it back.
  */
 async function applyDays(business: Business, by: Holder & { id: string }, plans: DayPlan[], strict: boolean, via: string, until?: string): Promise<Applied> {
   // whatever called this: the right, and every barber named is one the login sees
@@ -291,21 +294,10 @@ async function applyDays(business: Business, by: Holder & { id: string }, plans:
         JSON.stringify({ via, days: mine.length, from: mine[0].date, to: mine[mine.length - 1].date, kinds }),
       ]);
     }
-    if (until) {
-      const behind = await tx<{ id: string; was: string }>(
-        "select id, schedule_until::text as was from staff where business_id = $1 and id = any($2::uuid[]) and schedule_until < $3::date order by id",
-        [business.id, staffIds, until],
-      );
-      for (const s of behind) {
-        await tx("update staff set schedule_until = $2::date where id = $1", [s.id, until]);
-        await tx(`insert into audit (actor, entity, entity_id, action, before, after) values ($1, 'staff', $2, 'edit', $3::jsonb, $4::jsonb)`, [
-          by.id,
-          s.id,
-          JSON.stringify({ schedule_until: s.was }),
-          JSON.stringify({ schedule_until: until, via }),
-        ]);
-      }
-    }
+    // «График до» follows: to each barber's last working day written here, and a template's to its period's end
+    const follows = go.filter((p) => p.kind === "work").map((p) => ({ staffId: p.staffId, date: p.date }));
+    if (until) for (const staffId of staffIds) follows.push({ staffId, date: until });
+    await scheduleUntilFollows(tx, business.id, follows, by.id, via);
     return { ok: true, written: go.length, skipped: strict ? [] : refused };
   });
 }
@@ -344,7 +336,7 @@ export type CellsInput = {
   breaks?: Span[];
 };
 
-/** «Сохранить»: every marked cell becomes that day, or none does. */
+/** «Сохранить»: every marked cell becomes that day, or none does. A working day after a barber's «График до» moves it there. */
 export async function saveDays(business: Business, by: Holder & { id: string }, input: CellsInput): Promise<Applied> {
   const cells = Array.isArray(input?.cells) ? input.cells : [];
   if (!mayChange(by, cells.map((c) => c?.staffId))) return NO;
@@ -466,7 +458,8 @@ export type MarkInput = {
  * become working days with these hours and breaks, or days off. Written as
  * a template is: dated days only, so a vacation stays where it is, and a
  * day whose visits the change would cut (any visit, for a day off) is left
- * as it was and named in `skipped`; the other days are written.
+ * as it was and named in `skipped`; the other days are written. A working
+ * day added after his «График до» moves it there; days off never move it.
  */
 export async function markDays(business: Business, by: Holder & { id: string }, input: MarkInput): Promise<Applied> {
   const staffId = String(input?.staffId ?? "");

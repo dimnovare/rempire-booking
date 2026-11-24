@@ -104,27 +104,48 @@ export type AvailabilityQuery = {
 
 const ms = (v: unknown) => (v instanceof Date ? v.getTime() : Date.parse(String(v)));
 
+/** The last local day clients may book: today and the salon's horizon («Запись открыта на», 1–365 days). */
+export function horizonEnd(business: Pick<Business, "timezone" | "settings">, now = Date.now()): string {
+  return addDays(localParts(now, business.timezone).date, business.settings.horizon_days - 1);
+}
+
+/** The most days one call works out (the routes ask fewer: src/lib/slot-pages.ts). */
+const DAYS_MAX = 120;
+
 /**
  * Free slots per local day. `staffId` null or missing = «anyone», which
  * the salon may switch off («Любой специалист», any_staff_on): then nobody
  * is quoted for it, so nothing is offered and nothing can be booked.
  * Only days from today to the end of the booking horizon are returned, and
- * a barber only up to his own «График до» (staff.schedule_until, 042).
+ * a barber only up to his own «График до» (staff.schedule_until, 042), at
+ * most DAYS_MAX of them: a caller wanting more asks again from a later day.
+ * `lastDay`: the last day anyone quoted may be offered (the horizon's end,
+ * or the latest «График до» when every one of them has one); null when
+ * nobody is quoted. A page of days ends there (slot-pages.ts, nextPage).
  */
-export async function loadAvailability(q: Querier, a: AvailabilityQuery): Promise<{ quotes: StaffQuote[]; days: DayAvailability[] }> {
+export async function loadAvailability(q: Querier, a: AvailabilityQuery): Promise<{ quotes: StaffQuote[]; days: DayAvailability[]; lastDay: string | null }> {
   const { business } = a;
   const tz = business.timezone;
   const s = business.settings;
   const now = a.now ?? Date.now();
   const today = localParts(now, tz).date;
-  const lastDay = addDays(today, s.horizon_days - 1);
+  const lastDay = horizonEnd(business, now);
   const dates: string[] = [];
-  for (let i = 0; i < Math.min(a.days, 120); i++) {
+  for (let i = 0; i < Math.min(a.days, DAYS_MAX); i++) {
     const d = addDays(a.from, i);
     if (d >= today && d <= lastDay) dates.push(d);
   }
   const quotes = !a.staffId && !s.any_staff_on ? [] : await quoteStaff(q, business.id, a.serviceIds, a.staffId);
-  if (!dates.length || !quotes.length) return { quotes, days: dates.map((date) => ({ date, open: false, slots: [] })) };
+  // the last day anyone quoted may be offered: the horizon's end, or sooner when each of them has a «График до»
+  let last: string | null = null;
+  if (quotes.length) {
+    last = lastDay;
+    if (quotes.every((x) => x.scheduleUntil)) {
+      const latest = quotes.reduce((m, x) => (x.scheduleUntil! > m ? x.scheduleUntil! : m), "");
+      if (latest < last) last = latest;
+    }
+  }
+  if (!dates.length || !quotes.length) return { quotes, days: dates.map((date) => ({ date, open: false, slots: [] })), lastDay: last };
 
   const staffIds = quotes.map((x) => x.staffId);
   const fromMs = startOfDay(dates[0], tz);
@@ -213,5 +234,5 @@ export async function loadAvailability(q: Querier, a: AvailabilityQuery): Promis
     });
     return { date, open: staffDays.some((d) => d.windows.length > 0 || (d.special?.length ?? 0) > 0), slots: mergeSlots(staffDays, opts) };
   });
-  return { quotes, days };
+  return { quotes, days, lastDay: last };
 }

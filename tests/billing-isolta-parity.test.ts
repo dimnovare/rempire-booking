@@ -4,7 +4,8 @@
  * in the list and its search; no issuing without the company's IBAN and
  * address, refused before a number is taken; the number a draft would get
  * (not reserved); the receiver's phone (044), checked as the salon's own
- * numbers are. The PDF's side (reference printed, note not printed) and
+ * numbers are; no credit note without them either; the invoice's note up
+ * to 4000 characters (045). The PDF's side (reference printed, note not printed) and
  * «Отправить снова» to the current e-mail are in parity-invoices.test.ts.
  *
  * Fake companies only, on the demo seed. Every date is fixed: October 2026
@@ -13,7 +14,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { getBusiness, type Business } from "@/lib/availability";
 import { sectionRows } from "@/lib/billing/export";
-import { buildDraft, invoiceById, issueBlock, issueInvoice, upcomingNumber } from "@/lib/billing/invoices";
+import { buildDraft, creditInvoice, INVOICE_NOTE_MAX, invoiceById, issueBlock, issueInvoice, setDraftNote, upcomingNumber } from "@/lib/billing/invoices";
 import { filterRows } from "@/lib/billing/list";
 import { listIssuers, listReceivers, receiverForStaff, saveReceiver, setLastNumber, type Receiver } from "@/lib/billing/parties";
 import { checkDigit731, referenceNumber } from "@/lib/billing/reference";
@@ -123,6 +124,86 @@ describe("issuing without the company's IBAN or address", () => {
   it("says «no_bank» first when both are missing", () => {
     expect(issueBlock({ iban: "", address: "" })).toBe("no_bank");
     expect(issueBlock({ iban: "EE000000000000000000", address: " " })).toBe("no_address");
+  });
+});
+
+describe("a credit note without the company's IBAN or address", () => {
+  const state = async (id: string) => {
+    const [c] = await query<{ counters: string; credits: number; letters: number; audits: number }>(
+      `select (select coalesce(string_agg(year || ':' || last, ','), '') from invoice_counters) as counters,
+              (select count(*)::int from invoices where kind = 'credit') as credits,
+              (select count(*)::int from notifications where kind = 'invoice') as letters,
+              (select count(*)::int from audit where entity = 'invoice' and action = 'credit') as audits`,
+    );
+    return { ...c, status: (await invoiceById(query, biz.id, id))!.status };
+  };
+
+  it("is refused as issuing is, «no_bank» then «no_address», before a number is taken; with both it goes", async () => {
+    const i = await issuer();
+    const id = await draftFor("valentin");
+    expect(await issueInvoice(biz, id, owner, ISSUE)).toEqual({ ok: true, number: "DEMO-2026-0001" });
+    const before = await state(id);
+    expect(before).toMatchObject({ counters: "2026:1", credits: 0, letters: 1, audits: 0, status: "issued" });
+
+    // the bank account taken off the company's card after the invoice went out
+    await query("update invoice_issuers set iban = '' where id = $1", [i.id]);
+    expect(await creditInvoice(biz, id, owner, ISSUE + 60_000)).toEqual({ ok: false, code: "no_bank" });
+    expect(await state(id)).toEqual(before);
+
+    await query("update invoice_issuers set iban = 'EE000000000000000000', address = '  ' where id = $1", [i.id]);
+    expect(await creditInvoice(biz, id, owner, ISSUE + 60_000)).toEqual({ ok: false, code: "no_address" });
+    expect(await state(id)).toEqual(before);
+
+    // both back: the credit note takes the next number, the original turns «credited»
+    await query("update invoice_issuers set address = 'Mardi 1, 10145 Tallinn' where id = $1", [i.id]);
+    expect(await creditInvoice(biz, id, owner, ISSUE + 60_000)).toMatchObject({ ok: true, number: "DEMO-2026-0002" });
+    expect(await state(id)).toMatchObject({ counters: "2026:2", credits: 1, letters: 2, audits: 1, status: "credited" });
+  });
+
+  it("an invoice already credited says so first, whatever the company's card", async () => {
+    const i = await issuer();
+    const id = await draftFor("valentin");
+    expect(await issueInvoice(biz, id, owner, ISSUE)).toMatchObject({ ok: true });
+    expect(await creditInvoice(biz, id, owner, ISSUE)).toMatchObject({ ok: true });
+    await query("update invoice_issuers set iban = '' where id = $1", [i.id]);
+    expect(await creditInvoice(biz, id, owner, ISSUE)).toEqual({ ok: false, code: "already" });
+  });
+});
+
+/* ---------- «Заметка к счёту»: 4000 characters (045) ---------- */
+
+describe("the invoice's note, as long as Isolta's (045)", () => {
+  it("keeps 4000 characters and cuts what is longer; line breaks are kept as \\n", async () => {
+    expect(INVOICE_NOTE_MAX).toBe(4000);
+    const id = await draftFor("valentin");
+    const full = "x".repeat(INVOICE_NOTE_MAX);
+    expect(await setDraftNote(biz, id, full, owner)).toBe(true);
+    expect((await invoiceById(query, biz.id, id))!.note).toBe(full);
+
+    expect(await setDraftNote(biz, id, `${"y".repeat(INVOICE_NOTE_MAX)}zzz`, owner)).toBe(true);
+    expect((await invoiceById(query, biz.id, id))!.note).toBe("y".repeat(INVOICE_NOTE_MAX));
+
+    expect(await setDraftNote(biz, id, "  esimene\r\nteine  ", owner)).toBe(true);
+    expect((await invoiceById(query, biz.id, id))!.note).toBe("esimene\nteine");
+  });
+
+  it("the database holds 4000 and refuses 4001; the issuer's printed foot text keeps its 300", async () => {
+    const id = await draftFor("valentin");
+    await query("update invoices set note = $2 where id = $1", [id, "n".repeat(4000)]);
+    await expect(query("update invoices set note = $2 where id = $1", [id, "n".repeat(4001)])).rejects.toThrow(/invoices_note_check/);
+    expect((await invoiceById(query, biz.id, id))!.note).toHaveLength(4000);
+
+    const i = await issuer();
+    await query("update invoice_issuers set note = $2 where id = $1", [i.id, "f".repeat(300)]);
+    await expect(query("update invoice_issuers set note = $2 where id = $1", [i.id, "f".repeat(301)])).rejects.toThrow(/check/);
+  });
+
+  it("an issued invoice's note is not changed any more", async () => {
+    const id = await draftFor("valentin");
+    expect(await setDraftNote(biz, id, "enne", owner)).toBe(true);
+    expect(await issueInvoice(biz, id, owner, ISSUE)).toMatchObject({ ok: true });
+    expect(await setDraftNote(biz, id, "pärast", owner)).toBe(false);
+    expect((await invoiceById(query, biz.id, id))!.note).toBe("enne");
   });
 });
 

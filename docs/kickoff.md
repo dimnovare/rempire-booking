@@ -340,12 +340,9 @@ No secrets are written here. The full registry for the shop is
 
 ## 9. Open questions
 
-**For Dim:**
-
-- The domain for staging: `booking.diipsolutions.eu` or
-  `rempire-booking.diipsolutions.eu`?
-- Who owns the repo and the Vercel project?
-- A Railway database on the shop's account or a new one?
+**For Dim:** ~~the staging domain, the repo and Vercel owner, the Railway
+database~~: answered 17.11, round 1 above. What is still open before the
+launch is in `docs/launch.md`.
 
 **For Renat** (version 2, 17.11.2026: `docs/questions-for-renat.ru.md`; he answers on the questions page, `/ru/q/<token>`, which saves as he types):
 

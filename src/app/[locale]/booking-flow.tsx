@@ -49,6 +49,7 @@ import {
 import type { Catalog, CatalogLocation, CatalogStaff } from "@/lib/catalog";
 import { COPY, duration, eur, euroRange, INTL, LOCALES, pick, type Locale } from "@/lib/i18n";
 import type { SalonReview } from "@/lib/reviews";
+import { monthEnd, monthStep, pageToAsk, SLOT_PAGE } from "@/lib/slot-pages";
 import { localParts } from "@/lib/tz";
 
 type Props = {
@@ -77,7 +78,10 @@ type Screen = "barber" | "services" | "time" | "details" | "done" | "bye";
 /** [start ms, the barber «anyone» gets, his special-time extra in cents] */
 type Tuple = [number, string, number?];
 type Day = { d: string; open: boolean; s: Tuple[] };
-type Avail = { key: string; offered: boolean; days: Day[] };
+/** The free times loaded so far for one choice: the days from today on, and where the next page starts (null: the horizon is all here). */
+type Avail = { key: string; offered: boolean; days: Day[]; next: string | null };
+/** One answer of /api/slots (or a visit's own …/slots): a page of days. */
+type SlotsPage = { offered: boolean; days: Day[]; next?: string | null };
 type Slot = { t: number; staffId: string; extra: number };
 /** The visit this device booked, as remembered here and checked against the server (/api/visit/<token>). */
 type NextVisit = { url: string; start: number; end: number; staffId: string; services: string[] };
@@ -365,28 +369,53 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
     void loadReviews();
   }, [about, catalog.location.reviewCount, loadReviews]);
 
-  // free times for the current choice, the whole horizon at once
+  // free times for the current choice, a page of days at a time (src/lib/slot-pages.ts): the first two
+  // months now, then a page more while no free day is found yet, or when the calendar goes past them
   const availKey = barber && services.length ? `${barber}|${services.join(",")}` : "";
   const wantsTimes = screen === "time" || screen === "details";
+  const slotsUrl = (key: string, from: string | null) => {
+    const [staff, ids] = key.split("|");
+    const page = `days=${SLOT_PAGE}${from ? `&from=${from}` : ""}`;
+    // a visit being moved asks by its own link: it does not stand in its own way
+    return moving ? `/api/visit/${moving.token}/slots?${page}` : `/api/slots?services=${ids}&staff=${staff}&${page}`;
+  };
   useEffect(() => {
     if (!availKey || !wantsTimes || avail?.key === availKey) return;
     const ctl = new AbortController();
     setAvailError(false);
-    const [staff, ids] = availKey.split("|");
-    // a visit being moved asks by its own link: it does not stand in its own way
-    fetch(moving ? `/api/visit/${moving.token}/slots?days=${horizonDays}` : `/api/slots?services=${ids}&staff=${staff}&days=${horizonDays}`, { signal: ctl.signal, cache: "no-store" })
+    fetch(slotsUrl(availKey, null), { signal: ctl.signal, cache: "no-store" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((j: { offered: boolean; days: Day[] }) => setAvail({ key: availKey, offered: j.offered, days: j.days }))
+      .then((j: SlotsPage) => setAvail({ key: availKey, offered: j.offered, days: j.days, next: j.next ?? null }))
       .catch((e) => {
         if ((e as Error).name !== "AbortError") setAvailError(true);
       });
     return () => ctl.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [availKey, wantsTimes, avail?.key, horizonDays]);
+  }, [availKey, wantsTimes, avail?.key]);
 
   const ready = avail && avail.key === availKey ? avail : null;
   const earliest = useMemo(() => ready?.days.find((d) => d.s.length)?.d ?? null, [ready]);
   const shownDay = day ?? earliest ?? ready?.days[0]?.d ?? null;
+  // the month the calendar shows, and the last day it wants loaded: that month's end, or the day picked
+  const shownMonth = calMonth ?? shownDay?.slice(0, 7) ?? null;
+  const wantTo = [shownMonth ? monthEnd(shownMonth) : "", day ?? ""].reduce((a, b) => (b > a ? b : a), "");
+  const more = ready && wantsTimes ? pageToAsk(ready.next, !!earliest, wantTo) : null;
+  useEffect(() => {
+    if (!more || !availKey) return;
+    const ctl = new AbortController();
+    const key = availKey;
+    fetch(slotsUrl(key, more), { signal: ctl.signal, cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((j: SlotsPage) =>
+        // after the days it has, once: a page that came for another choice, or twice, is left out
+        setAvail((a) => (a && a.key === key && a.next === more ? { ...a, offered: a.offered || j.offered, days: [...a.days, ...j.days.filter((d) => d.d >= more)], next: j.next ?? null } : a)),
+      )
+      .catch((e) => {
+        if ((e as Error).name !== "AbortError") setAvailError(true);
+      });
+    return () => ctl.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [more, availKey]);
 
   /* ---------- formatting ---------- */
   const fmtTime = (ms: number) =>
@@ -871,7 +900,8 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
 
   const timeScreen = () => {
     if (availError) return <p className="alert stack">{c.errGeneric}</p>;
-    if (!ready) {
+    // (no free day in the days loaded, and more to come: the next page is on its way)
+    if (!ready || (!earliest && ready.next)) {
       return (
         <p className="wait" role="status">
           {c.loading}
@@ -900,10 +930,12 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
     const current = byDate.get(shownDay ?? "") ?? ready.days[0];
     const today = localParts(Date.now(), tz).date;
 
-    // the month, Monday first, with the days around it that fill its weeks
+    // the month, Monday first, with the days around it that fill its weeks. A month past the days loaded
+    // is shown as soon as it is picked; its days come with the next page (`more`, above)
     const months = [...new Set(ready.days.map((d) => d.d.slice(0, 7)))];
-    const month = calMonth && months.includes(calMonth) ? calMonth : current.d.slice(0, 7);
-    const mi = months.indexOf(month);
+    const month = calMonth && (months.includes(calMonth) || (ready.next && calMonth > months[months.length - 1])) ? calMonth : current.d.slice(0, 7);
+    const hasPrev = month > months[0];
+    const hasNext = months.some((m) => m > month) || !!ready.next;
     const [cy, cm] = month.split("-").map(Number);
     const first = Date.UTC(cy, cm - 1, 1);
     const lead = (new Date(first).getUTCDay() + 6) % 7;
@@ -982,10 +1014,10 @@ export function BookingFlow({ locale, catalog, tz, horizonDays, cutoffHours, rem
                 <ChevronIcon dir={monthOpen ? "up" : "down"} size={16} width={2.4} />
               </span>
             </button>
-            <button type="button" className="cal-nav" disabled={mi <= 0} aria-label={c.prevMonth} onClick={() => setCalMonth(months[mi - 1])}>
+            <button type="button" className="cal-nav" disabled={!hasPrev} aria-label={c.prevMonth} onClick={() => setCalMonth(monthStep(month, -1))}>
               <ChevronIcon dir="left" size={16} width={2.4} />
             </button>
-            <button type="button" className="cal-nav" disabled={mi >= months.length - 1} aria-label={c.nextMonth} onClick={() => setCalMonth(months[mi + 1])}>
+            <button type="button" className="cal-nav" disabled={!hasNext} aria-label={c.nextMonth} onClick={() => setCalMonth(monthStep(month, 1))}>
               <ChevronIcon dir="right" size={16} width={2.4} />
             </button>
           </div>

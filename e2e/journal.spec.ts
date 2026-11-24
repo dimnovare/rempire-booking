@@ -353,6 +353,40 @@ test.describe("the journal", () => {
       await expect(menu).toHaveCount(0);
       await expect(head).toBeFocused();
 
+      // «Изменить время для онлайн-записи»: 12:00–15:00; his column then carries it as a thin violet strip
+      // along its left edge, with the hours as its tooltip, and the menu says them too
+      await expect(col.locator(".cal-online")).toHaveCount(0);
+      await head.click();
+      await menu.getByRole("menuitem", { name: C.onlineTime }).click();
+      const online = page.getByRole("dialog", { name: C.onlineTime });
+      await online.getByRole("button", { name: C.onlineAdd }).click();
+      await online.getByRole("combobox", { name: C.onlineFrom, exact: true }).selectOption("12:00");
+      await online.getByRole("combobox", { name: C.onlineTo, exact: true }).selectOption("15:00");
+      await online.getByRole("button", { name: A.save, exact: true }).click();
+      await expect(calToast(page)).toHaveText(C.onlineSaved);
+      await expect(online).toHaveCount(0);
+      const strip = col.locator(".cal-online");
+      await expect(strip).toHaveCount(1);
+      await expect(strip).toHaveAttribute("title", C.onlineNow("12:00–15:00"));
+      await expect(col.getByRole("img", { name: C.onlineNow("12:00–15:00") })).toBeVisible();
+      // 4px on the column's left edge, from 12:00 to 15:00 at a pixel a minute (the grid starts at 11:00)
+      const [sb, cb] = [(await strip.boundingBox())!, (await col.boundingBox())!];
+      expect(sb.x - cb.x).toBeLessThanOrEqual(1);
+      expect(Math.round(sb.width)).toBe(4);
+      expect(Math.round(sb.y - cb.y)).toBe(60);
+      expect(Math.round(sb.height)).toBe(180);
+      expect(await strip.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe("rgba(144, 123, 159, 0.6)");
+      // a click on it is the column's: free time there opens a new visit
+      await strip.click({ position: { x: 2, y: 30 } });
+      await expect(page.getByRole("dialog", { name: A.visit.new })).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("dialog", { name: A.visit.new })).toHaveCount(0);
+      await head.click();
+      await expect(menu.locator(".jr-head-online")).toHaveText(C.onlineNow("12:00–15:00"));
+      await page.keyboard.press("Escape");
+      await expect(menu).toHaveCount(0);
+      await shot(page, "online-strip");
+
       // «Изменить часы на этот день»: 10:00–18:00, the break kept
       await head.click();
       await menu.getByRole("menuitem", { name: C.changeHours }).click();

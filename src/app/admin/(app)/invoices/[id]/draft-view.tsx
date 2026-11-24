@@ -13,7 +13,6 @@
  * invoice's own rule. «Посмотреть и отправить счёт» shows the draft's PDF
  * (no number, the draft stamp); only «Выставить и отправить» there issues.
  */
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { LineItem, LinePick } from "@/lib/billing/picker";
@@ -25,11 +24,12 @@ import { useFrame } from "../../frame";
 import { addLineAction, changeReceiverAction, copyAction, discardAction, dropLineAction, findLineItemsAction, issueAction, setNoteAction, updateLineAction } from "../actions";
 import { INV_ROOT, StatusTag, ToolIcon } from "../common";
 import { MetaTable, ReceiverCard, ReceiverPicker, SenderBlock, Totals, unitOf, type PickReceiver } from "../sheet-parts";
-import { Confirm, Dialog, Field, IvTop, MenuButton } from "../ui";
+import { Blocked, Confirm, Dialog, Field, IvTop, MenuButton } from "../ui";
 import { DocBar, LinesHead, LinesHeadRow } from "./doc-parts";
 import type { ViewInvoice, ViewLine } from "./types";
 
-const NOTE_MAX = 300;
+/** invoices.note's limit, INVOICE_NOTE_MAX in src/lib/billing/invoices.ts (045), as Isolta's. */
+const NOTE_MAX = 4000;
 
 export function DraftView({ inv, lines, receivers }: { inv: ViewInvoice; lines: ViewLine[]; receivers: PickReceiver[] }) {
   const A = useA();
@@ -498,7 +498,7 @@ function NoteDialog({ invoiceId, note, onClose }: { invoiceId: string; note: str
     >
       <Field label={A.inv.noteLabel}>
         {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
-        <textarea rows={4} maxLength={NOTE_MAX} autoFocus value={v} onChange={(e) => setV(e.target.value)} />
+        <textarea rows={8} maxLength={NOTE_MAX} autoFocus value={v} onChange={(e) => setV(e.target.value)} />
       </Field>
       {err && (
         <p className="iv-err" role="alert">
@@ -581,23 +581,5 @@ function PreviewDialog({ inv, onClose }: { inv: ViewInvoice; onClose: () => void
       )}
       {blocked && <Blocked code={blocked} alert />}
     </Dialog>
-  );
-}
-
-/**
- * Why a draft cannot be issued yet, in plain words, with the way to the
- * company's card in «Настройки» (Isolta refuses to send without the bank
- * account and the sender's address). Above the sheet, and again in the
- * preview if «Выставить и отправить» was refused.
- */
-function Blocked({ code, alert = false }: { code: string; alert?: boolean }) {
-  const A = useA();
-  return (
-    <p className="iv-warn" role={alert ? "alert" : undefined}>
-      {A.inv.blocked[code] ?? A.error}{" "}
-      <Link className="iv-link" href={`${INV_ROOT}/settings`} prefetch={false}>
-        {A.inv.toSettings}
-      </Link>
-    </p>
   );
 }

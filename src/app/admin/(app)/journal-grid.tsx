@@ -5,7 +5,9 @@
  * barber's «Мой день» (src/app/b/(app)/day-view.tsx, board MyDay-Grid): the
  * time down the side, a column for each barber (or day), the working hours
  * white on grey, special time, breaks and time off, the visits as cards in
- * their colours (src/lib/admin/journal.ts, visitLook), the clock line. Also
+ * their colours (src/lib/admin/journal.ts, visitLook), the clock line, and
+ * a barber's own online hours as a thin strip along his column's left edge
+ * (`online`; the journal's only, where they are set). Also
  * the phone's dark bar (the date with a ▾) and its floating week strip.
  *
  * Every place on it is in minutes (--t from the top, --m long) and the styles
@@ -62,6 +64,13 @@ export type GridProps<V extends GridVisit, K extends GridBlock, S extends GridSp
   today: string;
   now: number;
   work: (c: GridCol) => Interval[];
+  /**
+   * A column's online hours, when the barber has his own that day
+   * («Изменить время для онлайн-записи»): the spans as moments and the words
+   * of their tooltip. A thin strip along the column's left edge, under the
+   * visits, that a click goes through to the column. None: no strip.
+   */
+  online?: (c: GridCol) => { spans: Interval[]; label: string } | null;
   visits: V[];
   blocks: K[];
   special: S[];
@@ -194,6 +203,18 @@ export function JournalGrid<V extends GridVisit, K extends GridBlock, S extends 
   const nowMin = minutesInDay(now, today, tz);
   const nowOn = cols.some((c) => c.date === today) && nowMin >= lo && nowMin <= hi;
 
+  /** The online hours' strip of a column: each span cut to the hours shown; its tooltip says them all. */
+  const onlineOf = (c: GridCol) => {
+    const on = p.online?.(c);
+    if (!on) return null;
+    return on.spans.map(([a, b]) => {
+      const top = Math.max(0, minOf(a, c.date));
+      const bottom = Math.min(total, minOf(b, c.date));
+      if (bottom <= top) return null;
+      return <div key={`o${a}`} className="cal-online" role="img" aria-label={on.label} title={on.label} style={at(top, bottom - top)} />;
+    });
+  };
+
   const onMove = (c: GridCol, e: React.PointerEvent<HTMLDivElement>) => {
     if (!p.slotLabel || e.pointerType !== "mouse") return;
     if ((e.target as HTMLElement).closest("[data-item], [data-card]")) return setSlot(null);
@@ -248,6 +269,7 @@ export function JournalGrid<V extends GridVisit, K extends GridBlock, S extends 
             {p.work(c).map(([a, b], i) => (
               <div key={`w${i}`} className="cal-work" style={at(minOf(a, c.date), (b - a) / MIN)} />
             ))}
+            {onlineOf(c)}
             {p.special
               .filter((x) => x.staffId === c.staffId)
               .map((x) => {

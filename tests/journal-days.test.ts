@@ -18,7 +18,7 @@
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { calendarFor, loadCalendar, type CalendarData, type CalStaff } from "@/lib/admin/calendar";
-import { addableStaff, cleanOnline, MARK_DAYS_MAX, ONLINE_SPANS_MAX, spansText } from "@/lib/admin/journal";
+import { addableStaff, cleanOnline, MARK_DAYS_MAX, ONLINE_SPANS_MAX, onlineStrip, spansText } from "@/lib/admin/journal";
 import { saveOnlineHours } from "@/lib/admin/journal-online";
 import { loadSchedule, markDays, saveDays } from "@/lib/admin/schedule";
 import { adminCreateVisit, addTimeOff } from "@/lib/admin/visits";
@@ -307,6 +307,68 @@ describe("online hours: written by the journal", () => {
     expect(await saveOnlineHours(demo.business, seeing(milena), ask)).toEqual({ ok: false, code: "forbidden" });
     expect(await onlineRow(slava, WED)).toBeNull();
     expect(await saveOnlineHours(demo.business, seeing(slava), ask)).toMatchObject({ ok: true });
+  });
+});
+
+describe("online hours on the journal's grid", () => {
+  it("onlineStrip: each span as moments of its day, an end of midnight as the next midnight; none set is no strip", () => {
+    expect(
+      onlineStrip(
+        [
+          ["20:00", "23:59"],
+          ["12:00", "15:00"],
+        ],
+        WED,
+        TZ,
+      ),
+    ).toEqual([
+      [at(WED, "12:00"), at(WED, "15:00")],
+      [at(WED, "20:00"), at(THU, "00:00")],
+    ]);
+    expect(onlineStrip([["20:00", "24:00"]], WED, TZ)).toEqual([[at(WED, "20:00"), at(THU, "00:00")]]);
+    expect(onlineStrip(null, WED, TZ)).toEqual([]);
+    expect(onlineStrip(undefined, WED, TZ)).toEqual([]);
+    expect(onlineStrip([], WED, TZ)).toEqual([]);
+    // what is not a span is left out, not drawn
+    expect(onlineStrip([["noon", "15:00"], ["15:00", "14:00"], ["10:00", "11:00"]] as [string, string][], WED, TZ)).toEqual([[at(WED, "10:00"), at(WED, "11:00")]]);
+    // the day the clocks go forward (28.3.2027 in Tallinn): by the wall clock, as the working hours are drawn
+    expect(onlineStrip([["10:00", "14:00"]], "2027-03-28", TZ)).toEqual([[at("2027-03-28", "10:00"), at("2027-03-28", "14:00")]]);
+  });
+
+  it("the journal's loader brings them to the grid for the day and the week it shows, cut as the login's columns and history are", async () => {
+    await works(slava, WED);
+    await works(milena, WED);
+    await saveOnlineHours(demo.business, owner, { staffId: slava, date: WED, spans: [["12:00", "15:00"], ["17:00", "19:00"]] });
+    // the day (/admin?d=…) and the week (/admin?v=week, from its Monday) load the same row
+    const day = calendarFor(owner, await loadCalendar(query, demo.business, WED, 1), MON);
+    const week = calendarFor(owner, await loadCalendar(query, demo.business, MON, 7), MON);
+    for (const cal of [day, week]) {
+      const set = cal.online?.[slava]?.[WED];
+      expect(set).toEqual([
+        ["12:00", "15:00"],
+        ["17:00", "19:00"],
+      ]);
+      // what his column draws: those spans, inside his working day
+      const strip = onlineStrip(set, WED, TZ);
+      expect(strip).toEqual([
+        [at(WED, "12:00"), at(WED, "15:00")],
+        [at(WED, "17:00"), at(WED, "19:00")],
+      ]);
+      const [[w0, w1]] = cal.work[slava][WED];
+      for (const [a, b] of strip) expect(a >= w0 && b <= w1).toBe(true);
+      // and its tooltip's words
+      expect(spansText(set!)).toBe("12:00–15:00, 17:00–19:00");
+      // Milena has none of her own: no strip in her column
+      expect(onlineStrip(cal.online?.[milena]?.[WED], WED, TZ)).toEqual([]);
+    }
+    // only the other days of the week have none
+    expect(Object.keys(week.online?.[slava] ?? {})).toEqual([WED]);
+    // a login that looks back no further than Thursday does not get Wednesday's
+    const recent: Who = { ...owner, rights: { ...owner.rights, values: { ...owner.rights.values, "journal.history": 0 } } };
+    expect(calendarFor(recent, await loadCalendar(query, demo.business, MON, 7), THU).online?.[slava]).toEqual({});
+    // given back all his hours: gone from the grid's data
+    await saveOnlineHours(demo.business, owner, { staffId: slava, date: WED, spans: [] });
+    expect((await loadCalendar(query, demo.business, WED, 1)).online?.[slava]).toBeUndefined();
   });
 });
 

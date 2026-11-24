@@ -1309,6 +1309,8 @@ export const en: typeof ru = {
     found: (n: number) => `Found: ${n}`,
     until: (d: string) => `until ${d}`,
     untilEnded: "The schedule has ended: he cannot be booked online",
+    untilNone: "no end date",
+    untilNoneHint: "No «Schedule until» set: online booking is open as far ahead as «Settings → Online booking» allows",
     onlineOf: (name: string) => `Online booking: ${name}`,
     on: "On",
     off: "Off",

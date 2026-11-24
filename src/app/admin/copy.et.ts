@@ -1308,6 +1308,8 @@ export const et: typeof ru = {
     found: (n: number) => `Leitud: ${n}`,
     until: (d: string) => `kuni ${d}`,
     untilEnded: "Graafik on lõppenud: veebis tema juurde ei broneeri",
+    untilNone: "kuupäevata",
+    untilNoneHint: "«Graafik kuni» on määramata: veebibroneering on avatud nii kaugele, kui lubab «Seaded → Veebibroneering»",
     onlineOf: (name: string) => `Veebibroneering: ${name}`,
     on: "Sees",
     off: "Väljas",

@@ -28,7 +28,8 @@
  * (journal-card.tsx): the client, his numbers, the status chips, the
  * services, his e-mail; a barber's head opens his day's menu of six
  * (journal-hours.tsx: his hours, his day off, working days added or taken
- * away, the schedule, his online hours); the bar's person-plus adds a
+ * away, the schedule, his online hours, which his column then shows as a
+ * thin violet strip along its left edge); the bar's person-plus adds a
  * barber to any day, and a day nobody works offers the schedule and
  * «Добавить сотрудников в день».
  * A click, a drag and the bar snap to the line the scale shows: 15, 10 or 5
@@ -53,7 +54,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import type { CalBlock, CalendarData, CalMay, CalVisit } from "@/lib/admin/calendar";
 import { daySpan, hhmm, minutesInDay, momentAt, snap, weekStart } from "@/lib/admin/grid";
-import { addableStaff, dayNumbers, dayStaff, isVisitState, visitLook, type MineToday } from "@/lib/admin/journal";
+import { addableStaff, dayNumbers, dayStaff, isVisitState, onlineStrip, spansText, visitLook, type MineToday } from "@/lib/admin/journal";
 import type { AdminOutcome } from "@/lib/admin/visits";
 import { shownName } from "@/lib/client-anon";
 import { extraText } from "@/lib/slots";
@@ -524,6 +525,12 @@ function Journal({ data, view, date, today, staffId, now: serverNow, step: bookS
             today={today}
             now={now}
             work={(c) => data.work[c.staffId]?.[c.date] ?? []}
+            // his own online hours that day, a strip along his column («Онлайн-запись: 12:00–15:00»)
+            online={(c) => {
+              const set = data.online?.[c.staffId]?.[c.date];
+              const spans = onlineStrip(set, c.date, tz);
+              return set && spans.length ? { spans, label: A.cal.onlineNow(spansText(set)) } : null;
+            }}
             visits={data.visits}
             blocks={data.blocks}
             special={data.special}

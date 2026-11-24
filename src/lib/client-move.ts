@@ -31,22 +31,27 @@ export type MoveOutcome =
 /** What the visit costs without special time, as booked: a percent window is priced from this, as the move itself does. */
 const baseOf = (v: { services: { priceCents: number }[] }) => v.services.reduce((n, s) => n + s.priceCents, 0);
 
-/** The free times this visit could move to: its barber, its services, itself out of the way. Null: no such visit, or it can no longer change. */
-export async function moveSlots(business: Business, token: string, days: number, now = Date.now()): Promise<{ offered: boolean; days: DayAvailability[] } | null> {
+/**
+ * The free times this visit could move to: its barber, its services, itself
+ * out of the way; `days` days from `from` (today when none), a page of the
+ * booking page's (src/lib/slot-pages.ts). `lastDay`: the last day he may be
+ * offered. Null: no such visit, or it can no longer change.
+ */
+export async function moveSlots(business: Business, token: string, days: number, now = Date.now(), from?: string | null): Promise<{ offered: boolean; days: DayAvailability[]; lastDay: string | null } | null> {
   const v = await findVisit(query, business.id, token);
   if (!v || !canChange(v, business, now)) return null;
   const ask: AvailabilityQuery = {
     business,
     serviceIds: v.services.map((s) => s.serviceId),
     staffId: v.staffId,
-    from: localParts(now, business.timezone).date,
+    from: from || localParts(now, business.timezone).date,
     days,
     now,
     ignoreAppointmentId: v.id,
     basePriceCents: baseOf(v),
   };
   const r = await loadAvailability(query, ask);
-  return { offered: r.quotes.length > 0, days: r.days };
+  return { offered: r.quotes.length > 0, days: r.days, lastDay: r.lastDay };
 }
 
 /**

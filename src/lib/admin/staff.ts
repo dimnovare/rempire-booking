@@ -299,7 +299,49 @@ export async function saveWeeklyHours(business: Business, staffId: string, days:
   });
 }
 
-/** One day unlike the template: other hours, or a day off ([]). spans null removes the override. */
+/**
+ * «График до» follows a working day added after it (Dim, round 15): for each
+ * barber of `days` (dated working days just written), his latest one, when
+ * his «График до» (042) is set and earlier, becomes his «График до», with an
+ * audit row of its own that says from where (`via`). None set stays none
+ * (no limit is wider than any date), a later one stays, and taking days away
+ * never moves it back: a caller hands only the working days it added. Runs
+ * in the caller's transaction, after it has locked the barbers' rows.
+ *
+ * Every write that adds a dated working day calls it: «График работы» (its
+ * cells, a template to the period's last day, a copy: schedule.ts,
+ * applyDays), the journal's «Добавить рабочие дни» and «Добавить сотрудника
+ * в расписание» (the same), and the profile's «Особые дни» (setDayOverride).
+ * The weekly hours have no date (the barber app's «Мои часы» included), so
+ * they never move it.
+ */
+export async function scheduleUntilFollows(tx: Querier, businessId: string, days: readonly { staffId: string; date: string }[], actor: string, via: string): Promise<void> {
+  const last = new Map<string, string>();
+  for (const d of days) {
+    const was = last.get(d.staffId);
+    if (!was || d.date > was) last.set(d.staffId, d.date);
+  }
+  if (!last.size) return;
+  const ids = [...last.keys()].sort();
+  const behind = await tx<{ id: string; was: string; day: string }>(
+    `select s.id, s.schedule_until::text as was, d.day::text as day
+       from staff s join unnest($2::uuid[], $3::date[]) as d (id, day) on d.id = s.id
+      where s.business_id = $1 and s.schedule_until < d.day
+      order by s.id`,
+    [businessId, ids, ids.map((id) => last.get(id)!)],
+  );
+  for (const s of behind) {
+    await tx("update staff set schedule_until = $2::date where id = $1", [s.id, s.day]);
+    await tx(`insert into audit (actor, entity, entity_id, action, before, after) values ($1, 'staff', $2, 'edit', $3::jsonb, $4::jsonb)`, [
+      actor,
+      s.id,
+      JSON.stringify({ schedule_until: s.was }),
+      JSON.stringify({ schedule_until: s.day, via }),
+    ]);
+  }
+}
+
+/** One day unlike the template: other hours, or a day off ([]). spans null removes the override. A working day after his «График до» moves it there (scheduleUntilFollows). */
 export async function setDayOverride(business: Business, staffId: string, date: string, spans: unknown, note: string, actor: string): Promise<{ ok: true } | { ok: false; field: string }> {
   if (!isUuid(staffId)) return { ok: false, field: "staff" };
   if (!isLocalDate(date)) return { ok: false, field: "date" };
@@ -316,6 +358,7 @@ export async function setDayOverride(business: Business, staffId: string, date: 
         [staffId, date, JSON.stringify(clean.map(([a, b]) => [a, b === "24:00" ? "23:59" : b])), t(note, 200)],
       );
     await tx(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'staff', $2, 'day', $3::jsonb)`, [actor, staffId, JSON.stringify({ date, spans: clean })]);
+    if (clean?.length) await scheduleUntilFollows(tx, business.id, [{ staffId, date }], actor, "day");
     return { ok: true as const };
   });
 }

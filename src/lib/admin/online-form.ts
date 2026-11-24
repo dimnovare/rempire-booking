@@ -20,11 +20,13 @@ export const STEP_OPTIONS: readonly number[] = [5, 10, 15, 20, 30, 45, 60, 90, 1
 /** minutes; 0 is «Не выбрано» */
 export const NOTICE_OPTIONS: readonly number[] = [0, 15, 30, 60, 120, 180, 240, 360, 720, 1440, 2880];
 /**
- * Days ahead, at most HORIZON_MAX: the booking page asks /api/slots for the
- * whole horizon at once, and that answers 92 days at most.
+ * Days ahead, at most HORIZON_MAX: a year, as the admin we follow offers.
+ * The booking page asks /api/slots a page of days at a time, only as far as
+ * its calendar goes (src/lib/slot-pages.ts), so a long horizon costs nothing
+ * up front.
  */
-export const HORIZON_MAX = 90;
-export const HORIZON_OPTIONS: readonly number[] = [7, 14, 21, 30, 45, 60, 90];
+export const HORIZON_MAX = 365;
+export const HORIZON_OPTIONS: readonly number[] = [7, 14, 21, 30, 45, 60, 90, 120, 180, 365];
 /** minutes, whole hours; 0 is «Без ограничений» */
 export const CUTOFF_OPTIONS: readonly number[] = [0, 1, 2, 3, 4, 6, 12, 24, 48, 72].map((h) => h * 60);
 

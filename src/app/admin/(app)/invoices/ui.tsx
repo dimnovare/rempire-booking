@@ -11,6 +11,7 @@
  *              «Избранное» (star.tsx), or the login could not take it off;
  *   Dialog     a centred window with a head, a body and a foot;
  *   Confirm    the same as a question that must be answered («alertdialog»);
+ *   Blocked    why an invoice cannot go out yet, with the way to «Настройки»;
  *   MenuButton a button with a menu under it («Инструменты»);
  *   Field      a 56px field with its label cut into the line;
  *   Period     «Период» and the two dates, with ‹ › to step by it.
@@ -22,7 +23,7 @@ import { isDay, periodOf, type Gran, GRANS } from "@/lib/billing/list";
 import { CaretIcon, NextIcon, PrevIcon, XIcon } from "../../icons";
 import { useA } from "../../lang";
 import { PageStar } from "../star";
-import { INV_PAGES, invPageOf } from "./common";
+import { INV_PAGES, INV_ROOT, invPageOf } from "./common";
 
 /** The white bar on top of a page. `children` are its buttons; `star` puts the section's star beside the title. */
 export function IvTop({ title, sub, star, children }: { title: string; sub?: string; star?: boolean; children?: React.ReactNode }) {
@@ -104,12 +105,13 @@ export function Dialog({
 
 /**
  * A question before something that cannot be taken back. `onYes` returns
- * what went wrong, or nothing: then the question closes.
+ * what went wrong, or nothing: then the question closes. Words are said as
+ * an error; an element (<Blocked>, with its link) is shown as it is.
  */
-export function Confirm({ title, ask, yes, danger, onYes, onClose, children }: { title: string; ask: string; yes: string; danger?: boolean; onYes: () => Promise<string | null | void>; onClose: () => void; children?: React.ReactNode }) {
+export function Confirm({ title, ask, yes, danger, onYes, onClose, children }: { title: string; ask: string; yes: string; danger?: boolean; onYes: () => Promise<string | React.ReactElement | null | void>; onClose: () => void; children?: React.ReactNode }) {
   const A = useA();
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<string | React.ReactElement | null>(null);
   const go = async () => {
     setBusy(true);
     setErr(null);
@@ -140,12 +142,33 @@ export function Confirm({ title, ask, yes, danger, onYes, onClose, children }: {
     >
       <p>{ask}</p>
       {children}
-      {err && (
+      {typeof err === "string" ? (
         <p className="iv-err" role="alert">
           {err}
         </p>
+      ) : (
+        err
       )}
     </Dialog>
+  );
+}
+
+/**
+ * Why an invoice or a credit note cannot go out yet, in plain words, with
+ * the way to the company's card in «Настройки» (Isolta refuses to send
+ * without the bank account and the sender's address; issueBlock in
+ * src/lib/billing/invoices.ts). Above a draft's sheet, in its preview if
+ * «Выставить и отправить» was refused, and in «Создать кредит-счёт».
+ */
+export function Blocked({ code, alert = false }: { code: string; alert?: boolean }) {
+  const A = useA();
+  return (
+    <p className="iv-warn" role={alert ? "alert" : undefined}>
+      {A.inv.blocked[code] ?? A.error}{" "}
+      <Link className="iv-link" href={`${INV_ROOT}/settings`} prefetch={false}>
+        {A.inv.toSettings}
+      </Link>
+    </p>
   );
 }
 

@@ -587,10 +587,18 @@ export async function addDraftLine(business: Business, invoiceId: string, input:
   });
 }
 
+/** The longest «Заметка к счёту», as Isolta's (invoices.note, 045). */
+export const INVOICE_NOTE_MAX = 4000;
+
+/**
+ * «Заметка к счёту»: the staff's own words about a draft, kept with it and
+ * never printed (pdf.ts), at most INVOICE_NOTE_MAX characters, as Isolta's
+ * «Заметка (не будет видна на инвойсе)» (045). Longer is cut there.
+ */
 export async function setDraftNote(business: Business, invoiceId: string, note: string, actor: string): Promise<boolean> {
   return withTx(async (tx) => {
     if (!(await lockDraft(tx, business.id, invoiceId))) return false;
-    await tx("update invoices set note = $2, updated_at = now() where id = $1", [invoiceId, String(note ?? "").trim().slice(0, 300)]);
+    await tx("update invoices set note = $2, updated_at = now() where id = $1", [invoiceId, String(note ?? "").replace(/\r\n/g, "\n").trim().slice(0, INVOICE_NOTE_MAX)]);
     await tx(`insert into audit (actor, entity, entity_id, action) values ($1, 'invoice', $2, 'note')`, [actor, invoiceId]);
     return true;
   });
@@ -795,12 +803,14 @@ export async function setPaid(business: Business, invoiceId: string, paid: boole
   });
 }
 
-export type CreditResult = { ok: true; id: string; number: string } | Fail<"not_issued" | "already" | "no_issuer">;
+export type CreditResult = { ok: true; id: string; number: string } | Fail<"not_issued" | "already" | "no_issuer" | "no_bank" | "no_address">;
 
 /**
  * A correction: a credit invoice with every line negated, issued at once
  * with its own number, sent like an invoice. The original turns «credited»;
  * its sales and its month go back to «not billed», for a new draft.
+ * Refused as an invoice is, before a number is taken, while the issuer has
+ * no IBAN or no address (issueBlock): the credit note prints them too.
  */
 export async function creditInvoice(business: Business, invoiceId: string, actor: string, now = Date.now()): Promise<CreditResult> {
   return withTx(async (tx) => {
@@ -816,6 +826,8 @@ export async function creditInvoice(business: Business, invoiceId: string, actor
     const issuer = await issuerById(tx, business.id, orig.issuer_id);
     const receiver = await receiverById(tx, business.id, orig.receiver_id);
     if (!issuer || !receiver) return { ok: false as const, code: "no_issuer" as const };
+    const blocked = issueBlock(issuer);
+    if (blocked) return { ok: false as const, code: blocked };
     const lines = await invoiceLines(tx, invoiceId);
     const today = todayIn(business.timezone, now);
     const number = await nextNumber(tx, issuer, Number(today.slice(0, 4)));

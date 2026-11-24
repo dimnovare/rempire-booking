@@ -291,6 +291,16 @@ describe("what the invoice's PDF prints", () => {
     expect(text).not.toContain("Ainult meile");
   });
 
+  it("not a long note either: Isolta's 4000 characters (045) are kept whole and never printed", async () => {
+    const LONG = `Sisemärkus ${"helista reedel, ".repeat(400)}`.slice(0, 4000);
+    const id = await draftFor("valentin");
+    expect(await setDraftNote(biz, id, LONG, owner)).toBe(true);
+    expect(await textOf((await draftPdf(query, biz, id, ISSUE))!.bytes)).not.toMatch(/Sisemärkus|reedel/);
+    expect(await issueInvoice(biz, id, owner, ISSUE)).toMatchObject({ ok: true });
+    expect((await invoiceById(query, biz.id, id))!.note).toBe(LONG.trim());
+    expect(await textOf((await invoicePdf(query, biz.id, id))!.bytes)).not.toMatch(/Sisemärkus|reedel/);
+  });
+
   it("for a receiver with VAT: his KMKR number, each line at 24 % and the VAT on its own row", async () => {
     const id = await draftFor("jevgeni");
     expect(await issueInvoice(biz, id, owner, ISSUE)).toEqual({ ok: true, number: "DEMO-2026-0001" });

@@ -537,6 +537,25 @@ describe("the import", () => {
     expect(text).not.toContain("Our next number prints as");
   });
 
+  it("keeps Isolta's free text as the invoice's note up to 4000 characters (045), and cuts only past that", async () => {
+    // Finvoice holds free text in pieces of at most 512; the import joins them with a space
+    const pieces = (n: number, ch: string) => Array.from({ length: n }, () => `<InvoiceFreeText>${ch.repeat(500)}</InvoiceFreeText>`).join("\n");
+    const withText = (xml: string, text: string) => xml.replace("</InvoiceDetails>", `${text}\n</InvoiceDetails>`);
+    const files = exportFiles();
+    files.set("finvoices/invoice-1001.xml", latin9(withText(finvoice(DOCS["1001"].doc!), pieces(2, "a"))));
+    files.set("finvoices/invoice-1003.xml", latin9(withText(finvoice(DOCS["1003"].doc!), pieces(9, "b"))));
+    await applyIsoltaImport(query, await planIsoltaImport(query, demo.business, readIsoltaExport(files), NOW));
+
+    const note = async (ref: string) => (await query<{ note: string }>("select note from invoices where source_ref = $1", [ref]))[0].note;
+    // 1001 characters, more than the 300 it was cut at before: whole
+    expect(await note("1001")).toBe(`${"a".repeat(500)} ${"a".repeat(500)}`);
+    // 4508 characters: 3999 of them and «…»
+    const long = await note("1003");
+    expect(long).toHaveLength(4000);
+    expect(long.endsWith("…")).toBe(true);
+    expect(long.startsWith("b".repeat(500))).toBe(true);
+  });
+
   it("a credit whose original is not there is left out and named", async () => {
     const files = exportFiles();
     files.delete("finvoices/invoice-1002.xml");

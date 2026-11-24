@@ -88,6 +88,35 @@
       }
     },
     {
+      "name": "walk-prod",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["next", "start", "--port", "3433"],
+      "port": 3433,
+      "env": {
+        "DB_DRIVER": "pglite",
+        "SEED_DEMO": "yes",
+        "DEMO_LOGINS": "yes",
+        "EMAIL_TRANSPORT": "console",
+        "SMS_TRANSPORT": "console",
+        "RESEND_API_KEY": "",
+        "EMAIL_FROM": "",
+        "TEST_MAIL_TO": "",
+        "MESSAGGIO_LOGIN": "",
+        "MESSAGGIO_SENDER": "",
+        "SMS_TEST_TO": "",
+        "SHOP_API_URL": "",
+        "SHOP_API_SECRET": "",
+        "SHOP_SALES": "",
+        "GOOGLE_CLIENT_ID": "",
+        "GOOGLE_CLIENT_SECRET": "",
+        "VAPID_PUBLIC_KEY": "",
+        "VAPID_PRIVATE_KEY": "",
+        "CRON_SECRET": "",
+        "GEOCODER": "fake",
+        "DATABASE_URL": ""
+      }
+    },
+    {
       "name": "db-down",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["next", "dev", "--port", "3430"],

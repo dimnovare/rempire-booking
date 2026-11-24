@@ -10,7 +10,7 @@
  * The hours the grid shows are in grid.ts (daySpan).
  */
 import type { L10n } from "../catalog";
-import { addDays, startOfDay } from "../tz";
+import { addDays, startOfDay, zonedToUtc } from "../tz";
 import type { CalendarData, CalStaff, CalVisit } from "./calendar";
 
 /**
@@ -163,6 +163,24 @@ export function cleanOnline(spans: unknown, work: readonly Span[]): Span[] | nul
 
 /** «12:00–15:00, 16:00–19:00» */
 export const spansText = (spans: readonly Span[]) => spans.map(([a, b]) => `${a}–${b === "23:59" ? "24:00" : b}`).join(", ");
+
+/**
+ * A barber's online hours of one day as moments, for the grid's quiet strip
+ * along the left edge of his column (journal-grid.tsx, `online`): each span
+ * as it was set, a «23:59» or «24:00» end being midnight. None set (all his
+ * hours, the usual), or nothing readable: [], no strip.
+ */
+export function onlineStrip(spans: readonly Span[] | null | undefined, date: string, tz: string): [number, number][] {
+  if (!Array.isArray(spans)) return [];
+  const out: [number, number][] = [];
+  for (const s of spans) {
+    if (!Array.isArray(s) || !TIME_RE.test(String(s[0])) || !(TIME_RE.test(String(s[1])) || s[1] === "24:00")) continue;
+    const from = zonedToUtc(date, s[0], tz);
+    const to = endOf(s[1]) === 1440 ? startOfDay(addDays(date, 1), tz) : zonedToUtc(date, s[1], tz);
+    if (to > from) out.push([from, to]);
+  }
+  return out.sort((x, y) => x[0] - y[0]);
+}
 
 /* ---------- «Моё»: the panel beside a login's own column ---------- */
 

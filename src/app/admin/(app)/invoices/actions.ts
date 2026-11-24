@@ -19,6 +19,7 @@ import {
   discardDraft,
   dropDraftLine,
   invoiceById,
+  INVOICE_NOTE_MAX,
   issueInvoice,
   makeDrafts,
   openDraft,
@@ -215,7 +216,7 @@ export async function copyAction(invoiceId: string): Promise<{ ok: true; id: str
 
 export async function setNoteAction(invoiceId: string, note: string): Promise<boolean> {
   const { user, business } = await requireAdmin();
-  const ok = await setDraftNote(business, str(invoiceId, 64), str(note, 600), user.id);
+  const ok = await setDraftNote(business, str(invoiceId, 64), str(note, INVOICE_NOTE_MAX * 2), user.id);
   if (ok) refresh();
   return ok;
 }

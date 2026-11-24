@@ -9,6 +9,12 @@
 .jr-slot b { font-weight: 600; font-variant-numeric: tabular-nums; }
 @media (min-width: 900px) { :where(.adm:not(.bx)) .jr-slot { left: 6px; right: 6px; } }
 
+/* «Онлайн-запись: 12:00–15:00»: a barber's own online hours that day, a thin strip along the left edge of
+   his column in the violet of an online visit's strip, quiet. Under the visits, breaks and time off
+   (they start right of it, and lie over it where they meet it); a click on it is the column's. */
+.cal-online { position: absolute; z-index: 1; left: 0; width: 3px; top: calc(var(--ppm) * var(--t) * 1px); height: calc(var(--ppm) * var(--m) * 1px); border-radius: 0 2px 2px 0; background: rgba(144, 123, 159, .6); }
+@media (min-width: 900px) { :where(.adm:not(.bx)) .cal-online { width: 4px; } }
+
 /* ---------- a visit's card ---------- */
 .jr-card-wrap { position: fixed; z-index: 45; width: 384px; }
 .jr-card-wrap.is-right { padding-left: 8px; }

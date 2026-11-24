@@ -17,7 +17,7 @@ import { useFrame } from "../../frame";
 import { copyAction, creditAction, resendAction, setPaidAction } from "../actions";
 import { INV_ROOT, PAYMENTS_SHOWN, statusWord, ToolIcon, type EventLine } from "../common";
 import { MetaTable, ReceiverCard, SenderBlock, Totals, unitOf } from "../sheet-parts";
-import { Confirm, Dialog, Field, IvTop, MenuButton } from "../ui";
+import { Blocked, Confirm, Dialog, Field, IvTop, MenuButton } from "../ui";
 import { DocBar, LinesHead, LinesHeadRow } from "./doc-parts";
 import type { ViewInvoice, ViewLine } from "./types";
 
@@ -245,7 +245,8 @@ export function SentView({ inv, lines, events }: { inv: ViewInvoice; lines: View
           onClose={() => setCrediting(false)}
           onYes={async () => {
             const r = await creditAction(inv.id);
-            if (!r.ok) return fail(r.code);
+            // no IBAN or address yet: said as on a draft, with the way to «Настройки»
+            if (!r.ok) return A.inv.blocked[r.code] ? <Blocked code={r.code} alert /> : fail(r.code);
             router.push(`${INV_ROOT}/${r.id}`);
           }}
         />

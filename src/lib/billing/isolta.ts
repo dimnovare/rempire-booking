@@ -40,7 +40,7 @@ import { cleanPhone } from "../admin/location-form";
 import type { Querier } from "../db";
 import { amountText, splitGross } from "../money";
 import { todayIn, zonedToUtc } from "../tz";
-import type { Party } from "./invoices";
+import { INVOICE_NOTE_MAX, type Party } from "./invoices";
 import { formatNumber, type ReceiverKind } from "./parties";
 
 /* ---------- CSV ---------- */
@@ -809,7 +809,8 @@ export async function planIsoltaImport(q: Querier, business: { id: string; timez
       netCents: net,
       vatCents: vat,
       grossCents: gross,
-      note: cut([doc.freeText, ...(lines.length && priced.length ? notes : [])].filter(Boolean).join(" "), 300),
+      // Isolta's own free text keeps its 4000 (045), as «Заметка к счёту»
+      note: cut([doc.freeText, ...(lines.length && priced.length ? notes : [])].filter(Boolean).join(" "), INVOICE_NOTE_MAX),
       lines,
     };
     if (doc.credit) originalOf.set(inv, doc.originalNumber);

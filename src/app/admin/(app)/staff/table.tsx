@@ -81,9 +81,13 @@ export function StaffTable({ items, today, mayEdit }: { items: RailItem[]; today
                   </Link>
                 </span>
                 <span role="cell" className="st-c-until">
-                  {until && (
+                  {until ? (
                     <span className={`st-until${ended ? " is-ended" : ""}`} title={ended ? T.untilEnded : undefined}>
                       {T.until(until)}
+                    </span>
+                  ) : (
+                    <span className="st-until is-none" title={T.untilNoneHint}>
+                      {T.untilNone}
                     </span>
                   )}
                 </span>
