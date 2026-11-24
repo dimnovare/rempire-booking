@@ -396,44 +396,8 @@ export async function seedDemoVisits(db, now = Date.now()) {
   const [biz] = (await db.query("select id from businesses where slug = $1", [DEMO.business.slug])).rows;
   if (!biz) return 0;
   let added = 0;
-  // First one client in 20 minutes for each barber, so «Дальше» (and its
-  // «Пришёл», from 30 minutes before) shows whenever the app starts; the
-  // fixed visits below leave its time alone. His shortest service. Late in
-  // the evening it would fall on tomorrow, a day whose demo visits the
-  // tests count: then there is none (e2e run of 23.11, 23:40).
-  const soon = Math.ceil((now + 20 * 60_000) / 300_000) * 300_000;
-  let j = 2 * DEMO.staff.length * DEMO_VISITS.length;
   const lines = {};
-  for (const st of DEMO.staff) {
-    const k = ++j;
-    const staffId = demoId("staff", st.slug);
-    lines[st.slug] = await demoLines(db, staffId);
-    const [line] = [...lines[st.slug]].sort((a, b) => a.dur - b.dur);
-    if (!line) continue;
-    if (localNow(soon + line.dur * 60_000 - 1, tz).today !== today) continue;
-    const [client] = (
-      await db.query(
-        "insert into clients (business_id, name, phone_e164, source) values ($1, $2, $3, 'admin') on conflict (business_id, phone_e164) do update set updated_at = now() returning id",
-        [biz.id, `Demo client ${k}`, `+37255550${800 + k}`],
-      )
-    ).rows;
-    const from = new Date(soon);
-    const to = new Date(soon + line.dur * 60_000);
-    const r = await db.query(
-      `insert into appointments (business_id, location_id, staff_id, client_id, starts_at, ends_at, blocked_until, source, reminder_min, total_cents)
-       select $1, s.location_id, s.id, $2, $3, $4, $5, 'online', 120, $6 from staff s
-        where s.id = $7 and not exists (
-          select 1 from appointments a where a.staff_id = s.id and a.status <> 'cancelled' and tstzrange(a.starts_at, a.blocked_until) && tstzrange($3, $5))
-       returning id`,
-      [biz.id, client.id, from, to, new Date(to.getTime() + line.buf * 60_000), line.price, staffId],
-    );
-    if (!r.rows.length) continue;
-    await db.query(
-      "insert into appointment_services (appointment_id, position, service_id, name, duration_min, price_cents) values ($1, 0, $2, $3::jsonb, $4, $5)",
-      [r.rows[0].id, line.id, JSON.stringify(line.name), line.dur, line.price],
-    );
-    added++;
-  }
+  for (const st of DEMO.staff) lines[st.slug] = await demoLines(db, demoId("staff", st.slug));
   let k = 0;
   for (let i = 0; i < 2; i++) {
     for (const st of DEMO.staff) {
@@ -484,6 +448,57 @@ export async function seedDemoVisits(db, now = Date.now()) {
         );
         added++;
       }
+    }
+  }
+  // Then one client in about 20 minutes for each barber, so «Дальше» (and
+  // its «Пришёл», from 30 minutes before) shows whenever the app starts. His
+  // shortest service. After the fixed visits above, in a time they leave
+  // free: the nearest 5 minutes to «in 20 minutes» from those at most 30
+  // minutes away, back to one already under way (it is «Дальше» too). It
+  // used to go first and push a fixed one out (e2e run of 24.11, 09:34: it
+  // took Demo client 1's 10:00, so he had no visit). None if every such
+  // time is taken: then a fixed visit is under way or that near anyway. Late
+  // in the evening it would fall on tomorrow, a day whose demo visits the
+  // tests count: then there is none either (e2e run of 23.11, 23:40).
+  const STEP = 5 * 60_000;
+  const target = now + 20 * 60_000;
+  let j = 2 * DEMO.staff.length * DEMO_VISITS.length;
+  for (const st of DEMO.staff) {
+    const k = ++j;
+    const staffId = demoId("staff", st.slug);
+    const [line] = [...lines[st.slug]].sort((a, b) => a.dur - b.dur);
+    if (!line) continue;
+    const dur = line.dur * 60_000;
+    const starts = [];
+    for (let t = Math.ceil((now - dur + 1) / STEP) * STEP; t <= now + 30 * 60_000; t += STEP) {
+      if (localNow(t, tz).today === today && localNow(t + dur - 1, tz).today === today) starts.push(t);
+    }
+    starts.sort((a, b) => Math.abs(a - target) - Math.abs(b - target) || b - a);
+    if (!starts.length) continue;
+    const [client] = (
+      await db.query(
+        "insert into clients (business_id, name, phone_e164, source) values ($1, $2, $3, 'admin') on conflict (business_id, phone_e164) do update set updated_at = now() returning id",
+        [biz.id, `Demo client ${k}`, `+37255550${800 + k}`],
+      )
+    ).rows;
+    for (const start of starts) {
+      const from = new Date(start);
+      const to = new Date(start + dur);
+      const r = await db.query(
+        `insert into appointments (business_id, location_id, staff_id, client_id, starts_at, ends_at, blocked_until, source, reminder_min, total_cents)
+         select $1, s.location_id, s.id, $2, $3, $4, $5, 'online', 120, $6 from staff s
+          where s.id = $7 and not exists (
+            select 1 from appointments a where a.staff_id = s.id and a.status <> 'cancelled' and tstzrange(a.starts_at, a.blocked_until) && tstzrange($3, $5))
+         returning id`,
+        [biz.id, client.id, from, to, new Date(to.getTime() + line.buf * 60_000), line.price, staffId],
+      );
+      if (!r.rows.length) continue;
+      await db.query(
+        "insert into appointment_services (appointment_id, position, service_id, name, duration_min, price_cents) values ($1, 0, $2, $3::jsonb, $4, $5)",
+        [r.rows[0].id, line.id, JSON.stringify(line.name), line.dur, line.price],
+      );
+      added++;
+      break;
     }
   }
   return added;

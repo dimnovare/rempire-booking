@@ -25,7 +25,7 @@ test.skip(process.env.E2E_CRAWL !== "yes", "the crawl runs only with E2E_CRAWL=y
 /** Buttons never pressed: they change or send something for real, or leave the page's login. */
 const SKIP = /выйти|удал|отключ|обезлич|отправ|выстав|кредит|отменить (визит|выбранн|запис)|аннулир|списа|сбросить|google|скан|камер|фото|войти|получить код|сменить пароль|записаться|сообщить о проблеме/i;
 /** Links never followed: they leave the app, end the session or download a file (those are fetched instead). */
-const NO_FOLLOW = /logout|signout|\/api\/|\.(csv|xlsx|pdf|ics|vcf)(\?|$)|mailto:|tel:|^https?:\/\/(?!localhost|bs-local)/i;
+const NO_FOLLOW = /logout|signout|\/api\/|\.(csv|xlsx|pdf|ics|vcf)(\?|$)|mailto:|tel:|^https?:\/\/(?!localhost)/i;
 const MAX_PAGES = 90;
 const MAX_CLICKS = 30;
 

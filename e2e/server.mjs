@@ -5,8 +5,10 @@
  * output goes to e2e/.out/server.log, where e2e/helpers.ts reads the login
  * codes; nothing in it is real.
  */
-import { spawn } from "node:child_process";
-import { createWriteStream, mkdirSync, rmSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { createWriteStream, mkdirSync, readFileSync, rmSync } from "node:fs";
+import http from "node:http";
+import https from "node:https";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -63,10 +65,8 @@ const env = {
   ...(prod ? { NODE_ENV: "production" } : {}),
 };
 
-// E2E_HOST=bs-local.com (e2e/browserstack.mjs): `next dev` serves its own
-// scripts only to the host it was started with, besides localhost
-const host = process.env.E2E_HOST && process.env.E2E_HOST !== "localhost" ? ["--hostname", process.env.E2E_HOST] : [];
-const child = spawn(process.execPath, [next, prod ? "start" : "dev", "--port", port, ...host], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
+const child = spawn(process.execPath, [next, prod ? "start" : "dev", "--port", port], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
+if (prod) httpsFront();
 child.stdout.pipe(log);
 child.stderr.pipe(log);
 child.stderr.pipe(process.stderr);
@@ -75,3 +75,60 @@ process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 process.on("exit", stop);
 child.on("exit", (code) => process.exit(code ?? 0));
+
+/**
+ * E2E_PROD=yes: an https front on E2E_HTTPS_PORT (E2E_PORT + 1) as well,
+ * for the iPhone (playwright.config.ts). In production the login cookie is
+ * __Host- (Secure), and WebKit keeps no Secure cookie over plain http, not
+ * even on localhost. It passes every request on to `next start` as it came,
+ * Host included (the server actions compare it with Origin), and says
+ * https. The certificate is made here and now by openssl, for this machine's
+ * names only, kept in e2e/.out and nowhere else; the iPhone project accepts
+ * it (ignoreHTTPSErrors). Android stays on plain http, as before.
+ */
+function httpsFront() {
+  const httpsPort = Number(process.env.E2E_HTTPS_PORT) || Number(port) + 1;
+  const dir = path.join(out, "tls");
+  mkdirSync(dir, { recursive: true });
+  const keyFile = path.join(dir, "key.pem");
+  const certFile = path.join(dir, "cert.pem");
+  const made = spawnSync(
+    "openssl",
+    ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", keyFile, "-out", certFile, "-days", "2", "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost,IP:127.0.0.1"],
+    { stdio: ["ignore", "ignore", "pipe"] },
+  );
+  if (made.error || made.status !== 0) {
+    console.error(`E2E_PROD=yes needs openssl on PATH (Git for Windows has one) for the iPhone's https front: ${made.error?.message ?? made.stderr}`);
+    process.exit(1);
+  }
+  const front = https.createServer({ key: readFileSync(keyFile), cert: readFileSync(certFile) }, (req, res) => {
+    const up = http.request(
+      {
+        host: "127.0.0.1",
+        port: Number(port),
+        method: req.method,
+        path: req.url,
+        headers: { ...req.headers, "x-forwarded-proto": "https", "x-forwarded-port": String(httpsPort) },
+      },
+      (answer) => {
+        const headers = { ...answer.headers };
+        delete headers.connection;
+        delete headers["keep-alive"];
+        res.writeHead(answer.statusCode ?? 502, answer.statusMessage, headers);
+        answer.pipe(res);
+      },
+    );
+    up.on("error", () => {
+      if (!res.headersSent) res.writeHead(502);
+      res.end();
+    });
+    req.on("aborted", () => up.destroy());
+    req.pipe(up);
+  });
+  front.on("error", (err) => {
+    console.error(`the https front on ${httpsPort} did not start: ${err.message}`);
+    process.exit(1);
+  });
+  front.listen(httpsPort, () => log.write(`https front on ${httpsPort} -> ${port}\n`));
+  process.on("exit", () => front.close());
+}

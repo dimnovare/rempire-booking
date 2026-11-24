@@ -15,7 +15,7 @@ export { A, B, expect };
  */
 export const test = base.extend<{ barber: ReturnType<typeof barberOf> }>({
   barber: async ({}, use, info) => use(barberOf(info)),
-  page: async ({ page, storageState }, use) => {
+  page: async ({ page }, use) => {
     await page.addInitScript(() => {
       document.addEventListener("DOMContentLoaded", () => {
         const s = document.createElement("style");
@@ -23,32 +23,15 @@ export const test = base.extend<{ barber: ReturnType<typeof barberOf> }>({
         document.head.append(s);
       });
     });
-    if (process.env.E2E_REAL_PHONE === "yes" && typeof storageState === "string") await carryLogin(page, storageState);
     await use(page);
   },
 });
-
-/**
- * A real phone at BrowserStack (e2e/browserstack.mjs) opens its own browser
- * and ignores `storageState`: the login made on this computer (auth.setup.ts)
- * goes to the phone as its cookies. `next dev`'s session cookie is plain
- * `rb_staff` (src/lib/auth/cookie.ts), so the page itself can set it.
- */
-async function carryLogin(page: Page, file: string): Promise<void> {
-  const { cookies } = JSON.parse(readFileSync(file, "utf8")) as { cookies: { name: string; value: string; path: string }[] };
-  await page.goto("/b/install");
-  await page.evaluate((cs) => {
-    for (const c of cs) document.cookie = `${c.name}=${c.value}; path=${c.path || "/"}; max-age=86400; samesite=lax`;
-  }, cookies);
-}
 
 /**
  * A second phone in the same test: Renat's (or another login's), the same
  * model as this project's. Close its context at the end.
  */
 export async function phoneOf(browser: Browser, info: TestInfo, who: string): Promise<Page> {
-  // one real phone at BrowserStack is one browser: a second context closes it
-  base.skip(process.env.E2E_REAL_PHONE === "yes", "two phones at once: npm run e2e only");
   const { viewport, userAgent, deviceScaleFactor, isMobile, hasTouch, locale, timezoneId } = info.project.use;
   const ctx = await browser.newContext({ viewport, userAgent, deviceScaleFactor, isMobile, hasTouch, locale, timezoneId, baseURL: info.project.use.baseURL, storageState: authFile(who) });
   await ctx.addInitScript(() => {

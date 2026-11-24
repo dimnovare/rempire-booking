@@ -40,7 +40,8 @@ const wideShot = async (page: Page, name: string) => {
 const bar = (page: Page) => page.getByRole("navigation", { name: A.sections });
 /** A fresh device: no half remembered yet. */
 const forgetSide = (page: Page) => page.context().clearCookies({ name: "rb_side" });
-const rememberSide = (page: Page, side: "b" | "admin") => page.context().addCookies([{ name: "rb_side", value: side, url: E2E_URL }]);
+// the project's own address: the iPhone's is https on the production build (playwright.config.ts)
+const rememberSide = (page: Page, side: "b" | "admin") => page.context().addCookies([{ name: "rb_side", value: side, url: test.info().project.use.baseURL ?? E2E_URL }]);
 /** What the browser made of an element: its box and the styles the boards give. */
 const look = (el: Locator) =>
   el.first().evaluate((node) => {

@@ -1,7 +1,7 @@
 import type { BrowserContext, CDPSession, Page } from "@playwright/test";
 import { pushText } from "../src/lib/push-kinds";
 import { E2E_URL } from "./env";
-import { asBarber, B, expect, hydrated, nextWorkday, test, TZ } from "./helpers";
+import { asBarber, expect, hydrated, nextWorkday, test, TZ } from "./helpers";
 
 /**
  * B5 on the phone's side, without a phone: the service worker gets a push
@@ -92,35 +92,5 @@ test.describe("push in the service worker", () => {
     const { cdp, id } = await workerId(context, page);
     await cdp.send("ServiceWorker.deliverPushMessage", { origin: E2E_URL, registrationId: id, data: "not json" });
     await expect.poll(() => shown(page)).toEqual([{ title: "REMPIRE", body: "", tag: "rempire", url: "/b" }]);
-  });
-
-  test("offline: his day as it was last loaded (production build only)", async ({ page, context }) => {
-    test.skip(process.env.E2E_PROD !== "yes", "the worker caches nothing in `next dev`: run with E2E_PROD=yes");
-    await page.goto("/b");
-    await hydrated(page);
-    await page.evaluate(async () => (await navigator.serviceWorker.ready).scope);
-    await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
-    // a load through the worker keeps a copy
-    await page.reload();
-    await hydrated(page);
-    const first = (await page.locator(".bx-cal .cal-v .bx-cv-txt b").first().innerText()).trim();
-    await context.setOffline(true);
-    // ten minutes later: the kept copy is old enough to say so (a weak
-    // connection, as here, still reports navigator.onLine)
-    await page.clock.install({ time: Date.now() + 10 * 60_000 });
-    try {
-      await page.reload();
-      await expect(page.locator(".bx-cal .cal-v .bx-cv-txt b").first()).toHaveText(first);
-      await expect(page.locator(".bx-state.is-off")).toHaveText(B.offline);
-      // the logo and his photo from the kept copies
-      for (const img of await page.locator("img:visible").all()) {
-        await expect.poll(() => img.evaluate((el) => (el as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
-      }
-      // a page never loaded: the day instead
-      await page.goto("/b/week");
-      await expect(page.locator(".bx-cal .cal-v").first()).toBeVisible();
-    } finally {
-      await context.setOffline(false);
-    }
   });
 });

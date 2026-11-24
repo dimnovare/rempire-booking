@@ -72,10 +72,10 @@ shows the same, nothing else.
 | Suite | Command | Today (23.11) | Must be |
 |---|---|---|---|
 | Types | `npm run typecheck` | green | green |
-| Unit (Vitest, PGlite) | `npm test` | 1216 tests, green at 19:05 and 20:40 on 23.11 (run 3); 1227 at 23:35 with the limit per address and the Postgres race | green twice in a row, at two hours of the day |
+| Unit (Vitest, PGlite) | `npm test` | 1216 tests, green at 19:05 and 20:40 on 23.11 (run 3); 1227 at 23:35 with the limit per address and the Postgres race; 1260 on 24.11 (the demo day seeded at every 20 minutes) | green twice in a row, at two hours of the day |
 | Postgres 18 (`tests/pg-race.test.ts`) | `PG_TEST_URL=postgres://postgres@127.0.0.1:55432/booking_test npm test` (a local `postgres:18` container; CI starts its own) | 23.11: every migration from empty, the race below, 3 runs green | green in CI on every push |
 | E2E, phone size (Playwright: Pixel 7 Chromium, iPhone 13 WebKit) | `npm run e2e` | 23.11 evening (a Monday): 275 passed, 63 skipped (by design), 1 failed: the new «Обезличить» test's own mistake, fixed, passes | green; a Monday evening and a late-night run done; a Saturday and a morning run not needed (Dim, 24.11) |
-| E2E, production build | `npm run build` then `E2E_PROD=yes npm run e2e` | 23.11: 172 passed, 8 skipped, 0 failed. Android only: WebKit keeps no Secure cookie over plain http | green |
+| E2E, production build | `npm run build` then `E2E_PROD=yes npm run e2e` | 24.11, both phones (the iPhone through a local https front, `e2e/server.mjs`): 278 passed, 77 skipped, 1 failed (`rights.spec.ts` opened `book.spec.ts`'s client instead of the demo's; fixed, passes). 23.11: Android only, 172 passed | green |
 | Crawl: every page, every button | `E2E_PROD=yes E2E_CRAWL=yes npm run e2e -- e2e/crawl.spec.ts` | 23.11: 173 pages, 1839 buttons, 0 problems | 0 problems |
 | No index | `npm run check:noindex -- <url>` | after every deploy | staging: noindex; production after the move: indexed |
 
@@ -115,7 +115,7 @@ shows the same, nothing else.
 
 Not covered by any test today: «Проверить» push; the `/admin/reports`
 page; `/admin/login` in a browser and Google login end to end; real FCM
-and APNs delivery; offline on iPhone; outages of the database, Resend,
+and APNs delivery; a page opened offline on iPhone (Playwright's WebKit offline mode bypasses the service worker; `e2e/offline.spec.ts` checks the worker's copies there); outages of the database, Resend,
 Messaggio or the shop.
 
 ## 3. Client booking (RU, ET, EN)
@@ -378,6 +378,14 @@ Seen, not changed:
 
 ### Run 2: the barber app on a real Galaxy, 23.11.2026
 
+**Removed 24.11 (Dim):** the runner below (`e2e/browserstack.mjs`,
+`playwright.browserstack.config.ts`, `npm run e2e:browserstack`, the
+BrowserStack SDK) and its 7 builds («barber app Galaxy» #1–6, «barber
+app iPhone» #1), after BrowserStack's daily summary mail («4/6 builds had
+issues»: the setup problems and the used-up minutes below, no app bug).
+The project's and the account's summary mails are off. «real phones
+23.11» (run 1) is kept.
+
 `npm run e2e:browserstack -- android <spec files>` (`e2e/browserstack.mjs`):
 the e2e server with fake data runs on this computer at `bs-local.com`, and
 the specs run on a real Samsung Galaxy S24 (Android 14, Chrome) at
@@ -418,10 +426,9 @@ the checks without a page passed (the manifest, the service worker file,
 robots.txt). Device Control has no tunnel to this computer.
 
 Not run yet:
-- **The staff app on a real iPhone, and on main on a real Android.** Either
-  more BrowserStack Automate minutes (a paid plan) for `npm run
-  e2e:browserstack`, or by hand: Dim's phone, or a BrowserStack Live
-  session where Dim logs in himself.
+- **The staff app on a real iPhone, and on main on a real Android.** By
+  hand: Dim's phone, or a BrowserStack Live session where Dim logs in
+  himself.
 - **On Dim's own phone (about 10 minutes):** install both apps on the home
   screen; a push with the screen locked; tapping it opens the visit.
 
@@ -451,7 +458,11 @@ Not covered by run 3, still open before the switch:
   Built later the same evening: `tests/pg-race.test.ts`, green.
 - **A limit per IP on `/api/bookings`** (§ 11 «Spam bookings»): built
   later the same evening (`src/lib/booking-limit.ts`, migration 041).
-- **iPhone on the production build**: WebKit drops the Secure login cookie
+- **iPhone on the production build**: **built 24.11** at Dim's request.
+  With E2E_PROD=yes the e2e server puts an https front on 3421 (a
+  certificate made by openssl at start, `e2e/server.mjs`) and the iPhone
+  project goes through it; Android stays on http. The whole e2e on the
+  production build, both phones: green (above, § 2). Before: WebKit drops the Secure login cookie
   over plain http; the iPhone e2e ran on `next dev` only. BrowserStack
   (Dim asked, 24.11): the client side already passed on real iPhones on
   staging, which is a production build (§ 10, run 1). The staff app
@@ -468,6 +479,13 @@ Not covered by run 3, still open before the switch:
   on tomorrow; after midnight it is the first, short card). Fixed in the
   seed (`tools/seed-demo.mjs`, a unit test at 23:45) and in
   `e2e/sides.spec.ts`; one rights test failed once and passed again.
+  The production-build run of 24.11 at 09:34 was a morning run after all:
+  the «in 20 minutes» visit (09:55) took Demo client 1's 10:00, so he had
+  no visit, «Удалить» deleted him and two more tests lost him. The seed
+  now lays the fixed day first and puts «in 20 minutes» in a free time at
+  most 30 minutes away; a unit test seeds the day every 20 minutes. The
+  rights test: `book.spec.ts` books tomorrow's first free time, 09:00 in
+  the morning, before the demo's first visit; it now opens the demo's.
 - **Real inboxes, SMS, real phones, the Altegio import** (§§ 7, 10, 12):
   need staging with Dim, Messaggio's login and Altegio's exports. Dim,
   24.11: the inbox is chosen when we are ready; then Messaggio's access
@@ -508,7 +526,7 @@ On the dress rehearsal (launch step 6) and again on the evening before.
 
 | Part | Run by | Date | Result |
 |---|---|---|---|
-| § 2 automated, all green on the production build | Claude | 23.11 | green (run 3); iPhone on `next dev` only |
+| § 2 automated, all green on the production build | Claude | 24.11 | green, both phones on the production build |
 | § 3–8 on the local production build | Claude | 23.11 | e2e and the crawl green (run 3) |
 | § 3–8 on staging, letters and SMS checked in Dim's inbox and phone | Claude and Dim | | |
 | § 10 real phones | Dim, Renat, one barber | | |

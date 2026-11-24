@@ -133,20 +133,26 @@ describe("status from the barber app", () => {
 
 describe("the demo day (a local run and e2e, tools/seed-demo.mjs)", () => {
   const db = { query: async (sql: string, params?: unknown[]) => ({ rows: await query(sql, params) }) };
-  // 09:22, 10:32, 13:22: the client in 20 minutes would sit on the next
-  // demo visit (10:00, 11:15, 14:00), which is itself more than 30 minutes
-  // away; at 10:32 and 13:57 he sits on two of them
-  for (const time of ["07:00", "09:22", "09:35", "10:32", "10:40", "13:22", "13:57", "16:57"]) {
-    it(`started at ${time}: «Дальше» is at most 30 minutes away, so «Пришёл» shows; nothing overlaps`, async () => {
+  /** The demo's own visits: clients 1 to 50 (DEMO_VISITS, two days, five barbers); «in 20 minutes» is 51 to 55. */
+  const fixed = <V extends { clientName: string }>(visits: V[]) => visits.filter((v) => Number(v.clientName.replace("Demo client ", "")) <= 50);
+  // 09:22, 09:34, 10:32, 13:22: «in 20 minutes» would sit on the next demo
+  // visit (10:00, 11:15, 14:00), itself more than 30 minutes away; at 10:32
+  // and 13:57 on two of them. And every 20 minutes of the day besides.
+  const times = ["07:00", "09:22", "09:34", "09:35", "10:32", "10:40", "13:22", "13:57", "16:57"];
+  for (let m = 8 * 60; m < 19 * 60; m += 20) times.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`);
+  for (const time of [...new Set(times)].sort()) {
+    it(`started at ${time}: «Дальше» is at most 30 minutes away, so «Пришёл» shows; the five fixed visits all there; nothing overlaps`, async () => {
       const now = at(TUE, time);
       await seedDemoVisits(db, now);
-      for (const slug of ["valentin", "jevgeni"]) {
+      for (const slug of ["renat", "valentin", "jevgeni"]) {
         const [day] = await loadBarberDays(query, demo.business, demo.staff[slug], TUE, 1);
         const next = nextVisit(day.visits, now);
-        expect(next && next.start - now).toBeLessThanOrEqual(30 * MIN);
+        expect(next && next.start - now, slug).toBeLessThanOrEqual(30 * MIN);
         const live = day.visits.filter((v) => v.status !== "cancelled").sort((a, b) => a.start - b.start);
         for (let i = 1; i < live.length; i++) expect(live[i].start).toBeGreaterThanOrEqual(live[i - 1].blockedUntil);
-        expect(live.length).toBeGreaterThanOrEqual(4);
+        // never one pushed out: the tests find Demo client 1 at 10:00 whatever the hour (e2e run of 24.11, 09:34)
+        expect(fixed(live), slug).toHaveLength(5);
+        expect(fixed(live)[0].start, slug).toBe(at(TUE, "10:00"));
       }
     });
   }
@@ -160,6 +166,12 @@ describe("the demo day (a local run and e2e, tools/seed-demo.mjs)", () => {
       expect(day.visits, slug).toHaveLength(5);
       expect(day.visits[0].start, slug).toBe(at(date, "10:00"));
     }
+  });
+
+  it("started at 07:00: the client «in 20 minutes» at 07:20, before the fixed day (the demo lets it be outside his hours)", async () => {
+    await seedDemoVisits(db, at(TUE, "07:00"));
+    const [day] = await loadBarberDays(query, demo.business, demo.staff.renat, TUE, 1);
+    expect(day.visits.map((v) => v.start).slice(0, 2)).toEqual([at(TUE, "07:20"), at(TUE, "10:00")]);
   });
 
   it("the second demo day is the next day the barber works, whatever the weekday: five visits and lunch inside his hours, two hours free after them", async () => {

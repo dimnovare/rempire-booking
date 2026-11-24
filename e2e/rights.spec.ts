@@ -45,7 +45,8 @@ test.describe("a login's rights", () => {
     const openVisit = async () => {
       await his.goto(day);
       await hydrated(his);
-      await his.locator(".bx-cal .cal-v").first().click();
+      // the demo's own first visit: book.spec may have put its client without a phone before it (09:00, a morning run on 24.11)
+      await his.locator(".bx-cal .cal-v", { hasText: "Demo client" }).first().click();
       return sheet(his);
     };
     try {
