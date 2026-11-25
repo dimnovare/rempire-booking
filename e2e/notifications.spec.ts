@@ -336,7 +336,8 @@ test.describe("«Уведомления» on a wide screen", () => {
       if (await readAll.count()) await readAll.click();
     }
     await expect(dot).toHaveCount(0);
-    await expect(panel.locator(".bell-new")).toHaveCount(0);
+    // this test's own row only: in a full run other tests' bookings may come in after «Прочитать все»
+    await expect(visits.locator(`.bell-mini-row[href="/admin?d=${day!.d}"] .bell-new`)).toHaveCount(0);
 
     // Esc slides it out and gives the focus back
     await page.keyboard.press("Escape");

@@ -109,7 +109,7 @@ async function Loaded({ searchParams }: { searchParams: PageProps<"/admin/accoun
       <>
         {head}
         {tabs}
-        <AccessList rows={rows} me={user.id} mayRights={mayRights} mayRemove={mayRemove} roles={roles} />
+        <AccessList rows={rows} me={user.id} ownerMe={user.role === "owner"} mayRights={mayRights} mayRemove={mayRemove} roles={roles} />
       </>
     );
   }

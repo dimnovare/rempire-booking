@@ -43,7 +43,22 @@ export type AccessRow = {
 
 export type RoleOption = { code: string; name: string; hint: string };
 
-export function AccessList({ rows, me, mayRights, mayRemove, roles }: { rows: AccessRow[]; me: string; mayRights: boolean; mayRemove: boolean; roles: RoleOption[] }) {
+export function AccessList({
+  rows,
+  me,
+  ownerMe,
+  mayRights,
+  mayRemove,
+  roles,
+}: {
+  rows: AccessRow[];
+  me: string;
+  /** an owner's login is switched off or deleted only by an owner (account/actions.ts) */
+  ownerMe: boolean;
+  mayRights: boolean;
+  mayRemove: boolean;
+  roles: RoleOption[];
+}) {
   const A = useA();
   const T = A.account;
   const frame = useFrame();
@@ -72,6 +87,8 @@ export function AccessList({ rows, me, mayRights, mayRemove, roles }: { rows: Ac
     setBusy(null);
   };
   const flip = (r: AccessRow) => (r.active ? setAsking(r) : void switchOn(r));
+  /** why this login cannot be switched off or deleted by this one; null: it can */
+  const blockedWhy = (r: AccessRow, del: boolean) => (r.id === me ? (del ? T.ownNoDel : T.ownNo) : !ownerMe && r.role === "owner" ? T.ownerOnly : null);
 
   // «Вернуть» in the toast: the login as it was, while the server still allows it
   const restore = async (r: AccessRow) => {
@@ -135,7 +152,8 @@ export function AccessList({ rows, me, mayRights, mayRemove, roles }: { rows: Ac
         </div>
         {shown.map((r) => {
           const mine = r.id === me;
-          const mayFlip = mayRemove && !mine;
+          const why = blockedWhy(r, true);
+          const mayFlip = mayRemove && !why;
           return (
             <div role="row" key={r.id} className={`ac-row${r.active ? "" : " is-off"}`}>
               <span role="cell" className="ac-who">
@@ -187,7 +205,7 @@ export function AccessList({ rows, me, mayRights, mayRemove, roles }: { rows: Ac
                   className="adm-sw"
                   checked={r.active}
                   disabled={!mayFlip || busy === r.id}
-                  title={mine ? T.ownNo : undefined}
+                  title={mayRemove ? (blockedWhy(r, false) ?? undefined) : undefined}
                   aria-label={r.active ? T.switchOff(r.email) : T.switchOn(r.email)}
                   onChange={(e) => (e.target.checked ? void switchOn(r) : setAsking(r))}
                 />
@@ -224,8 +242,8 @@ export function AccessList({ rows, me, mayRights, mayRemove, roles }: { rows: Ac
                                 type="button"
                                 role="menuitem"
                                 className="jr-item is-red"
-                                disabled={mine}
-                                aria-describedby={mine ? `ac-own-w-${r.id}` : undefined}
+                                disabled={!!why}
+                                aria-describedby={why ? `ac-own-w-${r.id}` : undefined}
                                 onClick={() => {
                                   close();
                                   setDeleting(r);
@@ -233,9 +251,9 @@ export function AccessList({ rows, me, mayRights, mayRemove, roles }: { rows: Ac
                               >
                                 <span>{T.delYes}</span>
                               </button>
-                              {mine && (
+                              {why && (
                                 <small className="ac-own" id={`ac-own-w-${r.id}`}>
-                                  {T.ownNoDel}
+                                  {why}
                                 </small>
                               )}
                             </>
@@ -260,9 +278,9 @@ export function AccessList({ rows, me, mayRights, mayRemove, roles }: { rows: Ac
       {acts && (
         <RowSheet
           row={acts}
-          mine={acts.id === me}
+          blocked={blockedWhy(acts, true)}
           mayRights={mayRights}
-          mayFlip={mayRemove && acts.id !== me}
+          mayFlip={mayRemove && !blockedWhy(acts, true)}
           mayDelete={mayRemove}
           onClose={() => setActs(null)}
           onFlip={() => {

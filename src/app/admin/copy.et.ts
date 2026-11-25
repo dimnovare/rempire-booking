@@ -1933,6 +1933,7 @@ export const et: typeof ru = {
     delSoft: ["Võib veel vaja minna?", "Lülita kasutaja välja", ": õigused jäävad alles ja sisse saab lülitada igal ajal."],
     delYes: "Kustuta kasutaja",
     ownNoDel: "Oma kasutajat kustutada ei saa.",
+    ownerOnly: "Omaniku kasutajat lülitab välja ja kustutab ainult omanik.",
     deleted: (email: string) => `Kasutaja ${email} kustutatud`,
     undo: "Võta tagasi",
     restored: (email: string) => `Kasutaja ${email} on taas nimekirjas`,

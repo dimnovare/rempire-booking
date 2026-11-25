@@ -97,12 +97,13 @@ export function DeleteAsk({ row, onClose, onYes, onOff }: { row: AccessRow; onCl
 
 /**
  * A phone's sheet of one row's actions. `mayRights`: the rights page;
- * `mayFlip`: switching off or on and deleting (never one's own: `mine`
- * shows «Удалить вход» greyed with the reason).
+ * `mayFlip`: switching off or on. `blocked`: why this login may not be
+ * switched off or deleted (one's own; an owner's, for an admin), shown
+ * under a greyed «Удалить вход».
  */
 export function RowSheet({
   row,
-  mine,
+  blocked,
   mayRights,
   mayFlip,
   mayDelete,
@@ -111,7 +112,7 @@ export function RowSheet({
   onDelete,
 }: {
   row: AccessRow;
-  mine: boolean;
+  blocked: string | null;
   mayRights: boolean;
   mayFlip: boolean;
   /** the right to delete at all («Удалять пользователей»): without it the item is not there */
@@ -140,12 +141,12 @@ export function RowSheet({
         {mayDelete && (
           <>
             <div role="separator" className="ac-sheet-sep" />
-            <button type="button" role="menuitem" className="ac-sheet-item is-red" disabled={mine} aria-describedby={mine ? `ac-own-${row.id}` : undefined} onClick={onDelete}>
+            <button type="button" role="menuitem" className="ac-sheet-item is-red" disabled={!!blocked} aria-describedby={blocked ? `ac-own-${row.id}` : undefined} onClick={onDelete}>
               <span>{T.delYes}</span>
             </button>
-            {mine && (
+            {blocked && (
               <small className="ac-own" id={`ac-own-${row.id}`}>
-                {T.ownNoDel}
+                {blocked}
               </small>
             )}
           </>

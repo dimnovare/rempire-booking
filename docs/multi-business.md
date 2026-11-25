@@ -92,7 +92,7 @@ or barbers see has changed.
 - Never Altegio's names or texts. Staging stays noindex through
   `src/lib/indexing.ts`. Run `npm run check:noindex -- <url>` after every
   staging deploy.
-- New migration files only, from `047`. Never edit one that has run.
+- New migration files only, from `049` (047 and 048 were taken on 25.11 by the bell and «Удалить вход»). Never edit one that has run.
 - One place rule (`docs/one-place.md`): one person = one login. A person in
   two businesses has one staff row in each (his services and prices may
   differ by place) and one membership in each.
@@ -120,16 +120,21 @@ expects. Each one has its own test in the task named.
 
 ## Data
 
-- `047_memberships.sql`
+- `049_memberships.sql`
   - `memberships (user_id, business_id, role, staff_id, rights_preset,
     rights, rights_values, notify, bell_seen_at, last_used_at, active,
     created_at)`, primary key `(user_id, business_id)`.
   - `role` is checked as in `users`.
   - `staff_id` must belong to the same business: a unique `(id,
     business_id)` on `staff` and a composite foreign key. Tested.
-  - It is filled from today's `users` rows, one per login.
+  - It is filled from today's `users` rows, one per login, skipping
+    deleted ones (`users.deleted_at`, 048).
+  - «Удалить вход» (048) becomes per business: it deletes this
+    business's membership. The `users` row is tombstoned as today (e-mail
+    freed, sessions ended, `deleted_was` for «Вернуть») only when no
+    membership is left; «Вернуть» puts the membership back.
   - `sessions.business_id`: the business this device has open.
-- `048_business_profile.sql`
+- `050_business_profile.sql`
   - `businesses.kind` (`barber`, `tattoo`, `beauty`, `other`; REMPIRE =
     `barber`).
   - `businesses.status` (`draft`, `open`; REMPIRE = `open`).
@@ -148,7 +153,7 @@ expects. Each one has its own test in the task named.
       for the other businesses' own domains, later (M8).
     - The neutral domain is not a row: it is `PLATFORM_HOST`, and the first
       part of its path names the business.
-- `049_users_drop_business.sql`
+- `051_users_drop_business.sql`
   - Drops the per-business columns from `users` (`business_id`, `role`,
     `staff_id`, the rights, `notify`, `bell_seen_at`).
   - It ships only after M1 has run on staging, never in the same deploy.
@@ -164,7 +169,7 @@ M4 can swap. M8 can come any time after M4.
 REMPIRE works exactly as before. One business is still all there is.
 
 **Files**
-- Create: `db/migrations/047_memberships.sql`, `src/lib/auth/memberships.ts`
+- Create: `db/migrations/049_memberships.sql`, `src/lib/auth/memberships.ts`
 - Modify:
   - `src/lib/auth/sessions.ts`, `src/lib/auth/current.ts`,
     `src/lib/auth/login.ts`, `src/lib/auth/rights-store.ts`;

@@ -2,7 +2,7 @@ import path from "node:path";
 import type { Page } from "@playwright/test";
 import { PRESETS } from "../src/lib/auth/rights-catalogue";
 import { OUT } from "./env";
-import { A, asOwner, expect, expectNoSideScroll, hydrated, test, toast } from "./helpers";
+import { A, asOwner, expect, expectNoSideScroll, hydrated, loginByCode, test, toast } from "./helpers";
 
 /**
  * «Доступ» → «Входы» → «⋯» → «Удалить вход» (Dim, 25.11.2026, design artifact
@@ -18,14 +18,15 @@ const R = A.rights;
 const shot = (page: Page, name: string) => page.screenshot({ path: path.join(OUT, "screens", `${name}.png`) });
 const roleLink = (page: Page, email: string) => page.getByRole("link", { name: `${R.open}: ${email}` });
 
-async function addLogin(page: Page, email: string): Promise<void> {
+async function addLogin(page: Page, email: string, preset: keyof typeof PRESETS = "AD"): Promise<void> {
   await page.goto("/admin/account");
   await hydrated(page);
   if (await roleLink(page, email).count()) return;
   await page.getByRole("button", { name: T.addUser }).click();
   const dw = page.getByRole("dialog", { name: T.newLogin });
   await dw.locator('input[type="email"]').fill(email);
-  await dw.getByRole("radio", { name: new RegExp(`^${PRESETS.AD.ru}`) }).check();
+  // by its code: «Менеджер» is also the start of «Менеджер системы»
+  await dw.locator(`input[name="preset"][value="${preset}"]`).check();
   await dw.getByRole("button", { name: T.addUser }).click();
   await expect(dw).toHaveCount(0);
   await expect(roleLink(page, email)).toBeVisible();
@@ -70,6 +71,14 @@ test.describe("«Удалить вход» on a phone", () => {
     // gone from the list; the toast has «Вернуть»
     await expect(toast(page)).toContainText(T.deleted(email));
     await expect(roleLink(page, email)).toHaveCount(0);
+    // a sheet opened meanwhile: the toast goes to the top, off the sheet's rows
+    await page.locator(".ac-row", { has: page.locator(".ac-tag.is-you") }).getByRole("button", { name: /^Действия: / }).click();
+    const own = page.getByRole("dialog");
+    await expect(own).toBeVisible();
+    const tb = (await toast(page).boundingBox())!;
+    expect(tb.y + tb.height).toBeLessThanOrEqual((await own.boundingBox())!.y);
+    await page.keyboard.press("Escape");
+    await expect(own).toHaveCount(0);
     await toast(page).getByRole("button", { name: T.undo }).click();
     await expect(toast(page)).toHaveText(T.restored(email));
     await expect(roleLink(page, email)).toBeVisible();
@@ -96,6 +105,36 @@ test.describe("«Удалить вход» on a phone", () => {
     await expect(menu.getByRole("menuitem", { name: T.offYes })).toHaveCount(0);
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog")).toHaveCount(0);
+  });
+});
+
+test.describe("a manager, not an owner", () => {
+  test("may switch off and delete other logins, but an owner's only greyed, with the reason", async ({ page, browser }, info) => {
+    const email = `mgr-${info.project.name}@example.test`;
+    await addLogin(page, email, "MG");
+    // the manager on a phone of his own («Менеджер» has «Удалять пользователей»)
+    const { viewport, userAgent, deviceScaleFactor, isMobile, hasTouch, locale, timezoneId } = info.project.use;
+    const ctx = await browser.newContext({ viewport, userAgent, deviceScaleFactor, isMobile, hasTouch, locale, timezoneId, baseURL: info.project.use.baseURL });
+    const mgr = await ctx.newPage();
+    try {
+      await loginByCode(mgr, email);
+      await mgr.goto("/admin/account");
+      await hydrated(mgr);
+      const owner = mgr.locator(".ac-row", { hasText: "owner@example.test" });
+      await expect(owner.getByRole("switch")).toBeDisabled();
+      await expect(owner.getByRole("switch")).toHaveAttribute("title", T.ownerOnly);
+      await owner.getByRole("button", { name: T.actsOf("owner@example.test") }).click();
+      const menu = mgr.getByRole("dialog").getByRole("menu");
+      await expect(menu.getByRole("menuitem", { name: T.offYes })).toHaveCount(0);
+      const del = menu.getByRole("menuitem", { name: T.delYes });
+      await expect(del).toBeDisabled();
+      await expect(del).toHaveAccessibleDescription(T.ownerOnly);
+      await mgr.keyboard.press("Escape");
+      // a barber's login: his to switch
+      await expect(mgr.locator(".ac-row", { hasText: "valentin@example.test" }).getByRole("switch")).toBeEnabled();
+    } finally {
+      await ctx.close();
+    }
   });
 });
 

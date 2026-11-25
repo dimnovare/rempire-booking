@@ -973,6 +973,10 @@ button.cal-head:hover b { color: var(--accent); }
 .adm-toast-act { flex: none; margin-left: auto; padding: 4px 0; border: 0; background: none; color: #ffd940; font: inherit; font-weight: 600; cursor: pointer; }
 .adm-toast-act:hover { text-decoration: underline; text-underline-offset: 3px; }
 .adm-frame-toast > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+/* a phone with a sheet or a drawer open: the toast goes to the top, so it never covers the sheet's last rows or the drawer's button (25.11) */
+@media (max-width: 899px) {
+  :root:has(.adm-sheet-wrap:not(.adm-pane-wrap), .adm-pane-wrap.is-open, .dw-wrap) .adm-frame-toast { top: calc(12px + env(safe-area-inset-top, 0px)); bottom: auto; }
+}
 .ac-av { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--fg); color: #fff; font: 600 13px/1 var(--display); }
 .ac-row.is-off .ac-av { background: #eef1f6; color: var(--mute); }
 .ac-sw .adm-sw:disabled { opacity: .4; cursor: not-allowed; }

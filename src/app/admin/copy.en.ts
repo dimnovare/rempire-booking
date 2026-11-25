@@ -1934,6 +1934,7 @@ export const en: typeof ru = {
     delSoft: ["Might you need it again?", "Switch the login off", ": its rights stay, and you can switch it on at any time."],
     delYes: "Delete login",
     ownNoDel: "You cannot delete your own login.",
+    ownerOnly: "Only an owner can switch off or delete an owner's login.",
     deleted: (email: string) => `Login ${email} deleted`,
     undo: "Undo",
     restored: (email: string) => `Login ${email} is back`,
