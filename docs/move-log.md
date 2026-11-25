@@ -19,7 +19,7 @@ the same commit. At the move, tick each row in the «Done» column.
 | # | On staging now | At the move | Who | Done |
 |---|---|---|---|---|
 | H1 | One host for everything: `rempire-booking.diipsolutions.eu` (Vercel domain; CNAME in Dim's Cloudflare zone `diipsolutions.eu`) | `book.rempire.ee` for clients, `staff.rempire.ee` for staff (round 13). Vercel domains, DNS in rempire.ee's zone (B2). The staging host stays for staging | Dim (DNS, Vercel) | |
-| H2 | Two-address routing (B3) being built 25.11 for a trial on `book-rempire.` and `staff-rempire.diipsolutions.eu`: `SITE_URL` = client host, `STAFF_URL` = staff host; any other host serves everything | Production `SITE_URL=https://book.rempire.ee`, `STAFF_URL=https://staff.rempire.ee`. The trial hosts and their CNAMEs can go once production runs | Dim | |
+| H2 | Two-address routing (B3) built 25.11 (`src/lib/hosts.ts`), **off** until `STAFF_URL` is set. Trial planned on `book-rempire.` and `staff-rempire.diipsolutions.eu` (steps in `docs/launch.md`): `SITE_URL` = client host, `STAFF_URL` = staff host; any other host serves everything. During the trial staging's client letters and SMS point at `book-rempire`; logins are per host; CI's noindex check covers only today's host, the trial hosts are checked by hand | Production `SITE_URL=https://book.rempire.ee`, `STAFF_URL=https://staff.rempire.ee`; Google redirect URI `https://staff.rempire.ee/api/auth/google/callback`. The trial hosts, their CNAMEs and their Google redirect URI can go once production runs | Dim | |
 | H3 | Noindex everywhere: meta, robots.txt, `X-Robots-Tag`, one switch in `src/lib/indexing.ts`; `npm run check:noindex -- <url>` after every deploy | `ALLOW_INDEXING=yes` on production only, then redeploy and `check:noindex` (it then reports indexing on). Staging never gets it | Dim (Vercel), Claude (check) | |
 | H4 | rempire.ee's «book» buttons and Google Maps «Записаться» still open Altegio's widget | Point them to the client host on the evening before day one (`docs/launch.md`, step 12) | Renat / Dim | |
 
@@ -79,3 +79,4 @@ the switch.
 Newest last. One line per change to this list.
 
 - 25.11.2026: list started (H1–H4, T1–T5, D1–D7, M1–M5, R1–R3, S1–S2).
+- 25.11.2026: H2, two addresses built, off until `STAFF_URL`.
