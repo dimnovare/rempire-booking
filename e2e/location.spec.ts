@@ -262,6 +262,60 @@ const checks = (wide: boolean) => {
     await expect(s.locator(".ab-map .osm-pin")).toHaveAttribute("data-lng", "24.761967");
   });
 
+  test("«Онлайн-запись»: the booking link to copy, and the QR plaque to print (Renat, 18.11)", async ({ page, context }) => {
+    const O = A.online;
+    await open(page, "/admin/settings/online", A.nav.online);
+    const card = page.getByRole("region", { name: O.link });
+    // SITE_URL's start page (src/lib/site.ts): staging's address now, rempire.ee's after the move
+    const link = (await card.locator(".onl-link-chip").textContent())!;
+    expect(link).toMatch(/^https?:\/\/[^/]+\/$/);
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]).catch(() => {});
+    await card.getByRole("button", { name: O.copy }).click();
+    await expect(card.getByRole("button", { name: O.copied })).toBeVisible();
+    // the e2e server is a test run, as staging: the plaque says it is not to be printed yet
+    await expect(card.locator(".onl-plaque small")).toHaveText(O.plaqueTest);
+    await expectNoSideScroll(page);
+    await shot(page, "online-link", wide);
+
+    const [sheet] = await Promise.all([page.waitForEvent("popup"), card.getByRole("link", { name: O.plaque }).click()]);
+    await sheet.waitForLoadState();
+    await hydrated(sheet);
+    await expect(sheet).toHaveTitle(`${A.plaque.title} · REMPIRE`);
+    const qr = sheet.getByRole("img", { name: link });
+    await expect(qr).toBeVisible();
+    expect(await qr.locator("path").getAttribute("d")).toMatch(/^M\d+ \d+h\d+v1h-\d+z/);
+    await expect(sheet.locator(".pl-host")).toHaveText(new URL(link).host);
+    await expect(sheet.locator(".pl-book p")).toHaveText(["Запишитесь онлайн", "Broneeri aeg", "Book online"]);
+    await expect(sheet.locator(".pl-test")).toHaveText(A.plaque.test);
+    // A5 by default; A4 and A6 are the same drawing at another size, the code square in every one
+    const sizes = sheet.getByRole("group", { name: A.plaque.size });
+    await expect(sizes.getByRole("button", { name: "A5" })).toHaveAttribute("aria-pressed", "true");
+    for (const [s, ratio] of [["A4", 210 / 297], ["A6", 105 / 148], ["A5", 148 / 210]] as const) {
+      await sizes.getByRole("button", { name: s }).click();
+      const box = (await sheet.locator(".pl-sheet").boundingBox())!;
+      expect(box.width / box.height).toBeCloseTo(ratio, 2);
+      const q = (await qr.boundingBox())!;
+      expect(Math.abs(q.width - q.height)).toBeLessThan(1);
+      expect(q.width / box.width).toBeCloseTo(0.54, 2);
+      // nothing on the sheet is cut off: every line inside its box
+      for (const el of await sheet.locator(".pl-face > *, .pl-test").all()) {
+        const b = (await el.boundingBox())!;
+        expect(b.y).toBeGreaterThanOrEqual(box.y);
+        expect(b.y + b.height).toBeLessThanOrEqual(box.y + box.height + 0.5);
+      }
+    }
+    await expectNoSideScroll(sheet);
+    // on paper: the sheet alone, at A5 in mm (96 px an inch), the bar gone
+    await sheet.emulateMedia({ media: "print" });
+    await expect(sheet.locator(".pl-bar")).toBeHidden();
+    const paper = (await sheet.locator(".pl-sheet").boundingBox())!;
+    expect(Math.round(paper.width)).toBe(Math.round((148 / 25.4) * 96));
+    expect(Math.round(paper.height)).toBe(Math.round((210 / 25.4) * 96));
+    await sheet.emulateMedia({ media: "screen" });
+    await shot(sheet, "plaque", wide);
+    await sheet.close();
+  });
+
   test("«Галерея»: a photo added, moved first, seen on the salon's page, deleted", async ({ page }) => {
     await open(page, "/admin/settings/gallery", A.nav.gallery);
     const tiles = page.locator(".loc-photos:visible > li");

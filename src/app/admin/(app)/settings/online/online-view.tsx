@@ -21,7 +21,7 @@ import { saveOnlineAction } from "./actions";
 
 type NumKey = "slot_step_min" | "min_notice_min" | "horizon_days" | "cancel_cutoff_min";
 
-export function OnlineView({ initial, view }: { initial: OnlineSettings; view: string }) {
+export function OnlineView({ initial, view, link, test }: { initial: OnlineSettings; view: string; link: string; test: boolean }) {
   const A = useA();
   const O = A.online;
   const [d, setD] = useState<OnlineSettings>(initial);
@@ -39,6 +39,7 @@ export function OnlineView({ initial, view }: { initial: OnlineSettings; view: s
   return (
     <div className="loc">
       <LocHead page="online" view={view} viewText={O.view} viewHint={O.viewHint} />
+      <LinkCard link={link} test={test} />
       <form
         className="loc-form"
         onBlur={auto.flush}
@@ -91,5 +92,53 @@ export function OnlineView({ initial, view }: { initial: OnlineSettings; view: s
       </form>
       <LocSaveBar auto={auto} />
     </div>
+  );
+}
+
+/**
+ * The link clients book by, as the first card of the admin we follow
+ * («Ссылки на онлайн-запись»: the address in a chip, copy), and the QR
+ * plaque for the reception (Renat, 18.11), opened in a tab of its own to
+ * print. Outside the form: nothing here is saved.
+ */
+function LinkCard({ link, test }: { link: string; test: boolean }) {
+  const O = useA().online;
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+    } catch {
+      // no clipboard (an old browser, an insecure page): select the address, so a long press copies it
+      const chip = document.getElementById("onl-link");
+      if (chip) getSelection()?.selectAllChildren(chip);
+      return;
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <section className="adm-card loc-card onl-link" aria-labelledby="onl-link-h">
+      <h2 className="loc-h" id="onl-link-h">
+        {O.link}
+      </h2>
+      <div className="onl-link-row">
+        <code className="onl-link-chip" id="onl-link">
+          {link}
+        </code>
+        <button type="button" className="adm-btn adm-btn-line adm-btn-sm" onClick={copy} aria-live="polite">
+          {copied ? O.copied : O.copy}
+        </button>
+      </div>
+      <small className="adm-meta">{O.linkHint}</small>
+      <div className="onl-plaque">
+        <a className="adm-btn adm-btn-line" href="/admin/plaque" target="_blank" rel="noreferrer">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+            <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2" />
+          </svg>
+          {O.plaque}
+        </a>
+        <small className="adm-meta">{test ? O.plaqueTest : O.plaqueHint}</small>
+      </div>
+    </section>
   );
 }

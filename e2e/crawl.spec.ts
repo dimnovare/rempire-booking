@@ -50,6 +50,7 @@ const ADMIN = [
   "/admin/invoices/settings",
   "/admin/messages",
   "/admin/notifications",
+  "/admin/plaque",
   "/admin/records",
   "/admin/reports",
   "/admin/requests",

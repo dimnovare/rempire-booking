@@ -28,6 +28,7 @@
     "next": "16.4.6",
     "pdf-lib": "^1.17.1",
     "pg": "^8.23.1",
+    "qrcode-generator": "^2.0.4",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "web-push": "^3.6.7"

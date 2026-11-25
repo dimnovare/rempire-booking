@@ -12,6 +12,8 @@ import { Suspense } from "react";
 import { onlineMay, onlineOf } from "@/lib/admin/online-settings";
 import { requireAdmin } from "@/lib/auth/current";
 import { dbConfigured } from "@/lib/db";
+import { siteUrl } from "@/lib/site";
+import { testRun } from "@/lib/test-run";
 import { Wait } from "../../../lang";
 import { adminLang, getA } from "../../../lang-server";
 import { NoRights } from "../../no-rights";
@@ -34,6 +36,7 @@ async function Loaded() {
   if (!dbConfigured()) return <p className="adm-wait">{A.noDb}</p>;
   const { user, business } = await requireAdmin();
   if (!onlineMay(user)) return <NoRights />;
-  // the booking page in the admin's language: what a client sees once a change is saved
-  return <OnlineView initial={onlineOf(business.settings)} view={`/${await adminLang()}`} />;
+  // the booking page in the admin's language: what a client sees once a change is saved;
+  // the link clients get (and the plaque's QR code): the start, where each client's own language opens
+  return <OnlineView initial={onlineOf(business.settings)} view={`/${await adminLang()}`} link={new URL("/", siteUrl()).href} test={testRun()} />;
 }
