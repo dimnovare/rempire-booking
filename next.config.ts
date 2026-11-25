@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   poweredByHeader: false,
+  // `next dev` only: 127.0.0.1 is this machine as localhost is (allowed by itself). The e2e run
+  // with two addresses (E2E_SPLIT=yes, e2e/hosts.spec.ts) serves the client side there.
+  allowedDevOrigins: ["127.0.0.1"],
   experimental: {
     // No Turbopack cache between builds (on by default since 16.3). On
     // 25.11.2026 Vercel restored the previous build's cache and shipped the

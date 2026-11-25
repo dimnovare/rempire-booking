@@ -17,10 +17,19 @@
  * comes back to it. A request for a salon page also ends «looking at a
  * barber's app» (the owner's support view of /b): back in the salon, /b is
  * his own again.
+ *
+ * Two addresses (docs/launch.md B3): with SITE_URL and STAFF_URL on
+ * different hosts, each host serves its own half first and sends the other
+ * half's pages to the other host (src/lib/hosts.ts). Every other host, and
+ * every host while the split is off, serves both halves as before. The
+ * staff host's robots.txt closes everything, so the proxy sees that one
+ * file too. Every redirect between the hosts and every answer on the staff
+ * host says noindex, also after the move.
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, SESSION_COOKIE_MAX_AGE, START_PATH, VIEW_AS_COOKIE } from "@/lib/auth/cookie";
 import { SIDE_COOKIE, sideOf } from "@/lib/auth/side";
+import { hostRedirect, hostRole, requestUrlOf, STAFF_ROBOTS } from "@/lib/hosts";
 import { isLocale, pickLocale } from "@/lib/i18n";
 import { indexingAllowed, NOINDEX_HEADER } from "@/lib/indexing";
 
@@ -51,6 +60,19 @@ function staffArea(request: NextRequest, root: "/admin" | "/b"): NextResponse {
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  // the host asked for, from the Host header (src/lib/hosts.ts)
+  const asked = requestUrlOf(request);
+  if (pathname === "/robots.txt") {
+    if (hostRole(asked.host) !== "staff") return NextResponse.next();
+    return new NextResponse(STAFF_ROBOTS, { headers: { "Content-Type": "text/plain; charset=utf-8", "X-Robots-Tag": NOINDEX_HEADER } });
+  }
+  // the other half's page, on the host of this half
+  const moved = hostRedirect(asked);
+  if (moved) {
+    const res = NextResponse.redirect(moved.to, moved.status);
+    res.headers.set("X-Robots-Tag", NOINDEX_HEADER);
+    return res;
+  }
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return staffArea(request, "/admin");
   if (pathname === "/b" || pathname.startsWith("/b/")) return staffArea(request, "/b");
   // the SMS reminder's short link picks the visit's own language (src/app/v)
@@ -64,6 +86,7 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // not the API, Next's own files, or any file with an extension (logo, robots.txt)
-  matcher: ["/((?!api/|_next/|.*\\.[a-z0-9]+$).*)"],
+  // not the API, Next's own files, or any file with an extension (logo, manifests, icons, service
+  // workers), so those are served on every host; robots.txt only for the staff host's own answer
+  matcher: ["/((?!api/|_next/|.*\\.[a-z0-9]+$).*)", "/robots.txt"],
 };

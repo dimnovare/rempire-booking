@@ -1,8 +1,8 @@
 # The apps: one for staff, one for clients
 
 *Decided with Dim in chat, 18.11.2026. All four steps were built the same
-day. Open: the two apps need two addresses (below), found on Dim's Android
-phone that evening.*
+day. The two apps need two addresses, found on Dim's Android phone that
+evening: decided in round 13, built 25.11 («Addresses», below).*
 
 ## Decisions (Dim, 18.11.2026)
 
@@ -271,9 +271,37 @@ phone, because that needs a real push service.
 3. **Client app.** *Built 18.11, above.*
 4. **Client notifications.** *Built 18.11, above.*
 
-**Not now:** the QR page (Renat's answer first), the final addresses.
+**Not now:** the QR page (Renat's answer first). *The addresses were
+built 25.11, below.*
 
-## Addresses (open)
+## Addresses: two, built 25.11.2026
+
+Decided in round 13 (23.11): **`book.rempire.ee` for clients,
+`staff.rempire.ee` for staff**, one subdomain each. Built 25.11
+(`docs/launch.md`, «Two addresses»); off until Vercel has `STAFF_URL`.
+
+- `SITE_URL` is the client address, `STAFF_URL` the staff one
+  (`src/lib/site.ts`). With both set on different hosts, the client host
+  serves the booking, the visit pages and the salon page and sends
+  `/admin` and `/b` to the staff host; the staff host serves the admin and
+  the barber app, sends client pages to the client host, and opens the
+  staff app's start (`/b/start`) on its bare address. Any other host
+  (today's staging address) serves both, as before (`src/lib/hosts.ts`,
+  `src/proxy.ts`).
+- **Two installs on one Android phone:** each app installs from its own
+  host. The manifests did not change: their `id`, `scope` and `start_url`
+  are paths, so they belong to the host they came from, and the apps
+  already installed from today's address keep working there.
+- A login is per host: a phone logged in on today's address logs in once
+  more on the staff host.
+- Links: the staff letters on `STAFF_URL`, every client link on
+  `SITE_URL`.
+- First tried on staging on `book-rempire.` and
+  `staff-rempire.diipsolutions.eu`, with today's address left as it is.
+
+What follows is the history of the choice.
+
+## Addresses (open until round 13)
 
 Dim's candidates, 18.11:
 

@@ -398,6 +398,11 @@ describe("invoices (C5)", () => {
     const [row] = await query<{ business_id: string; locale: string; payload: Record<string, unknown> }>("select business_id, locale, payload from notifications where kind = 'invoice'");
     const msg = await invoiceMessage(query, row, DEV);
     expect("subject" in msg && msg.subject).toBe("Arve DEMO-2026-0001 · REMPIRE");
+    // a letter to a barber's company: on the staff address once the two addresses are split (docs/launch.md B3)
+    const split = await invoiceMessage(query, row, { ...DEV, SITE_URL: "https://book.example.test", STAFF_URL: "https://staff.example.test" });
+    const html = "body" in split ? (split.body.html ?? "") : "";
+    expect(html).toContain("https://staff.example.test/brand/");
+    expect(html).not.toContain("book.example.test");
     sentToConsole.length = 0;
     // the letter was queued on the database's own clock
     const res = await runOutbox(query, Date.now() + 1000, DEV);

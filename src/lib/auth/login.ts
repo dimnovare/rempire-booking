@@ -17,7 +17,7 @@ import { hashPassword, passwordProblem, verifyPassword } from "../../../tools/pa
 import type { Querier } from "../db";
 import { EmailDisabled, sendEmail } from "../email";
 import { loginCodeLetter } from "../letters";
-import { siteUrl } from "../site";
+import { staffUrl } from "../site";
 import { backfillRights } from "./rights-store";
 import { revokeOtherSessions, type Role } from "./sessions";
 
@@ -92,7 +92,8 @@ export async function sendLoginCode(q: Querier, emailRaw: string, ip: string, no
   await q("insert into login_codes (email, code_hash, expires_at, created_at) values ($1, $2, $3, $4)", [email, codeHash(email, code), new Date(now + LIMITS.codeTtlMin * MIN), new Date(now)]);
   if (!known) return "sent";
   try {
-    const letter = loginCodeLetter(code, LIMITS.codeTtlMin, siteUrl().origin);
+    // a letter to staff: its pictures come from the staff address (src/lib/site.ts)
+    const letter = loginCodeLetter(code, LIMITS.codeTtlMin, staffUrl().origin);
     await send(email, letter.subject, letter);
   } catch (err) {
     if (err instanceof EmailDisabled) return "disabled";

@@ -36,7 +36,7 @@ Renat's last Isolta invoice (asked on his page, `switch.isolta`).
 | Service | What it does for booking | Account / sign-in | Env var names | Pays | State on 23.11 | At the launch | Since 17.11 |
 |---|---|---|---|---|---|---|---|
 | **GitHub** `dimnovare/rempire-booking` (public; Dim kept it public, 24.11.2026) | The code; Actions `ci.yml`: check → deploy → noindex check | Dim's `dimnovare`; commits use his noreply address | secret `VERCEL_TOKEN` (token `rempire-booking-ci`, this project only, expires **17.11.2027**); variables `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`; `DOMAIN` is written in `ci.yml` | free | set up | `ci.yml`: change `DOMAIN`; drop `SEED_DEMO`, `SEED_BUSY` and `DB_DRIVER=auto` from the deploy line (with `auto` and no `DATABASE_URL`, production would quietly run on an in-memory demo database); keep the noindex check for staging only. Who owns the repo is still open | `SEED_BUSY=yes` added to the deploy line (c60169d) |
-| **Vercel** team «Rempire» (Pro), project `rempire-booking`, region `fra1` | Hosting; the cron (`vercel.json`, every 5 minutes) | GitHub `rempireshop`; CI deploys with the project token | see «Env vars» | Dim's card; Pro ($20 a month) shared with the shop | set up | Add the booking host(s), set `SITE_URL`, production database vars, then `ALLOW_INDEXING=yes` last. The shop wants to go back to Hobby; the 5-minute cron needs Pro | `SHOP_API_URL`, `SHOP_API_SECRET` set 18.11 |
+| **Vercel** team «Rempire» (Pro), project `rempire-booking`, region `fra1` | Hosting; the cron (`vercel.json`, every 5 minutes) | GitHub `rempireshop`; CI deploys with the project token | see «Env vars» | Dim's card; Pro ($20 a month) shared with the shop | set up | Add the two hosts, set `SITE_URL` and `STAFF_URL` (`docs/launch.md`, «Two addresses»), production database vars, then `ALLOW_INDEXING=yes` last. The shop wants to go back to Hobby; the 5-minute cron needs Pro | `SHOP_API_URL`, `SHOP_API_SECRET` set 18.11 |
 | **Vercel cron** `/api/cron/outbox` | Sends every message; since 17.11 also sends barber sales to the shop and makes the month's invoice drafts | — | `CRON_SECRET` | — | runs | stays | does more |
 | **Railway**, workspace «rempireshop's Projects» (Hobby), project `rempire-booking-staging` | Postgres 18, EU West: demo, generated and masked data | GitHub `rempireshop`; the local `railway` CLI cannot see it | `DATABASE_URL` (its `DATABASE_PUBLIC_URL`), `DATABASE_SSL_CA` (the CA expires **14.02.2029**) | Dim's card | set up | A production Postgres of its own, without demo data, with its own URL and CA. Staging never becomes production. Open: what carries over (`docs/launch.md`, decision «data») | — |
 | **Cloudflare**, Dim's zone `diipsolutions.eu` | Staging DNS: CNAME `rempire-booking` → Vercel, TXT `_vercel`; Resend: CNAME `send.rempire-booking`, CNAME `rsend.rempire-booking`, TXT `resend._domainkey.rempire-booking` (all DNS only, no MX) | Dim's browser | — | free | set up | Stays while staging lives. The zone's own `send.`/`rsend.` records are Dim's Resend: leave them | — |
@@ -69,7 +69,8 @@ channels are live, without values.
 | Name | Production | Staging | Note |
 |---|---|---|---|
 | `ALLOW_INDEXING` | `yes`, set **last** | unset | Also ends the test run (`src/lib/test-run.ts`): the mail guard, the `SMS_TEST_TO` filter, `TEST-` invoice numbers and the banner go. From then on real clients get real SMS and e-mails. Never on staging |
-| `SITE_URL` | yes | unset | unset falls back to the staging URL |
+| `SITE_URL` | yes: `https://book.rempire.ee` | unset (trial: `https://book-rempire.diipsolutions.eu`) | the **client** address: every link a client gets. Unset falls back to the staging URL |
+| `STAFF_URL` | yes: `https://staff.rempire.ee` | unset (trial: `https://staff-rempire.diipsolutions.eu`) | the **staff** address: staff letters, Google's way back. Unset = `SITE_URL`, one address for both. Set with `SITE_URL` on another host, each host serves its own half (`docs/launch.md`, «Two addresses») |
 | `DATABASE_URL` | yes | yes (Dim) | Railway's public URL |
 | `DATABASE_SSL_CA` | yes | yes | the database's CA, public |
 | `DATABASE_SSL_NO_VERIFY`, `DATABASE_POOL_MAX` | no | ? | last resort / tuning |
@@ -123,8 +124,13 @@ new account as Owner; they accept; change the support and contact
 e-mails under Branding; remove rempireshopinfo@gmail.com if wanted. The
 client ID and secret stay, so Vercel needs no change.
 
+**The staging trial of the two addresses** (`docs/launch.md`, B3): add
+`https://staff-rempire.diipsolutions.eu/api/auth/google/callback`. While
+the two addresses are split, Google always comes back to the staff
+address; today's staging address keeps its own URI.
+
 **At the move to rempire.ee:** add the redirect URI
-`https://<staff host>/api/auth/google/callback`; under Branding the home
+`https://staff.rempire.ee/api/auth/google/callback`; under Branding the home
 page, the privacy policy on rempire.ee and the authorized domain
 `rempire.ee`; then Audience → Publish app (scopes `openid email` need no
 review). Remove the staging and localhost URIs once staging is gone.
