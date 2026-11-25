@@ -5,6 +5,14 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   poweredByHeader: false,
+  experimental: {
+    // No Turbopack cache between builds (on by default since 16.3). On
+    // 25.11.2026 Vercel restored the previous build's cache and shipped the
+    // old admin.css: a change to that file alone was not picked up. A build
+    // from scratch costs about half a minute; a stale page in production
+    // costs more.
+    turbopackFileSystemCacheForBuild: false,
+  },
   // PGlite (in-memory Postgres, DB_DRIVER=pglite|auto) loads its own .wasm
   // and data files at run time: keep it out of the bundle, trace it whole.
   serverExternalPackages: ["@electric-sql/pglite"],
