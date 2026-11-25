@@ -173,10 +173,22 @@ test.describe("the frame", () => {
 
       // «menu»
       await sb(page).getByRole("button", { name: F.all }).click();
-      await menu(page).getByRole("button", { name: A.nav.clients }).click();
+      // a group's head stays put when it opens, as on the board (Dim, 25.11): the same box, icon and words
+      // before the click, while the list grows and after; 196 wide at x 12, the icon at 20, the words at 52
+      const head = menu(page).getByRole("button", { name: A.nav.clients });
+      const place = () =>
+        head.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          return [r.x, r.y, r.width, r.height, el.querySelector("svg")!.getBoundingClientRect().x, el.querySelector("span")!.getBoundingClientRect().x].map((n) => Math.round(n));
+        });
+      const shut = await place();
+      expect(shut).toEqual([12, shut[1], 196, 40, 20, 52]);
+      await head.click();
+      expect(await place()).toEqual(shut);
       // the group's opening has run its .25s
-      await expect(page.locator(".sb-group.is-open")).toHaveCSS("padding", "4px");
+      await expect(page.locator(".sb-group.is-open")).toHaveCSS("box-shadow", "rgb(34, 34, 46) 0px 0px 0px 4px");
       await expect(page.locator(".sb-group.is-open > .sb-row")).toHaveCSS("background-color", "rgb(255, 217, 64)");
+      expect(await place()).toEqual(shut);
       expect(await look(".sb")).toMatchObject({ w: 220, bg: "rgb(8, 8, 12)" });
       // as Dim's video of the board at 1920 × 1080 (24.11): the head keeps its line; rows of 40px, 12px apart,
       // 10px in from each side, 24px icons, a light 20px chevron
@@ -189,10 +201,11 @@ test.describe("the frame", () => {
       const tops = await page.locator(".sb-menu > *").evaluateAll((els) => els.map((el) => Math.round(el.getBoundingClientRect().y)));
       const closed = await page.locator(".sb-menu > *").evaluateAll((els) => els.map((el) => !el.classList.contains("is-open")));
       for (let i = 1; i < tops.length; i++) if (closed[i - 1]) expect(tops[i] - tops[i - 1]).toBe(52);
-      // the open group: a dark card, its yellow head; its list grows in .25s (the grid's rows, 0fr → 1fr), a shut one has no height and is hidden
-      expect(await look(".sb-group.is-open")).toMatchObject({ w: 200, bg: "rgb(34, 34, 46)", radius: "10px" });
-      expect(await page.locator(".sb-group.is-open").evaluate((el) => getComputedStyle(el).padding)).toBe("4px");
-      expect(await look(".sb-group.is-open > .sb-row")).toMatchObject({ w: 192, h: 40, bg: "rgb(255, 217, 64)", color: "rgb(8, 8, 12)", radius: "8px", font: "500 14px/20px" });
+      // the open group: a dark card 4px round it (204 wide at x 8, corners 6 + 4 = 10), its yellow head; its list
+      // grows in .25s (the grid's rows, 0fr → 1fr), a shut one has no height and is hidden
+      expect(await look(".sb-group.is-open")).toMatchObject({ w: 196, bg: "rgb(34, 34, 46)", radius: "6px" });
+      expect(await page.locator(".sb-group.is-open").evaluate((el) => [getComputedStyle(el).padding, Math.round(el.getBoundingClientRect().x)])).toEqual(["0px", 12]);
+      expect(await look(".sb-group.is-open > .sb-row")).toMatchObject({ w: 196, h: 40, bg: "rgb(255, 217, 64)", color: "rgb(8, 8, 12)", radius: "8px", font: "500 14px/20px" });
       expect(await look(".sb-group.is-open .sb-sub")).toMatchObject({ h: 40, color: "rgb(198, 203, 211)", font: "500 14px/20px" });
       expect(await page.locator(".sb-group.is-open > .sb-subs").evaluate((el) => [getComputedStyle(el).transitionProperty, getComputedStyle(el).transitionDuration])).toEqual(["grid-template-rows, visibility", "0.25s, 0s"]);
       expect(await page.locator(".sb-group:not(.is-open) > .sb-subs").first().evaluate((el) => [el.getBoundingClientRect().height, getComputedStyle(el).visibility, (el as HTMLElement).inert])).toEqual([0, "hidden", true]);

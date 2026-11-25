@@ -235,8 +235,12 @@ html, body { background: var(--ink); }
   .sb-row > svg:first-child { flex: none; }
   .sb-row > svg:last-child:not(:first-child) { flex: none; color: #dfe4ed; transition: transform .25s ease-out; }
   .sb-row:hover { background: var(--sb-card); }
-  .sb-group { border-radius: 10px; transition: background-color .25s ease-out, padding .25s ease-out; }
-  .sb-group.is-open { background: var(--sb-card); padding: 4px; }
+  /* A group's head stays put when it opens (Dim's video, 25.11): 196 wide at x 12, closed, hovered or open,
+     its icon at 20 and its words at 52 as a plain row's. The dark card grows outward, 4px round it (204 wide
+     at x 8, corners 10), drawn by the shadow, so nothing inside moves. */
+  .sb-group { margin: 0 2px; border-radius: 6px; box-shadow: 0 0 0 4px transparent; transition: background-color .25s ease-out, box-shadow .25s ease-out; }
+  .sb-group > .sb-row { padding: 4px 8px; }
+  .sb-group.is-open { background: var(--sb-card); box-shadow: 0 0 0 4px var(--sb-card); }
   .sb-group.is-open > .sb-row, a.sb-row[aria-current="page"] { background: var(--sb-on); color: var(--sb-on-fg); }
   /* a click turns the head yellow at once, as theirs; only the hover fades */
   .sb-group.is-open > .sb-row { transition-duration: 0s; }
