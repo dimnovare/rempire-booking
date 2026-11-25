@@ -88,7 +88,7 @@ export async function visitExtras(q: Querier, business: Business, who: Holder, i
   if (!isUuid(id)) return null;
   const tz = business.timezone;
   const [v] = await q<{ staff_id: string; client_id: string; starts_at: Date; created_at: Date; source: string; made_name: string | null; made_email: string | null }>(
-    `select a.staff_id, a.client_id, a.starts_at, a.created_at, a.source, mu.name as made_name, mu.email as made_email
+    `select a.staff_id, a.client_id, a.starts_at, a.created_at, a.source, mu.name as made_name, coalesce(mu.deleted_was->>'email', mu.email) as made_email
        from appointments a
        left join lateral (
          select au.actor from audit au
@@ -106,7 +106,7 @@ export async function visitExtras(q: Querier, business: Business, who: Holder, i
 
   const [log, messages] = await Promise.all([
     q<{ at: Date; action: string; actor: string; after: { status?: string; confirmed?: boolean } | null; name: string | null; email: string | null }>(
-      `select au.at, au.action, au.actor, au.after, u.name, u.email
+      `select au.at, au.action, au.actor, au.after, u.name, coalesce(u.deleted_was->>'email', u.email) as email
          from audit au left join users u on u.business_id = $2 and u.id::text = au.actor
         where au.entity = 'appointment' and au.entity_id = $1
         order by au.at desc, au.id desc limit ${LOG_MAX}`,

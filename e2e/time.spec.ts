@@ -13,6 +13,13 @@ async function openTime(page: Page) {
   if (await all.count()) await all.click();
 }
 
+/** «История запросов · 30 дней»: his requests open in a sheet. */
+async function openHistory(page: Page) {
+  await page.getByRole("button", { name: new RegExp(`^${T.history}`) }).click();
+  await expect(sheet(page).getByRole("heading", { name: T.requests })).toBeVisible();
+  return sheet(page);
+}
+
 /** Remove one of his entries in «Впереди» by its kind and its words. */
 async function removeAhead(page: Page, title: string, when: RegExp) {
   await page.getByRole("button", { name: new RegExp(`^${T.remove}: ${title}, ${when.source}`) }).click();
@@ -27,7 +34,17 @@ test.describe("his time", () => {
     await openTime(page);
     await expect(page.getByRole("heading", { level: 1, name: T.title })).toBeVisible();
     const add = page.getByRole("group", { name: T.title });
-    for (const k of [T.add.block, T.add.vacation, T.add.sick, T.add.special]) await expect(add.getByRole("button", { name: k })).toBeVisible();
+    for (const k of ["block", "vacation", "sick", "special"] as const) {
+      const b = add.getByRole("button", { name: T.add[k], exact: true });
+      await expect(b).toBeVisible();
+      // the line under the word says what it is (aria-describedby)
+      await expect(b).toHaveAccessibleDescription(T.addSub[k]);
+      expect((await b.boundingBox())!.height).toBeGreaterThanOrEqual(64);
+    }
+    // the history is one button, and it opens as a sheet
+    const s = await openHistory(page);
+    await s.getByRole("button", { name: B.close }).click();
+    await expect(sheet(page)).toHaveCount(0);
     await expect(page.getByRole("heading", { name: T.hours })).toBeVisible();
     await expect(page.getByRole("heading", { name: T.prices })).toBeVisible();
     await expectNoSideScroll(page);
@@ -66,7 +83,7 @@ test.describe("his time", () => {
       const day = nextWorkday(barber.slug, 4);
       const note = `E2E отпуск ${barber.name}`;
       await openTime(page);
-      await expect(page.getByText(T.modeTime.ask)).toBeVisible();
+      await expect(page.getByText(`${T.applies.time}: ${T.when.ask}`)).toBeVisible();
       await page.getByRole("button", { name: T.add.vacation, exact: true }).click();
       const s = sheet(page);
       await s.getByLabel(T.from, { exact: true }).fill(day);
@@ -76,6 +93,9 @@ test.describe("his time", () => {
       await expect(toast(page)).toHaveText(T.sent);
       const mine = page.locator(".bx-rows li", { hasText: note });
       await expect(mine.getByText(T.waiting, { exact: true })).toBeVisible();
+      // a waiting one is withdrawn, not removed: the link, no ×
+      await expect(mine.getByRole("button", { name: T.withdraw })).toBeVisible();
+      await expect(mine.getByRole("button", { name: new RegExp(`^${T.remove}:`) })).toHaveCount(0);
       // a waiting vacation already holds the day
       await page.goto(`/b?d=${day}`);
       await expect(page.locator(".bx-cal-sum p")).toContainText(B.day.kinds.vacation);
@@ -85,19 +105,25 @@ test.describe("his time", () => {
       await hydrated(owner);
       const row = owner.locator(".adm-req li", { hasText: note });
       await expect(row).toContainText(barber.name);
+      // «Ответ барберу» opens the field; the toast names what was approved
+      await row.getByRole("button", { name: A.req.note }).click();
       await row.getByLabel(A.req.note).fill("E2E хорошо");
       await row.getByRole("button", { name: A.req.approve }).click();
-      await expect(owner.locator(".adm-toast")).toHaveText(A.req.approved);
-      await owner.reload();
+      await expect(owner.locator(".adm-toast")).toContainText(A.req.approvedWhat(barber.name, ""));
+      // answered: in «История» now, with the answer
+      await owner.goto("/admin/requests?tab=history");
+      await hydrated(owner);
       const done = owner.locator(".adm-req li", { hasText: note });
       await expect(done).toContainText(A.req.status.approved);
       await expect(done).toContainText("E2E хорошо");
       await expectNoSideScroll(owner);
 
-      // the barber sees the answer
+      // the barber sees the answer, in his requests
       await openTime(page);
-      await expect(page.getByText(T.answer("E2E хорошо"))).toBeVisible();
       await expect(page.locator(".bx-rows li", { hasText: note }).getByText(T.waiting, { exact: true })).toHaveCount(0);
+      const h = await openHistory(page);
+      await expect(h.getByText(T.answer("E2E хорошо"))).toBeVisible();
+      await h.getByRole("button", { name: B.close }).click();
       // taking time back always applies at once
       await removeAhead(page, T.add.vacation, /.*/);
     } finally {
@@ -126,13 +152,17 @@ test.describe("his time", () => {
       await owner.goto("/admin/requests");
       await hydrated(owner);
       const req = owner.locator(".adm-req li", { hasText: barber.name }).filter({ hasText: name }).filter({ has: owner.getByRole("button", { name: A.req.decline }) });
+      // «Отклонить» asks first, with the answer to the barber
       await req.getByRole("button", { name: A.req.decline }).click();
-      await expect(owner.locator(".adm-toast")).toHaveText(A.req.declined);
+      const ask = owner.getByRole("alertdialog", { name: A.req.declineAsk(barber.name) });
+      await ask.getByRole("button", { name: A.req.decline }).click();
+      await expect(owner.locator(".adm-toast")).toContainText(A.req.declinedWhat(barber.name, ""));
 
       await openTime(page);
       await expect(row.locator(".price")).toHaveText(before);
       await expect(row).not.toContainText(/ждёт ответа: /);
-      await expect(page.locator(".bx-rows li", { hasText: name }).getByText(T.status.declined)).toBeVisible();
+      const h = await openHistory(page);
+      await expect(h.locator(".bx-rows li", { hasText: name }).getByText(T.status.declined).first()).toBeVisible();
     } finally {
       // a barber starts with his prices at once (Renat, 18.11)
       await setSwitch(owner, "price", "now");
@@ -140,7 +170,7 @@ test.describe("his time", () => {
     }
   });
 
-  test("a request he regrets: «Отозвать»", async ({ page, browser }, info) => {
+  test("a request he regrets: «Отозвать запрос», after a question", async ({ page, browser }, info) => {
     // a price change is a request only with «С моего ОК»; a barber starts with «now» (Renat, 18.11)
     const owner = await phoneOf(browser, info, "owner");
     await setSwitch(owner, "price", "ask");
@@ -152,9 +182,17 @@ test.describe("his time", () => {
       await s.getByRole("button", { name: "+5" }).click();
       await s.getByRole("button", { name: T.send }).click();
       await expect(toast(page)).toHaveText(T.sent);
-      await page.getByRole("button", { name: T.withdraw }).first().click();
+      // the history button counts what waits (another test's request may wait too)
+      await expect(page.getByRole("button", { name: new RegExp(`^${T.history}`) })).toContainText(T.waitingN(0).replace(/0$/, ""));
+      const h = await openHistory(page);
+      await h.getByRole("button", { name: T.withdraw }).first().click();
+      // it asks first; «Оставить» keeps it
+      await h.getByRole("button", { name: T.keep }).click();
+      await expect(h.getByRole("button", { name: T.withdrawYes })).toHaveCount(0);
+      await h.getByRole("button", { name: T.withdraw }).first().click();
+      await h.getByRole("button", { name: T.withdrawYes }).click();
       await expect(toast(page)).toHaveText(T.withdrawn);
-      await expect(page.getByText(T.status.withdrawn).first()).toBeVisible();
+      await expect(h.getByText(T.status.withdrawn).first()).toBeVisible();
     } finally {
       await setSwitch(owner, "price", "now");
       await owner.context().close();
@@ -205,12 +243,13 @@ test.describe("his time", () => {
     await save.click();
     await expect(toast(page)).toHaveText(T.saved);
 
-    // «Впереди»: the window as he set it; «Запросы» says the same in words
+    // «Впереди»: the window as he set it; his requests say the same in words
     await openTime(page);
-    const ahead = page.locator("section.adm-card", { has: page.getByRole("heading", { name: T.ahead }) }).locator(".bx-rows li", { hasText: "06:00–08:00" });
-    await expect(ahead).toContainText(`${T.add.special} +50 %`);
-    const asked = page.locator("section.adm-card", { has: page.getByRole("heading", { name: T.requests }) }).locator(".bx-rows li", { hasText: "06:00–08:00" });
-    await expect(asked).toContainText(`${T.add.special} +50 % ·`);
+    const ahead = page.locator("section.bx-sec", { has: page.getByRole("heading", { name: T.ahead }) }).locator(".bx-rows li", { hasText: "06:00–08:00" });
+    await expect(ahead).toContainText(`${T.add.special} ${T.extraTag("+50 %")}`);
+    const h = await openHistory(page);
+    await expect(h.locator(".bx-rows li", { hasText: "06:00–08:00" }).first()).toContainText(`${T.add.special} +50 % ·`);
+    await h.getByRole("button", { name: B.close }).click();
 
     // his day: the window says the percent, and that it is still free; no money yet
     await page.goto(`/b?d=${day}`);

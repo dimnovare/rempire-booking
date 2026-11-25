@@ -16,7 +16,9 @@ export function RequestsRow() {
   const { waiting } = useFrame();
   return (
     <Link className="adm-item mo-row" href="/admin/requests" prefetch={false}>
-      <b>{A.nav.requests}</b>
+      <span className="tx">
+        <b>{A.nav.requests}</b>
+      </span>
       {waiting > 0 && (
         <span className="mo-count" role="img" aria-label={A.app.waiting(waiting)} title={A.app.waiting(waiting)}>
           {waiting}

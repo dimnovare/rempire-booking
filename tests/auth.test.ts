@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { changePassword, createUser, LIMITS, listUsers, loginWithCode, loginWithPassword, sendLoginCode, setUserActive, setUserStaff } from "@/lib/auth/login";
+import { changePassword, createUser, deleteUser, LIMITS, listUsers, loginWithCode, loginWithPassword, RESTORE_MINUTES, restoreUser, sendLoginCode, setUserActive, setUserStaff } from "@/lib/auth/login";
 import { canUseAdmin, createSession, readSession, revokeSession, SESSION_IDLE_DAYS } from "@/lib/auth/sessions";
 import { closeDb, query } from "@/lib/db";
 import { EmailDisabled, emailTransport, sendEmail, sentToConsole } from "@/lib/email";
@@ -119,6 +119,52 @@ describe("password login", () => {
     expect(await setUserActive(query, demo.business.id, id, false)).toBe(true);
     expect(await readSession(query, token)).toBeNull();
     expect(await loginWithPassword(query, "owner@example.test", PW, IP)).toEqual({ ok: false, code: "bad" });
+  });
+});
+
+describe("«Удалить вход»", () => {
+  const MAIL = "front@example.test";
+
+  it("a deleted login leaves the list, cannot log in, frees its e-mail, keeps its row and its name in the history", async () => {
+    const actor = await owner();
+    const r = await createUser(query, demo.business.id, { email: MAIL, name: "Front", role: "admin", staffId: null, password: PW });
+    if (!r.ok) throw new Error(r.field);
+    const token = await createSession(query, r.id);
+    // another business cannot touch it
+    expect(await deleteUser(query, "00000000-0000-4000-8000-000000000000", r.id, actor)).toBe(false);
+    expect(await deleteUser(query, demo.business.id, r.id, actor)).toBe(true);
+    expect(await deleteUser(query, demo.business.id, r.id, actor)).toBe(false);
+    expect(await readSession(query, token)).toBeNull();
+    expect((await listUsers(query, demo.business.id)).map((u) => u.id)).not.toContain(r.id);
+    expect(await loginWithPassword(query, MAIL, PW, IP)).toEqual({ ok: false, code: "bad" });
+    // nothing switches it on again, nor links it to a barber
+    expect(await setUserActive(query, demo.business.id, r.id, true)).toBe(false);
+    expect(await setUserStaff(query, demo.business.id, r.id, null)).toBe(false);
+    // the row stays, what it was is kept, the history says who deleted it
+    const [row] = await query<{ email: string; active: boolean; was: { email: string; active: boolean } }>("select email, active, deleted_was as was from users where id = $1", [r.id]);
+    expect(row).toMatchObject({ email: `deleted-${r.id}@deleted.invalid`, active: false, was: { email: MAIL, active: true } });
+    expect(await query("select actor, action from audit where entity = 'user' and entity_id = $1", [r.id])).toEqual([{ actor: actor, action: "delete" }]);
+    // the e-mail is free for a new login
+    const again = await createUser(query, demo.business.id, { email: MAIL, name: "Front 2", role: "admin", staffId: null, password: null });
+    expect(again.ok).toBe(true);
+  });
+
+  it("«Вернуть» brings it back as it was, within ten minutes, unless its e-mail is taken", async () => {
+    const actor = await owner();
+    const r = await createUser(query, demo.business.id, { email: MAIL, name: "Front", role: "admin", staffId: null, password: PW });
+    if (!r.ok) throw new Error(r.field);
+    expect(await restoreUser(query, demo.business.id, r.id, actor)).toBe("gone");
+    await deleteUser(query, demo.business.id, r.id, actor);
+    expect(await restoreUser(query, demo.business.id, r.id, actor, Date.now() + (RESTORE_MINUTES + 1) * 60_000)).toBe("gone");
+    expect(await restoreUser(query, demo.business.id, r.id, actor)).toBe("ok");
+    expect((await listUsers(query, demo.business.id)).find((u) => u.id === r.id)).toMatchObject({ email: MAIL, active: true });
+    expect((await loginWithPassword(query, MAIL, PW, IP)).ok).toBe(true);
+    expect((await query<{ action: string }>("select action from audit where entity = 'user' and entity_id = $1 order by id", [r.id])).map((a) => a.action)).toEqual(["delete", "restore"]);
+    // deleted again, and a new login takes the e-mail: no way back
+    await deleteUser(query, demo.business.id, r.id, actor);
+    expect((await createUser(query, demo.business.id, { email: MAIL, name: "New", role: "admin", staffId: null, password: null })).ok).toBe(true);
+    expect(await restoreUser(query, demo.business.id, r.id, actor)).toBe("taken");
+    expect((await listUsers(query, demo.business.id)).map((u) => u.id)).not.toContain(r.id);
   });
 });
 

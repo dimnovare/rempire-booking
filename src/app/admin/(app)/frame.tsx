@@ -20,9 +20,17 @@
  * день» for a login linked to a barber) and how many requests wait for an
  * answer (`waiting`, the dot on «Ещё», where «Запросы» is a row): src/lib/admin/app-nav.ts.
  */
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import type { BarKey } from "@/lib/admin/app-nav";
 import type { FavPage } from "@/lib/admin/favourites";
+import { TickIcon } from "../icons";
 import { useA } from "../lang";
 import { favouriteAction } from "./frame-actions";
 import { SaleDrawer } from "./sale-drawer";
@@ -30,11 +38,15 @@ import { ServicesDrawer } from "./services-drawer";
 
 export type DrawerName = "sale" | "services";
 
+/** A button in the toast, as «Вернуть» after «Удалить вход». */
+export type ToastAct = { label: string; run: () => void };
+
 type Frame = {
   favs: readonly FavPage[];
   star: (page: FavPage, on: boolean) => void;
   open: (drawer: DrawerName) => void;
-  say: (text: string, bad?: boolean) => void;
+  /** the toast; `act`: a button in it («Вернуть»), and then it stays 10 seconds */
+  say: (text: string, bad?: boolean, act?: ToastAct) => void;
   /** what this login has no right to: section keys, and «sale» */
   off: readonly string[];
   /** the login's tabs in a phone's bottom bar */
@@ -44,8 +56,22 @@ type Frame = {
 };
 
 /** The salon's own tabs: what a login not linked to a barber has. */
-const SALON_BAR: readonly BarKey[] = ["calendar", "clients", "reports", "invoices", "more"];
-const NONE: Frame = { favs: [], star: () => {}, open: () => {}, say: () => {}, off: [], bar: SALON_BAR, waiting: 0 };
+const SALON_BAR: readonly BarKey[] = [
+  "calendar",
+  "clients",
+  "reports",
+  "invoices",
+  "more",
+];
+const NONE: Frame = {
+  favs: [],
+  star: () => {},
+  open: () => {},
+  say: () => {},
+  off: [],
+  bar: SALON_BAR,
+  waiting: 0,
+};
 const Ctx = createContext<Frame>(NONE);
 
 export const useFrame = () => useContext(Ctx);
@@ -72,26 +98,45 @@ export function FrameProvider({
     setFavs(sent);
   }
   const [drawer, setDrawer] = useState<DrawerName | null>(null);
-  const [toast, setToast] = useState<{ text: string; bad: boolean } | null>(null);
+  const [toast, setToast] = useState<{
+    text: string;
+    bad: boolean;
+    act?: ToastAct;
+  } | null>(null);
 
   useEffect(() => {
     if (!toast) return;
-    const t = window.setTimeout(() => setToast(null), 3600);
+    const t = window.setTimeout(() => setToast(null), toast.act ? 10_000 : 3600);
     return () => window.clearTimeout(t);
   }, [toast]);
 
-  const say = useCallback((text: string, bad = false) => setToast({ text, bad }), []);
+  const say = useCallback(
+    (text: string, bad = false, act?: ToastAct) => setToast({ text, bad, act }),
+    [],
+  );
 
   const star = useCallback(
     (page: FavPage, on: boolean) => {
       // shown at once; the answer is the list as it is saved
-      setFavs((cur) => (on ? (cur.includes(page) ? cur : [...cur, page]) : cur.filter((p) => p !== page)));
+      setFavs((cur) =>
+        on
+          ? cur.includes(page)
+            ? cur
+            : [...cur, page]
+          : cur.filter((p) => p !== page),
+      );
       favouriteAction(page, on).then(
         (list) => {
           if (list) setFavs(list);
         },
         () => {
-          setFavs((cur) => (on ? cur.filter((p) => p !== page) : cur.includes(page) ? cur : [...cur, page]));
+          setFavs((cur) =>
+            on
+              ? cur.filter((p) => p !== page)
+              : cur.includes(page)
+                ? cur
+                : [...cur, page],
+          );
           say(A.error, true);
         },
       );
@@ -102,17 +147,50 @@ export function FrameProvider({
   const offKey = off.join(",");
   const barKey = bar.join(",");
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const frame = useMemo<Frame>(() => ({ favs: favs.filter((p) => !off.includes(p)), star, open: setDrawer, say, off, bar, waiting }), [favs, star, say, offKey, barKey, waiting]);
+  const frame = useMemo<Frame>(
+    () => ({
+      favs: favs.filter((p) => !off.includes(p)),
+      star,
+      open: setDrawer,
+      say,
+      off,
+      bar,
+      waiting,
+    }),
+    [favs, star, say, offKey, barKey, waiting],
+  );
   const close = useCallback(() => setDrawer(null), []);
 
   return (
     <Ctx.Provider value={frame}>
       {children}
-      {drawer === "sale" && <SaleDrawer onClose={close} onSaved={(what) => say(A.sale.saved(what))} />}
+      {drawer === "sale" && (
+        <SaleDrawer
+          onClose={close}
+          onSaved={(what) => say(A.sale.saved(what))}
+        />
+      )}
       {drawer === "services" && <ServicesDrawer onClose={close} />}
       {toast && (
-        <p className={`adm-toast adm-frame-toast${toast.bad ? " is-bad" : ""}`} role="status">
-          {toast.text}
+        <p
+          className={`adm-toast adm-frame-toast${toast.bad ? " is-bad" : ""}`}
+          role="status"
+        >
+          {!toast.bad && <TickIcon size={16} />}
+          {toast.act ? <span>{toast.text}</span> : toast.text}
+          {toast.act && (
+            <button
+              type="button"
+              className="adm-toast-act"
+              onClick={() => {
+                const run = toast.act!.run;
+                setToast(null);
+                run();
+              }}
+            >
+              {toast.act.label}
+            </button>
+          )}
         </p>
       )}
     </Ctx.Provider>

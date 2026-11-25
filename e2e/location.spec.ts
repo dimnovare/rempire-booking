@@ -277,15 +277,19 @@ const checks = (wide: boolean) => {
     await expectNoSideScroll(page);
     await shot(page, "online-link", wide);
 
-    const [sheet] = await Promise.all([page.waitForEvent("popup"), card.getByRole("link", { name: O.plaque }).click()]);
-    await sheet.waitForLoadState();
+    // the plaque is a page of the admin now (design artifact, 25.11), with the way back
+    await card.getByRole("link", { name: O.plaque }).click();
+    await expect(page).toHaveURL(/\/admin\/plaque$/);
+    const sheet = page;
     await hydrated(sheet);
     await expect(sheet).toHaveTitle(`${A.plaque.title} · REMPIRE`);
+    // the plaque sits in the admin's frame (25.11): the sidebar has the same link, the page's own is «‹ Онлайн-запись»
+    await expect(sheet.getByRole("main").getByRole("link", { name: A.nav.online })).toHaveAttribute("href", "/admin/settings/online");
     const qr = sheet.getByRole("img", { name: link });
     await expect(qr).toBeVisible();
     expect(await qr.locator("path").getAttribute("d")).toMatch(/^M\d+ \d+h\d+v1h-\d+z/);
     await expect(sheet.locator(".pl-host")).toHaveText(new URL(link).host);
-    await expect(sheet.locator(".pl-book p")).toHaveText(["Запишитесь онлайн", "Broneeri aeg", "Book online"]);
+    await expect(sheet.locator(".pl-book p")).toHaveText(["Запишитесь онлайн", "Broneeri aeg · Book online"]);
     await expect(sheet.locator(".pl-test")).toHaveText(A.plaque.test);
     // A5 by default; A4 and A6 are the same drawing at another size, the code square in every one
     const sizes = sheet.getByRole("group", { name: A.plaque.size });
@@ -305,15 +309,15 @@ const checks = (wide: boolean) => {
       }
     }
     await expectNoSideScroll(sheet);
-    // on paper: the sheet alone, at A5 in mm (96 px an inch), the bar gone
+    // on paper: the sheet alone, at A5 in mm (96 px an inch), the card and the admin's frame gone
     await sheet.emulateMedia({ media: "print" });
     await expect(sheet.locator(".pl-bar")).toBeHidden();
+    await expect(sheet.locator(".pl-back")).toBeHidden();
     const paper = (await sheet.locator(".pl-sheet").boundingBox())!;
     expect(Math.round(paper.width)).toBe(Math.round((148 / 25.4) * 96));
     expect(Math.round(paper.height)).toBe(Math.round((210 / 25.4) * 96));
     await sheet.emulateMedia({ media: "screen" });
     await shot(sheet, "plaque", wide);
-    await sheet.close();
   });
 
   test("«Галерея»: a photo added, moved first, seen on the salon's page, deleted", async ({ page }) => {

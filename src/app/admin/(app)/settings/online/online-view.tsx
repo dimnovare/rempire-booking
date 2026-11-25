@@ -98,8 +98,8 @@ export function OnlineView({ initial, view, link, test }: { initial: OnlineSetti
 /**
  * The link clients book by, as the first card of the admin we follow
  * («Ссылки на онлайн-запись»: the address in a chip, copy), and the QR
- * plaque for the reception (Renat, 18.11), opened in a tab of its own to
- * print. Outside the form: nothing here is saved.
+ * plaque for the reception (Renat, 18.11), a page of the admin with the way
+ * back. Outside the form: nothing here is saved.
  */
 function LinkCard({ link, test }: { link: string; test: boolean }) {
   const O = useA().online;
@@ -131,7 +131,7 @@ function LinkCard({ link, test }: { link: string; test: boolean }) {
       </div>
       <small className="adm-meta">{O.linkHint}</small>
       <div className="onl-plaque">
-        <a className="adm-btn adm-btn-line" href="/admin/plaque" target="_blank" rel="noreferrer">
+        <a className="adm-btn adm-btn-line" href="/admin/plaque">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
             <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h2v2h-2zM18 18h2v2h-2zM14 18h2M18 14h2" />
           </svg>

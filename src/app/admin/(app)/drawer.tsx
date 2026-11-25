@@ -8,11 +8,30 @@
  * one under another.
  *
  * Escape, the dark side and «Закрыть» close it.
+ *
+ * `head`: a form of our own (design artifact 53PfD3DxCRkbDyjwLVvBHB,
+ * «Новый вход», Dim 25.11.2026) has its title on top with ×, and «Отмена»
+ * on the left of the foot.
  */
 import { useEffect, useLayoutEffect, useRef } from "react";
+import { XIcon } from "../icons";
 import { useA } from "../lang";
 
-export function Drawer({ title, size = "wide", onClose, foot, children }: { title: string; size?: "wide" | "narrow"; onClose: () => void; foot?: React.ReactNode; children: React.ReactNode }) {
+export function Drawer({
+  title,
+  size = "wide",
+  head = false,
+  onClose,
+  foot,
+  children,
+}: {
+  title: string;
+  size?: "wide" | "narrow";
+  head?: boolean;
+  onClose: () => void;
+  foot?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   const A = useA();
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -28,17 +47,47 @@ export function Drawer({ title, size = "wide", onClose, foot, children }: { titl
   }, []);
   return (
     <div className="dw-wrap" onClick={onClose}>
-      <div ref={box} className={`dw dw-${size}`} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} onClick={(e) => e.stopPropagation()}>
-        <div className="dw-body">{children}</div>
-        <footer className="dw-foot">
-          <h2>{title}</h2>
-          <div className="dw-acts">
-            <button type="button" className="dw-btn" onClick={onClose}>
-              {A.close}
+      <div
+        ref={box}
+        className={`dw dw-${size}${head ? " has-head" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        tabIndex={-1}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {head && (
+          <header className="dw-head">
+            <h2>{title}</h2>
+            <button
+              type="button"
+              className="dw-x"
+              aria-label={A.close}
+              onClick={onClose}
+            >
+              <XIcon size={20} />
             </button>
-            {foot}
-          </div>
-        </footer>
+          </header>
+        )}
+        <div className="dw-body">{children}</div>
+        {head ? (
+          <footer className="dw-foot">
+            <button type="button" className="dw-btn" onClick={onClose}>
+              {A.cancel}
+            </button>
+            <div className="dw-acts">{foot}</div>
+          </footer>
+        ) : (
+          <footer className="dw-foot">
+            <h2>{title}</h2>
+            <div className="dw-acts">
+              <button type="button" className="dw-btn" onClick={onClose}>
+                {A.close}
+              </button>
+              {foot}
+            </div>
+          </footer>
+        )}
       </div>
     </div>
   );

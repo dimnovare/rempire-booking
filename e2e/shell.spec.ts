@@ -1,5 +1,6 @@
+import { en } from "../src/app/b/copy.en";
 import { authFile } from "./env";
-import { B, expect, expectNoSideScroll, hydrated, smallTargets, test } from "./helpers";
+import { B, expect, expectNoSideScroll, hydrated, L, smallTargets, test } from "./helpers";
 
 /** B1: the app's shell, before and around the login. */
 test.describe("shell, logged out", () => {
@@ -8,7 +9,7 @@ test.describe("shell, logged out", () => {
     expect(new URL(page.url()).pathname).toBe("/b/login");
     expect(res?.headers()["x-robots-tag"]).toMatch(/noindex/);
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
-    await expect(page.getByRole("heading", { name: B.login.title })).toBeVisible();
+    await expect(page.getByRole("heading", { name: L.title })).toBeVisible();
     await expectNoSideScroll(page);
     expect(await smallTargets(page)).toEqual([]);
   });
@@ -23,16 +24,51 @@ test.describe("shell, logged out", () => {
       test(`a wrong code is refused, and says so (${email.split("@")[0]})`, async ({ page }) => {
         await page.goto("/b/login");
         await hydrated(page);
-        await page.getByRole("button", { name: B.login.byCode }).click();
+        // the code first: no tab to press
         await page.locator('input[name="email"]').fill(email);
-        await page.getByRole("button", { name: B.login.sendCode }).click();
-        await expect(page.getByText(B.login.codeSent)).toBeVisible();
+        await page.getByRole("button", { name: L.sendCode }).click();
+        await expect(page.getByText(L.sentTo)).toContainText(email);
         await page.locator('input[name="code"]').fill("000000");
         await page.locator('input[name="code"]').press("Enter");
-        await expect(page.getByText(B.login.badCode)).toBeVisible();
+        await expect(page.getByText(L.err.badCode)).toBeVisible();
         expect(new URL(page.url()).pathname).toBe("/b/login");
       });
     }
+
+    test("a code already sent survives a reload; «Другой e-mail» starts again", async ({ page }) => {
+      await page.goto("/b/login");
+      await hydrated(page);
+      await page.locator('input[name="email"]').fill("stranger2@example.test");
+      await page.getByRole("button", { name: L.sendCode }).click();
+      await expect(page.locator('input[name="code"]')).toBeVisible();
+      // the resend waits its minute
+      await expect(page.getByText(L.resendIn("0:"), { exact: false })).toBeVisible();
+      // an iPhone app reloads when the mail app was opened: back on the code
+      await page.reload();
+      await hydrated(page);
+      await expect(page.locator('input[name="code"]')).toBeVisible();
+      await expect(page.getByText(L.sentTo)).toContainText("stranger2@example.test");
+      await page.getByRole("button", { name: L.otherEmail }).click();
+      await expect(page.locator('input[name="email"]')).toBeFocused();
+      await expect(page.locator('input[name="code"]')).toHaveCount(0);
+    });
+  });
+
+  test("the password is the second tab; the language is picked on the page", async ({ page }) => {
+    await page.goto("/b/login");
+    await hydrated(page);
+    await page.getByRole("button", { name: L.tabPassword }).click();
+    await expect(page.getByLabel(L.password, { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: L.forgot }).click();
+    await expect(page.getByRole("button", { name: L.sendCode })).toBeVisible();
+    await page.getByRole("button", { name: "Eesti" }).click();
+    await expect(page.getByRole("heading", { name: "Sisselogimine" })).toBeVisible();
+    // the same choice on the admin's login, on this device
+    await page.goto("/admin/login");
+    await expect(page.getByRole("heading", { name: "Sisselogimine" })).toBeVisible();
+    await hydrated(page);
+    await page.getByRole("button", { name: "Русский" }).click();
+    await expect(page.getByRole("heading", { name: L.title })).toBeVisible();
   });
 
   test("the manifest: one staff app for both sides, standalone, with icons that load", async ({ page, request }) => {
@@ -69,8 +105,23 @@ test.describe("shell, logged out", () => {
   test("the install guide opens without a login", async ({ page }) => {
     await page.goto("/b/install");
     await expect(page.getByRole("heading", { name: B.install.title })).toBeVisible();
+    await hydrated(page);
+    // the phone's own system is chosen already; only its steps show
+    const phone = page.getByRole("group", { name: B.install.phone });
+    const android = test.info().project.name === "android";
+    await expect(phone.getByRole("button", { name: android ? B.install.android : B.install.iphone })).toHaveAttribute("aria-pressed", "true");
+    await phone.getByRole("button", { name: B.install.iphone }).click();
     await expect(page.getByText(B.install.iphoneSteps[1])).toBeVisible();
+    await expect(page.getByText(B.install.androidSteps[0])).toHaveCount(0);
+    await phone.getByRole("button", { name: B.install.android }).click();
+    await expect(page.getByText(B.install.androidSteps[0])).toBeVisible();
+    await expect(page.getByText(B.install.iphoneSteps[1])).toHaveCount(0);
     await expectNoSideScroll(page);
+    expect(await smallTargets(page)).toEqual([]);
+    // the language on the page itself, without a login
+    await page.getByRole("combobox", { name: B.more.language }).selectOption("en");
+    await expect(page.getByRole("heading", { level: 1, name: en.install.title })).toBeVisible();
+    await expect(page.getByRole("group", { name: en.install.phone })).toBeVisible();
   });
 
   test("robots.txt keeps /b out", async ({ request }) => {

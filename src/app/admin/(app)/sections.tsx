@@ -35,12 +35,22 @@ export const SECTIONS = [
   { href: "/admin/invoices", key: "invoices", icon: "inv", bar: true },
   // «Настройки → Локация» (settings/): the salon's page on the booking site, in three pages
   { href: "/admin/settings/brand", key: "brand", icon: "cog", bar: false },
-  { href: "/admin/settings/contacts", key: "contacts", icon: "cog", bar: false },
+  {
+    href: "/admin/settings/contacts",
+    key: "contacts",
+    icon: "cog",
+    bar: false,
+  },
   { href: "/admin/settings/gallery", key: "gallery", icon: "cog", bar: false },
   // «Настройки → Онлайн-запись» (settings/online/): how clients book, the tool's online-booking settings
   { href: "/admin/settings/online", key: "online", icon: "cog", bar: false },
   // «Уведомления»: a section of its own, not under «Настройки», as in the admin we follow (Dim, round 13)
-  { href: "/admin/notifications", key: "notifications", icon: "bell", bar: false },
+  {
+    href: "/admin/notifications",
+    key: "notifications",
+    icon: "bell",
+    bar: false,
+  },
 ] as const;
 
 /** «Ещё»: only in a phone's bar. Lit while one of the sections behind it is open. */
@@ -50,7 +60,11 @@ export const MORE = { href: "/admin/more", key: "more", icon: "more" } as const;
 export const MINE = { href: "/b", key: "mine", icon: "me" } as const;
 
 /** «Доступ» is about the person, not the work: on a phone it is a row of «Ещё», from 900px a row of the sidebar's menu. */
-export const ACCOUNT = { href: "/admin/account", key: "account", icon: "key" } as const;
+export const ACCOUNT = {
+  href: "/admin/account",
+  key: "account",
+  icon: "key",
+} as const;
 
 /**
  * The sidebar's menu from 900px («Все разделы»): a row per section, or a
@@ -63,8 +77,41 @@ export const ACCOUNT = { href: "/admin/account", key: "account", icon: "key" } a
  * (frame.tsx): a page by its own key, a row by `off` or its key; a group
  * with no page left is not drawn.
  */
-export type MenuPage = { href: string; key: "analytics" | "records" | "reviews" | "visits" | "messages" | "changes" | "staffList" | "schedule" | "clientBase" | "catalogue" | "brand" | "contacts" | "gallery" | "online" };
-export type MenuRow = { key: "reports" | "team" | "clients" | "services" | "goods" | "requests" | "invoices" | "notifications" | "settings" | "account"; icon: string; href?: string; pages?: readonly MenuPage[]; off?: string };
+export type MenuPage = {
+  href: string;
+  key:
+    | "analytics"
+    | "records"
+    | "reviews"
+    | "visits"
+    | "messages"
+    | "changes"
+    | "staffList"
+    | "schedule"
+    | "clientBase"
+    | "catalogue"
+    | "brand"
+    | "contacts"
+    | "gallery"
+    | "online";
+};
+export type MenuRow = {
+  key:
+    | "reports"
+    | "team"
+    | "clients"
+    | "services"
+    | "goods"
+    | "requests"
+    | "invoices"
+    | "notifications"
+    | "settings"
+    | "account";
+  icon: string;
+  href?: string;
+  pages?: readonly MenuPage[];
+  off?: string;
+};
 export const MENU: readonly MenuRow[] = [
   {
     key: "reports",
@@ -89,9 +136,17 @@ export const MENU: readonly MenuRow[] = [
       { href: "/admin/schedule", key: "schedule" },
     ],
   },
-  { key: "clients", icon: "cli", pages: [{ href: "/admin/clients", key: "clientBase" }] },
+  {
+    key: "clients",
+    icon: "cli",
+    pages: [{ href: "/admin/clients", key: "clientBase" }],
+  },
   { key: "services", icon: "svc", href: "/admin/services" },
-  { key: "goods", icon: "box", pages: [{ href: "/admin/catalogue", key: "catalogue" }] },
+  {
+    key: "goods",
+    icon: "box",
+    pages: [{ href: "/admin/catalogue", key: "catalogue" }],
+  },
   { key: "requests", icon: "req", href: "/admin/requests" },
   { key: "invoices", icon: "inv", href: "/admin/invoices" },
   // the salon's «Уведомления» (notifications/): a row of its own, as in the tool's menu, not a page of «Настройки» (Dim, round 13)
@@ -112,10 +167,27 @@ export const MENU: readonly MenuRow[] = [
 ];
 
 /** Is this section the open one? The calendar is /admin itself. */
-export const sectionOpen = (href: string, path: string) => (href === "/admin" ? path === "/admin" : path.startsWith(href));
+// the QR plaque is a page of «Онлайн-запись»: the sidebar keeps that row lit there
+const sectionOf = (path: string) =>
+  path.startsWith("/admin/plaque") ? "/admin/settings/online" : path;
+export const sectionOpen = (href: string, path: string) =>
+  href === "/admin" ? path === "/admin" : sectionOf(path).startsWith(href);
 
-export function SectionIcon({ name, size = 22 }: { name: string; size?: number }) {
-  const p = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, "aria-hidden": true, width: size, height: size } as const;
+export function SectionIcon({
+  name,
+  size = 22,
+}: {
+  name: string;
+  size?: number;
+}) {
+  const p = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    "aria-hidden": true,
+    width: size,
+    height: size,
+  } as const;
   if (name === "cal")
     return (
       <svg viewBox="0 0 24 24" {...p}>

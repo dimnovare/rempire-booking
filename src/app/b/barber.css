@@ -39,16 +39,26 @@
 .bx-banner a { flex: 1; min-height: 40px; display: flex; align-items: center; color: var(--accent); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
 .bx-banner .adm-ibtn { width: 36px; height: 36px; border-color: transparent !important; color: var(--mute); }
 
-/* login and the install guide */
-.bx-login-head { display: flex; flex-direction: column; gap: 6px; }
-.bx-install { gap: 20px; }
-.bx-steps { display: flex; flex-direction: column; gap: 10px; padding: 14px; border: 1px solid var(--line-2); }
-.bx-steps ol { margin: 0; padding: 0 0 0 22px; display: flex; flex-direction: column; gap: 8px; list-style: decimal; }
-.bx-steps li { padding-left: 4px; }
-.bx-steps li::marker { color: var(--accent); font-family: var(--display); }
-.bx-share { display: inline-block; vertical-align: -3px; margin-right: 6px; color: var(--accent); }
+/* the install guide (the design board «Установить на телефон»): white, the steps of one phone */
+.bx-inst-page { min-height: 100dvh; background: var(--raise); }
+.adm-login.bx-install { padding-top: max(16px, calc(env(safe-area-inset-top, 0px) + 12px)); gap: 16px; }
+.bx-inst-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
+.bx-inst-top .logo { height: 22px; }
+:where(.adm) .bx-inst-top select { width: auto; min-height: 36px; height: 36px; padding: 0 8px; font-size: 14px; }
+.bx-install .adm-h1 { margin-top: 8px; font: 600 24px/30px var(--body); }
+.bx-inst-lead { margin: 0; color: var(--mute); }
+.bx-steps { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 16px; }
+.bx-steps > li { display: flex; align-items: flex-start; gap: 12px; }
+.bx-step-n { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--fg); color: #fff; font: 600 14px/1 var(--body); }
+.bx-steps > li > div { flex: 1; min-width: 0; padding-top: 4px; }
+/* the button to tap, drawn small under its step */
+.bx-tile { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 8px 12px; border-radius: 10px; background: var(--ink); border: 1px solid var(--line-2); font-size: 14px; }
+.bx-tile svg { flex: none; }
+.bx-tile .is-ios { color: #007aff; }
+.bx-inst-note { margin: 0; display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border-radius: 8px; background: var(--lime-bg); font-size: 14px; line-height: 20px; }
+.bx-inst-note svg { flex: none; margin-top: 1px; }
 
-/* plain lists of rows (the barber picker, clients, requests) */
+/* plain lists of rows (clients, requests) */
 .bx-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--line); }
 .bx-list > li { border-bottom: 1px solid var(--line); }
 .bx-list form { display: contents; }
@@ -57,6 +67,24 @@
 .bx-row-main b { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bx-row-main small { font-size: 13px; color: var(--mute); }
 .bx-strong { margin: 0; font-size: 17px; }
+
+/* «Чей день смотреть» (the design board): search, rows with ›, those who left folded away */
+.bx-picker form { display: contents; }
+.bx-picker .bx-row { min-height: 56px; padding: 8px 14px; }
+.bx-picker .bx-row-main { gap: 2px; }
+.bx-picker .bx-row-main > span { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.bx-picker .bx-row-main b { font: 500 15px/20px var(--body); }
+.bx-picker .adm-ava { width: 36px; height: 36px; border-radius: 50%; background: var(--fg); color: #fff; font-size: 13px; }
+.bx-picker .is-gone .adm-ava { background: var(--raise-2); color: var(--mute); }
+.bx-gh { margin: 4px 0 0; color: var(--mute); font: 600 13px/18px var(--body); }
+@media (hover: hover) { .bx-picker button.bx-row:hover { background: var(--ink); } }
+.bx-picker .bx-row-main small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bx-back { align-self: flex-start; margin: -4px 0 -8px -2px; }
+.bx-pick .bx-srch { flex: none; }
+.bx-pick .bx-srch input { width: 100%; }
+.bx-fold { align-self: flex-start; }
+.bx-fold svg { transition: transform .15s; }
+.bx-fold svg.is-up { transform: rotate(180deg); }
 
 /* sheets: a centred card on a wide screen too (no side panel in a phone app) */
 @media (min-width: 900px) {
@@ -134,10 +162,19 @@ html:has(.bx-cal) { overscroll-behavior-y: contain; }
 .adm-svcs .bx-tick { flex: none; width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--line-2); color: transparent; }
 .adm-svcs button[aria-pressed="true"] .bx-tick { background: var(--lime); border-color: var(--sel); color: var(--on-lime); }
 
-/* ---------- «Моё время» (B4) ---------- */
+/* ---------- «Моё время» (B4; the design board «Моё время», 25.11) ---------- */
+/* what applies at once and what after approval: two lines on top */
+.bx-rules { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; }
+.bx-rule { display: flex; align-items: center; gap: 8px; font-size: 14px; line-height: 20px; }
+.bx-rule svg { flex: none; }
+.bx-rule.is-now svg { color: var(--ok); }
+.bx-rule.is-ask svg { color: var(--amber); }
+/* four ways to add: 64px, the word and a line on what it is */
 .bx-time-add { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.bx-time-add .adm-btn { min-height: 56px; padding: 0 10px; white-space: normal; line-height: 1.15; } /* «Особое время» may take two lines on a narrow phone */
-.bx-time-add .adm-btn svg { flex: none; }
+.bx-time-add .adm-btn.bx-act { min-height: 64px; padding: 8px 14px; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; white-space: normal; text-align: left !important; font: 500 15px/1.2 var(--body); }
+.bx-act > span { display: flex; align-items: center; gap: 6px; }
+.bx-act svg { flex: none; }
+.bx-act small { color: var(--mute); font: 400 12px/1.3 var(--body); }
 .bx-rows > li { padding: 0; }
 .bx-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 60px; padding: 10px 2px; text-align: left; }
 .bx-row .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -152,11 +189,25 @@ html:has(.bx-cal) { overscroll-behavior-y: contain; }
 .bx-x { border-color: transparent !important; color: var(--mute); }
 @media (hover: hover) { button.bx-row:hover { background: var(--raise); } }
 .bx-confirm { display: flex; flex-direction: column; gap: 8px; padding: 0 0 12px; }
-.bx-week { margin: 0; display: grid; gap: 6px; }
-.bx-week > div { display: grid; grid-template-columns: 88px 1fr; gap: 10px; }
-.bx-week dt { font: 600 14px/1.4 var(--display); color: var(--mute); }
-.bx-week dd { margin: 0; font-variant-numeric: tabular-nums; }
-.bx-week dd.is-off { color: var(--dim); }
+.bx-box .bx-confirm { padding: 0 14px 12px; }
+/* «Мои часы»: its own name, so the week page's .bx-week (its padding) never reaches it */
+.bx-hours { margin: 0; display: grid; gap: 6px; font-size: 15px; }
+.bx-hours > div { display: grid; grid-template-columns: 72px 1fr; gap: 12px; }
+.bx-hours dt { color: var(--mute); }
+.bx-hours dd { margin: 0; font-variant-numeric: tabular-nums; }
+.bx-hours dd.is-off { color: var(--mute); }
+.bx-hours-card { display: flex; flex-direction: column; gap: 8px; }
+.bx-hours-card > .adm-btn { margin-top: 4px; }
+.bx-hours-wait { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.bx-hours-card .bx-confirm { padding: 0; }
+.bx-rule { margin: 0; }
+/* «Впереди»: the kind and its tags, the when, the note; the × keeps to the top */
+.bx-box .bx-row.bx-item { align-items: flex-start; padding: 12px 14px; }
+.bx-item .bx-x { margin: -6px -8px 0 0; }
+.bx-item .bx-note { display: flex; flex-wrap: wrap; align-items: center; gap: 0 4px; }
+/* «История запросов · 30 дней»: one wide button, the arrow at its end */
+.adm-btn.bx-hist { width: 100%; gap: 8px; flex-wrap: wrap; }
+.bx-sheet .bx-box .bx-row { min-height: 56px; }
 .bx-wday { margin: 0; padding: 10px 0 12px; border: 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .bx-wday legend { padding: 0; float: left; width: 100%; }
 .bx-wday legend b { font-weight: 700; }
@@ -179,25 +230,115 @@ html:has(.bx-cal) { overscroll-behavior-y: contain; }
 .bx-cv .txt small { color: var(--mute); font-size: 13px; overflow-wrap: anywhere; }
 .bx-cv .end { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-variant-numeric: tabular-nums; }
 
+/* ---------- the redesign of 25.11 (the design boards «Продать», «Мои расчёты», «Моё время»,
+   «Установить», «Чей день смотреть»): their parts on the app's own tokens ---------- */
+.bx {
+  --link-c: var(--link, #003acc);
+  --amber: #b54708;
+  --amber-bg: #fef0c7;
+  --ok-bg: #e3f4ec;
+}
+/* a heading over a white box, as the boards have them */
+.bx-sec { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.bx-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; }
+.bx-ch { margin: 0; font: 600 16px/24px var(--body); color: var(--fg); }
+.bx-box { list-style: none; margin: 0; padding: 0; background: var(--raise); border: 1px solid var(--line-2); border-radius: 12px; overflow: hidden; min-width: 0; }
+.bx-box > li + li { border-top: 1px solid var(--line); }
+.bx-box .bx-row { min-height: 52px; padding: 10px 14px; }
+.bx-box .bx-row .txt { gap: 2px; }
+.bx-box .bx-row .txt b { font: 600 15px/20px var(--body); }
+.bx-box .bx-row .txt .plain { font-size: 15px; line-height: 20px; }
+.bx-box .bx-row .end.price { font: 600 15px/20px var(--body); font-variant-numeric: tabular-nums; }
+.bx-box .bx-row .tags { gap: 8px; }
+.bx-chev { flex: none; display: flex; color: var(--mute); }
+.bx-tip { margin: 0; color: var(--mute); font-size: 13px; line-height: 18px; }
+/* a link in a page: Altegio's blue, no underline */
+.bx-lnk { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; color: var(--link-c) !important; font-weight: 500; font-size: 15px; text-decoration: none; }
+.bx-lnk:hover { text-decoration: underline; text-underline-offset: 3px; }
+.bx-lnk.sm { min-height: 28px; font-size: 13px; }
+/* tags: filled, round, as on the boards */
+.bx-tag { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-radius: 10px; background: var(--raise-2); color: var(--mute); font: 500 12px/20px var(--body); white-space: nowrap; vertical-align: middle; }
+.bx-tag svg { flex: none; }
+.bx-tag.amb { background: var(--amber-bg); color: var(--amber); }
+.bx-tag.ok { background: var(--ok-bg); color: #0f6b47; }
+.bx-tag.y { background: var(--lime-bg); color: var(--fg); }
+/* «Клиенту | Себе», «iPhone | Android»: a grey track, the chosen one white */
+.bx-seg { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--raise-2); }
+.bx-seg button { flex: 1; min-height: 40px; padding: 0 10px; border-radius: 8px; color: var(--mute); font: 500 14px/1 var(--body); text-align: center; white-space: nowrap; }
+.bx-seg button[aria-pressed="true"] { background: var(--raise); color: var(--fg); box-shadow: 0 1px 2px rgba(8, 8, 12, .1); }
+/* the one big yellow action */
+.adm-btn.bx-big { min-height: 56px; border-radius: 12px; font: 600 16px/1.2 var(--body); }
+.adm-btn.bx-xs { width: auto; min-height: 32px; padding: 0 10px; font-size: 13px; }
+.adm-btn.is-off { opacity: .45; cursor: default; }
+
 /* ---------- «Продать» and «Мои расчёты» (Phase C) ---------- */
-.bx-sell-find { display: flex; flex-direction: column; gap: 14px; }
-.bx-sell-find .adm-btns .adm-btn { min-height: 56px; }
-.bx-sell-msg { padding: 10px 12px; border: 1px solid currentColor; }
-.bx-thumb { flex: none; width: 48px; height: 48px; object-fit: contain; background: var(--raise); border: 1px solid var(--line); }
+.bx-sell-find { display: flex; flex-direction: column; gap: 8px; }
+.bx-sell-q { display: flex; gap: 8px; }
+.bx-srch { position: relative; flex: 1; min-width: 0; display: block; }
+.bx-srch > svg { position: absolute; left: 12px; top: 50%; margin-top: -8px; color: var(--dim); pointer-events: none; }
+:where(.adm) .bx-srch input { padding-left: 36px; }
+.bx-sell-q .adm-btn { flex: none; width: auto; padding: 0 14px; }
+.bx-sell-tip { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; }
+.bx-sell-msg { padding: 10px 12px; border: 1px solid currentColor; border-radius: 8px; }
+.bx-sell-msg.is-wait { border-color: transparent; background: var(--amber-bg); color: var(--amber); }
+.bx-thumb { flex: none; width: 48px; height: 48px; object-fit: contain; background: var(--raise); border: 1px solid var(--line); border-radius: 8px; }
+.bx-thumb-none { display: grid; place-items: center; background: var(--raise-2); border-color: transparent; color: var(--dim); }
 .bx-pick { gap: 14px; }
-.bx-pick-head { display: flex; align-items: center; gap: 12px; }
-.bx-pick-head .bx-thumb { width: 72px; height: 72px; }
-.bx-pick-head .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.bx-pick-head .txt b { font: 600 20px/1.1 var(--display); overflow-wrap: anywhere; }
-.bx-pick-head .txt small { color: var(--mute); font-size: 13px; }
-.bx-pick .adm-btn-ghost.adm-btn-sm { align-self: flex-start; }
-.bx-sell-go { min-height: 60px; font-size: 17px; }
-.bx-sale { display: flex; align-items: center; gap: 10px; padding: 10px 2px; }
-.bx-sale .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.bx-sale .txt .plain { font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
-.bx-sale .txt small { color: var(--mute); font-size: 13px; }
-.bx-sale .end { flex: none; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bx-pick-head { display: flex; align-items: flex-start; gap: 12px; }
+.bx-pick-head .bx-thumb { width: 80px; height: 80px; background: var(--raise-2); border-color: transparent; }
+.bx-pick-head .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.bx-pick-head .txt b { font: 600 16px/22px var(--body); overflow-wrap: anywhere; }
+.bx-qty { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.bx-qty > span { font-size: 13px; color: var(--mute); }
+.bx-stepper { display: inline-flex; align-items: center; border: 1px solid var(--line-2); border-radius: 10px; overflow: hidden; }
+.bx-stepper button { width: 48px; height: 48px; display: grid; place-items: center; color: var(--fg); }
+.bx-stepper output { width: 44px; text-align: center; font: 600 18px/1 var(--body); font-variant-numeric: tabular-nums; }
+.bx-pay { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.bx-pay dt { color: var(--mute); }
+.bx-pay dd { margin: 0; font-weight: 600; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bx-pay .is-ok { color: var(--ok); }
+/* «Продать за …» stays in reach above the bottom bar while the page scrolls */
+.bx-sell-bar { position: sticky; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px)); z-index: 5; margin: 0 -16px; padding: 8px 16px 12px; background: linear-gradient(to top, var(--ink) 75%, rgba(247, 249, 252, 0)); }
+.bx-sale { display: flex; align-items: flex-start; gap: 12px; padding: 10px 14px; }
+.bx-sale .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.bx-sale .txt .plain { font-size: 15px; line-height: 20px; font-weight: 500; overflow-wrap: anywhere; }
+.bx-sale .txt small { color: var(--mute); font-size: 13px; line-height: 18px; }
+.bx-sale .end { flex: none; white-space: nowrap; font-weight: 600; font-variant-numeric: tabular-nums; }
 .bx-sale.is-off .txt, .bx-sale.is-off .end { opacity: .5; text-decoration: line-through; }
+.bx-sale .bx-tag { margin-top: 4px; }
+.bx-undo { display: flex; align-items: center; gap: 8px; margin-top: 6px; color: var(--mute); font-size: 13px; }
+.bx-sell-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; color: var(--mute); font-size: 14px; }
+.bx-sell-foot b { color: var(--fg); font-variant-numeric: tabular-nums; }
+
+/* «Мои расчёты» */
+.bx-mnav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bx-mnav .adm-btn { width: auto; min-height: 40px; padding: 0 10px; gap: 4px; font-weight: 500; }
+.bx-mnav b { min-width: 0; text-align: center; font: 600 16px/1.2 var(--body); }
+.bx-owe-l { color: var(--mute); font-size: 14px; }
+.bx-owe-n { margin: -10px 0 0; font: 600 32px/40px var(--body); font-variant-numeric: tabular-nums; }
+.bx-dl { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; font-size: 15px; }
+.bx-dl dd { margin: 0; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bx-dl .is-ok { color: var(--ok); }
+.bx-dl .tot { padding-top: 8px; border-top: 1px solid var(--line); font-weight: 600; }
+.bx-owe-more { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.bx-owe-more > div { display: flex; justify-content: space-between; gap: 12px; }
+.bx-owe-more span:first-child { color: var(--mute); }
+.bx-owe-more span:last-child { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bx-inv { gap: 10px; }
+.bx-inv-head { display: flex; align-items: flex-start; gap: 12px; }
+.bx-inv-head > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bx-inv-head .num-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.bx-inv-head small { color: var(--mute); font-size: 14px; }
+.bx-inv-head > span { white-space: nowrap; font-weight: 600; font-variant-numeric: tabular-nums; }
+.bx-ref { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 8px; background: var(--ink); }
+.bx-ref > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.bx-ref small { color: var(--mute); font-size: 12px; line-height: 16px; }
+.bx-ref b { font: 600 16px/22px var(--body); letter-spacing: .5px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.bx-ref .adm-btn { flex: none; width: auto; min-height: 40px; padding: 0 12px; }
+.bx-ref .adm-btn.is-done { color: var(--ok) !important; }
+.bx-box a.bx-row { text-decoration: none; color: inherit; }
+.bx-dayh { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; padding: 6px 14px; background: var(--ink); font-size: 14px; }
+.bx-dayh span { color: var(--mute); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .bx-scan { position: fixed; inset: 0; z-index: 60; background: #000; display: flex; flex-direction: column; }
 /* the picture: a pinch or a double tap here is the lens's zoom, not the page's */
 .bx-scan-box { position: relative; flex: 1; min-height: 0; overflow: hidden; touch-action: none; }

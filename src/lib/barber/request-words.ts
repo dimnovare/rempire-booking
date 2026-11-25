@@ -40,6 +40,7 @@ const W = {
     special: "Особое время",
     weeks: (n: number) => `${n} нед. подряд`,
     hours: "Часы работы",
+    price: "Цена",
     dayOff: "выходной",
     min: "мин",
   },
@@ -50,6 +51,7 @@ const W = {
     special: "Eriaeg",
     weeks: (n: number) => `${n} nädalat järjest`,
     hours: "Tööaeg",
+    price: "Hind",
     dayOff: "vaba",
     min: "min",
   },
@@ -60,14 +62,17 @@ const W = {
     special: "Special time",
     weeks: (n: number) => `${n} weeks in a row`,
     hours: "Working hours",
+    price: "Price",
     dayOff: "off",
     min: "min",
   },
 } satisfies Record<Locale, unknown>;
 
 const DAY = 86_400_000;
-const pick = (t: Text3 | undefined, l: Locale) => t?.[l] || t?.ru || t?.et || t?.en || "";
-const euro = (cents: number) => {
+/** A service's name in this language, or the first one it has. */
+export const pick = (t: Text3 | undefined, l: Locale) => t?.[l] || t?.ru || t?.et || t?.en || "";
+/** «45 €», «45.50 €» */
+export const euro = (cents: number) => {
   const e = cents / 100;
   return `${Number.isInteger(e) ? e : e.toFixed(2)} €`;
 };
@@ -94,15 +99,22 @@ function days(from: number, to: number, tz: string, l: Locale): string {
   return first === last ? dayWords(from, tz, l) : `${dm(first)}–${dm(last)}`;
 }
 
-/** The week in groups of days with the same hours: [«пн–пт», «10:00–20:00»], [«вс», «выходной»]. */
-export function weekGroups(week: WeekHours, l: Locale): { days: string; hours: string }[] {
+/**
+ * The week in groups of days with the same hours: [«пн–пт», «10:00–20:00»],
+ * [«вс», «выходной»]. With `was`, a group is `changed` when any of its days
+ * had other hours there («Запросы» shows «Было / Станет», the change bold).
+ */
+export function weekGroups(week: WeekHours, l: Locale, was?: WeekHours): { days: string; hours: string; changed: boolean }[] {
   const w = W[l];
-  const line = (wd: number) => (week[String(wd)] ?? []).map(([a, b]) => `${a}–${b}`).join(", ") || w.dayOff;
-  const out: { days: string; hours: string }[] = [];
+  const lineOf = (x: WeekHours, wd: number) => (x[String(wd)] ?? []).map(([a, b]) => `${a}–${b}`).join(", ") || w.dayOff;
+  const line = (wd: number) => lineOf(week, wd);
+  const out: { days: string; hours: string; changed: boolean }[] = [];
   for (let wd = 1; wd <= 7; ) {
     let end = wd;
     while (end < 7 && line(end + 1) === line(wd)) end++;
-    out.push({ days: end === wd ? w.days[wd - 1] : `${w.days[wd - 1]}–${w.days[end - 1]}`, hours: line(wd) });
+    let changed = false;
+    if (was) for (let d = wd; d <= end; d++) if (lineOf(was, d) !== line(d)) changed = true;
+    out.push({ days: end === wd ? w.days[wd - 1] : `${w.days[wd - 1]}–${w.days[end - 1]}`, hours: line(wd), changed });
     wd = end + 1;
   }
   return out;
@@ -135,6 +147,34 @@ export function requestWords(what: RequestWhat, tz: string, l: Locale): string {
       if (what.fromMin !== what.toMin) parts.push(`${what.fromMin} → ${what.toMin} ${w.min}`);
       return `${pick(what.service, l)}: ${parts.join(", ")}`;
     }
+  }
+}
+
+/**
+ * A request as «Запросы» shows it: the kind as a tag («Отпуск», «Цена») and
+ * the rest of the line («1.12–14.12», «Стрижка»). `days`: whole days of a
+ * vacation or sick days, for «14 дней».
+ */
+export function requestParts(what: RequestWhat, tz: string, l: Locale): { tag: string; line: string; days?: number } {
+  const w = W[l];
+  const removed = (tag: string) => `${w.removed}: ${tag.toLocaleLowerCase(l)}`;
+  switch (what.kind) {
+    case "time_off": {
+      const tag = w.off[what.offKind] ?? what.offKind;
+      if (what.offKind === "block") return { tag: what.action === "remove" ? removed(tag) : tag, line: span(what.from, what.to, tz, l) };
+      const first = localParts(what.from, tz).date;
+      const last = localParts(what.to - 1, tz).date;
+      const n = Math.round((Date.parse(`${last}T00:00:00Z`) - Date.parse(`${first}T00:00:00Z`)) / DAY) + 1;
+      return { tag: what.action === "remove" ? removed(tag) : tag, line: days(what.from, what.to, tz, l), days: n };
+    }
+    case "special": {
+      const weeks = what.weeks && what.weeks > 1 ? ` · ${w.weeks(what.weeks)}` : "";
+      return { tag: what.action === "remove" ? removed(w.special) : w.special, line: `${extraText(what)} · ${span(what.from, what.to, tz, l)}${weeks}` };
+    }
+    case "hours":
+      return { tag: w.hours, line: weekWords(what.days, l) };
+    case "price":
+      return { tag: w.price, line: pick(what.service, l) };
   }
 }
 

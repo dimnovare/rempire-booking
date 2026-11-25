@@ -1,12 +1,14 @@
 "use client";
 
 /**
- * «Моё время» on the barber's phone (B4): four buttons for a break, a
- * vacation, sick days and special time; what is ahead, with his own entries
- * removable; his weekly hours; his prices; and his requests to Renat. What
- * waits for Renat and what applies at once is Renat's switch, said on top.
+ * «Моё время» on the barber's phone (B4; the design board «Моё время»,
+ * 25.11): on top, what applies at once and what after approval (the
+ * login's rights); four buttons for a break, a vacation, sick days and
+ * special time; what is ahead, his own entries removable and his waiting
+ * requests withdrawable, each after a question; his weekly hours; his
+ * prices; and one button for his requests of the last 30 days.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { ChangeCode, ChangeResult, MyPrice, MyTime } from "@/lib/barber/requests";
 import { MAX_OFF_DAYS, MAX_SPANS, MAX_WEEKS, requestWords, weekGroups, type OffKind, type WeekHours } from "@/lib/barber/request-words";
 import { cleanExtra, extraText, hasExtra } from "@/lib/slots";
@@ -14,13 +16,15 @@ import { addDays, localParts } from "@/lib/tz";
 import { PlusIcon, XIcon } from "../../../admin/icons";
 import { cap, dateWords, ddmm, eur, minsText, pick3 } from "../../copy.shared";
 import { useB } from "../../lang";
+import { Ic, type IconName } from "../sell/icons";
 import { BSheet } from "../sheet";
 import { addOff, addSpecial, removeOff, removeSpecial, setHours, setPrice, withdraw } from "./actions";
 
 type B = ReturnType<typeof useB>;
 type T = B["time"];
-type Open = { kind: OffKind } | { kind: "special" } | { kind: "hours" } | { kind: "price"; p: MyPrice } | null;
+type Open = { kind: OffKind } | { kind: "special" } | { kind: "hours" } | { kind: "price"; p: MyPrice } | { kind: "history" } | null;
 type Toast = { text: string; bad?: boolean };
+type Job = () => Promise<{ ok: true } | { ok: false; code: ChangeCode } | boolean>;
 
 const DAY = 86_400_000;
 // a Monday: weekday names come from the dates after it
@@ -28,6 +32,12 @@ const MONDAY = "2026-11-30";
 const REPEATS = [1, 2, 4, 8, MAX_WEEKS];
 /** «Впереди» shows this many, then «show all». */
 const FOLD = 6;
+const ADD: { k: OffKind | "special"; icon: IconName }[] = [
+  { k: "block", icon: "time" },
+  { k: "vacation", icon: "cal" },
+  { k: "sick", icon: "plus" },
+  { k: "special", icon: "star" },
+];
 const isTime = (t: string) => /^\d{2}:\d{2}$/.test(t);
 const toMin = (t: string) => (t === "24:00" ? 1440 : Number(t.slice(0, 2)) * 60 + Number(t.slice(3)));
 const fromMin = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
@@ -66,6 +76,23 @@ function nextHour(tz: string): number {
   return Math.min(22 * 60, (Math.floor(m / 60) + 1) * 60);
 }
 
+/** One line of «Впереди»: a break, days off or special time, set or still waiting. */
+type Item = {
+  key: string;
+  from: number;
+  title: string;
+  when: string;
+  note: string;
+  extra: string;
+  weeks: number;
+  /** waiting for an answer: withdrawn, not removed */
+  waiting: boolean;
+  /** set by the salon: removed only there */
+  mine: boolean;
+  remove?: Job;
+  withdraw?: Job;
+};
+
 export function TimeView({ data, tz, today, viewing }: { data: MyTime; tz: string; today: string; viewing: boolean }) {
   const B = useB();
   const T = B.time;
@@ -74,7 +101,8 @@ export function TimeView({ data, tz, today, viewing }: { data: MyTime; tz: strin
   const [confirm, setConfirm] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [all, setAll] = useState(false);
-  // by the login's rights (src/lib/barber/requests.ts, whoOf): at once, or a request for Renat
+  const subId = useId();
+  // by the login's rights (src/lib/barber/requests.ts, whoOf): at once, or a request
   const timeMode = data.modes.time === "now" ? "now" : "ask";
   const priceMode = data.modes.price === "now" ? "now" : "ask";
 
@@ -90,7 +118,7 @@ export function TimeView({ data, tz, today, viewing }: { data: MyTime; tz: strin
     setToast({ text: r.visitsInside ? `${head}. ${T.inside(r.visitsInside)}` : head });
   };
 
-  const run = async (job: () => Promise<{ ok: true } | { ok: false; code: ChangeCode } | boolean>, ok: string) => {
+  const run = async (job: Job, ok: string) => {
     setBusy(true);
     try {
       const r = await job();
@@ -104,144 +132,196 @@ export function TimeView({ data, tz, today, viewing }: { data: MyTime; tz: strin
     }
   };
 
-  const ahead = [
-    ...data.off.map((o) => ({
-      id: o.id,
-      type: "off" as const,
-      from: o.from,
-      title: T.add[o.kind] ?? o.kind,
-      when: o.kind === "block" ? spanText(o.from, o.to, tz, B) : daysText(o.from, o.to, tz, B),
-      note: o.note,
-      waiting: o.status === "requested",
-      extra: "",
-      mine: o.mine || viewing,
-    })),
+  const waitingReqs = data.requests.filter((r) => r.status === "requested");
+  const ahead: Item[] = [
+    ...data.off.map((o) => {
+      const waiting = o.status === "requested";
+      // a waiting day off goes with its request: removing it withdraws the request (barberRemoveTimeOff)
+      const job: Job = () => removeOff(o.id);
+      return {
+        key: `off:${o.id}`,
+        from: o.from,
+        title: T.add[o.kind] ?? o.kind,
+        when: o.kind === "block" ? spanText(o.from, o.to, tz, B) : daysText(o.from, o.to, tz, B),
+        note: o.note,
+        extra: "",
+        weeks: 1,
+        waiting,
+        mine: o.mine || viewing,
+        ...(waiting ? { withdraw: job } : { remove: job }),
+      };
+    }),
     ...data.special.map((x) => ({
-      id: x.id,
-      type: "special" as const,
+      key: `sp:${x.id}`,
       from: x.from,
       title: T.add.special,
       when: spanText(x.from, x.to, tz, B),
       note: "",
-      waiting: false,
       // the window as he set it: «+20 €» or «+50 %»
       extra: hasExtra(x) ? extraText(x) : "",
+      weeks: 1,
+      waiting: false,
       mine: x.mine || viewing,
+      remove: () => removeSpecial(x.id),
     })),
+    // special time he asked for is not in the calendar until the salon says yes: shown here as waiting
+    ...waitingReqs.flatMap((r) =>
+      r.what.kind === "special" && r.what.action === "add"
+        ? [
+            {
+              key: `rq:${r.id}`,
+              from: r.what.from,
+              title: T.add.special,
+              when: spanText(r.what.from, r.what.to, tz, B),
+              note: r.note,
+              extra: extraText(r.what),
+              weeks: r.what.weeks ?? 1,
+              waiting: true,
+              mine: true,
+              withdraw: () => withdraw(r.id),
+            },
+          ]
+        : [],
+    ),
   ].sort((a, b) => a.from - b.from);
+  const hoursWait = waitingReqs.find((r) => r.what.kind === "hours");
 
   return (
     <main className="adm-page bx-time">
       <h1 className="adm-h1">{T.title}</h1>
-      <p className="adm-meta">
-        {timeMode === priceMode ? T.modeAll[timeMode] : `${T.modeTime[timeMode]} ${T.modePrice[priceMode]}`}
-      </p>
 
-      <div className="bx-time-add" role="group" aria-label={T.title}>
-        {(["block", "vacation", "sick"] as const).map((k) => (
-          <button key={k} type="button" className="adm-btn adm-btn-ghost" onClick={() => setOpen({ kind: k })}>
-            <PlusIcon size={18} />
-            {T.add[k]}
-          </button>
-        ))}
-        <button type="button" className="adm-btn adm-btn-line" onClick={() => setOpen({ kind: "special" })}>
-          <PlusIcon size={18} />
-          {T.add.special}
-        </button>
+      <div className="adm-card bx-rules">
+        <Rule mode={timeMode} text={`${T.applies.time}: ${T.when[timeMode]}`} />
+        <Rule mode={priceMode} text={`${T.applies.price}: ${T.when[priceMode]}`} />
       </div>
 
-      <section className="adm-card">
-        <h2 className="adm-h2">{T.ahead}</h2>
+      <div className="bx-time-add" role="group" aria-label={T.title}>
+        {ADD.map(({ k, icon }) => (
+          <button
+            key={k}
+            type="button"
+            className="adm-btn adm-btn-ghost bx-act"
+            aria-label={T.add[k]}
+            aria-describedby={`${subId}-${k}`}
+            onClick={() => setOpen({ kind: k })}
+          >
+            <span>
+              <Ic name={icon} size={18} />
+              {T.add[k]}
+            </span>
+            <small id={`${subId}-${k}`}>{T.addSub[k]}</small>
+          </button>
+        ))}
+      </div>
+
+      <section className="bx-sec">
+        <h2 className="bx-ch">{T.ahead}</h2>
         {ahead.length === 0 ? (
           <p className="adm-meta">{T.nothingAhead}</p>
         ) : (
-          <ul className="adm-list bx-rows">
+          <ul className="bx-box bx-rows">
             {(all ? ahead : ahead.slice(0, FOLD)).map((a) => (
-              <li key={a.id}>
-                <div className="bx-row">
+              <li key={a.key}>
+                <div className="bx-row bx-item">
                   <span className="txt">
-                    <b>
-                      {a.title}
-                      {a.extra && <span className="bx-plus"> {a.extra}</span>}
-                    </b>
-                    <small>{a.when}</small>
-                    {a.note && <small className="bx-note">{a.note}</small>}
-                    {(a.waiting || !a.mine) && (
-                      <span className="tags">
-                        {a.waiting && <span className="adm-tag warn">{T.waiting}</span>}
-                        {!a.mine && <span className="adm-tag">{T.byRenat}</span>}
-                      </span>
+                    <span className="tags">
+                      <b>{a.title}</b>{" "}
+                      {a.extra && <span className="bx-tag y">{T.extraTag(a.extra)}</span>}
+                      {a.waiting && <span className="bx-tag amb">{T.waiting}</span>}
+                      {!a.mine && <span className="bx-tag">{T.bySalon}</span>}
+                    </span>
+                    <span className="plain">{a.when}</span>
+                    {a.weeks > 1 && (
+                      <small>
+                        {T.repeat}: {T.weeks(a.weeks)}
+                      </small>
+                    )}
+                    {(a.note || (a.withdraw && confirm !== a.key)) && (
+                      <small className="bx-note">
+                        {a.note}
+                        {a.note && a.withdraw && confirm !== a.key && " · "}
+                        {a.withdraw && confirm !== a.key && (
+                          <button type="button" className="bx-lnk sm" onClick={() => setConfirm(a.key)}>
+                            {T.withdraw}
+                          </button>
+                        )}
+                      </small>
                     )}
                   </span>
-                  {a.mine && confirm !== a.id && (
-                    <button type="button" className="adm-ibtn bx-x" aria-label={`${T.remove}: ${a.title}, ${a.when}`} onClick={() => setConfirm(a.id)}>
+                  {a.remove && a.mine && confirm !== a.key && (
+                    <button type="button" className="adm-ibtn bx-x" aria-label={`${T.remove}: ${a.title}, ${a.when}`} onClick={() => setConfirm(a.key)}>
                       <XIcon />
                     </button>
                   )}
                 </div>
-                {confirm === a.id && (
-                  <div className="bx-confirm">
-                    <span>{T.removeQ}</span>
-                    <div className="adm-btns">
-                      <button
-                        type="button"
-                        className="adm-btn adm-btn-sm adm-btn-warn adm-btn-auto"
-                        disabled={busy}
-                        onClick={() => void run(() => (a.type === "off" ? removeOff(a.id) : removeSpecial(a.id)), T.removed)}
-                      >
-                        {T.removeYes}
-                      </button>
-                      <button type="button" className="adm-btn adm-btn-sm adm-btn-ghost adm-btn-auto" onClick={() => setConfirm(null)}>
-                        {T.keep}
-                      </button>
-                    </div>
-                  </div>
+                {confirm === a.key && a.remove && (
+                  <Confirm q={T.removeQ} yes={T.removeYes} busy={busy} onYes={() => void run(a.remove!, T.removed)} onNo={() => setConfirm(null)} />
+                )}
+                {confirm === a.key && a.withdraw && (
+                  <Confirm q={T.withdrawQ} yes={T.withdrawYes} busy={busy} onYes={() => void run(a.withdraw!, T.withdrawn)} onNo={() => setConfirm(null)} />
                 )}
               </li>
             ))}
           </ul>
         )}
         {!all && ahead.length > FOLD && (
-          <button type="button" className="adm-txt lime" onClick={() => setAll(true)}>
+          <button type="button" className="bx-lnk" onClick={() => setAll(true)}>
             {T.showAll(ahead.length)}
           </button>
         )}
       </section>
 
-      <section className="adm-card">
-        <h2 className="adm-h2">{T.hours}</h2>
-        <dl className="bx-week">
-          {weekGroups(data.hours, B.lang).map((g) => (
-            <div key={g.days}>
-              <dt>{g.days}</dt>
-              <dd className={g.hours === T.dayOff ? "is-off" : undefined}>{g.hours}</dd>
+      <section className="bx-sec">
+        <h2 className="bx-ch">{T.hours}</h2>
+        <div className="adm-card bx-hours-card">
+          <dl className="bx-hours">
+            {weekGroups(data.hours, B.lang).map((g) => (
+              <div key={g.days}>
+                <dt>{g.days}</dt>
+                <dd className={g.hours === T.dayOff ? "is-off" : undefined}>{g.hours}</dd>
+              </div>
+            ))}
+          </dl>
+          {hoursWait && (
+            <div className="bx-hours-wait">
+              <span className="bx-tag amb">{T.waiting}</span>
+              {confirm !== `rq:${hoursWait.id}` && (
+                <button type="button" className="bx-lnk sm" onClick={() => setConfirm(`rq:${hoursWait.id}`)}>
+                  {T.withdraw}
+                </button>
+              )}
             </div>
-          ))}
-        </dl>
-        <button type="button" className="adm-btn adm-btn-ghost" onClick={() => setOpen({ kind: "hours" })}>
-          {T.hoursEdit}
-        </button>
+          )}
+          {hoursWait && confirm === `rq:${hoursWait.id}` && (
+            <Confirm q={T.withdrawQ} yes={T.withdrawYes} busy={busy} onYes={() => void run(() => withdraw(hoursWait.id), T.withdrawn)} onNo={() => setConfirm(null)} />
+          )}
+          <button type="button" className="adm-btn adm-btn-ghost" onClick={() => setOpen({ kind: "hours" })}>
+            {T.hoursEdit}
+          </button>
+          <p className="bx-tip">{T.hoursHint}</p>
+        </div>
       </section>
 
-      <section className="adm-card">
-        <h2 className="adm-h2">{T.prices}</h2>
+      <section className="bx-sec">
+        <h2 className="bx-ch">{T.prices}</h2>
         {data.prices.length === 0 ? (
           <p className="adm-meta">{T.noPrices}</p>
         ) : (
-          <ul className="adm-list bx-rows">
+          <ul className="bx-box bx-rows">
             {data.prices.map((p) => (
               <li key={p.serviceId}>
                 <button type="button" className="bx-row" onClick={() => setOpen({ kind: "price", p })}>
                   <span className="txt">
                     <span className="plain">{pick3(p.name, B.lang)}</span>
-                    <small>{minsText(p.min, B.h, B.min)}</small>
-                    {p.waiting && (
-                      <span className="tags">
-                        <span className="adm-tag warn">{T.waitingFor(`${eur(p.waiting.cents)} · ${minsText(p.waiting.min, B.h, B.min)}`)}</span>
-                      </span>
-                    )}
+                    <small className="tags">
+                      {minsText(p.min, B.h, B.min)}
+                      {p.waiting && <span className="bx-tag amb">{T.waitingFor(`${eur(p.waiting.cents)} · ${minsText(p.waiting.min, B.h, B.min)}`)}</span>}
+                    </small>
                   </span>
                   <span className="end price">{eur(p.cents)}</span>
+                  <span className="bx-chev">
+                    <Ic name="right" size={18} />
+                  </span>
                 </button>
               </li>
             ))}
@@ -249,34 +329,11 @@ export function TimeView({ data, tz, today, viewing }: { data: MyTime; tz: strin
         )}
       </section>
 
-      <section className="adm-card">
-        <h2 className="adm-h2">{T.requests}</h2>
-        {data.requests.length === 0 ? (
-          <p className="adm-meta">{T.noRequests}</p>
-        ) : (
-          <ul className="adm-list bx-rows">
-            {data.requests.map((r) => (
-              <li key={r.id}>
-                <div className="bx-row">
-                  <span className="txt">
-                    <span className="plain">{requestWords(r.what, tz, B.lang)}</span>
-                    <span className="tags">
-                      <span className={`adm-tag${r.status === "requested" ? " warn" : r.status === "approved" || r.status === "applied" ? " lime" : ""}`}>{T.status[r.status]}</span>
-                      <small>{ddmm(localParts(r.createdAt, tz).date)}</small>
-                    </span>
-                    {r.answerNote && <small className="bx-note">{T.answer(r.answerNote)}</small>}
-                  </span>
-                  {r.status === "requested" && (
-                    <button type="button" className="adm-txt lime" disabled={busy} onClick={() => void run(() => withdraw(r.id), T.withdrawn)}>
-                      {T.withdraw}
-                    </button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      <button type="button" className="adm-btn adm-btn-line bx-hist" onClick={() => setOpen({ kind: "history" })}>
+        <span>{T.history}</span>{" "}
+        {waitingReqs.length > 0 && <span className="bx-tag amb">{T.waitingN(waitingReqs.length)}</span>}
+        <Ic name="right" size={16} />
+      </button>
 
       {toast && (
         <p className={`adm-toast${toast.bad ? " is-bad" : ""}`} role="status">
@@ -290,7 +347,70 @@ export function TimeView({ data, tz, today, viewing }: { data: MyTime; tz: strin
       {open?.kind === "special" && <SpecialSheet today={today} ask={timeMode === "ask"} onClose={() => setOpen(null)} onDone={done} />}
       {open?.kind === "hours" && <HoursSheet hours={data.hours} ask={timeMode === "ask"} onClose={() => setOpen(null)} onDone={done} />}
       {open?.kind === "price" && <PriceSheet p={open.p} ask={priceMode === "ask"} onClose={() => setOpen(null)} onDone={done} />}
+      {open?.kind === "history" && (
+        <BSheet title={T.requests} onClose={() => setOpen(null)}>
+          {data.requests.length === 0 ? (
+            <p className="adm-meta">{T.noRequests}</p>
+          ) : (
+            <ul className="bx-box bx-rows">
+              {data.requests.map((r) => {
+                const key = `h:${r.id}`;
+                return (
+                  <li key={r.id}>
+                    <div className="bx-row">
+                      <span className="txt">
+                        <span className="plain">{requestWords(r.what, tz, B.lang)}</span>
+                        <span className="tags">
+                          <span className={`bx-tag${r.status === "requested" ? " amb" : r.status === "approved" || r.status === "applied" ? " ok" : ""}`}>{T.status[r.status]}</span>
+                          <small>{ddmm(localParts(r.createdAt, tz).date)}</small>
+                        </span>
+                        {r.answerNote && <small className="bx-note">{T.answer(r.answerNote)}</small>}
+                      </span>
+                      {r.status === "requested" && confirm !== key && (
+                        <button type="button" className="bx-lnk sm" onClick={() => setConfirm(key)}>
+                          {T.withdraw}
+                        </button>
+                      )}
+                    </div>
+                    {confirm === key && (
+                      <Confirm q={T.withdrawQ} yes={T.withdrawYes} busy={busy} onYes={() => void run(() => withdraw(r.id), T.withdrawn)} onNo={() => setConfirm(null)} />
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </BSheet>
+      )}
     </main>
+  );
+}
+
+/** «Перерывы, отпуск и часы: сразу» with a tick, or «…: после согласования» with a clock. */
+function Rule({ mode, text }: { mode: "now" | "ask"; text: string }) {
+  return (
+    <p className={`bx-rule is-${mode}`}>
+      <Ic name={mode === "now" ? "check" : "clock"} size={16} />
+      <span>{text}</span>
+    </p>
+  );
+}
+
+/** The question under a line before it goes: «Убрать это?» or «Отозвать этот запрос?». */
+function Confirm({ q, yes, busy, onYes, onNo }: { q: string; yes: string; busy: boolean; onYes: () => void; onNo: () => void }) {
+  const T = useB().time;
+  return (
+    <div className="bx-confirm">
+      <span>{q}</span>
+      <div className="adm-btns">
+        <button type="button" className="adm-btn adm-btn-sm adm-btn-warn adm-btn-auto" disabled={busy} onClick={onYes}>
+          {yes}
+        </button>
+        <button type="button" className="adm-btn adm-btn-sm adm-btn-ghost adm-btn-auto" onClick={onNo}>
+          {T.keep}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -402,7 +522,7 @@ function OffSheet({ kind, tz, today, ask, onClose, onDone }: SheetProps & { kind
       )}
       {!block && <p className="adm-meta">{daysText(Date.parse(`${from}T12:00:00Z`), Date.parse(`${to}T12:00:00Z`) + 1, "UTC", B)}</p>}
       <NoteField value={note} onChange={setNote} />
-      {ask && <p className="adm-meta">{T.modeTime.ask}</p>}
+      {ask && <p className="adm-meta">{T.askNote.time}</p>}
     </BSheet>
   );
 }
@@ -566,7 +686,7 @@ function PriceSheet({ p, ask, onClose, onDone }: SheetProps & { p: MyPrice }) {
           </button>
         </div>
       </div>
-      {ask && <p className="adm-meta">{T.modePrice.ask}</p>}
+      {ask && <p className="adm-meta">{T.askNote.price}</p>}
     </BSheet>
   );
 }

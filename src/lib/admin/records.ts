@@ -104,7 +104,7 @@ export function recordsMay(who: Holder): RecordsMay {
  * the e-mail before the @ when a login has no name (never the whole address).
  */
 export async function recordMakers(q: Querier, businessId: string): Promise<{ id: string; name: string }[]> {
-  const rows = await q<{ id: string; name: string; email: string }>("select id, name, email from users where business_id = $1 order by lower(name), email", [businessId]);
+  const rows = await q<{ id: string; name: string; email: string }>("select id, name, coalesce(deleted_was->>'email', email) as email from users where business_id = $1 order by lower(name), 3", [businessId]);
   return rows.map((u) => ({ id: u.id, name: u.name || u.email.split("@")[0] }));
 }
 
@@ -239,7 +239,7 @@ async function recordRows(q: Querier, found: { where: string; params: unknown[] 
     `select a.id, a.staff_id, s.display_name as staff_name, s.role as staff_role, s.photo_url as staff_photo,
             a.client_id, c.name as client_name, c.phone_e164,
             a.starts_at, a.ends_at, a.created_at, a.status, a.source, a.total_cents,
-            mk.actor as made_actor, mu.name as made_name, mu.email as made_email,
+            mk.actor as made_actor, mu.name as made_name, coalesce(mu.deleted_was->>'email', mu.email) as made_email,
             (select coalesce(json_agg(l.name order by l.position), '[]'::json) from appointment_services l where l.appointment_id = a.id) as services
        from appointments a
        join staff s on s.id = a.staff_id

@@ -226,7 +226,7 @@ export async function listMessageLog(q: Querier, business: Pick<Business, "id" |
             n.payload, n.provider, n.segments, n.user_id,
             a.starts_at as visit_at, s.display_name as staff_name,
             c.id as client_id, case when c.anonymised_at is null then c.name end as client_name, (c.id is not null${seenClientsSql(who, p)}) as client_seen,
-            u.name as user_name, u.email as user_email,
+            u.name as user_name, coalesce(u.deleted_was->>'email', u.email) as user_email,
             i.number as invoice_number, i.kind as invoice_kind
        from ${FROM}
        left join invoices i on n.kind = 'invoice' and i.business_id = n.business_id and i.id::text = n.payload->>'invoiceId'

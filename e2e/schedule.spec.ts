@@ -4,7 +4,7 @@ import { monthDays, monthStart, weekDays } from "../src/lib/admin/schedule-plan"
 import { addDays, isoWeekday } from "../src/lib/tz";
 import { demoHours } from "../tools/demo-structure.mjs";
 import { OUT } from "./env";
-import { A, asOwner, demoId, expect, expectNoSideScroll, hydrated, smallTargets, tallinnDate, test, toast } from "./helpers";
+import { A, asOwner, demoId, expect, expectNoSideScroll, hydrated, openFolds, smallTargets, tallinnDate, test, toast } from "./helpers";
 
 /**
  * «График работы» (/admin/schedule): the month grid of shifts. On a wide
@@ -430,6 +430,7 @@ test.describe("schedule", () => {
     // from «Ещё»
     await page.goto("/admin/more");
     await hydrated(page);
+    await openFolds(page);
     await page.locator(".adm-more .adm-item:visible", { hasText: A.nav.schedule }).click();
     await page.waitForURL(/\/admin\/schedule$/);
     await hydrated(page);

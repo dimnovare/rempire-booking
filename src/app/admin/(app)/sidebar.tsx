@@ -235,7 +235,7 @@ function TwoLines({ text }: { text: string }) {
 function Menu({ path }: { path: string }) {
   const A = useA();
   // a section the login has no right to is not listed (frame.tsx)
-  const { off } = useFrame();
+  const { off, waiting } = useFrame();
   // the group with the open page is open; a tap opens another one or shuts it, until the page changes
   const here = MENU.find((row) => row.pages?.some((p) => sectionOpen(p.href, path)))?.key ?? null;
   const [picked, setPicked] = useState<{ path: string; key: string | null } | null>(null);
@@ -249,8 +249,10 @@ function Menu({ path }: { path: string }) {
       {rows.map((row) => {
         if (!row.pages) {
           const on = sectionOpen(row.href!, path);
+          // requests waiting for an answer: a red count, as the design draws it (admin.css, .sb-row[data-n])
+          const n = row.key === "requests" && waiting > 0 ? waiting : undefined;
           return (
-            <Link key={row.key} className="sb-row" href={row.href!} prefetch={false} aria-current={on ? "page" : undefined}>
+            <Link key={row.key} className="sb-row" href={row.href!} prefetch={false} aria-current={on ? "page" : undefined} data-n={n} title={n ? A.app.waiting(n) : undefined}>
               <SectionIcon name={row.icon} size={24} />
               <span>{A.nav[row.key]}</span>
             </Link>

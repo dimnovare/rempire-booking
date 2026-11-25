@@ -195,7 +195,7 @@ export async function createUser(q: Querier, businessId: string, input: UserInpu
 export async function setUserStaff(q: Querier, businessId: string, userId: string, staffId: string | null): Promise<boolean> {
   const rows = await q<{ id: string }>(
     `update users u set staff_id = $3::uuid, updated_at = now()
-      where u.id = $1 and u.business_id = $2 and u.role in ('owner', 'admin')
+      where u.id = $1 and u.business_id = $2 and u.role in ('owner', 'admin') and u.deleted_at is null
         and ($3::uuid is null or exists (select 1 from staff s where s.id = $3::uuid and s.business_id = $2))
       returning u.id`,
     [userId, businessId, staffId],
@@ -209,10 +209,73 @@ export async function setUserStaff(q: Querier, businessId: string, userId: strin
  * switches himself off, and an owner's login is switched only by an owner.)
  */
 export async function setUserActive(q: Querier, businessId: string, userId: string, active: boolean): Promise<boolean> {
-  const hit = await q<{ id: string }>("update users set active = $3, updated_at = now() where id = $1 and business_id = $2 returning id", [userId, businessId, active]);
+  const hit = await q<{ id: string }>("update users set active = $3, updated_at = now() where id = $1 and business_id = $2 and deleted_at is null returning id", [userId, businessId, active]);
   if (!hit.length) return false;
   if (!active) await revokeOtherSessions(q, userId, null);
   return true;
+}
+
+/** How long «Вернуть» can bring a deleted login back. The toast shows it for 10 seconds; the server allows a slow click. */
+export const RESTORE_MINUTES = 10;
+
+/**
+ * «Удалить вход» (048_user_delete.sql): the login leaves every list and can
+ * never log in again, but its row stays, for the visits, sales, invoices
+ * and history that name it. Its e-mail is freed for a new login (the row's
+ * becomes «deleted-<id>@deleted.invalid»: no code or password reaches it),
+ * its Google link is cleared, it is off and every session of it ends. What
+ * it was is kept in `deleted_was` for «Вернуть». The change history gets a
+ * «Удаление» row by `actorId`. False if no such login here.
+ * (Whose login may be deleted is the door's rule, account/actions.ts.)
+ */
+export async function deleteUser(q: Querier, businessId: string, userId: string, actorId: string): Promise<boolean> {
+  const hit = await q<{ id: string }>(
+    `with d as (
+       update users
+          set deleted_at = now(),
+              deleted_was = jsonb_build_object('email', email, 'google_sub', google_sub, 'active', active),
+              email = 'deleted-' || id::text || '@deleted.invalid', google_sub = null, active = false, updated_at = now()
+        where id = $1 and business_id = $2 and deleted_at is null
+        returning id)
+     insert into audit (actor, entity, entity_id, action) select $3, 'user', id, 'delete' from d returning entity_id as id`,
+    [userId, businessId, actorId],
+  );
+  if (!hit.length) return false;
+  await revokeOtherSessions(q, userId, null);
+  return true;
+}
+
+/**
+ * «Вернуть» after «Удалить вход»: the login as it was (its e-mail, Google
+ * link, on or off, its rights), within RESTORE_MINUTES. "taken": a new
+ * login has its e-mail meanwhile; "gone": too late, or no such deleted
+ * login here.
+ */
+export async function restoreUser(q: Querier, businessId: string, userId: string, actorId: string, now = Date.now()): Promise<"ok" | "taken" | "gone"> {
+  const [u] = await q<{ was: { email?: string; google_sub?: string | null; active?: boolean }; deleted_at: Date }>(
+    "select deleted_was as was, deleted_at from users where id = $1 and business_id = $2 and deleted_at is not null",
+    [userId, businessId],
+  );
+  if (!u || !u.was?.email || now - new Date(u.deleted_at).getTime() > RESTORE_MINUTES * 60_000) return "gone";
+  try {
+    const hit = await q<{ id: string }>(
+      `with r as (
+         update users
+            set email = $3::text,
+                google_sub = case when exists (select 1 from users o where o.google_sub = $4::text) then null else $4::text end,
+                active = $5::boolean, deleted_at = null, deleted_was = null, updated_at = now()
+          where id = $1 and business_id = $2 and deleted_at is not null
+            and not exists (select 1 from users o where o.email = $3::text)
+          returning id)
+       insert into audit (actor, entity, entity_id, action) select $6, 'user', id, 'restore' from r returning entity_id as id`,
+      [userId, businessId, u.was.email, u.was.google_sub ?? null, u.was.active === true, actorId],
+    );
+    return hit.length ? "ok" : "taken";
+  } catch (e) {
+    // a new login took the e-mail at the same moment
+    if ((e as { code?: string }).code === "23505") return "taken";
+    throw e;
+  }
 }
 
 export type UserListItem = { id: string; email: string; name: string; role: Role; staffId: string | null; active: boolean; hasPassword: boolean; lastLoginAt: string | null };
@@ -220,7 +283,7 @@ export type UserListItem = { id: string; email: string; name: string; role: Role
 export async function listUsers(q: Querier, businessId: string): Promise<UserListItem[]> {
   const rows = await q<{ id: string; email: string; name: string; role: Role; staff_id: string | null; active: boolean; has_password: boolean; last_login_at: Date | null }>(
     `select id, email, name, role, staff_id, active, (password_hash is not null) as has_password, last_login_at
-       from users where business_id = $1 order by active desc, role, email`,
+       from users where business_id = $1 and deleted_at is null order by active desc, role, email`,
     [businessId],
   );
   return rows.map((r) => ({

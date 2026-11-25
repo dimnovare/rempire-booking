@@ -5,9 +5,9 @@
  * only.
  */
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { can, type StoredRights } from "@/lib/auth/rights";
+import { can, normalizeRights, type StoredRights } from "@/lib/auth/rights";
 import { presetRights } from "@/lib/auth/rights-catalogue";
-import { listRightsHistory, loadHolder, loadRights, mayAddLogin, rightsToCopy, saveRights } from "@/lib/auth/rights-store";
+import { listRightsHistory, loadHolder, loadRights, mayAddLogin, rightsToCopy, saveRights, startingSet, writeStartingSet } from "@/lib/auth/rights-store";
 import { closeDb, query } from "@/lib/db";
 import { freshDemo, type Demo } from "./helpers";
 
@@ -184,6 +184,23 @@ describe("a login that is not an owner hands out only what it holds", () => {
     await query("update businesses set settings = settings || $2::jsonb where id = $1", [demo.business.id, JSON.stringify({ barber_self_price: "now" })]);
     await save(owner, desk, { off: ["services.staff"] });
     expect(await mayAddLogin(query, demo.business.id, await holder(desk), "staff", demo.staff.valentin)).toBe(false);
+  });
+
+  it("«Новый вход» with one of the eight roles: the old three start as before, the other five with their preset", async () => {
+    const o = await holder(owner);
+    const m = await holder(await manager());
+    const sp = (await startingSet(query, demo.business.id, o, "SP", demo.staff.valentin))!;
+    expect(sp.preset).toBe("SP");
+    expect(sp.values["journal.staff"]).toEqual([demo.staff.valentin]);
+    const vw = (await startingSet(query, demo.business.id, o, "VW", null))!;
+    expect(vw).toEqual(normalizeRights({ preset: "VW", ...presetRights("VW") }));
+    // nobody but an owner starts an owner; a manager hands out a viewer
+    expect(await startingSet(query, demo.business.id, m, "OW", null)).toBeNull();
+    expect(await startingSet(query, demo.business.id, m, "VW", null)).not.toBeNull();
+    // and the set is what the new login then has
+    const [u] = await query<{ id: string }>("insert into users (business_id, email, role) values ($1, 'viewer-new@example.test', 'admin') returning id", [demo.business.id]);
+    await writeStartingSet(query, demo.business.id, u.id, vw);
+    expect((await setOf(u.id)).preset).toBe("VW");
   });
 });
 

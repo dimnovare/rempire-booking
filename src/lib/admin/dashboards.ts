@@ -752,7 +752,7 @@ export async function listFeed(q: Querier, business: Business, raw: { filter?: u
   const [logs, staff] = ids.length
     ? await Promise.all([
         q<LogRow>(
-          `select au.entity_id, au.at, au.action, au.actor, au.before, au.after, u.name, u.email
+          `select au.entity_id, au.at, au.action, au.actor, au.before, au.after, u.name, coalesce(u.deleted_was->>'email', u.email) as email
              from audit au left join users u on u.business_id = $1 and u.id::text = au.actor
             where au.entity = 'appointment' and au.entity_id = any($2::uuid[])
             order by au.at desc, au.id desc`,

@@ -9,7 +9,9 @@ export function SaleRow() {
   const frame = useFrame();
   return (
     <button type="button" className="adm-item mo-row" aria-haspopup="dialog" onClick={() => frame.open("sale")}>
-      <b>{A.sale.title}</b>
+      <span className="tx">
+        <b>{A.sale.title}</b>
+      </span>
     </button>
   );
 }

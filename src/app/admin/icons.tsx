@@ -33,6 +33,18 @@ export const XIcon = ({ size = 20 }: P) => (
     <path d="M6 6l12 12M18 6L6 18" />
   </svg>
 );
+export const BellIcon = ({ size = 16 }: P) => (
+  <svg {...svg(size, 1.8)}>
+    <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" />
+    <path d="M10 20.5a2 2 0 0 0 4 0" />
+  </svg>
+);
+export const WarnIcon = ({ size = 18 }: P) => (
+  <svg {...svg(size, 1.8)}>
+    <path d="M12 3.5 2.5 20h19z" />
+    <path d="M12 10v4.5M12 17v.5" />
+  </svg>
+);
 export const TickIcon = ({ size = 14 }: P) => (
   <svg {...svg(size, 3)}>
     <path d="M4 12.5l5 5L20 6.5" />

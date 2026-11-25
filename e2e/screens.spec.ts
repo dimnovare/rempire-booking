@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { Page } from "@playwright/test";
 import { authFile, OUT } from "./env";
-import { B, expect, expectNoSideScroll, hydrated, nextWorkday, sheet, smallTargets, test } from "./helpers";
+import { B, expect, expectNoSideScroll, hydrated, L, nextWorkday, sheet, smallTargets, test } from "./helpers";
 
 /**
  * Every screen and sheet of the barber app on the narrowest phones (320 px
@@ -92,8 +92,8 @@ for (const width of [320, 360]) {
       await page.goto("/b/login");
       await hydrated(page);
       await check(page, "login");
-      await page.getByRole("button", { name: B.login.byCode }).click();
-      await check(page, "login-code");
+      await page.getByRole("button", { name: L.tabPassword }).click();
+      await check(page, "login-password");
     });
   });
 }

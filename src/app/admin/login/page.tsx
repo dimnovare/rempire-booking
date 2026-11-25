@@ -1,34 +1,32 @@
 import { Suspense } from "react";
 import { Logo } from "@/components/brand";
+import { LoginPanel } from "@/components/login/panel";
+import { LINK_ERRORS } from "@/components/login/words";
 import { TestBanner } from "@/components/test-banner";
 import { safeAdminPath } from "@/lib/auth/cookie";
 import { googleLoginConfigured } from "@/lib/auth/google";
-import { Wait } from "../lang";
-import { LoginForm, LoginLang, LoginTitle } from "./login-form";
+import { adminLang } from "../lang-server";
 
-/** Reasons other pages send here as ?e=… (requireAdmin, the Google callback). */
-const LINK_ERRORS = ["role", "bad", "google", "googleUnknown", "googleOther"];
-
+/** The admin's login: the same page as the barber app's (src/components/login/panel.tsx). */
 export default function LoginPage({ searchParams }: PageProps<"/admin/login">) {
   return (
     <>
       <TestBanner app="admin" />
-      <main className="adm-login">
-        <Logo />
-        <LoginTitle />
-        <Suspense fallback={<Wait />}>
-          <Form searchParams={searchParams} />
-        </Suspense>
-        {/* each language under its own name: whoever cannot read this page still finds theirs */}
-        <LoginLang />
+      <main className="lp">
+        <div className="lp-card">
+          <Logo />
+          <Suspense fallback={<div className="lp-wait" />}>
+            <Form searchParams={searchParams} />
+          </Suspense>
+        </div>
       </main>
     </>
   );
 }
 
 async function Form({ searchParams }: { searchParams: PageProps<"/admin/login">["searchParams"] }) {
-  const sp = await searchParams;
+  const [sp, lang] = await Promise.all([searchParams, adminLang()]);
   const next = safeAdminPath(typeof sp.next === "string" ? sp.next : "");
-  const e = typeof sp.e === "string" && LINK_ERRORS.includes(sp.e) ? sp.e : undefined;
-  return <LoginForm next={next} initialError={e} google={googleLoginConfigured()} />;
+  const e = typeof sp.e === "string" && (LINK_ERRORS as readonly string[]).includes(sp.e) ? sp.e : undefined;
+  return <LoginPanel app="admin" lang={lang} next={next} initialError={e} google={googleLoginConfigured()} />;
 }

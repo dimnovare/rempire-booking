@@ -138,7 +138,7 @@ const uuidOf = (expr: string) => `(case when ${expr} ~* ${UUID_SQL} then (${expr
 
 /** Every login of the business, for the author filter: the inactive ones too, they may have changed something. */
 export async function changeAuthors(q: Querier, businessId: string): Promise<{ id: string; name: string }[]> {
-  const rows = await q<{ id: string; name: string | null; email: string }>("select id, name, email from users where business_id = $1 order by lower(coalesce(nullif(name, ''), email)), id", [businessId]);
+  const rows = await q<{ id: string; name: string | null; email: string }>("select id, name, coalesce(deleted_was->>'email', email) as email from users where business_id = $1 order by lower(coalesce(nullif(name, ''), deleted_was->>'email', email)), id", [businessId]);
   return rows.map((r) => ({ id: r.id, name: r.name || r.email.split("@")[0] }));
 }
 
@@ -202,10 +202,10 @@ export async function listChanges(
     location_name: string | null;
   }>(
     `select au.id::text as id, au.at, au.actor, au.entity, au.entity_id, au.action, au.before, au.after,
-            u.name as author_name, u.email as author_email,
+            u.name as author_name, coalesce(u.deleted_was->>'email', u.email) as author_email,
             ap.starts_at as visit_at, case when cl.anonymised_at is null then cl.name end as client_name, st.display_name as staff_name,
             coalesce(sv.name->>${lang}::text, sv.name->>'ru', sv.name->>'et', sv.name->>'en') as service_name,
-            ou.name as login_name, ou.email as login_email,
+            ou.name as login_name, coalesce(ou.deleted_was->>'email', ou.email) as login_email,
             rv.created_at as review_at, rv.author_name as review_name, ps.name as sale_name,
             iv.number as invoice_number, coalesce(ir.legal_name, ii.legal_name) as party_name,
             lc.name as location_name

@@ -2,7 +2,7 @@ import path from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { PRESETS } from "../src/lib/auth/rights-catalogue";
 import { authFile, E2E_URL, OUT } from "./env";
-import { A, asBarber, asOwner, B, demoId, expect, expectNoSideScroll, hydrated, loginByCode, nextWorkday, phoneOf, setSwitch, sheet, smallTargets, test, toast, TZ } from "./helpers";
+import { A, asBarber, asOwner, B, demoId, expect, expectNoSideScroll, hydrated, loginByCode, nextWorkday, openFolds, phoneOf, setSwitch, sheet, smallTargets, test, toast, TZ } from "./helpers";
 
 /**
  * One staff app (docs/apps.md, «One app for Renat»): «Мой день» is a tab,
@@ -197,15 +197,16 @@ test.describe("an owner who cuts too, on a phone", () => {
     // who is signed in: the picture or the initial, the name, the role in words
     await expect(more.locator(".mo-who b")).toHaveText("Owner and barber (demo)");
     await expect(more.locator(".mo-who span:not(.mo-ava)")).toHaveText(M.andBarber(PRESETS.OW.ru));
-    await expect(more.getByRole("heading", { level: 2 })).toHaveText([M.mineGroup, M.salonGroup, M.settingsGroup, M.accountGroup]);
+    await expect(more.getByRole("heading", { level: 2 })).toHaveText([M.mineGroup, M.salonGroup, M.accountGroup]);
     const group = (name: string) => more.getByRole("region", { name });
     await expect(group(M.mineGroup).locator(".mo-row b")).toHaveText([M.time, M.sell, M.money]);
     await expect(group(M.mineGroup).locator(".mo-row small").first()).toHaveText(M.timeHint);
-    // «Основные показатели» is the tab «Отчёты»; «Запросы» a row
-    await expect(group(M.salonGroup).locator(".mo-row b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.nav.invoices, A.nav.notifications, A.sale.title]);
-    // «Настройки»: the salon's page on the booking site and «Онлайн-запись», the owner's
-    await expect(group(M.settingsGroup).locator(".mo-row b")).toHaveText([A.nav.brand, A.nav.contacts, A.nav.gallery, A.nav.online]);
-    await expect(group(M.accountGroup).locator(".mo-row b")).toHaveText([M.access, M.notify, M.language, M.logout]);
+    // «Салон» in the sidebar's order and folds; «Основные показатели» is the tab «Отчёты»; «Запросы» a row
+    await openFolds(page);
+    await expect(group(M.salonGroup).locator(".mo-row b")).toHaveText([A.nav.reports, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.team, A.nav.staffList, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.requests, A.nav.invoices, M.notifySalon, A.nav.settings, A.nav.brand, A.nav.contacts, A.nav.gallery, A.nav.online, A.sale.title]);
+    await expect(group(M.accountGroup).locator(".mo-row b")).toHaveText([M.access, M.notify, M.language]);
+    // the way out: apart from the lists, in red
+    await expect(more.getByRole("button", { name: M.logout })).toBeVisible();
     await expect(group(M.accountGroup).locator(".mo-row", { hasText: M.language }).locator("small")).toHaveText("Русский");
     await expectNoSideScroll(page);
     expect(await smallTargets(page)).toEqual([]);
@@ -215,7 +216,7 @@ test.describe("an owner who cuts too, on a phone", () => {
     expect(await look(more.locator(".mo-who b"))).toMatchObject({ font: "600 17px/24px" });
     expect(await look(more.locator(".mo-group h2"))).toMatchObject({ color: "rgb(113, 117, 127)", font: "600 12px/16px" });
     expect(await look(more.locator(".mo-list"))).toMatchObject({ bg: "rgb(255, 255, 255)", radius: "12px" });
-    expect(await look(more.locator(".mo-row"))).toMatchObject({ h: 48 });
+    expect(await look(more.locator(".mo-row", { hasText: M.language }))).toMatchObject({ h: 48 });
     expect(await look(more.locator(".mo-row b"))).toMatchObject({ color: "rgb(43, 49, 52)", font: "500 15px/20px" });
     await shot(page, "more");
 
@@ -223,7 +224,9 @@ test.describe("an owner who cuts too, on a phone", () => {
     const opens = async (label: string, url: RegExp, heading?: string) => {
       await page.goto("/admin/more");
       await hydrated(page);
-      await page.locator(".adm-more .mo-row:visible", { hasText: label }).click();
+      await openFolds(page);
+      // a fold's own row («Сотрудники: список, график работы») is a summary, not a page
+      await page.locator(".adm-more .mo-row:visible:not(summary)", { hasText: label }).click();
       await page.waitForURL(url);
       await hydrated(page);
       if (heading) await expect(page.locator("h1:visible", { hasText: heading }).first()).toBeVisible();
@@ -235,17 +238,17 @@ test.describe("an owner who cuts too, on a phone", () => {
     await opens(M.sell, /\/b\/sell$/, B.sell.title);
     await opens(M.money, /\/b\/money$/, B.money.title);
     // «Салон»: every section that has no tab
-    await opens(A.nav.staff, /\/admin\/staff$/, A.staff.title);
+    await opens(A.nav.staffList, /\/admin\/staff$/, A.staff.title);
     await opens(A.nav.schedule, /\/admin\/schedule$/);
     await opens(A.nav.services, /\/admin\/services$/, A.services.title);
     await opens(A.nav.catalogue, /\/admin\/catalogue$/, A.catalogue.title);
     await opens(A.nav.records, /\/admin\/records$/);
     await opens(A.nav.requests, /\/admin\/requests$/);
     await opens(A.nav.invoices, /\/admin\/invoices$/);
-    // «Аккаунт»
+    // «Мой вход»
     await opens(M.access, /\/admin\/account$/, A.account.title);
-    // by its line «на этом устройстве»: «Настройки» has the salon's «Уведомления» too
-    await opens(M.notifyHint, /\/b\/more$/, B.push.title);
+    // this phone's pushes, apart from the salon's «Уведомления клиентам»
+    await opens(M.notify, /\/b\/more$/, B.push.title);
     await expect(page.getByRole("region", { name: B.push.title })).toBeVisible();
     // (the language and the way out are not on this page any more: they are rows of «Ещё»)
     await expect(page.getByRole("button", { name: B.more.logout })).toHaveCount(0);
@@ -321,9 +324,10 @@ test.describe("an owner who cuts too, on a phone", () => {
       await hydrated(phone);
       const all = phone.getByRole("button", { name: /^Показать всё/ });
       if (await all.count()) await all.click();
-      await phone.locator(".bx-rows li", { hasText: note }).getByRole("button", { name: new RegExp(`^${B.time.remove}: `) }).click();
-      await phone.getByRole("button", { name: B.time.removeYes }).click();
-      await expect(toast(phone)).toHaveText(B.time.removed);
+      // a waiting day off is withdrawn, not removed (the design, 25.11: «Отозвать запрос» in «Впереди»)
+      await phone.locator(".bx-rows li", { hasText: note }).getByRole("button", { name: B.time.withdraw }).click();
+      await phone.getByRole("button", { name: B.time.withdrawYes }).click();
+      await expect(toast(phone)).toHaveText(B.time.withdrawn);
       expect(await waiting()).toBe(before);
     } finally {
       await setSwitch(owner, "time", "now");
@@ -359,7 +363,7 @@ test.describe("«Выйти» is a row of «Ещё»", () => {
     await loginByCode(page, "boss@example.test");
     await page.goto("/admin/more");
     await hydrated(page);
-    await page.locator(".adm-more .mo-row:visible", { hasText: M.logout }).click();
+    await page.getByRole("button", { name: M.logout }).click();
     await page.waitForURL((u) => u.pathname === "/admin/login");
     // neither half opens any more
     await page.goto("/b");
@@ -389,9 +393,10 @@ test.describe("an owner who does not cut, on a phone", () => {
     const more = page.locator(".adm-more:visible");
     await expect(more.locator(".mo-who b")).toHaveText("Owner (demo)");
     await expect(more.locator(".mo-who span:not(.mo-ava)")).toHaveText(PRESETS.OW.ru);
-    await expect(more.getByRole("heading", { level: 2 })).toHaveText([M.salonGroup, M.settingsGroup, M.accountGroup]);
-    await expect(more.getByRole("region", { name: M.salonGroup }).locator(".mo-row b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.nav.notifications, A.sale.title]);
-    await expect(more.getByRole("region", { name: M.accountGroup }).locator(".mo-row b")).toHaveText([M.access, M.notify, M.language, M.logout]);
+    await expect(more.getByRole("heading", { level: 2 })).toHaveText([M.salonGroup, M.accountGroup]);
+    await openFolds(page);
+    await expect(more.getByRole("region", { name: M.salonGroup }).locator(".mo-row b")).toHaveText([A.nav.reports, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.team, A.nav.staffList, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.requests, M.notifySalon, A.nav.settings, A.nav.brand, A.nav.contacts, A.nav.gallery, A.nav.online, A.sale.title]);
+    await expect(more.getByRole("region", { name: M.accountGroup }).locator(".mo-row b")).toHaveText([M.access, M.notify, M.language]);
     await expect(more.locator('a[href^="/b/time"], a[href^="/b/sell"], a[href^="/b/money"]')).toHaveCount(0);
     await expectNoSideScroll(page);
     expect(await smallTargets(page)).toEqual([]);
@@ -451,13 +456,15 @@ test.describe("an owner who does not cut, on a phone", () => {
     const email = `desk-${info.project.name}@example.test`;
     await page.goto("/admin/account");
     await hydrated(page);
-    const form = page.locator("form", { has: page.getByRole("button", { name: A.account.addUser }) });
-    await form.locator('input[type="email"]').fill(email);
-    await form.getByRole("button", { name: A.account.roles.admin, exact: true }).click();
-    await form.getByLabel(A.account.alsoBarber).selectOption({ label: "Slava" });
-    await expect(form.getByText(A.account.alsoHint)).toBeVisible();
-    await form.getByRole("button", { name: A.account.addUser }).click();
-    await expect(form.getByText(A.saved, { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: A.account.addUser }).click();
+    const dw = page.getByRole("dialog", { name: A.account.newLogin });
+    await dw.locator('input[type="email"]').fill(email);
+    await dw.getByRole("radio", { name: new RegExp(`^${PRESETS.AD.ru}`) }).check();
+    await dw.getByLabel(A.account.alsoBarber).selectOption({ label: "Slava" });
+    await expect(dw.getByText(A.account.alsoHint)).toBeVisible();
+    await dw.getByRole("button", { name: A.account.addUser }).click();
+    await expect(dw).toHaveCount(0);
+    await expect(toast(page)).toContainText(A.account.added(email));
 
     const link = page.getByLabel(`${A.account.alsoBarber}: ${email}`);
     await expect(link).toHaveValue(/[0-9a-f-]{36}/);

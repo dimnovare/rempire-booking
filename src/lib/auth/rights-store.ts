@@ -144,7 +144,7 @@ export async function backfillRights(q: Querier, businessId: string): Promise<nu
 /** One login's set, backfilled first if it has none. Null: no such login in this business. */
 export async function loadRights(q: Querier, businessId: string, userId: string): Promise<StoredRights | null> {
   if (!UUID_RE.test(String(userId))) return null;
-  const read = () => q<UserRow>("select id, business_id, role, staff_id, active, rights_preset, rights, rights_values from users where id = $1 and business_id = $2", [userId, businessId]);
+  const read = () => q<UserRow>("select id, business_id, role, staff_id, active, rights_preset, rights, rights_values from users where id = $1 and business_id = $2 and deleted_at is null", [userId, businessId]);
   let [u] = await read();
   if (!u) return null;
   if (!u.rights) {
@@ -214,6 +214,29 @@ export async function mayAddLogin(q: Querier, businessId: string, actor: Holder,
   return beyondOwn(actor, { preset: start.preset, on: [], values: {} }, start).length === 0;
 }
 
+/**
+ * What a new login of a role starts with («Доступ» → «Новый вход», which
+ * offers the rights page's eight roles; Dim, 25.11.2026). «Владелец»,
+ * «Администратор» and «Специалист» start as those roles did before the
+ * rights (`legacyRights`, what `backfillRights` writes); the other five
+ * with their preset. Null: the adder may not hand it out, by
+ * `mayAddLogin`'s rule (no owner unless he is one, and nothing he does not
+ * hold himself).
+ */
+export async function startingSet(q: Querier, businessId: string, actor: Holder, code: RoleCode, staffId: string | null): Promise<StoredRights | null> {
+  const role = PRESETS[code].role;
+  if (actor.role !== "owner" && role === "owner") return null;
+  const [biz] = await q<{ settings: LegacySwitches | null }>("select settings from businesses where id = $1", [businessId]);
+  const set = code === "OW" || code === "AD" || code === "SP" ? legacyRights(role, biz?.settings, staffId) : normalizeRights({ preset: code, ...presetRights(code) });
+  if (actor.role === "owner") return set;
+  return beyondOwn(actor, { preset: set.preset, on: [], values: {} }, set).length ? null : set;
+}
+
+/** Write a new login's starting set (`startingSet`) over what its role gave it. */
+export async function writeStartingSet(q: Querier, businessId: string, userId: string, set: StoredRights): Promise<void> {
+  await q("update users set rights_preset = $3, rights = $4::text[], rights_values = $5::jsonb where id = $1 and business_id = $2", [userId, businessId, set.preset, set.on, JSON.stringify(set.values)]);
+}
+
 /** The whole set of one login, written at once. */
 export async function saveRights(business: Business, actor: Holder & { id: string }, targetId: string, input: RightsInput): Promise<RightsSaved> {
   if (!can(actor, "settings.users.rights")) return { ok: false, code: "forbidden" };
@@ -224,7 +247,7 @@ export async function saveRights(business: Business, actor: Holder & { id: strin
   const role = PRESETS[preset].role;
   return withTx<RightsSaved>(async (tx) => {
     await backfillRights(tx, business.id);
-    const [t] = await tx<UserRow>("select id, business_id, role, staff_id, active, rights_preset, rights, rights_values from users where id = $1 and business_id = $2 for update", [targetId, business.id]);
+    const [t] = await tx<UserRow>("select id, business_id, role, staff_id, active, rights_preset, rights, rights_values from users where id = $1 and business_id = $2 and deleted_at is null for update", [targetId, business.id]);
     const before = t ? storedOf(t) : null;
     if (!t || !before) return { ok: false, code: "not_found" };
     // an owner's login, and making an owner, are an owner's alone
@@ -292,7 +315,7 @@ export type RightsChange = {
 export async function listRightsHistory(q: Querier, businessId: string, userId: string, limit = 50): Promise<RightsChange[]> {
   if (!UUID_RE.test(String(userId))) return [];
   const rows = await q<{ id: string; at: Date; by_name: string | null; by_email: string | null; before: { preset?: string } | null; after: { preset?: string; on?: string[]; off?: string[]; values?: Record<string, unknown> } | null }>(
-    `select a.id::text as id, a.at, w.name as by_name, w.email as by_email, a.before, a.after
+    `select a.id::text as id, a.at, w.name as by_name, coalesce(w.deleted_was->>'email', w.email) as by_email, a.before, a.after
        from audit a join users u on u.id = a.entity_id and u.business_id = $1
        left join users w on w.id::text = a.actor
       where a.entity = 'user' and a.action = 'rights' and a.entity_id = $2

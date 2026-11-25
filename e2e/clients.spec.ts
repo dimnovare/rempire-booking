@@ -4,7 +4,7 @@ import type { Page } from "@playwright/test";
 import { TABS } from "../src/app/admin/(app)/clients/card-fields";
 import { readXlsx } from "../src/lib/xlsx";
 import { OUT } from "./env";
-import { A, asOwner, expect, expectNoSideScroll, hydrated, nextWorkday, smallTargets, test, toast } from "./helpers";
+import { A, asOwner, expect, expectNoSideScroll, hydrated, nextWorkday, openFolds, smallTargets, test, toast } from "./helpers";
 
 /**
  * «Клиенты», the client base in the admin, and the bar that now holds four
@@ -57,8 +57,9 @@ test.describe("clients", () => {
     await hydrated(page);
     await expect(page.getByRole("heading", { level: 1, name: A.more.title })).toBeVisible();
     const others = page.locator(".adm-more .adm-item:visible");
-    // (the last one is the sidebar's tile on a wide screen: e2e/frame.spec.ts); «Запросы» is a row, «Основные показатели» the tab «Отчёты»
-    await expect(others.locator("b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.nav.notifications, A.sale.title]);
+    // the sidebar's order and folds (the last one is the sidebar's tile on a wide screen: e2e/frame.spec.ts); «Запросы» is a row, «Основные показатели» the tab «Отчёты»
+    await openFolds(page);
+    await expect(others.locator("b")).toHaveText([A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.staffList, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.requests, A.more.notifySalon, A.nav.brand, A.nav.contacts, A.nav.gallery, A.nav.online, A.sale.title]);
     await expect(bar(page).getByRole("link", { name: A.nav.more })).toHaveAttribute("aria-current", "page");
     await expect(bar(page).locator('a[aria-current="page"]:visible')).toHaveCount(1);
     await expect(page).toHaveTitle(`${A.nav.more} · REMPIRE`);
@@ -67,13 +68,15 @@ test.describe("clients", () => {
     await shot(page, "more");
 
     // a section behind «Ещё»: its page opens, the tab says its name, «Ещё» stays lit
-    for (const [name, url, title] of [
-      [A.nav.services, /\/admin\/services$/, A.services.title],
-      [A.nav.staff, /\/admin\/staff$/, A.staff.title],
+    // the row's name on «Ещё», then the section's own: «Список» under «Сотрудники» is «Барберы»
+    for (const [row, url, title, name] of [
+      [A.nav.services, /\/admin\/services$/, A.services.title, A.nav.services],
+      [A.nav.staffList, /\/admin\/staff$/, A.staff.title, A.nav.staff],
     ] as const) {
       await page.goto("/admin/more");
       await hydrated(page);
-      await page.locator(".adm-more .adm-item:visible", { hasText: name }).click();
+      await openFolds(page);
+      await page.locator(".adm-more .adm-item:visible", { hasText: row }).click();
       await page.waitForURL(url);
       await expect(page.getByRole("heading", { level: 1, name: title }).first()).toBeVisible();
       await expect(bar(page).getByRole("link", { name: A.nav.more })).toHaveAttribute("aria-current", "page");
@@ -416,7 +419,8 @@ test.describe("clients", () => {
       // «Ещё» by its address still works here: the same rows
       await page.goto("/admin/more");
       await hydrated(page);
-      await expect(page.locator(".adm-more .adm-item:visible b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.nav.notifications, A.sale.title]);
+      await openFolds(page);
+      await expect(page.locator(".adm-more .adm-item:visible b")).toHaveText([A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.staffList, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.requests, A.more.notifySalon, A.nav.brand, A.nav.contacts, A.nav.gallery, A.nav.online, A.sale.title]);
     });
 
     test("a client's card is a 900px drawer over the list: its seven tabs, «Сохранить», the question before leaving, a comment, a file, a message", async ({ page, browser }, info) => {

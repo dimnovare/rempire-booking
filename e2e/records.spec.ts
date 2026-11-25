@@ -4,7 +4,7 @@ import type { Page } from "@playwright/test";
 import { defaultRecords } from "../src/lib/admin/record-filter";
 import { readXlsx } from "../src/lib/xlsx";
 import { OUT } from "./env";
-import { A, asOwner, demoId, expect, expectNoSideScroll, hydrated, smallTargets, tallinnDate, test, toast } from "./helpers";
+import { A, asOwner, demoId, expect, expectNoSideScroll, hydrated, openFolds, smallTargets, tallinnDate, test, toast } from "./helpers";
 
 /**
  * «Записи» (/admin/records): every visit in one table, the first page of
@@ -289,6 +289,7 @@ test.describe("records", () => {
     // from «Ещё»
     await page.goto("/admin/more");
     await hydrated(page);
+    await openFolds(page);
     await page.locator(".adm-more .adm-item:visible", { hasText: A.nav.records }).click();
     await page.waitForURL(/\/admin\/records$/);
     await hydrated(page);

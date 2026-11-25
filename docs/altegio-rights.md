@@ -459,7 +459,7 @@ Paths are under `src/`. «→» names the function.
 | **8. Настройки** | | |
 | Доступ к системным настройкам | `settings.system` | `app/admin/(app)/requests/actions.ts` → `setReminder` |
 | Управлять пользователями | `settings.users` | `app/admin/(app)/account/page.tsx` (the logins); `account/actions.ts` → `linkUserStaff` |
-| ↳ Удалять пользователей (ours: switch a login off or on) | `settings.users.remove` | `account/actions.ts` → `toggleUser` |
+| ↳ Удалять пользователей (ours: switch a login off or on, and «Удалить вход», 25.11) | `settings.users.remove` | `account/actions.ts` → `toggleUser`, `deleteUserAction`, `restoreUserAction` |
 | ↳ Приглашение пользователей к управлению локацией | `settings.users.invite` | `account/actions.ts` → `addUser`; `lib/auth/rights-store.ts` → `mayAddLogin` |
 | ↳ Управлять правами пользователей | `settings.users.rights` | `account/[id]/page.tsx`; `account/actions.ts` → `saveRightsAction`, `copyRightsAction`; `lib/auth/rights-store.ts` → `saveRights` |
 | Настройка списка категорий клиентов (ours: a category word nobody has yet) | `settings.categories` | `lib/admin/clients.ts` → `saveClient`; `lib/admin/client-bulk.ts` → `bulkAddLabel` |

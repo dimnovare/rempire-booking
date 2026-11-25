@@ -31,6 +31,8 @@
   --warn: #d92d20;
   --on-warn: #fff;
   --ok: #17845a;
+  /* Altegio's blue for a link inside a page */
+  --link: #003acc;
   /* the frame: dark, as Altegio's sidebar */
   --chrome: #22222e;
   --chrome-2: #14141c;
@@ -235,6 +237,7 @@ html, body { background: var(--ink); }
   .sb-row > svg:first-child { flex: none; }
   .sb-row > svg:last-child:not(:first-child) { flex: none; color: #dfe4ed; transition: transform .25s ease-out; }
   .sb-row:hover { background: var(--sb-card); }
+  .sb-row[data-n]::after { content: attr(data-n); flex: none; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--warn); color: #fff; font: 600 12px/20px var(--display); text-align: center; }
   /* A group's head stays put when it opens (Dim's video, 25.11): 196 wide at x 12, closed, hovered or open,
      its icon at 20 and its words at 52 as a plain row's. The dark card grows outward, 4px round it (204 wide
      at x 8, corners 10), drawn by the shadow, so nothing inside moves. */
@@ -393,6 +396,42 @@ html, body { background: var(--ink); }
 .adm-pw button:hover, .adm-pw button[aria-pressed="true"] { color: var(--fg); }
 .adm-or { display: flex; align-items: center; gap: 12px; color: var(--dim); font-size: 13px; }
 .adm-or::before, .adm-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+/* One login page for both apps (src/components/login/panel.tsx; design
+   artifact 53PfD3DxCRkbDyjwLVvBHB, «Вход»): white on a phone; from 600px a
+   white card on Altegio's night-black. */
+.lp { min-height: calc(100dvh - var(--test-h)); background: var(--raise); }
+.lp-card { max-width: 400px; margin: 0 auto; padding: max(40px, calc(env(safe-area-inset-top, 0px) + 24px)) 20px max(32px, env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 16px; }
+.lp .logo { align-self: center; height: 28px; filter: invert(1); }
+.lp-box { display: flex; flex-direction: column; gap: 16px; }
+.lp-wait { min-height: 360px; }
+.lp-lead { margin: -8px 0 0; text-align: center; color: var(--mute); font-size: 14px; }
+.lp-h1 { margin: 4px 0 0; text-align: center; font: 500 24px/32px var(--display); }
+.lp-seg, .ac-seg { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--raise-2); }
+.lp-seg button, .ac-seg button { flex: 1; min-height: 40px; padding: 0 10px; border-radius: 8px; color: var(--mute); font: 500 14px/1 var(--display); text-align: center; white-space: nowrap; }
+.lp-seg button[aria-pressed="true"], .ac-seg button[aria-pressed="true"] { background: var(--raise); color: var(--fg); box-shadow: 0 1px 2px rgba(8, 8, 12, .1); }
+.lp .adm-err a { color: var(--link); }
+.lp-hint { margin: 0; text-align: center; color: var(--dim); font-size: 13px; }
+.lp-sent { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 12px 14px; border-radius: 10px; background: var(--raise-2); font-size: 14px; }
+.lp-sent p { margin: 0; overflow-wrap: anywhere; }
+.lp-lnk { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; color: var(--link) !important; font-size: 14px; text-decoration: none; }
+.lp-lnk:hover { text-decoration: underline; text-underline-offset: 3px; }
+.lp-sent .lp-lnk { min-height: 32px; }
+.lp-resend { display: flex; justify-content: center; }
+:where(.adm) input.lp-code { min-height: 56px; font-size: 24px; letter-spacing: 6px; text-align: center; font-variant-numeric: tabular-nums; }
+.lp-google { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 0 18px; border: 2px solid #e0e3eb; border-radius: 8px; background: var(--raise); color: var(--fg); font: 600 14px/1 var(--display); text-decoration: none; }
+.lp-google:hover { border-color: var(--line-2); background: var(--ink); }
+.lp-lang { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 16px; margin-top: 4px; }
+.lp-lang button { min-height: 44px; padding: 0 4px; color: var(--link); font-size: 14px; }
+.lp-lang button[aria-current="true"] { color: var(--fg); font-weight: 600; cursor: default; }
+.lp-install { align-self: center; }
+@media (max-width: 599px) {
+  .lp-main { min-height: 56px; border-radius: 12px; font-size: 16px; }
+}
+@media (min-width: 600px) {
+  .lp { display: grid; place-items: center; padding: 48px 16px; background: #08080c; }
+  .lp-card { width: 400px; margin: 0; padding: 32px; border-radius: 16px; background: var(--raise); }
+}
 
 /* ---------- calendar ----------
    One markup for a phone and for the journal from 900px (calendar.tsx). Every place on the grid is given in
@@ -759,7 +798,9 @@ button.cal-head:hover b { color: var(--accent); }
 .adm-client { display: flex; align-items: center; gap: 12px; background: var(--lime-bg); border: 1px solid var(--lime); border-radius: 8px; padding: 8px 4px 8px 12px; }
 .adm-toast { position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom, 0px)); z-index: 60; margin: 0 auto; max-width: 520px; padding: 12px 16px; border-radius: 8px; box-shadow: 0 6px 20px rgba(34, 34, 46, .18); background: var(--fg); color: #fff; font-size: 14px; }
 .adm-toast.is-bad { background: var(--warn); color: var(--on-warn); }
-@media (min-width: 900px) { .adm-toast { bottom: 24px; left: calc(var(--side-w) + 24px); right: auto; margin: 0; } }
+.adm-frame-toast { display: flex; align-items: center; gap: 12px; }
+.adm-frame-toast svg { flex: none; color: #ffd940; }
+@media (min-width: 900px) { .adm-toast { bottom: 24px; left: calc(var(--side-w) + 24px); right: auto; margin: 0; } .adm-frame-toast { left: calc(var(--side-w) + (100vw - var(--side-w)) / 2); max-width: min(640px, calc(100vw - var(--side-w) - 48px)); transform: translateX(-50%); font-size: 13px; padding: 10px 14px; border-radius: 10px; } }
 
 /* ---------- lists: barbers, services, logins ---------- */
 .adm-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
@@ -868,22 +909,236 @@ button.cal-head:hover b { color: var(--accent); }
   .adm-fold2-h { margin: 0 0 12px; font: 600 13px/1 var(--display); color: var(--mute); }
   .adm-fold2-body { display: block; padding: 0; }
 }
-.adm-users li { min-height: 60px; }
-.adm-users .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.adm-users .tx > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.adm-users li.is-off { opacity: .55; }
 .adm-linkstaff { display: flex; align-items: center; gap: 8px; margin-top: 3px; color: var(--mute); font-size: 13px; }
 .adm-linkstaff select { width: auto; min-width: 0; max-width: 60%; min-height: 40px; padding: 0 28px 0 10px; font-size: 14px; }
 
-/* ---------- «Запросы»: the barbers' requests (Phase B, B4) ---------- */
-.adm-req > li { padding: 12px 0; }
-.adm-req-row { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.adm-req-row > b { font: 600 18px/1.1 var(--display); }
-.adm-req-row .plain { font-size: 16px; line-height: 1.35; overflow-wrap: anywhere; }
-.adm-req-row small { color: var(--mute); font-size: 13px; overflow-wrap: anywhere; }
-.adm-req-row .tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.adm-req-row .adm-btns { margin-top: 4px; }
-.adm-req-n { margin-left: 8px; }
+/* ---------- «Доступ» (account/page.tsx, access.tsx): Altegio's staff list.
+   On a phone each login is a card; from 900px a row of the table. ---------- */
+.ac-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.ac-title { min-width: 0; }
+.ac-sub { margin: 2px 0 0; color: var(--dim); font-size: 13px; }
+.ac-add { flex: none; }
+.ac-tabs { display: flex; gap: 2px; margin-top: 16px; padding: 3px; border-radius: 10px; background: var(--raise-2); }
+.ac-tabs a { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; border-radius: 8px; color: var(--mute); font: 500 14px/1 var(--display); text-decoration: none; }
+.ac-tabs a[aria-current="page"] { background: var(--raise); color: var(--fg); box-shadow: 0 1px 2px rgba(8, 8, 12, .1); }
+.ac-tabs .n { color: var(--dim); font-weight: 400; }
+.ac-list { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.ac-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ac-search { position: relative; flex: 1 1 100%; display: flex; align-items: center; }
+.ac-search svg { position: absolute; left: 12px; color: #9aa3b1; pointer-events: none; }
+:where(.adm) .ac-search input { padding-left: 36px; }
+.ac-tools select { flex: 1 1 0; }
+.ac-found { flex: 1 1 100%; color: var(--dim); font-size: 12px; }
+/* «Мой вход»: the language as the design's grey switch with a white pick, as «Код из письма / Пароль» on the login */
+.ac-me-v .adm-seg { gap: 2px; padding: 3px; border: 0; border-radius: 10px; background: var(--raise-2); }
+.ac-me-v .adm-seg button { min-height: 40px; border-radius: 8px; font: 500 14px/1 var(--display); }
+.ac-me-v .adm-seg button[aria-pressed="true"] { background: var(--raise); color: var(--fg); box-shadow: 0 1px 2px rgba(8, 8, 12, .1); }
+.ac-note { display: flex; align-items: flex-start; gap: 8px; margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--lime-bg); font-size: 13px; }
+.ac-note svg { flex: none; margin-top: 1px; }
+.ac-table { display: flex; flex-direction: column; gap: 8px; }
+.ac-cols { display: none; }
+.ac-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 12px; padding: 12px; border: 1px solid #eef0f4; border-radius: 12px; background: var(--raise); }
+.ac-who { grid-column: 1; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.ac-role, .ac-barber, .ac-last { grid-column: 1; min-width: 0; padding-left: 46px; font-size: 14px; }
+.ac-how { display: none; }
+.ac-sw { grid-column: 2; grid-row: 1 / span 4; align-self: start; display: flex; align-items: center; min-height: 36px; }
+/* a phone's «⋯» (design «Доступ, телефон: действия»): beside the switch, it opens the row's sheet */
+.ac-acts { grid-column: 3; grid-row: 1 / span 4; align-self: start; display: flex; margin: -4px -8px 0 -8px; }
+.ac-acts .jr-pop-wrap { display: none; }
+.ac-more.adm-ibtn { border-color: transparent !important; background: none; color: var(--mute); }
+/* the row's sheet on a phone: its actions as big rows, «Удалить вход» apart, in red */
+.ac-sheet-mail { margin: -6px 0 0; color: var(--dim); font-size: 14px; overflow-wrap: anywhere; }
+.ac-sheet-menu { display: flex; flex-direction: column; margin-top: -8px; }
+.ac-sheet-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 52px; padding: 0 4px; border: 0; background: none; color: var(--fg); font: 500 16px/20px var(--body); text-align: left; text-decoration: none; }
+.ac-sheet-item svg { flex: none; color: var(--dim); }
+.ac-sheet-item.is-red { color: #d92d20; }
+.ac-sheet-item:disabled { color: var(--dim); cursor: default; }
+.ac-sheet-sep { height: 1px; margin: 4px 0; background: var(--line); }
+.ac-own { display: block; padding: 0 4px 6px; color: var(--dim); font-size: 13px; line-height: 18px; white-space: normal; }
+.ac-sheet-cancel { width: 100%; }
+/* «Удалить этот вход?»: who exactly, what goes and stays, the softer way for a login still on */
+.cc-ask.ac-del { max-width: 460px; }
+.cc-ask.ac-del h2 { font-weight: 600; line-height: 26px; }
+.ac-del-who { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: var(--ink); }
+.ac-del-who > span:last-child { min-width: 0; display: flex; flex-direction: column; }
+.ac-del-who b { font-weight: 600; }
+.ac-del-who small { color: var(--mute); font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.cc-ask p.ac-del-soft { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border-radius: 8px; background: #f3f5f9; }
+.ac-del-soft svg { flex: none; margin-top: 2px; color: var(--mute); }
+.ac-lnk { display: inline; min-height: 0; padding: 0; border: 0; background: none; color: var(--link); font: inherit; font-weight: 500; cursor: pointer; }
+.ac-lnk:hover { text-decoration: underline; text-underline-offset: 3px; }
+.ac-del .cc-ask-btns { margin-top: 8px; }
+.ac-del .cc-ask-btns .cc-btn { flex: 1; }
+/* the toast's own button: «Вернуть» */
+.adm-toast-act { flex: none; margin-left: auto; padding: 4px 0; border: 0; background: none; color: #ffd940; font: inherit; font-weight: 600; cursor: pointer; }
+.adm-toast-act:hover { text-decoration: underline; text-underline-offset: 3px; }
+.adm-frame-toast > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ac-av { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: var(--fg); color: #fff; font: 600 13px/1 var(--display); }
+.ac-row.is-off .ac-av { background: #eef1f6; color: var(--mute); }
+.ac-sw .adm-sw:disabled { opacity: .4; cursor: not-allowed; }
+.ac-av.is-l { width: 48px; height: 48px; font-size: 18px; }
+.ac-id { min-width: 0; display: flex; flex-direction: column; }
+.ac-name { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; }
+.ac-name b { font-size: 14px; line-height: 20px; font-weight: 500; }
+.ac-id small { overflow: hidden; color: var(--dim); font-size: 12px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.ac-tag { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 4px; background: #f0f3f8; color: var(--mute); font-size: 11px; font-weight: 500; white-space: nowrap; }
+.ac-tag.is-you { background: var(--lime-bg); color: var(--fg); }
+.ac-row.is-off :is(.ac-who, .ac-role, .ac-barber, .ac-how, .ac-last) { opacity: .55; }
+.ac-role a { display: inline-flex; align-items: center; min-height: 32px; color: var(--link); font-weight: 500; text-decoration: none; }
+.ac-role a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.ac-mute, .ac-ph { color: var(--dim); }
+.ac-barber .adm-linkstaff { margin: 0; }
+.ac-none { margin: 0; padding: 24px 12px; text-align: center; color: var(--dim); }
+/* «Мой вход» */
+.ac-me-wrap { display: flex; flex-direction: column; gap: 16px; max-width: 720px; margin-top: 16px; }
+.ac-card { padding: 16px; border: 1px solid #eef0f4; border-radius: 12px; background: var(--raise); }
+.ac-me-head { display: flex; align-items: center; gap: 12px; }
+.ac-me-head .ac-name b { font-size: 16px; font-weight: 600; }
+.ac-me-row { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); }
+.ac-me-k { font-weight: 500; }
+.ac-me-v { min-width: 0; }
+.ac-me-line { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.ac-me-line .ac-mute { flex: 1 1 240px; font-size: 14px; }
+.ac-hint { margin: 6px 0 0; color: var(--dim); font-size: 13px; }
+.ac-out { display: flex; align-items: center; gap: 16px; }
+.ac-out > div { flex: 1; min-width: 0; }
+.ac-out .ac-hint { margin-top: 2px; }
+/* the drawer «Новый вход»: the eight roles and «Как будет входить» as cards to pick */
+.ac-new { gap: 16px; }
+.ac-req { color: var(--warn); font-style: normal; }
+.ac-set { min-width: 0; display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; border: 0; }
+.ac-set legend { margin-bottom: 8px; padding: 0; font-size: 14px; font-weight: 600; }
+.ac-set legend .dw-note { margin-left: 6px; font-weight: 400; }
+.ac-opts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.ac-opt { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--raise); cursor: pointer; }
+.ac-opt:has(input:checked) { padding: 9px 11px; border: 2px solid var(--lime); background: var(--lime-bg); }
+.ac-opt input { flex: none; width: 18px; height: 18px; min-height: 18px; margin: 1px 0 0; padding: 0; accent-color: var(--fg); }
+.ac-opt > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ac-opt b { font-size: 14px; font-weight: 600; }
+.ac-opt small { color: var(--dim); font-size: 12px; line-height: 16px; }
+.ac-first { margin-top: 4px; }
+.ac-new .dw-pair { grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 600px) {
+  .ac-opts, .ac-new .dw-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 900px) {
+  .ac-tabs { gap: 24px; padding: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; }
+  .ac-tabs a { flex: none; margin-bottom: -1px; padding: 0 2px; border-bottom: 2px solid transparent; border-radius: 0; }
+  .ac-tabs a[aria-current="page"] { border-bottom-color: var(--lime); background: none; box-shadow: none; }
+  .ac-search { flex: 0 1 320px; }
+  .ac-tools select { flex: none; width: auto; min-height: 36px; font-size: 13px; }
+  :where(.adm) .ac-search input { min-height: 36px; font-size: 13px; }
+  .ac-found { flex: 1; text-align: right; }
+  /* design: a header line on the grey page, then each login a white bar of its own (as «Сотрудники») */
+  .ac-table { gap: 8px; overflow-x: auto; }
+  .ac-cols, .ac-row { display: grid; grid-template-columns: minmax(160px, 2.3fr) minmax(96px, 1.2fr) minmax(120px, 1.2fr) minmax(90px, 1fr) 48px 40px; gap: 0 12px; align-items: center; min-width: 620px; padding: 0 16px; }
+  .ac-cols { padding-bottom: 0; color: var(--fg); font-size: 14px; line-height: 16px; font-weight: 500; }
+  .ac-row { min-height: 64px; padding: 10px 16px; border: 0; border-radius: 8px; background: var(--raise); }
+  .ac-row:hover { box-shadow: 0 0 0 1px #e3e7ee; }
+  .ac-acts .jr-ibtn { width: 36px; height: 36px; border-color: transparent; background: none; color: var(--mute); }
+  .ac-acts .jr-ibtn:hover { background: #f0f3f8; }
+  .ac-who, .ac-role, .ac-barber, .ac-last, .ac-sw { grid-column: auto; grid-row: auto; padding-left: 0; }
+  .ac-sw { align-self: center; }
+  .ac-role, .ac-barber, .ac-last { font-size: 13px; }
+  .ac-acts { grid-column: auto; grid-row: auto; display: flex; justify-content: flex-end; margin: 0; }
+  .ac-acts .jr-pop-wrap { display: flex; }
+  .ac-more.adm-ibtn { display: none; }
+  /* the row's menu (design «Доступ: меню строки»): 248px, 36px rows, «Удалить вход» below a line, red */
+  .ac-acts .jr-pop { width: 248px; }
+  .ac-acts .jr-item { min-height: 36px; padding: 0 10px; font-size: 13px; }
+  .ac-acts .jr-item.is-red { color: #d92d20; }
+  .ac-acts .jr-item.is-red:hover { background: #fef3f2; }
+  .ac-acts .jr-item:disabled { color: var(--dim); background: none; cursor: default; }
+  .ac-sep { height: 1px; margin: 4px 0; background: var(--line); }
+  .ac-acts .ac-own { padding: 2px 10px 6px; font-size: 12px; line-height: 16px; }
+  .cc-ask.ac-del { padding: 24px; }
+  .ac-del .cc-ask-btns .cc-btn { flex: none; }
+  .ac-del-who small { font-size: 12px; line-height: 16px; }
+  .cc-ask p.ac-del-soft { font-size: 13px; line-height: 18px; }
+  .ac-ph, .ac-barber .adm-linkstaff > span { display: none; }
+  .ac-barber .adm-linkstaff select { max-width: 100%; min-height: 32px; font-size: 13px; }
+  .ac-me-row { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; }
+  .ac-me-k { padding-top: 8px; }
+  .ac-me-v .adm-seg { max-width: 360px; }
+  .ac-me-v .adm-form { max-width: none; }
+  .ac-pw { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 12px; }
+  .ac-pw > :not(.adm-field) { grid-column: 1 / -1; }
+  .ac-pw > .adm-btn { justify-self: start; }
+}
+@media (min-width: 1200px) {
+  .ac-cols, .ac-row { grid-template-columns: minmax(200px, 2.3fr) minmax(110px, 1.3fr) minmax(130px, 1.3fr) minmax(110px, 1.1fr) minmax(100px, 1.1fr) 48px 40px; gap: 0 16px; min-width: 0; }
+  .ac-row .ac-how, .ac-cols .ac-how { display: flex; align-items: center; gap: 6px; }
+  .ac-row .ac-how { color: var(--mute); font-size: 13px; }
+}
+
+/* ---------- «Запросы»: the barbers' requests (Phase B, B4; design artifact
+   53PfD3DxCRkbDyjwLVvBHB, 25.11.2026). A card per request; from 900px
+   three columns: the barber, what changes, the answer. ---------- */
+.rq-head { min-width: 0; }
+.rq-pill { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: var(--warn); color: #fff; font: 600 12px/1 var(--display); }
+.rq { margin-top: 16px; }
+.rq-tools { display: none; }
+.rq-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.rq-chip { min-height: 32px; padding: 0 12px; border: 1px solid var(--line-2); border-radius: 16px; background: var(--raise); color: var(--fg); font-size: 13px; font-weight: 500; cursor: pointer; }
+.rq-chip[aria-pressed="true"] { background: var(--fg); border-color: var(--fg); color: #fff; }
+.rq-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.rq-card { min-width: 0; padding: 16px; border: 1px solid #eef0f4; border-radius: 12px; background: var(--raise); }
+.rq-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rq-who b { font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.rq-body { min-width: 0; margin-top: 8px; }
+.rq-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.rq-meta small { color: var(--mute); font-size: 13px; }
+.rq-kind { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 10px; background: var(--fg); color: #fff; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.rq-line { margin: 8px 0 0; font-size: 15px; line-height: 20px; overflow-wrap: anywhere; }
+.rq-nb { white-space: nowrap; }
+.rq-diff { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 8px 0 0; font-size: 14px; line-height: 20px; }
+.rq-diff dt { color: var(--mute); }
+.rq-diff dd { margin: 0; overflow-wrap: anywhere; }
+.rq-his { margin: 6px 0 0; color: var(--mute); font-size: 14px; overflow-wrap: anywhere; }
+.rq-warn { display: flex; align-items: flex-start; gap: 10px; margin: 10px 0 0; padding: 10px 12px; border-radius: 8px; background: #fef3f2; color: #912018; font-size: 14px; line-height: 20px; }
+.rq-warn svg { flex: none; margin-top: 1px; }
+.rq-warn a { color: #912018; font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
+.rq-note { margin-top: 12px; }
+.rq-note textarea { min-height: 64px; resize: vertical; }
+.rq-acts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "no yes" "link link"; gap: 8px; margin-top: 12px; }
+.rq-acts .adm-btn { width: 100%; justify-content: center; gap: 6px; }
+.rq-yes { grid-area: yes; }
+.rq-no { grid-area: no; position: relative; }
+/* «Отклонить»'s small window, under its button (design artifact, 25.11): over the card on a phone, 340px from its right edge on a computer */
+.rq-pop { position: absolute; top: calc(100% + 8px); left: 0; z-index: 5; width: calc(200% + 8px); padding: 16px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--raise); box-shadow: 0 12px 32px rgba(8, 8, 12, .18); }
+.rq-pop-title { margin: 0 0 8px; font-weight: 600; font-size: 15px; }
+.rq-pop .rq-note { margin-top: 0; }
+.rq-pop-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.rq-pop-acts .adm-btn { width: auto; }
+.rq-link { grid-area: link; justify-self: start; display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0; border: 0; background: none; color: var(--link); font-size: 14px; font-weight: 500; cursor: pointer; }
+.rq-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.rq-status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.rq-status small { color: var(--mute); font-size: 13px; }
+.rq-state { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 10px; background: var(--raise-2); color: var(--mute); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.rq-state.is-ok { background: #e3f4ec; color: #0f6b47; }
+.rq-state.is-red { background: #fde8e6; color: #b42318; }
+.rq-none { margin: 0; padding: 32px 12px; border-radius: 12px; background: var(--raise); color: var(--dim); text-align: center; }
+@media (min-width: 600px) {
+  .rq-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; }
+  .rq-tools select { flex: none; width: auto; min-height: 36px; font-size: 13px; }
+}
+@media (min-width: 900px) {
+  .rq-card { display: grid; grid-template-columns: 200px minmax(0, 1fr) 220px; gap: 24px; border-radius: 8px; }
+  .rq-who { align-self: start; }
+  .rq-who b { font-size: 15px; }
+  .rq-body { margin-top: 0; }
+  .rq-meta small { font-size: 12px; }
+  .rq-line { font-size: 14px; }
+  .rq-diff { font-size: 13px; }
+  .rq-acts { display: flex; flex-direction: column; align-items: stretch; margin-top: 0; }
+  .rq-acts .adm-btn { min-height: 36px; font-size: 13px; }
+  .rq-link { align-self: flex-start; min-height: 32px; }
+  .rq-pop { left: auto; right: 0; width: 340px; }
+  :where(.adm) .rq-pop textarea { min-height: 72px; font-size: 14px; }
+  :where(.adm) .rq-pop textarea:focus { border-color: #ffcb00; box-shadow: inset 0 0 0 1px #ffcb00; }
+  .rq-pop textarea:focus-visible { outline: none; }
+  .rq-status { flex-direction: column; align-items: flex-start; align-self: start; margin-top: 0; gap: 4px; }
+}
 
 /* ---------- «Счета»: the invoicing tool's own frame (the owner, 19.11.2026) ----------
    Inside /admin/invoices the section wears the frame of the invoicing tool Renat used until now
@@ -1376,10 +1631,26 @@ th.n .iv-sort { flex-direction: row-reverse; }
 .mo-group h2 { margin: 0; font: 600 12px/16px var(--body); color: #71757f; }
 .mo-list { list-style: none; margin: 0; padding: 0; background: #fff; border: 1px solid #e0e3eb; border-radius: 12px; overflow: hidden; }
 .mo-list > li + li { border-top: 1px solid #eef1f6; }
-.mo-row, .adm-more .adm-item.mo-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 0 14px; color: #2b3134; text-align: left; text-decoration: none; }
-.mo-row b { flex: 1; min-width: 0; font: 500 15px/20px var(--body); }
-.mo-row small { flex: none; max-width: 55%; font: 400 13px/18px var(--body); color: #71757f; text-align: right; }
-.mo-row::after { content: "›"; flex: none; color: #9aa3b1; font: 400 14px/20px var(--body); }
+.mo-row, .adm-more .adm-item.mo-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 0 14px; color: #2b3134; text-align: left; text-decoration: none; cursor: pointer; }
+/* the row's name, and under it a line of what is inside («смены, перерывы, отпуск») */
+.mo-row .tx { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 6px 0; }
+.mo-row b { min-width: 0; font: 500 15px/20px var(--body); overflow-wrap: anywhere; }
+.mo-row small { font: 400 13px/18px var(--body); color: #71757f; }
+.mo-row .mo-val { flex: none; max-width: 50%; font: 400 14px/20px var(--body); text-align: right; }
+.mo-row::after { content: "›"; flex: none; color: #9aa3b1; font: 400 14px/20px var(--body); transition: transform .15s ease-out; }
+/* «Отчёты», «Сотрудники», «Настройки»: a row that opens its pages under it, as the sidebar does */
+.mo-fold > summary { list-style: none; }
+.mo-fold > summary::-webkit-details-marker { display: none; }
+.mo-fold[open] > summary b { font-weight: 600; }
+.mo-fold[open] > summary::after { transform: rotate(90deg); }
+.mo-subs { list-style: none; margin: 0; padding: 0 0 6px; }
+.adm-more .adm-item.mo-row.mo-sub { min-height: 44px; padding-left: 28px; }
+.mo-sub b { font-weight: 400; font-size: 14px; }
+.mo-sub::after { content: none; }
+/* «Выйти на этом телефоне»: apart from the lists, in red */
+.mo-out { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 48px; margin-top: 4px; border: 1px solid #e0e3eb; border-radius: 12px; background: #fff; color: var(--warn); font: 500 15px/20px var(--body); cursor: pointer; }
+.mo-out:disabled { opacity: .5; cursor: default; }
+@media (hover: hover) { .mo-out:hover { background: #fef3f2; } }
 .mo-row:focus-visible { outline-offset: -2px; }
 @media (hover: hover) { .mo-row:hover { background: #f7f9fc; } }
 
@@ -1605,6 +1876,8 @@ th.n .iv-sort { flex-direction: row-reverse; }
 .cc-btn:not(:disabled):hover { border-color: #c6cbd3; }
 .cc-btn-main { border-color: var(--lime); background: var(--lime); color: var(--on-lime); }
 .cc-btn-main:not(:disabled):hover { border-color: var(--lime); filter: brightness(1.04); }
+.cc-btn-red { border-color: #d92d20; background: #d92d20; color: #fff; }
+.cc-btn-red:not(:disabled):hover { border-color: #b42318; background: #b42318; }
 .cc-btn-ico { width: 44px; padding: 0; }
 .cc-btn-start { align-self: flex-start; }
 .cc-foot { position: sticky; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom, 0px)); z-index: 4; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 64px; padding: 8px max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); background: var(--raise); border-top: 1px solid #e0e3eb; }
@@ -1703,6 +1976,7 @@ th.n .iv-sort { flex-direction: row-reverse; }
 .cc-ask { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 12px; padding: 20px; border-radius: 12px; background: var(--raise); color: var(--fg); box-shadow: rgba(6, 19, 51, .24) 0 12px 48px; }
 .cc-ask h2 { margin: 0; font: 500 18px/24px var(--body); overflow-wrap: anywhere; }
 .cc-ask p { margin: 0; font-size: 14px; line-height: 20px; overflow-wrap: anywhere; }
+.cc-ask p.ac-mute { margin-top: -4px; font-size: 12px; line-height: 16px; }
 .cc-ask-btns { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 @media (min-width: 900px) {
   .cc { position: fixed; z-index: 45; top: var(--head-h); right: 0; bottom: 0; width: 900px; max-width: calc(100vw - var(--side-w)); min-height: 0; background: #fff; color: #2b3134; font: 400 12px/16px var(--body); box-shadow: rgba(6, 19, 51, .24) 0 12px 48px; }
@@ -1778,6 +2052,11 @@ th.n .iv-sort { flex-direction: row-reverse; }
 .dw-col { flex: none; min-width: 0; display: flex; flex-direction: column; gap: 12px; padding: 12px; border-radius: 8px; background: var(--raise); }
 .dw-col > p { margin: 0; }
 .dw-foot { flex: none; min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px max(16px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); background: var(--raise); border-top: 1px solid #e0e3eb; }
+.dw-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 64px; padding: max(8px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 8px max(16px, env(safe-area-inset-left, 0px)); background: var(--raise); border-bottom: 1px solid #e0e3eb; }
+.dw-head h2 { margin: 0; min-width: 0; font: 500 20px/28px var(--display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dw-x { flex: none; display: inline-grid; place-items: center; width: 44px; height: 44px; margin-right: -10px; border: 0; border-radius: 8px; background: none; color: var(--mute); cursor: pointer; }
+.dw-x:hover { background: var(--raise-2); color: var(--fg); }
+.dw.has-head .dw-body { background: var(--raise); padding-top: 16px; }
 .dw-foot h2 { margin: 0; min-width: 0; font: 500 16px/24px var(--body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dw-acts { flex: none; display: flex; gap: 8px; }
 .dw-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; border: 1px solid #e0e3eb; border-radius: 8px; background: var(--raise); color: var(--fg); font: 500 14px/16px var(--body); text-decoration: none; white-space: nowrap; }
@@ -2038,7 +2317,6 @@ th.n .iv-sort { flex-direction: row-reverse; }
    switches 42 × 24 that are yellow when on. Controls are 32px high from 900px; on a phone they are 40px with
    16px type, so a finger hits them and iOS does not zoom into a field. One column down to 360px: nothing here
    is wider than its page. */
-.adm-user-acts { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
 .adm-norights { display: flex; flex-direction: column; gap: 8px; padding: 24px 0; }
 
 .rt { width: 100%; max-width: 860px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }

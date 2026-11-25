@@ -1,27 +1,36 @@
 "use client";
 
 /**
- * «Продать», in as few taps as a till: pick «Клиенту» or «Себе», scan (or
- * type, or take a photo), check the price and the 17 %, tap the one button.
+ * «Продать», in as few taps as a till (the design board «Продать», 25.11):
+ * scan first (or type the name, or take a photo), then the product's card
+ * with «Клиенту | Себе» next to the price it changes, his share before he
+ * sells, and the one big button.
  *
  * A sale never goes twice and is never lost on a bad connection: its `ref`
  * is made here first and kept on this phone until the server has it, and
  * the server treats the same ref as the same sale. A sale that could not be
- * sent waits here («ждёт интернета») and goes when the phone is back online.
+ * sent waits here («уйдёт, когда будет интернет») and goes when the phone is
+ * back online.
  */
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { euroText } from "@/lib/money";
+import { hm } from "../../copy.shared";
 import { useB } from "../../lang";
 import { barcodeAction, photoAction, searchAction, sellAction, undoAction, type Found, type SellProduct } from "./actions";
+import { Ic } from "./icons";
 import { Scanner, shrinkPhoto } from "./scanner";
 
 type Mode = "client" | "self";
 type Today = { ref: string; name: string; qty: number; mode: string; totalCents: number; commissionCents: number; status: string; sync: string; noPurchase: boolean; at: string; reversal: boolean };
-type Pending = { ref: string; productId: string; variant: string; mode: Mode; qty: number; expectCents: number; name: string; totalCents: number; at: number };
+/** `shareCents`: his share as the card showed it (the server counts the real one); none in a sale kept before 25.11. */
+type Pending = { ref: string; productId: string; variant: string; mode: Mode; qty: number; expectCents: number; name: string; totalCents: number; at: number; shareCents?: number };
 type Look = "idle" | "looking" | "photo" | "shop_down" | "empty" | "photo_none" | "not_found" | "photo_pick";
+type Msg = { kind: "ok" | "bad" | "wait"; text: string };
 
 const keyOf = (staffId: string) => `rempire.sell.pending.${staffId}`;
+/** How often the undo buttons look at the clock: one goes within seconds of its end. */
+const TICK = 5_000;
 
 function readPending(staffId: string): Pending[] {
   try {
@@ -52,6 +61,7 @@ const unitOf = (p: SellProduct, mode: Mode) => (mode === "client" ? p.clientCent
 export function SellView({
   staffId,
   now,
+  tz,
   pct,
   undoMin,
   maxQty,
@@ -76,7 +86,7 @@ export function SellView({
   const [pick, setPick] = useState<SellProduct | null>(null);
   const [qty, setQty] = useState(1);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [msg, setMsg] = useState<Msg | null>(null);
   const [scan, setScan] = useState(false);
   const [pending, setPending] = useState<Pending[]>([]);
   const [clock, setClock] = useState(now);
@@ -137,7 +147,6 @@ export function SellView({
     const online = () => void flush();
     window.addEventListener("online", online);
     const t = window.setInterval(() => {
-      setClock(Date.now());
       if (readPending(staffId).length) void flush();
     }, 15_000);
     return () => {
@@ -208,11 +217,12 @@ export function SellView({
 
   /* ---------- the sale ---------- */
 
+  const unit = pick ? unitOf(pick, mode) : null;
+  const share = pick && mode === "client" ? Math.round(qty * pick.shareCents) : 0;
+
   const sell = async () => {
-    if (!pick) return;
-    const unit = unitOf(pick, mode);
-    if (unit == null) return;
-    const p: Pending = { ref: newRef(), productId: pick.productId, variant: pick.variant, mode, qty, expectCents: unit, name: pick.title, totalCents: unit * qty, at: Date.now() };
+    if (!pick || unit == null) return;
+    const p: Pending = { ref: newRef(), productId: pick.productId, variant: pick.variant, mode, qty, expectCents: unit, name: pick.title, totalCents: unit * qty, at: Date.now(), shareCents: share };
     const list = [...readPending(staffId), p];
     writePending(staffId, list);
     setPending(list);
@@ -221,29 +231,42 @@ export function SellView({
     const r = await send(p);
     setBusy(false);
     if (r === "ok") {
-      setMsg({ ok: true, text: `${mode === "client" ? S.sold : S.taken}: ${pick.title} × ${qty}` });
+      setMsg({ kind: "ok", text: `${mode === "client" ? S.sold : S.taken}: ${pick.title} × ${qty}` });
       setPick(null);
       return;
     }
     if (r === "keep") {
-      setMsg({ ok: false, text: `${pick.title} × ${qty}: ${S.waiting}` });
+      // not an error: it is kept here and goes by itself
+      setMsg({ kind: "wait", text: `${pick.title} × ${qty}: ${S.waiting}` });
       setPick(null);
       return;
     }
-    setMsg({ ok: false, text: r.text });
-    // a new price: the sheet shows it, and the next tap is a new sale at that price
+    setMsg({ kind: "bad", text: r.text });
+    // a new price: the card shows it, and the next tap is a new sale at that price
     if (r.unitCents != null) setPick({ ...pick, ...(mode === "client" ? { clientCents: r.unitCents } : { selfCents: r.unitCents }) });
   };
 
   const undo = async (ref: string) => {
     const r = await undoAction(ref).catch(() => null);
-    if (!r) return setMsg({ ok: false, text: B.error });
-    if (!r.ok) setMsg({ ok: false, text: r.code === "too_late" ? S.tooLate : B.error });
+    if (!r) return setMsg({ kind: "bad", text: B.error });
+    if (!r.ok) setMsg({ kind: "bad", text: r.code === "too_late" ? S.tooLate : B.error });
   };
 
-  const unit = pick ? unitOf(pick, mode) : null;
-  const share = pick && mode === "client" ? Math.round(qty * pick.shareCents) : 0;
+  /* ---------- today ---------- */
+
   const waiting = pending.filter((p) => !today.some((t) => t.ref === p.ref));
+  const undoEnd = (t: Today) => Date.parse(t.at) + undoMin * 60_000;
+  const canUndo = (t: Today) => t.status === "done" && !t.reversal && (t.sync === "queued" || t.sync === "test") && undoEnd(t) > clock;
+  const anyUndo = today.some(canUndo);
+  // the undo buttons go when their window ends, not at the next reload
+  useEffect(() => {
+    if (!anyUndo) return;
+    const t = window.setInterval(() => setClock(Date.now()), TICK);
+    return () => window.clearInterval(t);
+  }, [anyUndo]);
+  const done = today.filter((t) => t.status === "done");
+  const dayCount = waiting.length + done.filter((t) => !t.reversal).length;
+  const dayShare = waiting.reduce((n, p) => n + (p.shareCents ?? 0), 0) + done.reduce((n, t) => n + t.commissionCents, 0);
 
   return (
     <main className="adm-page bx-sell">
@@ -252,92 +275,111 @@ export function SellView({
         {demo && <span className="adm-tag lime">{S.demoShop}</span>}
       </div>
 
-      <div className="adm-seg adm-seg-wide" role="group" aria-label={S.title}>
-        <button type="button" aria-pressed={mode === "client"} onClick={() => setMode("client")}>
-          {S.client}
-        </button>
-        <button type="button" aria-pressed={mode === "self"} onClick={() => setMode("self")}>
-          {S.self}
-        </button>
-      </div>
-
       {msg && (
-        <p className={msg.ok ? "adm-ok bx-sell-msg" : "adm-err bx-sell-msg"} role="status">
+        <p className={msg.kind === "ok" ? "adm-ok bx-sell-msg" : msg.kind === "wait" ? "bx-sell-msg is-wait" : "adm-err bx-sell-msg"} role="status">
           {msg.text}
         </p>
       )}
 
       {pick ? (
-        <section className="adm-card bx-pick">
-          <div className="bx-pick-head">
-            <Thumb src={pick.photo} />
-            <div className="txt">
-              <b>{pick.title}</b>
-              <small>{pick.stock == null ? "" : S.stock(pick.stock)}</small>
-            </div>
-          </div>
-          {unit == null ? (
-            <p className="adm-err">{S.noPurchaseHint}</p>
-          ) : (
-            <>
-              {mode === "self" && pick.selfNoPurchase && <p className="adm-err">{S.noPurchaseZero}</p>}
-              <div className="bx-step" role="group" aria-label={S.qty}>
-                <button type="button" className="adm-ibtn" aria-label="−" disabled={qty <= 1} onClick={() => setQty(qty - 1)}>
-                  −
-                </button>
-                <b>{qty}</b>
-                <button type="button" className="adm-ibtn" aria-label="+" disabled={qty >= maxQty} onClick={() => setQty(qty + 1)}>
-                  +
-                </button>
-              </div>
-              <p className="adm-meta">
-                {qty} × {euroText(unit)}
-                {mode === "client" ? ` · ${S.yours(pct, euroText(share))}` : ` · ${S.selfHint}`}
-              </p>
-              <button type="button" className="adm-btn adm-btn-lime bx-sell-go" disabled={busy} onClick={() => void sell()}>
-                {mode === "client" ? S.sellFor(euroText(unit * qty)) : S.takeFor(euroText(unit * qty))}
-              </button>
-            </>
-          )}
-          <button type="button" className="adm-btn adm-btn-ghost adm-btn-sm" onClick={() => setPick(null)}>
+        <section className="bx-sec">
+          <button type="button" className="bx-lnk" style={{ alignSelf: "flex-start" }} onClick={() => setPick(null)}>
+            <Ic name="left" size={16} />
             {S.change}
           </button>
+          <div className="adm-card bx-pick">
+            <div className="bx-pick-head">
+              <Thumb src={pick.photo} />
+              <div className="txt">
+                <b>{pick.title}</b>
+                {pick.stock != null && <span className={`bx-tag${pick.stock > 0 ? " ok" : ""}`}>{S.stock(pick.stock)}</span>}
+              </div>
+            </div>
+            {/* «Клиенту | Себе» next to the price it changes */}
+            <div className="adm-field">
+              <span>{S.to}</span>
+              <div className="bx-seg" role="group" aria-label={S.to}>
+                <button type="button" aria-pressed={mode === "client"} onClick={() => setMode("client")}>
+                  {S.client}
+                </button>
+                <button type="button" aria-pressed={mode === "self"} onClick={() => setMode("self")}>
+                  {S.self}
+                </button>
+              </div>
+            </div>
+            {unit == null ? (
+              <p className="adm-err">{S.noPurchaseHint}</p>
+            ) : (
+              <>
+                {mode === "self" && pick.selfNoPurchase && <p className="adm-err">{S.noPurchaseZero}</p>}
+                <div className="bx-qty">
+                  <span>{S.qty}</span>
+                  <div className="bx-stepper" role="group" aria-label={S.qty}>
+                    <button type="button" aria-label={S.less} disabled={qty <= 1} onClick={() => setQty(qty - 1)}>
+                      <Ic name="minus" size={20} />
+                    </button>
+                    <output aria-live="polite">{qty}</output>
+                    <button type="button" aria-label={S.more} disabled={qty >= maxQty} onClick={() => setQty(qty + 1)}>
+                      <Ic name="plus" size={20} />
+                    </button>
+                  </div>
+                </div>
+                <dl className="bx-pay">
+                  <dt>{mode === "client" ? S.clientPays(qty, euroText(unit)) : S.selfPays(qty, euroText(unit))}</dt>
+                  <dd>{euroText(unit * qty)}</dd>
+                  {mode === "client" && (
+                    <>
+                      <dt>{S.share(pct)}</dt>
+                      <dd className="is-ok">{euroText(share)}</dd>
+                    </>
+                  )}
+                </dl>
+              </>
+            )}
+          </div>
+          <p className="bx-tip">{S.selfHint(pct)}</p>
         </section>
       ) : (
         <section className="bx-sell-find">
-          <div className="adm-btns">
-            <button type="button" className="adm-btn adm-btn-line adm-btn-auto" onClick={() => setScan(true)}>
-              {S.scan}
-            </button>
-            <button type="button" className="adm-btn adm-btn-ghost adm-btn-auto" onClick={() => file.current?.click()}>
+          <button type="button" className="adm-btn adm-btn-lime bx-big" onClick={() => setScan(true)}>
+            <Ic name="scan" size={22} />
+            {S.scan}
+          </button>
+          <div className="bx-sell-q">
+            <label className="bx-srch">
+              <span className="sr">{S.search}</span>
+              <Ic name="search" size={16} />
+              <input
+                type="search"
+                enterKeyHint="search"
+                autoComplete="off"
+                placeholder={S.searchHint}
+                value={q}
+                onChange={(e) => {
+                  setQ(e.target.value);
+                  if (e.target.value.trim().length < 2) {
+                    seq.current++;
+                    setFound([]);
+                    setLook("idle");
+                  }
+                }}
+              />
+            </label>
+            <button type="button" className="adm-btn adm-btn-line" onClick={() => file.current?.click()}>
+              <Ic name="cam" size={18} />
               {S.photo}
             </button>
-            {/* capture: the phone opens its back camera at once, not the gallery (Dim, 18.11) */}
-            <input ref={file} type="file" accept="image/*" capture="environment" hidden onChange={(e) => void onPhoto(e.target.files?.[0]).finally(() => (e.target.value = ""))} />
           </div>
-          {/* a picture taken before, or a screenshot of the product */}
-          <button type="button" className="adm-txt bx-sell-gallery" onClick={() => gallery.current?.click()}>
-            {S.gallery}
-          </button>
+          {/* capture: the phone opens its back camera at once, not the gallery (Dim, 18.11) */}
+          <input ref={file} type="file" accept="image/*" capture="environment" hidden onChange={(e) => void onPhoto(e.target.files?.[0]).finally(() => (e.target.value = ""))} />
+          <p className="bx-tip bx-sell-tip">
+            <span>{S.photoHint}</span>
+            {/* a picture taken before, or a screenshot of the product */}
+            <button type="button" className="bx-lnk sm" onClick={() => gallery.current?.click()}>
+              {S.gallery}
+            </button>
+          </p>
           <input ref={gallery} type="file" accept="image/*" hidden onChange={(e) => void onPhoto(e.target.files?.[0]).finally(() => (e.target.value = ""))} />
-          <label className="adm-field">
-            <span>{S.search}</span>
-            <input
-              type="search"
-              enterKeyHint="search"
-              autoComplete="off"
-              placeholder={S.searchHint}
-              value={q}
-              onChange={(e) => {
-                setQ(e.target.value);
-                if (e.target.value.trim().length < 2) {
-                  seq.current++;
-                  setFound([]);
-                  setLook("idle");
-                }
-              }}
-            />
-          </label>
           {look !== "idle" && (
             <p className={look === "shop_down" || look === "not_found" || look === "photo_none" ? "adm-err" : "adm-meta"} role="status">
               {look === "looking" && S.looking}
@@ -350,7 +392,7 @@ export function SellView({
             </p>
           )}
           {found.length > 0 && (
-            <ul className="adm-list bx-rows">
+            <ul className="bx-box bx-rows">
               {found.map((p) => {
                 const u = unitOf(p, mode);
                 return (
@@ -362,6 +404,9 @@ export function SellView({
                         <small>{u == null ? S.noPurchase : mode === "self" && p.selfNoPurchase ? S.noPurchaseZero : p.stock == null ? "" : S.stock(p.stock)}</small>
                       </span>
                       <span className="end price">{u == null ? "—" : euroText(u)}</span>
+                      <span className="bx-chev">
+                        <Ic name="right" size={18} />
+                      </span>
                     </button>
                   </li>
                 );
@@ -371,18 +416,18 @@ export function SellView({
         </section>
       )}
 
-      <section className="adm-card">
-        <div className="adm-page-head">
-          <h2 className="adm-h2">{S.today}</h2>
-          <Link href="/b/money" className="adm-btn adm-btn-ghost adm-btn-sm" prefetch={false}>
+      <section className="bx-sec">
+        <div className="bx-sec-head">
+          <h2 className="bx-ch">{S.today}</h2>
+          <Link href="/b/money" className="bx-lnk" prefetch={false}>
             {S.toMoney}
+            <Ic name="right" size={16} />
           </Link>
         </div>
-        {waiting.length > 0 && <p className="adm-err">{S.pendingN(waiting.length)}</p>}
         {today.length === 0 && waiting.length === 0 ? (
           <p className="adm-meta">{S.noneToday}</p>
         ) : (
-          <ul className="adm-list bx-rows">
+          <ul className="bx-box">
             {waiting.map((p) => (
               <li key={p.ref} className="bx-sale">
                 <span className="txt">
@@ -390,16 +435,20 @@ export function SellView({
                     {p.name} × {p.qty}
                   </span>
                   <small>
-                    {B.money.mode[p.mode]} · {S.waiting}
+                    {B.money.mode[p.mode]}
+                    {p.mode === "client" && p.shareCents ? ` · ${S.yours(pct, euroText(p.shareCents))}` : p.mode === "self" ? ` · ${S.selfAt}` : ""}
                   </small>
+                  {/* kept on this phone, not lost: amber, not red */}
+                  <span className="bx-tag amb">
+                    <Ic name="clock" size={12} />
+                    {S.waiting}
+                  </span>
                 </span>
                 <span className="end">{euroText(p.totalCents)}</span>
               </li>
             ))}
             {today.map((t) => {
-              // the page clock can be older than a sale just made: never more than the window
-              const left = Math.min(undoMin, Math.ceil((Date.parse(t.at) + undoMin * 60_000 - clock) / 60_000));
-              const canUndo = t.status === "done" && !t.reversal && (t.sync === "queued" || t.sync === "test") && left > 0;
+              const can = canUndo(t);
               return (
                 <li key={t.ref} className={`bx-sale${t.status === "undone" ? " is-off" : ""}`}>
                   <span className="txt">
@@ -408,24 +457,44 @@ export function SellView({
                     </span>
                     <small>
                       {B.money.mode[t.mode] ?? t.mode}
-                      {t.commissionCents ? ` · ${S.yours(pct, euroText(t.commissionCents))}` : ""}
+                      {t.commissionCents ? ` · ${S.yours(pct, euroText(t.commissionCents))}` : t.mode === "self" ? ` · ${S.selfAt}` : ""}
                       {t.noPurchase ? ` · ${S.noPurchaseZero}` : ""}
                       {t.sync === "test" ? ` · ${S.testSale}` : ""}
-                      {t.status === "undone" ? ` · ${S.undone}` : canUndo ? ` · ${S.undoLeft(left)}` : ""}
+                      {t.status === "undone" ? ` · ${S.undone}` : ""}
                     </small>
+                    {can && (
+                      <span className="bx-undo">
+                        <button type="button" className="adm-btn adm-btn-ghost bx-xs" onClick={() => void undo(t.ref)}>
+                          {S.undo}
+                        </button>
+                        {/* the end of the window on the salon's clock: true however long the page stays open */}
+                        <span>{S.undoTill(hm(undoEnd(t), tz))}</span>
+                      </span>
+                    )}
                   </span>
                   <span className="end">{euroText(t.totalCents)}</span>
-                  {canUndo && (
-                    <button type="button" className="adm-btn adm-btn-ghost adm-btn-sm" onClick={() => void undo(t.ref)}>
-                      {S.undo}
-                    </button>
-                  )}
                 </li>
               );
             })}
           </ul>
         )}
+        {dayCount > 0 && (
+          <div className="bx-sell-foot">
+            <span>{S.count(dayCount)}</span>
+            <span>
+              {S.dayShare(pct)}: <b>{euroText(dayShare)}</b>
+            </span>
+          </div>
+        )}
       </section>
+
+      {pick && unit != null && (
+        <div className="bx-sell-bar">
+          <button type="button" className="adm-btn adm-btn-lime bx-big" disabled={busy} onClick={() => void sell()}>
+            {mode === "client" ? S.sellFor(euroText(unit * qty)) : S.takeFor(euroText(unit * qty))}
+          </button>
+        </div>
+      )}
 
       {scan && <Scanner onCode={(c) => void onCode(c)} onClose={() => setScan(false)} />}
     </main>
@@ -434,5 +503,11 @@ export function SellView({
 
 function Thumb({ src }: { src: string | null }) {
   // the shop's own picture (https only, checked in src/lib/shop.ts); none in the fake shop
-  return src ? <img className="bx-thumb" src={src} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span className="bx-thumb" aria-hidden="true" />;
+  return src ? (
+    <img className="bx-thumb" src={src} alt="" loading="lazy" referrerPolicy="no-referrer" />
+  ) : (
+    <span className="bx-thumb bx-thumb-none" aria-hidden="true">
+      <Ic name="bag" size={20} />
+    </span>
+  );
 }

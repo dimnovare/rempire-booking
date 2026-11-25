@@ -1,0 +1,75 @@
+/*
+ * The QR plaque (plaque-view.tsx), inside the admin's frame. On screen: the card with the size,
+ * the link and «Распечатать», beside the sheet drawn to scale in an A4 outline (2 px a mm, less
+ * when the screen is narrower). On paper: the sheet alone, at its size in mm. Inside the sheet
+ * every size is a part of its width (cqw), so A4, A5 and A6 are the same drawing. Black on
+ * white: it prints on any printer.
+ */
+.pl-back { display: inline-flex; align-items: center; gap: 4px; min-height: 32px; color: var(--link); font-size: 14px; font-weight: 500; text-decoration: none; }
+.pl-back:hover { text-decoration: underline; text-underline-offset: 3px; }
+.pl-head { margin-top: 4px; }
+.pl-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 16px; align-items: start; }
+.pl-bar { display: flex; flex-direction: column; gap: 16px; }
+.pl-fld { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pl-fld > span, .pl-fld > label { font-size: 14px; font-weight: 500; }
+.pl-fld .ac-hint { margin: 0; }
+.pl-link { display: flex; gap: 8px; }
+:where(.adm) .pl-link input { flex: 1; min-width: 0; color: var(--mute); }
+.pl-copy { flex: none; width: 44px; padding: 0; justify-content: center; }
+.pl-print { width: 100%; min-height: 48px; justify-content: center; gap: 8px; font-size: 15px; }
+.pl-bar > .ac-hint { margin: -8px 0 0; }
+
+/* the grey table the sheet lies on: --u is a millimetre on screen */
+.pl-stage {
+  container-type: inline-size; position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 24px 16px 16px; border-radius: 12px; background: var(--line);
+}
+.pl-a4 {
+  --u: min(2px, calc((100cqw - 36px) / 210));
+  position: relative; display: grid; place-items: center;
+  width: calc(var(--u) * 210); height: calc(var(--u) * 297);
+  border: 2px dashed #b9bfca; border-radius: 4px;
+}
+.pl-a4-n { position: absolute; top: 6px; left: 8px; color: var(--mute); font-size: 12px; }
+.pl-scale { align-self: flex-start; display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 12px; background: var(--raise); color: var(--mute); font-size: 12px; font-weight: 500; }
+
+/* A4, A5 and A6 have one shape (1 : √2): the sheet is always 141 cqw high, and what is on it
+   takes about 129, so nothing shrinks; the test mark sits in a corner, outside that count */
+.pl-sheet {
+  /* no padding here: cqw inside is a part of the whole sheet's width, the paper's */
+  container-type: inline-size; position: relative;
+  width: calc(var(--u) * var(--w)); overflow: hidden;
+  background: #fff; color: #000; box-shadow: 0 4px 16px rgb(8 8 12 / .15);
+  font-family: var(--font-body), system-ui, sans-serif; text-align: center;
+}
+.pl-face { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 6cqw 10cqw; }
+.pl-face > * { flex: none; }
+.pl-mark { display: block; width: 40cqw; height: auto; }
+.pl-book { margin-top: 5cqw; display: flex; flex-direction: column; gap: 1cqw; }
+.pl-book p { margin: 0; font-size: 6.6cqw; line-height: 1.15; font-weight: 700; letter-spacing: -.01em; }
+.pl-book .pl-more { font-size: 4cqw; font-weight: 400; color: #444; letter-spacing: 0; }
+.pl-qr { display: block; width: 54cqw; height: auto; margin-top: 5cqw; }
+.pl-host { margin: 1cqw 0 0; font-size: 4cqw; line-height: 1.2; font-weight: 600; overflow-wrap: anywhere; }
+.pl-scan { margin-top: 4cqw; display: flex; flex-direction: column; gap: .5cqw; }
+.pl-scan p { margin: 0; font-size: 2.8cqw; line-height: 1.3; color: #444; }
+.pl-test { position: absolute; top: 3cqw; right: 3cqw; margin: 0; padding: .8cqw 2cqw; border: .3cqw solid #b3261e; border-radius: 1.2cqw; color: #b3261e; font-size: 2.6cqw; font-weight: 700; }
+
+@media (min-width: 900px) {
+  .pl-grid { grid-template-columns: 340px minmax(0, 1fr); gap: 24px; }
+  .pl-stage { min-height: 660px; justify-content: center; padding: 32px 16px 48px; }
+  .pl-scale { position: absolute; left: 16px; bottom: 16px; }
+}
+
+/* on paper: the sheet alone. Everything that is not the sheet, or on the way to it, is gone;
+   what holds it gives up its own box, so the sheet starts at the page's corner */
+@media print {
+  body :not(:has(.pl-sheet)):not(.pl-sheet):not(.pl-sheet *) { display: none !important; }
+  :has(> * .pl-sheet), :has(> .pl-sheet) {
+    display: block !important; position: static !important; inset: auto !important;
+    width: auto !important; height: auto !important; min-width: 0 !important; min-height: 0 !important;
+    margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important;
+    background: none !important; box-shadow: none !important; overflow: visible !important; transform: none !important;
+  }
+  .pl-sheet { box-shadow: none; aspect-ratio: auto !important; break-inside: avoid; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}

@@ -28,10 +28,13 @@ async function addLogin(page: Page, email: string): Promise<void> {
   await page.goto("/admin/account");
   await hydrated(page);
   if (await page.getByRole("link", { name: `${R.open}: ${email}` }).count()) return;
-  const form = page.locator("form", { has: page.getByRole("button", { name: A.account.addUser }) });
-  await form.getByLabel(A.login.email).fill(email);
-  await form.getByRole("button", { name: A.account.roles.admin, exact: true }).click();
-  await form.getByRole("button", { name: A.account.addUser }).click();
+  // «Добавить вход» opens the drawer «Новый вход» with the eight roles
+  await page.getByRole("button", { name: A.account.addUser }).click();
+  const dw = page.getByRole("dialog", { name: A.account.newLogin });
+  await dw.locator('input[type="email"]').fill(email);
+  await dw.getByRole("radio", { name: new RegExp(`^${PRESETS.AD.ru}`) }).check();
+  await dw.getByRole("button", { name: A.account.addUser }).click();
+  await expect(dw).toHaveCount(0);
   await expect(page.getByRole("link", { name: `${R.open}: ${email}` })).toBeVisible();
 }
 
@@ -144,7 +147,7 @@ test.describe("a login's rights", () => {
     // kept: the list of logins names the role, and the page opens with it
     await page.goto("/admin/account");
     await hydrated(page);
-    await expect(page.locator(".adm-users li", { hasText: email })).toContainText(PRESETS.MG.ru);
+    await expect(page.locator(".ac-row", { hasText: email })).toContainText(PRESETS.MG.ru);
     await openRights(page, email);
     await expect(page.locator(".rt:visible").getByLabel(R.role, { exact: true })).toHaveValue("MG");
     await expect(counter(page, "clients")).toHaveText(R.count(24, 26));
@@ -342,7 +345,8 @@ test.describe("who may open a login's rights", () => {
     try {
       await owner.goto("/admin/requests");
       await hydrated(owner);
-      await expect(owner.getByRole("heading", { level: 2, name: A.req.open })).toBeVisible();
+      // «Ждут ответа» is the first tab now, «История» the second (design artifact, 25.11)
+      await expect(owner.getByRole("navigation", { name: A.req.title }).getByRole("link", { name: new RegExp(`^${A.req.open}`) })).toHaveAttribute("aria-current", "page");
       await expect(owner.getByText(rightDef("journal.schedule")!.ru)).toHaveCount(0);
       await expect(owner.getByRole("link", { name: /«Доступ»/ })).toHaveCount(0);
       await expectNoSideScroll(owner);

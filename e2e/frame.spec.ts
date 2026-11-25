@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { Page } from "@playwright/test";
 import { OUT } from "./env";
-import { A, asOwner, B, demoId, expect, expectNoSideScroll, hydrated, nextWorkday, smallTargets, tallinnDate, test } from "./helpers";
+import { A, asOwner, B, demoId, expect, expectNoSideScroll, hydrated, nextWorkday, openFolds, smallTargets, tallinnDate, test } from "./helpers";
 
 /**
  * The admin's frame from 900px (docs/reference-looks.md, «Sidebar and
@@ -582,8 +582,9 @@ test.describe("the frame", () => {
       const C = A.catalogue;
       await page.goto("/admin/more");
       await hydrated(page);
+      await openFolds(page);
       const rows = page.locator(".adm-more .adm-item:visible");
-      await expect(rows.locator("b")).toHaveText([A.nav.staff, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.requests, A.nav.notifications, A.sale.title]);
+      await expect(rows.locator("b")).toHaveText([A.nav.records, A.nav.reviews, A.nav.visits, A.nav.messages, A.nav.changes, A.nav.staffList, A.nav.schedule, A.nav.services, A.nav.catalogue, A.nav.requests, A.more.notifySalon, A.nav.brand, A.nav.contacts, A.nav.gallery, A.nav.online, A.sale.title]);
       await expectNoSideScroll(page);
       expect(await smallTargets(page)).toEqual([]);
       await phoneShot(page, "more");

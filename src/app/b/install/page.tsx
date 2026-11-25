@@ -5,11 +5,12 @@ import { InstallGuide } from "./guide";
 
 export default function InstallPage() {
   return (
-    <main className="adm-login bx-install">
-      <Logo />
-      <Suspense fallback={null}>
-        <InstallGuide />
-      </Suspense>
-    </main>
+    <div className="bx-inst-page">
+      <main className="adm-login bx-install">
+        <Suspense fallback={<Logo />}>
+          <InstallGuide logo={<Logo />} />
+        </Suspense>
+      </main>
+    </div>
   );
 }

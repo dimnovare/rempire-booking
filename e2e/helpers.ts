@@ -3,10 +3,13 @@ import { readFileSync } from "node:fs";
 import { test as base, expect, type Browser, type Page, type TestInfo } from "@playwright/test";
 import { ru as A } from "../src/app/admin/copy.ru";
 import { ru as B } from "../src/app/b/copy.ru";
+import { LOGIN } from "../src/components/login/words";
 import { GROUPS, rightDef, type RightKey } from "../src/lib/auth/rights-catalogue";
 import { addDays, demoWorkday } from "../tools/demo-structure.mjs";
 import { authFile, SERVER_LOG } from "./env";
 
+/** The login page's words (one set for both apps). */
+export const L = LOGIN.ru;
 export { A, B, expect };
 
 /**
@@ -135,10 +138,10 @@ export function lastCode(email: string): string | null {
 export async function loginByCode(page: Page, email: string): Promise<void> {
   await page.goto("/b/login");
   await hydrated(page);
-  await page.getByRole("button", { name: B.login.byCode }).click();
+  await page.getByRole("button", { name: L.tabCode }).click();
   const before = lastCode(email);
   await page.locator('input[name="email"]').fill(email);
-  await page.getByRole("button", { name: B.login.sendCode }).click();
+  await page.getByRole("button", { name: L.sendCode }).click();
   await expect(page.locator('input[name="code"]')).toBeVisible();
   let code: string | null = null;
   await expect
@@ -207,6 +210,16 @@ export async function smallTargets(page: Page, min = 24): Promise<string[]> {
     }
     return out;
   }, min);
+}
+
+/**
+ * «Ещё» folds «Отчёты», «Сотрудники» and «Настройки» as the sidebar does
+ * (design artifact, 25.11.2026): open every fold, so each row is there to
+ * see and tap.
+ */
+export async function openFolds(page: Page): Promise<void> {
+  const closed = page.locator(".adm-more:visible details.mo-fold:not([open]) > summary");
+  while (await closed.count()) await closed.first().click();
 }
 
 /**
