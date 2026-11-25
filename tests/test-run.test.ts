@@ -81,6 +81,21 @@ describe("test sales (SHOP_SALES off)", () => {
     expect(await undoSale(demo.staff.valentin, b.sale.ref, null, at("2026-10-11", "12:03"))).toEqual({ ok: true });
   });
 
+  it("never reach a live shop, even with SHOP_SALES on and a write key set by mistake", async () => {
+    // queued as real sales (the fake shop prices them), then the cron runs with staging's wrong settings
+    const a = await sell(paste, "client", { ...STAGE, SHOP_SALES: "on" });
+    if (!a.ok) throw new Error(a.code);
+    expect(a.sale.syncStatus).toBe("queued");
+    const wrong = { ...STAGE, SHOP_SALES: "on", SHOP_API_URL: "https://rempireshop.com", SHOP_API_SECRET: "fake-read-key-0123456789", SHOP_API_WRITE_SECRET: "fake-write-key-0123456789abcdef0123456789" };
+    let calls = 0;
+    const later = at("2026-10-10", "18:00");
+    expect(await syncShopSales(query, later, wrong, async () => (calls++, { orderNumber: "X", repeat: false }))).toEqual({ sent: 0, retry: 0, failed: 0 });
+    expect(calls).toBe(0);
+    // untouched: still queued, no try counted, ready for the day the move turns it on
+    const [row] = await query<{ sync_status: string; sync_attempts: number }>("select sync_status, sync_attempts from product_sales where id = $1", [a.sale.id]);
+    expect(row).toEqual({ sync_status: "queued", sync_attempts: 0 });
+  });
+
   it("for himself with no purchase price: 0 €, marked; refused once sales go to the shop", async () => {
     const r = await sell(pomade, "self");
     if (!r.ok) throw new Error(r.code);

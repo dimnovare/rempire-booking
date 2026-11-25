@@ -73,6 +73,11 @@ live only with Dim's OK, after he has seen the exact diff.
   has no sales route anyway, so it is off twice over.
   - The barber's statement and the invoice drafts still pick test sales up.
   - The switch goes on only at the move, together with the full partner API.
+- **And a guard in code (25.11.2026):** while `ALLOW_INDEXING` is not `yes`,
+  booking never sends a sale to a shop that is not on this computer, even
+  with `SHOP_SALES=on` and a write key set by mistake. Staging holds only the
+  read key; the write key (`SHOP_API_WRITE_SECRET`) is for production. See
+  `docs/phase-c.md` § «The shop branch (C2)».
 - **Purchase prices** don't exist in the live shop yet. A sale «for himself»
   shows «закупочная цена не указана» and books 0 €, marked as such.
 - **What the test can't show:** the shop-side half of a sale, meaning the

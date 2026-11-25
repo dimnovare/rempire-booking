@@ -61,6 +61,8 @@ const env = {
   SMS_TEST_TO: "",
   SHOP_API_URL: "",
   SHOP_API_SECRET: "",
+  SHOP_API_READ_SECRET: "",
+  SHOP_API_WRITE_SECRET: "",
   SHOP_SALES: "",
   GOOGLE_CLIENT_ID: "",
   GOOGLE_CLIENT_SECRET: "",

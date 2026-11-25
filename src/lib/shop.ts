@@ -8,15 +8,36 @@
  *   POST /api/partner/barber-sales        {ref, barber: {ref, name}, mode, items}
  *
  * Environment (names only; Dim puts the values into Vercel):
- *   SHOP_API_URL     the shop's origin, e.g. https://rempireshop.com
- *   SHOP_API_SECRET  the shared secret; the shop holds the same value as
- *                    BOOKING_API_SECRET
+ *   SHOP_API_URL           the shop's origin, e.g. https://rempireshop.com
+ *   SHOP_API_SECRET        the READ key: lookup, search, photo match. The shop
+ *                          holds the same value as BOOKING_API_SECRET (or
+ *                          BOOKING_API_READ_SECRET). Staging may hold it.
+ *   SHOP_API_READ_SECRET   the same read key under its newer name; wins when
+ *                          both are set
+ *   SHOP_API_WRITE_SECRET  the WRITE key: a barber's sale becomes an order in
+ *                          the shop and its stock goes down. The shop holds the
+ *                          same value as BOOKING_API_WRITE_SECRET. Production
+ *                          only, from the move on; never on staging
+ *
+ * The shop refuses a sale made with the read key (403), and booking never
+ * sends one: sendBarberSale() uses the write key only, and refuses a write
+ * key equal to the read key.
+ *
+ * STAGING NEVER SELLS INTO A LIVE SHOP, whatever is set (Dim, 25.11.2026):
+ * while the test run is on (src/lib/test-run.ts: ALLOW_INDEXING is not
+ * «yes»), sendBarberSale() refuses any shop that is not on this computer,
+ * before a key is read or a request made, and syncShopSales()
+ * (src/lib/sales.ts) sends nothing. Staging and production can be the same
+ * Vercel project at different times; this is what tells them apart. The
+ * local shop-link test (tools/shop-link-local.mjs) runs its shop on
+ * localhost, so it still sells.
  *
  * With no SHOP_API_URL this is a **fake shop** of demo products, as push is
  * off without its keys: staging never calls the live shop, and nothing here
  * throws for a missing setting. The fake shop sells, but nothing leaves the
  * app (its order numbers start with DEMO-).
  */
+import { indexingAllowed } from "./indexing";
 
 export type ShopProduct = {
   /** the shop's product id and variant: its stock_levels key */
@@ -111,25 +132,58 @@ function fakeIdentify(dataUrl: string): ShopProduct[] {
 
 /* ---------- the live shop ---------- */
 
-function base(env: Env): { url: URL; secret: string } {
+type Key = "read" | "write";
+
+const readKey = (env: Env) => (env.SHOP_API_READ_SECRET ?? "").trim() || (env.SHOP_API_SECRET ?? "").trim();
+const writeKey = (env: Env) => (env.SHOP_API_WRITE_SECRET ?? "").trim();
+const LOCAL_HOST = /^(localhost|127\.0\.0\.1|\[::1\])$/;
+
+function shopUrl(env: Env): URL {
   const raw = (env.SHOP_API_URL ?? "").trim();
-  const secret = (env.SHOP_API_SECRET ?? "").trim();
   let url: URL;
   try {
     url = new URL(raw);
   } catch {
     throw new ShopError("not_configured", "SHOP_API_URL is not a URL");
   }
-  const local = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(url.hostname);
+  const local = LOCAL_HOST.test(url.hostname);
   if (url.protocol !== "https:" && !(local && url.protocol === "http:")) throw new ShopError("not_configured", "SHOP_API_URL must be https");
-  if (!secret) throw new ShopError("not_configured", "SHOP_API_SECRET is not set");
+  return url;
+}
+
+/**
+ * May this app sell into the shop at all? The fake shop, yes. A real one only
+ * outside the test run, or when it runs on this computer (the shop-link
+ * test): staging never sells into a live shop (the module doc).
+ */
+export function shopWritesAllowed(env: Env = process.env): boolean {
+  if (shopMode(env) === "fake") return true;
+  if (indexingAllowed(env)) return true;
+  try {
+    return LOCAL_HOST.test(shopUrl(env).hostname);
+  } catch {
+    return false;
+  }
+}
+
+function base(env: Env, key: Key): { url: URL; secret: string } {
+  const url = shopUrl(env);
+  if (key === "read") {
+    const secret = readKey(env);
+    if (!secret) throw new ShopError("not_configured", "SHOP_API_SECRET is not set");
+    return { url, secret };
+  }
+  if (!shopWritesAllowed(env)) throw new ShopError("not_configured", "the test run never sells into a live shop (ALLOW_INDEXING is not yes)");
+  const secret = writeKey(env);
+  if (!secret) throw new ShopError("not_configured", "SHOP_API_WRITE_SECRET is not set");
+  if (secret === readKey(env)) throw new ShopError("not_configured", "SHOP_API_WRITE_SECRET must not be the read key");
   return { url, secret };
 }
 
 const TIMEOUT_MS = 8000;
 
-async function call<T>(env: Env, path: string, init?: { method?: string; body?: unknown; timeoutMs?: number }): Promise<T> {
-  const { url, secret } = base(env);
+async function call<T>(env: Env, path: string, init?: { method?: string; body?: unknown; timeoutMs?: number; key?: Key }): Promise<T> {
+  const { url, secret } = base(env, init?.key ?? "read");
   const target = new URL(path, url);
   let res: Response;
   try {
@@ -147,7 +201,8 @@ async function call<T>(env: Env, path: string, init?: { method?: string; body?: 
   const body = (await res.json().catch(() => null)) as (T & { error?: string }) | null;
   if (res.ok && body) return body;
   const err = body?.error;
-  if (res.status === 401) throw new ShopError("unauthorized");
+  // 403 read_only: the shop wants the write key for this, and was shown the read key
+  if (res.status === 401 || res.status === 403) throw new ShopError("unauthorized", err === "read_only" ? "the shop refused the read key for a sale" : undefined);
   if (res.status === 503 && err === "not_configured") throw new ShopError("not_configured", "the shop has no partner secret or AI key");
   if (res.status === 422 || err === "unknown_product") throw new ShopError("unknown_product");
   if (res.status === 400 || res.status === 413) throw new ShopError("bad_request", err);
@@ -215,10 +270,13 @@ export async function identifyPhoto(dataUrl: string, env: Env = process.env): Pr
   return items(await call<{ items?: unknown }>(env, "/api/partner/products/identify", { method: "POST", body: { image: dataUrl }, timeoutMs: 25_000 })).slice(0, 3);
 }
 
-/** The sale reaches the shop: an order, its stock goes down. Idempotent by ref. */
+/**
+ * The sale reaches the shop: an order, its stock goes down. Idempotent by ref.
+ * The write key only, and never from the test run into a live shop (the module doc).
+ */
 export async function sendBarberSale(sale: BarberSaleRequest, env: Env = process.env): Promise<{ orderNumber: string; repeat: boolean }> {
   if (shopMode(env) === "fake") return { orderNumber: `DEMO-${sale.ref.slice(0, 8).toUpperCase()}`, repeat: false };
-  const out = await call<{ ok?: boolean; orderNumber?: unknown; repeat?: unknown }>(env, "/api/partner/barber-sales", { method: "POST", body: sale, timeoutMs: 15_000 });
+  const out = await call<{ ok?: boolean; orderNumber?: unknown; repeat?: unknown }>(env, "/api/partner/barber-sales", { method: "POST", body: sale, timeoutMs: 15_000, key: "write" });
   if (!out.ok || typeof out.orderNumber !== "string" || !out.orderNumber) throw new ShopError("unavailable", "no order number");
   return { orderNumber: out.orderNumber.slice(0, 40), repeat: out.repeat === true };
 }

@@ -73,7 +73,7 @@ is a setting, not code.
 | # | What | Needs from outside | Status |
 |---|---|---|---|
 | C1 | **Receivers, issuer, rent.** In the admin, «Счета» → «Получатели»: a person, FIE or OÜ, with the legal name, registry code, KMKR number, address, e-mail, payment terms, VAT on or off, and the barber it belongs to. REMPIRE's own company details go in the admin settings. Each barber's chair rent has a valid-from date, so a change never rewrites old months. | The real details from Isolta. Demo data until then | **built**; real data waits on Isolta |
-| C2 | **Shop link (shop branch).** The purchase price field and the three partner endpoints in `rempire-web`, on a branch, with tests, against the shop's own test database only. Booking calls them through one small client (`src/lib/shop.ts`). With no `SHOP_API_URL` it falls back to a **fake shop** of demo products, as push does without its keys. | Dim's OK to push the shop branch; `SHOP_API_URL` and `SHOP_API_SECRET` (booking), the same secret in the shop as `BOOKING_API_SECRET`; Renat's purchase prices | **on the shop branch `booking-partner-api`, not pushed**; booking's client and fake shop built |
+| C2 | **Shop link (shop branch).** The purchase price field and the three partner endpoints in `rempire-web`, on a branch, with tests, against the shop's own test database only. Booking calls them through one small client (`src/lib/shop.ts`). With no `SHOP_API_URL` it falls back to a **fake shop** of demo products, as push does without its keys. | Dim's OK to merge the shop branch; `SHOP_API_URL` and `SHOP_API_SECRET` (booking, the read key), the same value in the shop as `BOOKING_API_SECRET`; at the move `SHOP_API_WRITE_SECRET` (booking production only) = the shop's `BOOKING_API_WRITE_SECRET`; Renat's purchase prices | read half live 18.11; **the sales half on the shop branch `booking-partner-api-2`, not pushed** (25.11); booking's client and fake shop built |
 | C3 | **Selling in the app.** The camera scan (`BarcodeDetector` where the phone has it, otherwise a small JS reader), the name search, client or self, the quantity, the price shown before the tap, and an undo within a few minutes. Each sale gets a `ref` first and is sent to the shop with retries through the outbox, so a bad connection never sells twice or loses a sale. | | **built**; staging sells from the fake shop |
 | C4 | **Statement.** The running ledger for each barber, in the app and in the admin, from `product_sales`, `chair_rents` and `invoices`. The 17 % basis is a setting: Renat's answer (Q1, 18.11) is the regular price with VAT. | Renat Q1 | **built**; the basis is the regular price with VAT |
 | C5 | **Invoices.** On the 1st, a draft for every receiver with something to bill. Renat checks it, changes lines if needed and taps «Выставить». That gives the number (`invoice_counters`, the shop's `141_invoices.sql` pattern), the PDF (`pdf-lib`, after the shop's `src/lib/invoice-pdf.ts`: the legal minimum of VAT Act §37, the tower, Estonian with an English line) and the e-mail through Resend with the PDF attached. Then «оплачен» when the money arrives, and a credit invoice for a correction. | From Isolta: the issuer, VAT, the layout and the last invoice number; the accountant's view on the 17 % (below) | **built**; the first real invoice waits on Isolta and the accountant |
@@ -178,13 +178,35 @@ Everything below runs on staging with demo barbers, demo companies
 
 ## The shop branch (C2), waiting for Dim's OK
 
-`rempire-web`, local branch `booking-partner-api`, 3 commits up to
-`ec90982c`, **not pushed**. All 8204 shop tests and its typecheck pass. The
-contract is the shop's `docs/partner-api.md`; booking's `src/lib/shop.ts`
-already speaks it.
+`rempire-web`, local branch `booking-partner-api-2` (25.11.2026): the sales
+half brought up to the live shop's `main`, **not pushed**. It replaces
+`booking-partner-api` (17.11), which is kept but is behind `main` and would
+undo live read changes. The contract and the merge-day checklist are the
+shop's `docs/partner-api.md` (§ «Auth: two keys», § «Merge day»); booking's
+`src/lib/shop.ts` speaks it.
 
-> **Never push `booking-partner-api` to `rempireshop/rempire-web`, not even
-> as a branch.**
+**Two keys** (Dim, 25.11.2026: staging must never be able to write into the
+live shop):
+
+| Booking env | Shop env | Opens | Where |
+|---|---|---|---|
+| `SHOP_API_SECRET` (or `SHOP_API_READ_SECRET`) | `BOOKING_API_SECRET` (or `BOOKING_API_READ_SECRET`) | lookup, search, photo match | staging and production |
+| `SHOP_API_WRITE_SECRET` | `BOOKING_API_WRITE_SECRET` | `POST /api/partner/barber-sales` | production only, from the move on |
+
+- The shop answers a sale with the read key `403 read_only`, and every sale
+  `503` until its write key is set. Merged with no new variable, the sales
+  route is shut.
+- Booking sends a sale with the write key only, and refuses a write key
+  equal to the read key.
+- **And booking's test run never sells into a live shop, whatever is set**:
+  with `ALLOW_INDEXING` not `yes`, `sendBarberSale()` refuses any shop not on
+  this computer, and the cron sends nothing (`shopWritesAllowed()`,
+  `src/lib/shop.ts`; `tests/shop-keys.test.ts`, `tests/test-run.test.ts`).
+  Staging and production can be the same Vercel project at different times;
+  this is what tells them apart.
+
+> **Never push `booking-partner-api-2` (or `booking-partner-api`) to
+> `rempireshop/rempire-web`, not even as a branch.**
 >
 > - The live shop's Vercel project sets `DATABASE_URL`, the Montonio and R2
 >   keys, `TELEGRAM_BOT_TOKEN` and `CRON_SECRET` for «All Environments».
@@ -198,13 +220,14 @@ already speaks it.
 
 What the merge changes on the live shop:
 
-- **Migration `230_partner_api.sql`**, run once at deploy:
+- **Migrations `230_partner_api.sql` and `231_partner_api_validate.sql`**,
+  run once at deploy (locks and timings in the shop's `docs/partner-api.md`):
   - a new table `purchase_prices`;
   - `orders.partner_ref` (unique) and `orders.barber`;
   - two check constraints widened: the channel `barber` and the stock reason
     `sale_barber`.
-- **Three routes** under `/api/partner/`. They answer 503 until
-  `BOOKING_API_SECRET` is set.
+- **The sale route** `POST /api/partner/barber-sales`. It answers 503 until
+  `BOOKING_API_WRITE_SECRET` is set. The two read routes are live already.
 - **Admin:**
   - «Склад» gets «Закупка без НДС».
   - «Заказы» shows a «Барбер» badge; barber sales show under «Салон».
@@ -215,13 +238,15 @@ What the merge changes on the live shop:
 
 Watch for:
 
-- Whoever holds the secret can create paid orders at any price, so it stays
-  only in the two Vercel projects, marked Sensitive.
+- Whoever holds the write key can create paid orders at any price, so it
+  stays only in the shop's and booking production's Vercel settings, marked
+  Sensitive, never on staging.
 - The shop's `go-live-reset --clear` deletes barber orders along with test
   orders. Don't run it once real barber sales exist.
 
-Then set `SHOP_API_URL` and `SHOP_API_SECRET` in booking's Vercel. Until
-then staging stays on the fake shop.
+At the move: `SHOP_API_WRITE_SECRET` in booking production, the same value
+as the shop's `BOOKING_API_WRITE_SECRET`, then `ALLOW_INDEXING=yes` and
+`SHOP_SALES=on`.
 
 ## Testing the shop link locally
 
@@ -230,14 +255,17 @@ check of the shop branch against booking. It is a developer check, not the
 staging test run (that is `docs/test-run.md`).
 
 - It runs the shop from its worktree
-  `rempire-web/.claude/worktrees/booking-partner-api` on port 3300 and booking
+  `rempire-web/.claude/worktrees/booking-partner-api-2` on port 3300 and booking
   on 3400, each on an empty PGlite database in the temp folder.
 - Each process gets a clean environment built from a short list. It refuses
   to start on the main shop checkout, on `main`, beside any `.env*` file, or
   when a live-looking variable (`DATABASE_URL`, Montonio, R2, Telegram,
   Resend…) would leak in. So run it from a booking worktree.
-- Secrets are random per run and stay in memory. The shop gets fake
-  barcodes, stock 10 and purchase prices on three products.
+- Secrets are random per run and stay in memory: a read key and a write
+  key, as production after the move. It checks the read key gets `403` on
+  the sale route. Booking runs as staging (no `ALLOW_INDEXING`); it sells
+  only because this shop is on localhost. The shop gets fake barcodes,
+  stock 10 and purchase prices on three products.
 - It walks the phone (Playwright, 390 px): a client sale by search, a self
   sale at purchase × 1.24, a camera scan, the cron, a retry with the same
   `ref`, the shop down and back, then the shop's orders and stock, the

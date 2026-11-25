@@ -19,6 +19,11 @@
  *
  * The 17 % is computed and stored here, never in the shop (kickoff §7.3).
  *
+ * Staging never sells into the live shop, even with SHOP_SALES on: the
+ * test run (ALLOW_INDEXING not «yes») sends nothing to a shop that is not on
+ * this computer (shopWritesAllowed() in src/lib/shop.ts); such sales just wait,
+ * queued, untouched.
+ *
  * SHOP_SALES (docs/test-run.md): only "on" sends sales to the shop. Off (the
  * staging test run, reading the live shop's products) a sale is booking's
  * own, sync_status 'test': never sent, still on the statement and the invoice
@@ -33,7 +38,7 @@ import { randomBytes } from "node:crypto";
 import type { Business } from "./availability";
 import { query, withTx, type Querier } from "./db";
 import { commissionFor, grossOfNet } from "./money";
-import { productById, sendBarberSale, ShopError, type ShopProduct } from "./shop";
+import { productById, sendBarberSale, ShopError, shopWritesAllowed, type ShopProduct } from "./shop";
 
 type Env = Record<string, string | undefined>;
 
@@ -386,6 +391,8 @@ export async function syncShopSales(q: Querier, now = Date.now(), env: Env = pro
   const res: SyncResult = { sent: 0, retry: 0, failed: 0 };
   // the test run reads the live shop but never sells into it, not even a sale queued before the switch went off
   if (!shopSales(env)) return res;
+  // …nor with the switch on by mistake: before a row is claimed, so nothing is counted as a try
+  if (!shopWritesAllowed(env)) return res;
   const stopAt = Date.now() + budgetMs;
   const rows = await q<SaleRow & { staff_name: string; sync_attempts: number }>(
     `update product_sales p set sync_status = 'sending', sync_locked = $2, sync_attempts = p.sync_attempts + 1
