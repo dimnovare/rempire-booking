@@ -976,6 +976,8 @@ export const et: typeof ru = {
       edit: "Muutmine",
       delete: "Kustutamine",
       restore: "Taastamine pärast kustutamist",
+      off: "Väljalülitamine",
+      on: "Sisselülitamine",
       move: "Aja muutmine",
       cancel: "Tühistamine",
       status: "Oleku muutmine",

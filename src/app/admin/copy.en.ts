@@ -977,6 +977,8 @@ export const en: typeof ru = {
       edit: "Changed",
       delete: "Deleted",
       restore: "Restored after deleting",
+      off: "Switched off",
+      on: "Switched on",
       move: "Moved",
       cancel: "Cancelled",
       status: "Status changed",

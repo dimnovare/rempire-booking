@@ -169,8 +169,12 @@ export type UserInput = { email: string; name: string; role: Role; staffId: stri
  * The new login starts with the rights its role had before there were
  * rights (src/lib/auth/rights-store.ts): written here, at once. They are
  * then changed on its own page under «Доступ».
+ *
+ * `by`: who added it from «Доступ», and the role he picked (its code,
+ * rights-catalogue.ts): «Изменения данных» shows «Вход · Создание» with
+ * both. Without it (seeds, tests) no history row.
  */
-export async function createUser(q: Querier, businessId: string, input: UserInput): Promise<{ ok: true; id: string } | { ok: false; field: string }> {
+export async function createUser(q: Querier, businessId: string, input: UserInput, by?: { actor: string; preset: string }): Promise<{ ok: true; id: string } | { ok: false; field: string }> {
   const email = normalizeEmail(input.email);
   if (!isEmail(email)) return { ok: false, field: "email" };
   if (!["owner", "admin", "staff"].includes(input.role)) return { ok: false, field: "role" };
@@ -184,6 +188,13 @@ export async function createUser(q: Querier, businessId: string, input: UserInpu
   );
   if (!row) return { ok: false, field: "email_taken" };
   await backfillRights(q, businessId);
+  if (by) {
+    await q(`insert into audit (actor, entity, entity_id, action, after) values ($1, 'user', $2, 'create', $3::jsonb)`, [
+      by.actor,
+      row.id,
+      JSON.stringify({ email, role: by.preset, ...(input.staffId ? { staffId: input.staffId } : {}) }),
+    ]);
+  }
   return { ok: true, id: row.id };
 }
 
@@ -191,27 +202,48 @@ export async function createUser(q: Querier, businessId: string, input: UserInpu
  * Link an owner's or admin's login to the barber he is, or unlink it
  * (`staffId` null). Only a barber of the same business. A barber's own
  * login keeps its barber: that one is switched off and added anew.
+ * `actor`: a real change gets a history row, «Вход · Изменение», barber
+ * before → after.
  */
-export async function setUserStaff(q: Querier, businessId: string, userId: string, staffId: string | null): Promise<boolean> {
-  const rows = await q<{ id: string }>(
-    `update users u set staff_id = $3::uuid, updated_at = now()
+export async function setUserStaff(q: Querier, businessId: string, userId: string, staffId: string | null, actor?: string): Promise<boolean> {
+  const rows = await q<{ id: string; was: string | null }>(
+    `with o as (select staff_id::text as was from users where id = $1 and business_id = $2)
+     update users u set staff_id = $3::uuid, updated_at = now()
       where u.id = $1 and u.business_id = $2 and u.role in ('owner', 'admin') and u.deleted_at is null
         and ($3::uuid is null or exists (select 1 from staff s where s.id = $3::uuid and s.business_id = $2))
-      returning u.id`,
+      returning u.id, (select was from o)`,
     [userId, businessId, staffId],
   );
-  return rows.length > 0;
+  if (!rows.length) return false;
+  if (actor && rows[0].was !== staffId) {
+    await q(`insert into audit (actor, entity, entity_id, action, before, after) values ($1, 'user', $2, 'edit', $3::jsonb, $4::jsonb)`, [
+      actor,
+      userId,
+      JSON.stringify({ staffId: rows[0].was }),
+      JSON.stringify({ staffId }),
+    ]);
+  }
+  return true;
 }
 
 /**
  * Switch a login of this business on or off; off ends its sessions. False if no such login here.
  * (That an owner always stays is the door's rule, account/actions.ts: nobody
  * switches himself off, and an owner's login is switched only by an owner.)
+ * `actor`: a real switch gets a history row, «Вход · Отключение» or
+ * «Включение».
  */
-export async function setUserActive(q: Querier, businessId: string, userId: string, active: boolean): Promise<boolean> {
-  const hit = await q<{ id: string }>("update users set active = $3, updated_at = now() where id = $1 and business_id = $2 and deleted_at is null returning id", [userId, businessId, active]);
+export async function setUserActive(q: Querier, businessId: string, userId: string, active: boolean, actor?: string): Promise<boolean> {
+  const hit = await q<{ id: string; was: boolean }>(
+    `with o as (select active as was from users where id = $1 and business_id = $2)
+     update users set active = $3, updated_at = now() where id = $1 and business_id = $2 and deleted_at is null returning id, (select was from o)`,
+    [userId, businessId, active],
+  );
   if (!hit.length) return false;
   if (!active) await revokeOtherSessions(q, userId, null);
+  if (actor && hit[0].was !== active) {
+    await q(`insert into audit (actor, entity, entity_id, action) values ($1, 'user', $2, $3)`, [actor, userId, active ? "on" : "off"]);
+  }
   return true;
 }
 

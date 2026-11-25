@@ -166,6 +166,31 @@ describe("«Удалить вход»", () => {
     expect(await restoreUser(query, demo.business.id, r.id, actor)).toBe("taken");
     expect((await listUsers(query, demo.business.id)).map((u) => u.id)).not.toContain(r.id);
   });
+
+  it("added, switched off and on, linked to a barber from «Доступ»: each a history row, a repeat none", async () => {
+    const actor = await owner();
+    const r = await createUser(query, demo.business.id, { email: MAIL, name: "Front", role: "admin", staffId: null, password: null }, { actor, preset: "AD" });
+    if (!r.ok) throw new Error(r.field);
+    expect(await setUserActive(query, demo.business.id, r.id, false, actor)).toBe(true);
+    expect(await setUserActive(query, demo.business.id, r.id, false, actor)).toBe(true);
+    expect(await setUserActive(query, demo.business.id, r.id, true, actor)).toBe(true);
+    expect(await setUserStaff(query, demo.business.id, r.id, demo.staff.slava, actor)).toBe(true);
+    expect(await setUserStaff(query, demo.business.id, r.id, demo.staff.slava, actor)).toBe(true);
+    expect(await setUserStaff(query, demo.business.id, r.id, null, actor)).toBe(true);
+    const rows = await query<{ actor: string; action: string; before: unknown; after: unknown }>("select actor, action, before, after from audit where entity = 'user' and entity_id = $1 order by id", [r.id]);
+    expect(rows).toEqual([
+      { actor, action: "create", before: null, after: { email: MAIL, role: "AD" } },
+      { actor, action: "off", before: null, after: null },
+      { actor, action: "on", before: null, after: null },
+      { actor, action: "edit", before: { staffId: null }, after: { staffId: demo.staff.slava } },
+      { actor, action: "edit", before: { staffId: demo.staff.slava }, after: { staffId: null } },
+    ]);
+    // without an actor (seeds, tests): no row
+    const quiet = await createUser(query, demo.business.id, { email: "quiet@example.test", name: "", role: "admin", staffId: null });
+    if (!quiet.ok) throw new Error(quiet.field);
+    await setUserActive(query, demo.business.id, quiet.id, false);
+    expect(await query("select 1 from audit where entity_id = $1", [quiet.id])).toEqual([]);
+  });
 });
 
 describe("sessions", () => {

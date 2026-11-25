@@ -82,7 +82,7 @@ export async function addUser(form: FormData): Promise<{ ok: true } | { ok: fals
   }
   const set = await startingSet(query, business.id, user, code, staffId);
   if (!set) return { ok: false, field: "forbidden" };
-  const r = await createUser(query, business.id, { email: u.email, name: u.name, role, staffId, password: u.password || null });
+  const r = await createUser(query, business.id, { email: u.email, name: u.name, role, staffId, password: u.password || null }, { actor: user.id, preset: code });
   if (!r.ok) return r;
   await writeStartingSet(query, business.id, r.id, set);
   // the new login starts in the language the owner picked for it (Russian if none)
@@ -105,7 +105,7 @@ export async function linkUserStaff(id: string, staffId: string): Promise<boolea
   const { user, business } = await requireAdmin();
   if (!can(user, "settings.users")) return false;
   if (!isUuid(id) || (staffId !== "" && !isUuid(staffId))) return false;
-  if (!(await setUserStaff(query, business.id, id, staffId === "" ? null : staffId))) return false;
+  if (!(await setUserStaff(query, business.id, id, staffId === "" ? null : staffId, user.id))) return false;
   refresh();
   return true;
 }
@@ -118,7 +118,7 @@ export async function linkUserStaff(id: string, staffId: string): Promise<boolea
 export async function toggleUser(id: string, active: boolean): Promise<boolean> {
   const { user, business } = await requireAdmin();
   if (!(await mayRemove(user, business.id, id))) return false;
-  if (!(await setUserActive(query, business.id, id, active === true))) return false;
+  if (!(await setUserActive(query, business.id, id, active === true, user.id))) return false;
   refresh();
   return true;
 }

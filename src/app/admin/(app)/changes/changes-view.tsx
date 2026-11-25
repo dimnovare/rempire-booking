@@ -21,6 +21,7 @@
  */
 import { Fragment, useEffect, useRef, useState } from "react";
 import { CHANGE_ENTITIES, CHANGE_PAGE_SIZES, type ChangeQuery } from "@/lib/admin/change-filter";
+import { isRoleCode, PRESETS } from "@/lib/auth/rights-catalogue";
 import type { ChangeList, ChangeRow, ChangeValue } from "@/lib/admin/change-log";
 import { FunnelIcon, NextIcon, PrevIcon } from "../../icons";
 import { useA } from "../../lang";
@@ -144,6 +145,8 @@ export function ChangesView({ initial, first, tz, authors }: ChangesViewProps) {
     if (v.t === "list") return v.v.length ? v.v.map((x) => (key === "changed" ? (V.fields[x] ?? x) : x)).join(", ") : "—";
     if (key === "status") return A.visit.status[v.v] ?? V.statuses[v.v] ?? v.v;
     if (key === "by" || key === "source") return V.byOf[v.v] ?? v.v;
+    // a login's role, kept as its code (rights-catalogue.ts): the reader's words for it
+    if (key === "role" && isRoleCode(v.v)) return PRESETS[v.v][A.lang];
     return v.v;
   };
 

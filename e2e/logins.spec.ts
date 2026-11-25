@@ -184,9 +184,11 @@ test.describe("«Удалить вход» on a wide screen", () => {
     await expectNoSideScroll(page);
     await shot(page, "logins-wide-deleted");
 
-    // the change history keeps its name: «Удаление» of «Входы и права»
+    // the change history keeps its name, and has each step: added, switched off, deleted
     await page.goto("/admin/changes");
     await hydrated(page);
-    await expect(page.locator("main")).toContainText(email.split("@")[0]);
+    const main = page.locator("main");
+    await expect(main).toContainText(email.split("@")[0]);
+    for (const act of [A.changes.actions.create, A.changes.actions.off, A.changes.actions.delete]) await expect(main.getByText(act, { exact: true }).first()).toBeVisible();
   });
 });
