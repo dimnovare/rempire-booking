@@ -4,9 +4,9 @@
  * § «Testing the shop link locally»).
  *
  *   npm run test:shop-link
- *   SHOP_DIR=<the shop's booking-partner-api worktree> npm run test:shop-link
+ *   SHOP_DIR=<the shop's booking-partner-api-2 worktree> npm run test:shop-link
  *
- * It starts the shop branch `booking-partner-api` (rempire-web) on
+ * It starts the shop branch `booking-partner-api-2` (rempire-web) on
  * localhost:3300 and booking on localhost:3400, each with `next dev` on its
  * own local PGlite database. Then a headless browser walks a barber's sales
  * from the phone to the shop's stock and back to Renat's invoice draft.
@@ -19,8 +19,12 @@
  *   - It refuses a folder with an .env file (next dev would load it), the
  *     shop's main checkout, a shop on `main`, and a busy port (it must never
  *     talk to a server it did not start).
- *   - The shop's admin password, its session secret and the partner secret
- *     are random for each run and live only in this process's memory.
+ *   - The shop's admin password, its session secret and the two partner
+ *     keys (read and write, as in production after the move) are random for
+ *     each run and live only in this process's memory.
+ *   - Booking runs as staging does (no ALLOW_INDEXING): it sells here only
+ *     because this shop is on localhost (shopWritesAllowed() in
+ *     src/lib/shop.ts).
  *   - The shop's own test switch (E2E_BOOTSTRAP: migrations over HTTP, the
  *     mail sink) works only outside production.
  *
@@ -80,10 +84,10 @@ function git(dir, ...args) {
   return r.status === 0 ? r.stdout.trim() : null;
 }
 
-/** The shop worktree next to this repository: …/rempire-web/.claude/worktrees/booking-partner-api */
+/** The shop worktree next to this repository: …/rempire-web/.claude/worktrees/booking-partner-api-2 */
 function defaultShopDir() {
   const common = git(ROOT, "rev-parse", "--path-format=absolute", "--git-common-dir");
-  return common ? path.resolve(common, "..", "..", "rempire-web", ".claude", "worktrees", "booking-partner-api") : "";
+  return common ? path.resolve(common, "..", "..", "rempire-web", ".claude", "worktrees", "booking-partner-api-2") : "";
 }
 
 /** File names only: an .env file is never opened, only noticed. */
@@ -241,12 +245,12 @@ async function main() {
   /* 1. refuse anything unsafe, before any process starts */
   const SHOP_DIR = path.resolve(process.env.SHOP_DIR || defaultShopDir());
   if (!existsSync(path.join(SHOP_DIR, "src", "app", "api", "partner", "barber-sales", "route.ts"))) {
-    refuse(`no shop branch with the partner API at ${SHOP_DIR}. Set SHOP_DIR to the rempire-web worktree of booking-partner-api.`);
+    refuse(`no shop branch with the partner API at ${SHOP_DIR}. Set SHOP_DIR to the rempire-web worktree of booking-partner-api-2.`);
   }
   const gitDir = git(SHOP_DIR, "rev-parse", "--path-format=absolute", "--git-dir");
   const commonDir = git(SHOP_DIR, "rev-parse", "--path-format=absolute", "--git-common-dir");
   if (!gitDir || !commonDir || path.resolve(gitDir) === path.resolve(commonDir)) {
-    refuse(`${SHOP_DIR} is the shop's main checkout, whose .env files may hold production values. Use a worktree of booking-partner-api.`);
+    refuse(`${SHOP_DIR} is the shop's main checkout, whose .env files may hold production values. Use a worktree of booking-partner-api-2.`);
   }
   const branch = git(SHOP_DIR, "rev-parse", "--abbrev-ref", "HEAD");
   if (!branch || branch === "main" || branch === "HEAD") refuse(`the shop folder is on ${branch ?? "no branch"}, not a feature branch.`);
@@ -261,7 +265,10 @@ async function main() {
   if (git(SHOP_DIR, "status", "--porcelain", "--untracked-files=no") !== "") refuse(`the shop worktree has uncommitted changes. Commit them first.`);
 
   /* 2. this run's own secrets, in memory only */
-  const partnerSecret = rand(32);
+  // two keys, as the shop wants them (its src/lib/partner-auth.ts): the write one 32+ characters and not the read one
+  const readSecret = rand(32);
+  const writeSecret = rand(32);
+  must(writeSecret.length >= 32 && writeSecret !== readSecret, "the write key");
   const shopPassword = rand(18);
   const cronSecret = rand(24);
   const tmp = mkdtempSync(path.join(os.tmpdir(), "rempire-shop-link-"));
@@ -276,8 +283,10 @@ async function main() {
     SHIPPING_PROVIDER: "mock",
     PUBLIC_BASE_URL: SHOP,
     E2E_BOOTSTRAP: "1",
-    BOOKING_API_SECRET: partnerSecret,
-  }, ["BOOKING_API_SECRET"]);
+    // the read key under the name production has had since 18.11.2026
+    BOOKING_API_SECRET: readSecret,
+    BOOKING_API_WRITE_SECRET: writeSecret,
+  }, ["BOOKING_API_SECRET", "BOOKING_API_WRITE_SECRET"]);
   const bookingEnv = cleanEnv({
     DB_DRIVER: "pglite",
     SEED_DEMO: "yes",
@@ -285,12 +294,16 @@ async function main() {
     EMAIL_TRANSPORT: "console",
     SMS_TRANSPORT: "console",
     SHOP_API_URL: SHOP,
-    SHOP_API_SECRET: partnerSecret,
+    SHOP_API_SECRET: readSecret,
+    SHOP_API_WRITE_SECRET: writeSecret,
     CRON_SECRET: cronSecret,
     SALES_MINUTE_MS: String(MINUTE_MS),
     // the full branch takes sales; on staging (docs/test-run.md) this stays off
     SHOP_SALES: "on",
-  }, ["SHOP_API_URL", "SHOP_API_SECRET", "CRON_SECRET"]);
+    // from a worktree whose node_modules is a junction to the main checkout's,
+    // Turbopack finds `next` only with the main checkout as its root
+    ...(process.env.NEXT_PRIVATE_OUTPUT_TRACE_ROOT ? { NEXT_PRIVATE_OUTPUT_TRACE_ROOT: process.env.NEXT_PRIVATE_OUTPUT_TRACE_ROOT } : {}),
+  }, ["SHOP_API_URL", "SHOP_API_SECRET", "SHOP_API_WRITE_SECRET", "CRON_SECRET"]);
   must(!("DATABASE_URL" in shopEnv) && !("DATABASE_URL" in bookingEnv), "DATABASE_URL in a server's environment");
 
   const shop = new Server("shop", SHOP_DIR, SHOP_PORT, shopEnv, tmp);
@@ -331,13 +344,23 @@ async function main() {
       return `bootstrap ${r.status}`;
     });
 
-    await step("shop: the partner API answers only this run's secret", async () => {
-      const ok = await http(SHOP, "/api/partner/products/lookup?q=sh&limit=1", { bearer: partnerSecret });
-      must(ok.status === 200, `right secret: ${ok.status}`);
-      const bad = await http(SHOP, "/api/partner/products/lookup?q=sh&limit=1", { bearer: rand(32) });
-      must(bad.status === 401, `wrong secret: ${bad.status}`);
-      const none = await http(SHOP, "/api/partner/products/lookup?q=sh&limit=1");
-      must(none.status === 401, `no secret: ${none.status}`);
+    await step("shop: the partner API answers only this run's keys, each on its own routes", async () => {
+      const LOOKUP = "/api/partner/products/lookup?q=sh&limit=1";
+      const ok = await http(SHOP, LOOKUP, { bearer: readSecret });
+      must(ok.status === 200, `read key: ${ok.status}`);
+      const bad = await http(SHOP, LOOKUP, { bearer: rand(32) });
+      must(bad.status === 401, `wrong key: ${bad.status}`);
+      const none = await http(SHOP, LOOKUP);
+      must(none.status === 401, `no key: ${none.status}`);
+      const write = await http(SHOP, LOOKUP, { bearer: writeSecret });
+      must(write.status === 401, `the write key on a read route: ${write.status}`);
+      // a sale with the read key: refused before the body is looked at, so this one is never booked
+      const sale = { ref: `t_${rand(12)}`, barber: { ref: randomUUID(), name: "Test Barber" }, mode: "client", items: [{ productId: "x", variant: "", qty: 1, unitCents: 1 }] };
+      const ro = await http(SHOP, "/api/partner/barber-sales", { method: "POST", body: sale, bearer: readSecret });
+      must(ro.status === 403 && ro.json?.error === "read_only", `the read key on the sale route: ${ro.status} ${JSON.stringify(ro.json)}`);
+      const anon = await http(SHOP, "/api/partner/barber-sales", { method: "POST", body: sale });
+      must(anon.status === 401, `no key on the sale route: ${anon.status}`);
+      return "read 200 · sale with the read key 403";
     });
 
     const login = await http(SHOP, "/api/admin/login/", { method: "POST", body: { password: shopPassword } });
@@ -345,7 +368,8 @@ async function main() {
     const shopCookie = (login.headers.get("set-cookie") || "").split(";")[0];
     must(shopCookie, "shop admin login set no cookie");
     const admin = (pathname, opts = {}) => http(SHOP, pathname, { ...opts, cookie: shopCookie });
-    const partner = (pathname, opts = {}) => http(SHOP, pathname, { ...opts, bearer: partnerSecret });
+    const partner = (pathname, opts = {}) => http(SHOP, pathname, { ...opts, bearer: readSecret });
+    const partnerWrite = (pathname, opts = {}) => http(SHOP, pathname, { ...opts, bearer: writeSecret });
     const byId = async (p) => (await partner(`/api/partner/products/lookup?id=${encodeURIComponent(p.productId)}&variant=${encodeURIComponent(p.variant)}&lang=ru`)).json?.items?.[0];
 
     /* 3. fake test data: three on-sale products, each with a made-up barcode, 10 on the shelf and a purchase price */
@@ -534,8 +558,8 @@ async function main() {
     await step("shop: the same sale sent twice is one order (idempotent by ref)", async () => {
       const before = (await byId(A)).stock;
       const body = { ref: `t_${rand(12)}`, barber: { ref: randomUUID(), name: "Test Barber" }, mode: "client", items: [{ productId: A.productId, variant: A.variant, qty: 1, unitCents: A.priceCents }] };
-      const one = await partner("/api/partner/barber-sales", { method: "POST", body });
-      const two = await partner("/api/partner/barber-sales", { method: "POST", body });
+      const one = await partnerWrite("/api/partner/barber-sales", { method: "POST", body });
+      const two = await partnerWrite("/api/partner/barber-sales", { method: "POST", body });
       must(one.status === 200 && one.json?.repeat === false, `first: ${one.status} ${JSON.stringify(one.json)}`);
       must(two.status === 200 && two.json?.repeat === true && two.json?.orderNumber === one.json?.orderNumber, `second: ${two.status} ${JSON.stringify(two.json)}`);
       synced += 1;
