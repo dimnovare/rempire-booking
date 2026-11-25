@@ -41,7 +41,10 @@ staging, and what each becomes at the move: `docs/move-log.md`.*
 Not blocking the launch (they can follow):
 - A8 «Мои визиты» with an SMS code (the visit link in every letter and SMS
   already lets a client move or cancel).
-- The shop's sales half (`SHOP_SALES`): needs Dim's OK for the shop branch.
+- The shop's sales half (`SHOP_SALES`): the shop side is live since 25.11
+  with sales shut; at the move the write key, then `SHOP_SALES=on`
+  (`docs/move-log.md`, S1). Renat fills «Закупка без НДС» in the shop's
+  «Склад» before then, for «Себе» sales.
 - Isolta's invoice history (the import is built; needs Isolta's export).
 
 ## Two addresses (B3, built 25.11.2026)

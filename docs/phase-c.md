@@ -23,7 +23,7 @@ is a setting, not code.
 | Start now | **Yes**, on demo data. Only C5's first real invoice waits for Isolta and the accountant |
 | Who takes the client's money | **The barber.** REMPIRE sells him the product at the shop price, and his 17 % comes off the same invoice as a minus line. So no Renat question is needed |
 | Purchase prices | **In the shop**, an admin-only field on the variant |
-| Shop side now | **Yes, on a branch.** The push waits for Dim's OK |
+| Shop side now | **Yes, on a branch**, then merged with Dim's OK on 25.11.2026 (below, «The shop's sales half») |
 | The 17 % basis | **The regular price with VAT** (Renat Q1, 18.11), also after a discount: `gross-list`. Until his answer it was Dim's pick, the price paid without VAT; migration 029 moves a business still on that pick. A switch in «Счета» → «Компания» (net paid, gross paid, list price) |
 | Photo match | **In the shop, with its own OpenAI key** |
 | How often | **Monthly**, drafts from the 1st (the billing day is a setting, 1–28) |
@@ -176,13 +176,21 @@ Everything below runs on staging with demo barbers, demo companies
   in Estonian with English under it. Fonts: Oswald, Golos Text and PT Mono,
   all under the Open Font License, in `src/app/fonts/`.
 
-## The shop branch (C2), waiting for Dim's OK
+## The shop's sales half (C2), live since 25.11.2026
 
-`rempire-web`, local branch `booking-partner-api-2` (25.11.2026): the sales
-half brought up to the live shop's `main`, **not pushed**. It replaces
-`booking-partner-api` (17.11), which is kept but is behind `main` and would
-undo live read changes. The contract and the merge-day checklist are the
-shop's `docs/partner-api.md` (§ «Auth: two keys», § «Merge day»); booking's
+`rempire-web` branch `booking-partner-api-2`: the sales half brought up to
+the live shop's `main`, and **merged with Dim's OK on 25.11.2026** (merge
+`306f30c7`, authored as rempireshop; production `bf45fd70`; the shop's
+full suite 8221/8221 on the branch first; the production build applied
+`230_partner_api.sql` and `231_partner_api_validate.sql`). Checked after the
+deploy: `POST /api/partner/barber-sales` answers 503 `not_configured`;
+«Заказы» and «Склад» open, and an open stock row has «Purchase price excl.
+VAT, €»; booking staging still reads the products. Dim's reason (25.11):
+it helps the move, because Renat can fill purchase prices now and staging's
+«Себе» sales then read them, and the code runs on the live shop for weeks
+before day one. The old `booking-partner-api` (17.11) is kept but is behind
+`main`. The contract and the merge-day checklist are the shop's
+`docs/partner-api.md` (§ «Auth: two keys», § «Merge day»); booking's
 `src/lib/shop.ts` speaks it.
 
 **Two keys** (Dim, 25.11.2026: staging must never be able to write into the
@@ -205,8 +213,9 @@ live shop):
   Staging and production can be the same Vercel project at different times;
   this is what tells them apart.
 
-> **Never push `booking-partner-api-2` (or `booking-partner-api`) to
-> `rempireshop/rempire-web`, not even as a branch.**
+> **Never push `booking-partner-api` (the old branch) or any shop branch to
+> `rempireshop/rempire-web` as a branch.** Shop changes reach `main` as one
+> commit or merge authored as rempireshop, with Dim's OK.
 >
 > - The live shop's Vercel project sets `DATABASE_URL`, the Montonio and R2
 >   keys, `TELEGRAM_BOT_TOKEN` and `CRON_SECRET` for «All Environments».
