@@ -1,51 +1,96 @@
-/* The bell in the sidebar's head (bell.tsx). The button is the product's own size, 24 × 47, at the
-   right end of the head row, a line bell in the sidebar's soft grey, white on hover, and an 8px red dot
-   at its top right when something is unread. The panel opens to the right of the sidebar (220px,
-   fixed): a white card, 360px wide, 12px corners, a light shadow. The sidebar exists from 900px only
-   (admin.css), so does the bell. */
+/* The bell in the sidebar's head and its panel (bell.tsx), measured on the product we follow
+   (25.11.2026, read-only). The button: 24 × 47 at the right end of the head row, a line bell in the
+   sidebar's soft grey, white on hover, an 8px red dot at its top right while something is unread.
+   The panel: fixed over the right edge, top to bottom, 321px, white, a soft blue shadow to the left,
+   no shade over the page; it slides in from the right in .3s (ease) and back out in .3s (ease-in-out).
+   It lives in <body> (a portal), over the test line and the sidebar, under the sheets and dialogs
+   (admin.css: 50, 60). The sidebar exists from 900px only (admin.css), so does the bell. */
 
 .bell { flex: none; display: flex; align-items: center; }
 .bell-btn { position: relative; width: 24px; height: 47px; display: grid; place-items: center; padding: 0; border: 0; background: none; color: var(--sb-soft); cursor: pointer; }
 .bell-btn:hover, .bell-btn[aria-expanded="true"] { color: #fff; }
 .bell-btn svg { display: block; }
-.bell-dot { position: absolute; top: 12px; right: 1px; width: 8px; height: 8px; border-radius: 50%; background: #ff3b30; box-shadow: 0 0 0 2px var(--sb-bg); pointer-events: none; }
+.bell-dot { position: absolute; top: 12px; right: 1px; width: 8px; height: 8px; border-radius: 50%; background: #f72c32; box-shadow: 0 0 0 2px var(--sb-bg); pointer-events: none; }
 .sb.is-menu .bell-dot { box-shadow: 0 0 0 2px var(--sb-menu-bg); }
 
-/* fixed, so the sidebar's own overflow does not cut it; beside the sidebar, level with the head */
-.bell-pop {
+@keyframes bell-in { from { transform: translateX(100%); } }
+@keyframes bell-out { to { transform: translateX(100%); } }
+
+.bell-panel {
   position: fixed;
-  top: calc(var(--test-h, 0px) + 8px);
-  left: calc(var(--side-w, 220px) + 8px);
-  z-index: 1;
-  width: 360px;
-  max-width: calc(100vw - var(--side-w, 220px) - 16px);
-  max-height: calc(100vh - var(--test-h, 0px) - 16px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 4px 0 8px;
-  border-radius: 12px;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 45;
+  width: 321px;
+  max-width: 100vw;
+  display: flex;
+  flex-direction: column;
   background: #fff;
   color: #2b3134;
-  box-shadow: rgba(0, 29, 102, .16) 0 6px 24px, rgba(0, 29, 102, .08) 0 0 1px;
-  font: 400 13px/18px var(--body);
+  box-shadow: rgba(0, 29, 102, .12) 0 12px 40px;
+  font: 400 14px/21px var(--body);
   text-align: left;
+  outline: none;
+  animation: bell-in .3s ease both;
 }
-.bell-title { margin: 0; padding: 12px 16px 8px; font: 600 16px/24px var(--body); color: #2b3134; }
-.bell-note, .bell-empty { margin: 0; padding: 16px 16px 20px; color: #828995; font-size: 13px; line-height: 18px; }
-.bell-empty { text-align: center; }
-.bell-list { list-style: none; margin: 0; padding: 0; }
-.bell-list[aria-busy="true"] { opacity: .6; }
-.bell-list li + li { border-top: 1px solid #eef0f4; }
-.sb .bell-row { display: flex; flex-direction: column; gap: 2px; padding: 10px 16px; color: #2b3134; text-decoration: none; }
-.bell-row:hover { background: #f6f7f9; }
-.bell-row.is-unread { background: #fffbea; }
-.bell-row.is-unread:hover { background: #fff5cc; }
-.bell-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.bell-head b { flex: 1; min-width: 0; font-weight: 600; font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
-.bell-new { flex: none; width: 8px; height: 8px; border-radius: 50%; background: #ff3b30; }
-.bell-body { font-size: 12px; line-height: 16px; color: #5b5b6b; overflow-wrap: anywhere; }
-.bell-row time { font-size: 11px; line-height: 14px; color: #828995; }
-.bell-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.bell-panel.is-closing { animation: bell-out .3s ease-in-out both; pointer-events: none; }
+.bell-panel a { color: inherit; text-decoration: none; }
+.bell-panel button { margin: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.bell-panel :focus-visible { outline: 2px solid #2b3134; outline-offset: -2px; }
 
-/* the sidebar's focus ring is white (admin.css); on the white card it is the admin's own */
-.sb .bell-pop :focus-visible { outline: 2px solid var(--sel, #2b3134); outline-offset: -2px; }
+.bell-nav { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; padding: 20px 20px 0; box-sizing: border-box; }
+.bell-h { margin: 0; min-width: 0; font: 500 20px/24px var(--body); color: #2b3134; }
+.bell-panel .bell-x { flex: none; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 8px; color: #71757f; transition: background-color .2s; }
+.bell-panel .bell-x:hover { background: #f0f2f5; }
+.bell-panel .bell-link { font: 500 12px/16px var(--body); color: #71757f; white-space: nowrap; }
+.bell-panel .bell-link:hover { color: #2b3134; }
+.bell-panel .bell-back { display: inline-flex; align-items: center; gap: 2px; height: 24px; margin-left: -4px; }
+
+.bell-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; margin-top: 16px; padding: 0 20px 20px; }
+
+/* the first view: «Записи», «Остальные» */
+.bell-block + .bell-block { margin-top: 24px; }
+.bell-block-head { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+.bell-block-head h3 { margin: 0; font: 500 16px/24px var(--body); color: #2b3134; }
+.bell-count { padding: 0 4px; border-radius: 8px; background: #eaeef4; color: #828995; font: 400 12px/16px var(--body); }
+.bell-panel .bell-readall { margin-left: auto; }
+.bell-empty { margin: 8px 0 0; color: #71757f; font: 400 14px/24px var(--body); }
+.bell-mini { list-style: none; margin: 8px 0 0; padding: 0 8px; border-radius: 8px; background: #f0f6ff; }
+.bell-mini-row { display: flex; align-items: center; height: 40px; padding: 8px 0; box-sizing: border-box; }
+.bell-mini-ic { flex: none; display: grid; place-items: center; padding: 4px 8px 4px 4px; color: #0041e5; }
+.bell-mini-title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: 400 14px/20px var(--body); }
+.bell-mini-row time { flex: none; margin-left: 8px; color: #71757f; font: 400 14px/20px var(--body); }
+.bell-mini-row .bell-new { margin-left: 4px; }
+.bell-arrow { flex: none; display: grid; place-items: center; margin-left: 2px; color: #71757f; }
+.bell-mini-row:hover .bell-mini-title { text-decoration: underline; text-underline-offset: 2px; }
+.bell-panel .bell-all { display: block; margin-top: 8px; }
+
+/* «Показать полностью» */
+.bell-list-head { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+.bell-list-head .bell-h { flex: 1; }
+.bell-chips { display: flex; gap: 8px; margin: 16px -20px 8px; padding: 0 20px; overflow-x: auto; scrollbar-width: none; }
+.bell-chips::-webkit-scrollbar { display: none; }
+.bell-panel .bell-chip { flex: none; height: 32px; padding: 8px; border-radius: 8px; box-sizing: border-box; background: #eaeef4; color: #2b3134; font: 400 12px/16px var(--body); white-space: nowrap; transition: background-color .2s, color .2s; }
+.bell-panel .bell-chip:hover { background: #dfe4ed; }
+.bell-panel .bell-chip[aria-pressed="true"] { background: #444951; color: #fff; }
+.bell-rows { list-style: none; margin: 0 -20px; padding: 0; }
+.bell-item { position: relative; background: #fff; transition: background-color .2s; }
+.bell-item:hover { background: #f7f9fc; }
+.bell-card { display: flex; gap: 8px; padding: 8px 20px; }
+.bell-ic { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: #f0f6ff; color: #0041e5; }
+.bell-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.bell-top { display: flex; align-items: flex-start; gap: 8px; }
+.bell-top b { flex: 1; min-width: 0; font: 400 14px/20px var(--body); color: #2b3134; overflow-wrap: anywhere; }
+.bell-top time { flex: none; color: #71757f; font: 400 14px/20px var(--body); }
+.bell-msg { display: flex; align-items: flex-start; gap: 8px; color: #71757f; font: 400 12px/16px var(--body); }
+.bell-msg > span:first-child { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.bell-msg .bell-new { margin: 4px 4px 0; }
+.bell-panel .bell-mark { position: absolute; top: 28px; right: 20px; width: 16px; height: 16px; display: grid; place-items: center; border-radius: 4px; color: #71757f; opacity: 0; pointer-events: none; }
+.bell-item:hover .bell-mark, .bell-panel .bell-mark:focus-visible { opacity: 1; pointer-events: auto; }
+.bell-item:hover .bell-msg .bell-new, .bell-item:has(.bell-mark:focus-visible) .bell-msg .bell-new { visibility: hidden; }
+.bell-panel .bell-mark:hover { color: #2b3134; }
+.bell-more { height: 1px; }
+
+.bell-new { flex: none; display: block; width: 8px; height: 8px; border-radius: 50%; background: #ffcb00; }
+.bell-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

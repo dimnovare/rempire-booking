@@ -1933,14 +1933,21 @@ export const ru = {
   /** The bell in the sidebar head (bell.tsx): what the staff pushes say, for every login. Its title is nav.notifications. */
   bell: {
     open: (unread: number) => (unread ? `Уведомления, новых: ${unread}` : "Уведомления"),
-    empty: "Пока ничего нет",
+    visits: "Записи",
+    other: "Остальные",
+    readAll: "Прочитать все",
+    showAll: "Показать полностью",
+    back: "Назад",
+    empty: "Нет уведомлений",
     unread: "Новое",
+    read: "Отметить прочитанным",
+    count: (n: number) => (n > 99 ? "99+" : String(n)),
+    unreadCount: (n: number) => `непрочитанных: ${n}`,
+    filters: { all: "Все", new: "Новые", moved: "Перенесённые", cancelled: "Отменённые" },
+    filterLabel: "Какие записи",
     failed: "Не удалось загрузить. Попробуйте ещё раз.",
-    now: "только что",
-    min: (n: number) => `${n} мин назад`,
-    today: (time: string) => `сегодня, ${time}`,
-    yesterday: (time: string) => `вчера, ${time}`,
-    day: (date: string, time: string) => `${date}, ${time}`,
+    months: ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"],
+    day: (d: number, m: string, y?: number) => (y ? `${d} ${m} ${y}` : `${d} ${m}`),
   },
 
   /** «Продажа товара»: the front desk records a barber's sale (src/lib/admin/sale.ts). */

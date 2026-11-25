@@ -24,6 +24,42 @@ Not opened at all: salaries, integrations, licence and billing.
 
 ## Sidebar
 
+### «Уведомления», the bell's panel (measured live 25.11.2026, read-only)
+Opened by the bell in the sidebar's head. Nothing was read, deleted or
+opened from it; «Прочитать все» and the rows were not pressed.
+- **Panel:** fixed over the right edge, top to bottom (over the top
+  banner too), 321 px, white, shadow `rgba(0,29,102,.12) 0 12px 40px`,
+  z-index 1001, no shade over the page. It slides in from
+  `translateX(321px)` in about .3 s on an `ease` curve and out in about
+  .3 s (ease-in-out), then leaves the DOM. × and Esc close it; a click on
+  the page does not; the bell pressed again leaves it open; opened again
+  it starts at the first view.
+- **Nav bar:** padding `20px 20px 0`; «Уведомления» 500 20/24 `#2b3134`;
+  × 24 × 24, 8 px corners, icon `rgb(113,117,127)`.
+- **First view** (content: 16 px under the bar, padding `0 20px 20px`):
+  - «Записи» 500 16/24; its count chip «99+» 12/16 `rgb(130,137,149)` on
+    `rgb(234,238,244)`, 8 px corners, padding `0 4px`; «Прочитать все»
+    at the right, 500 12/16 `rgb(113,117,127)`.
+  - 8 px below, a box `rgb(240,246,255)`, 8 px corners, padding `0 8px`,
+    the newest 3 rows of 40 px (padding `8px 0`): a 16 px icon
+    `rgb(0,65,229)` (a phone for an online booking), the title 14/20
+    («Новая онлайн-запись», «Новая запись»), the time 14/20 grey, an
+    8 × 8 `#ffcb00` dot while unread, a 16 px arrow.
+  - 8 px below, «Показать полностью», 500 12/16 grey.
+  - 24 px below, «Остальные» 500 16/24, «Нет уведомлений» 14/24 grey.
+- **«Показать полностью»:** «‹ Назад» 500 12/16 grey in the nav bar; the
+  title «Записи» 500 20/24 with «Прочитать все»; chips 32 px, padding
+  8 px, 8 px corners, 12/16, 8 px apart, scrolling sideways: «Все»
+  (active `rgb(68,73,81)`, white), «Новые», «Удаленные», «С оплатой по
+  QR», «Звонки» (`rgb(234,238,244)`). Rows full width, padding
+  `8px 20px`, hover `rgb(247,249,252)` (.2 s): a 36 px circle
+  `rgb(240,246,255)` with a 20 px blue icon (a phone; a reception bell
+  for one made in the salon; a bin for «Запись удалена»), the title 14/20
+  and the time («15:52» today, «24 ноя» before), the message 12/16 grey
+  («К сотруднику … на 15 декабря в 12:15»), the yellow dot; on hover an
+  unread row shows a 16 px double-tick «read» button in the dot's place.
+  15 rows, more as it scrolls.
+
 ### Sidebar, till mode (journal tab)
 - **Size:** 220 px wide. Ground `#22222e` (read from the ring's inner disc, matches the doc).
 - **Head row, 47 px:** salon mark and «Rempire» (14/20, 500, `#dfe4ed`), 184 px wide, a dropdown. A bell button 24 × 47 with a red dot. A 1 px separator under it.

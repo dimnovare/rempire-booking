@@ -1841,14 +1841,21 @@ export const et: typeof ru = {
 
   bell: {
     open: (unread: number) => (unread ? `Teavitused, uusi: ${unread}` : "Teavitused"),
-    empty: "Siin pole veel midagi",
+    visits: "Broneeringud",
+    other: "Muud",
+    readAll: "Märgi kõik loetuks",
+    showAll: "Näita kõiki",
+    back: "Tagasi",
+    empty: "Teavitusi pole",
     unread: "Uus",
+    read: "Märgi loetuks",
+    count: (n: number) => (n > 99 ? "99+" : String(n)),
+    unreadCount: (n: number) => `lugemata: ${n}`,
+    filters: { all: "Kõik", new: "Uued", moved: "Muudetud", cancelled: "Tühistatud" },
+    filterLabel: "Millised broneeringud",
     failed: "Laadimine ei õnnestunud. Proovige uuesti.",
-    now: "just praegu",
-    min: (n: number) => `${n} min tagasi`,
-    today: (time: string) => `täna, ${time}`,
-    yesterday: (time: string) => `eile, ${time}`,
-    day: (date: string, time: string) => `${date}, ${time}`,
+    months: ["jaan", "veebr", "märts", "apr", "mai", "juuni", "juuli", "aug", "sept", "okt", "nov", "dets"],
+    day: (d: number, m: string, y?: number) => (y ? `${d}. ${m} ${y}` : `${d}. ${m}`),
   },
 
   sale: {

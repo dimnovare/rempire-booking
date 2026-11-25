@@ -3,13 +3,14 @@
  * same events as the staff pushes, for every login the push would reach,
  * with a phone or without one; the push's own outbox rows unchanged; a
  * login's own rows only, newest first, in the words of the push in his
- * language; the red dot until he opens it; the evening plan once a day.
+ * language; in two groups, paged, each row read on its own (047); the
+ * evening plan once a day.
  * Fake people and fake keys only.
  */
 import { afterAll, afterEach, beforeEach, describe, expect, it } from "vitest";
 import { anonymiseClient } from "@/lib/admin/clients";
 import { adminCancelVisit, adminCreateVisit, adminUpdateVisit, type AdminVisitInput } from "@/lib/admin/visits";
-import { BELL, bellFeed, bellUnread, openBell, pruneBell } from "@/lib/bell";
+import { BELL, bellFeed, bellPage, bellSummary, bellUnread, pruneBell, readBell, readBellGroup } from "@/lib/bell";
 import { bellWhen } from "@/lib/bell-when";
 import { book, type BookingInput } from "@/lib/booking";
 import { closeDb, query } from "@/lib/db";
@@ -212,7 +213,8 @@ describe("bell: what a login reads", () => {
     await book(query, demo.business, online("jevgeni", "12:00"), { source: "online" });
 
     const owner = await bellFeed(query, ids.owner, demo.business.id, "ru");
-    expect(owner.map((i) => i.title)).toEqual(["Онлайн-запись", "Онлайн-запись"]);
+    expect(owner.map((i) => i.title)).toEqual(["Новая онлайн-запись", "Новая онлайн-запись"]);
+    expect(owner.map((i) => i.icon)).toEqual(["online", "online"]);
     expect(owner[0].body).toContain("Jevgeni");
     expect(owner[1].body).toContain("Valentin");
     // the push's own words and its link
@@ -223,41 +225,116 @@ describe("bell: what a login reads", () => {
 
     // the desk reads English
     const desk = await bellFeed(query, ids.desk, demo.business.id, "en");
-    expect(desk.map((i) => i.title)).toEqual(["Online booking", "Online booking"]);
+    expect(desk.map((i) => i.title)).toEqual(["New online booking", "New online booking"]);
     expect(desk[0].body).toContain("Tue 01.12, 12:00");
 
     // a barber sees his own visit only, none of the salon's
     const valentin = await bellFeed(query, ids.valentin, demo.business.id, "ru");
     expect(valentin.map((i) => i.title)).toEqual(["Новая запись"]);
+    // booked online: the phone in its circle, as the product we follow
+    expect(valentin[0].icon).toBe("online");
     expect(valentin[0].url).toBe(`/b?d=${DAY}`);
     expect(await bellFeed(query, ids.quiet, demo.business.id, "ru")).toEqual([]);
   });
 
-  it("the dot: unread until he opens it; what came after is unread again", async () => {
+  it("unread until read: opening reads nothing; a row read on its own, a group with «Прочитать все»; each login his own", async () => {
     expect(await bellUnread(query, ids.owner, demo.business.id)).toBe(0);
-    expect(await openBell(query, ids.owner, demo.business.id, "ru")).toEqual([]);
+    expect(await bellSummary(query, ids.owner, demo.business.id, "ru")).toEqual({ visits: { unread: 0, items: [] }, other: { unread: 0, items: [] } });
 
     await book(query, demo.business, online("valentin", "11:00"), { source: "online" });
     await book(query, demo.business, online("jevgeni", "11:00"), { source: "online" });
     expect(await bellUnread(query, ids.owner, demo.business.id)).toBe(2);
     expect(await bellUnread(query, ids.desk, demo.business.id)).toBe(2);
 
-    const opened = await openBell(query, ids.owner, demo.business.id, "ru");
-    expect(opened.map((i) => i.unread)).toEqual([true, true]);
-    expect(await bellUnread(query, ids.owner, demo.business.id)).toBe(0);
-    // the desk's mark is his own
-    expect(await bellUnread(query, ids.desk, demo.business.id)).toBe(2);
+    // the first view: both rows under «Записи», unread; opening it reads nothing
+    const first = await bellSummary(query, ids.owner, demo.business.id, "ru");
+    expect(first.visits.unread).toBe(2);
+    expect(first.visits.items.map((i) => i.unread)).toEqual([true, true]);
+    expect(first.other).toEqual({ unread: 0, items: [] });
+    expect(await bellUnread(query, ids.owner, demo.business.id)).toBe(2);
 
-    // a minute later, one more
-    const r = await book(query, demo.business, online("slava", "11:00"), { source: "online" });
-    if (!r.ok) throw new Error(r.code);
-    await query("update bell set created_at = created_at + interval '1 minute' where appointment_id = $1", [r.visit.id]);
+    // one row read on its own (a click, or its mark); an id of another login's row does nothing to it
+    await readBell(query, ids.owner, demo.business.id, [first.visits.items[1].id]);
+    await readBell(query, ids.desk, demo.business.id, [first.visits.items[0].id]);
+    expect((await bellSummary(query, ids.owner, demo.business.id, "ru")).visits.items.map((i) => i.unread)).toEqual([true, false]);
     expect(await bellUnread(query, ids.owner, demo.business.id)).toBe(1);
-    const again = await openBell(query, ids.owner, demo.business.id, "ru");
-    expect(again.map((i) => i.unread)).toEqual([true, false, false]);
+    expect(await bellUnread(query, ids.desk, demo.business.id, Date.now(), "visits")).toBe(2);
+
+    // a review lands in «Остальные»; «Прочитать все» of «Записи» leaves it unread
+    await query("insert into bell (business_id, user_id, kind, payload) values ($1, $2, 'own_review', $3::jsonb)", [demo.business.id, ids.owner, JSON.stringify({ reviewId: "r1", rating: 5 })]);
+    expect(await bellUnread(query, ids.owner, demo.business.id, Date.now(), "other")).toBe(1);
+    await readBellGroup(query, ids.owner, demo.business.id, "visits");
+    const after = await bellSummary(query, ids.owner, demo.business.id, "ru");
+    expect(after.visits.unread).toBe(0);
+    expect(after.visits.items.map((i) => i.unread)).toEqual([false, false]);
+    expect(after.other.unread).toBe(1);
+    expect(after.other.items.map((i) => [i.title, i.icon, i.unread])).toEqual([["Новый отзыв", "review", true]]);
+    expect(await bellUnread(query, ids.owner, demo.business.id)).toBe(1);
+    // the desk's rows are still his own, unread
+    expect(await bellUnread(query, ids.desk, demo.business.id)).toBe(2);
+  });
+
+  it("the old mark (046): what it had read stays read after 047", async () => {
+    await book(query, demo.business, online("valentin", "11:00"), { source: "online" });
+    const [row] = await query<{ created_at: Date }>("select created_at from bell where user_id = $1", [ids.owner]);
+    await query("update users set bell_seen_at = $2 where id = $1", [ids.owner, row.created_at]);
+    // 047's own update, for rows written before it ran
+    await query("update bell b set read_at = u.bell_seen_at from users u where u.id = b.user_id and u.bell_seen_at is not null and b.created_at <= u.bell_seen_at");
     expect(await bellUnread(query, ids.owner, demo.business.id)).toBe(0);
-    // opening again changes nothing
-    expect((await openBell(query, ids.owner, demo.business.id, "ru")).map((i) => i.unread)).toEqual([false, false, false]);
+    expect(await bellUnread(query, ids.desk, demo.business.id)).toBe(1);
+  });
+
+  it("«Показать полностью»: the visits by a filter, paged newest first, every row once", async () => {
+    const now = Date.now();
+    const add = (kind: string, payload: Record<string, unknown>, minutesAgo: number) =>
+      query("insert into bell (business_id, user_id, kind, payload, created_at) values ($1, $2, $3, $4::jsonb, $5)", [
+        demo.business.id,
+        ids.owner,
+        kind,
+        JSON.stringify(payload),
+        new Date(now - minutesAgo * MIN),
+      ]);
+    const v = (i: number, extra: Record<string, unknown> = {}) => ({
+      visitId: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
+      startsAt: new Date(at(DAY, "12:00")).toISOString(),
+      tz: TZ,
+      client: "Test Client",
+      services: [],
+      staff: "Slava",
+      ...extra,
+    });
+    let i = 0;
+    for (; i < BELL.page + 5; i++) await add("own_online", v(i), i);
+    // two in the same millisecond: the page still splits them right
+    await add("own_online", v(i++), 4);
+    await add("own_client", v(i++, { action: "moved", fromStart: new Date(at(DAY, "10:00")).toISOString() }), 100);
+    await add("own_client", v(i++, { action: "cancelled" }), 101);
+    await add("own_barber", v(i++, { action: "cancelled", reason: "x" }), 102);
+    await add("own_review", { reviewId: "r9", rating: 4 }, 103);
+
+    const p1 = await bellPage(query, ids.owner, demo.business.id, "ru", "visits", "all", null, now);
+    expect(p1.items).toHaveLength(BELL.page);
+    expect(p1.next).not.toBeNull();
+    const p2 = await bellPage(query, ids.owner, demo.business.id, "ru", "visits", "all", p1.next, now);
+    expect(p2.next).toBeNull();
+    const all = [...p1.items, ...p2.items];
+    expect(all).toHaveLength(BELL.page + 9);
+    expect(new Set(all.map((x) => x.id)).size).toBe(all.length);
+    const times = all.map((x) => Date.parse(x.at));
+    expect(times).toEqual([...times].sort((a, b) => b - a));
+    // the review is not a visit
+    expect(all.some((x) => x.icon === "review")).toBe(false);
+
+    const only = async (f: "new" | "moved" | "cancelled") => (await bellPage(query, ids.owner, demo.business.id, "ru", "visits", f, null, now)).items;
+    expect((await only("new")).every((x) => x.icon === "online")).toBe(true);
+    expect((await only("moved")).map((x) => [x.title, x.icon])).toEqual([["Клиент перенёс запись", "moved"]]);
+    expect((await only("cancelled")).map((x) => [x.title, x.icon])).toEqual([
+      ["Клиент отменил запись", "cancelled"],
+      ["Slava: отмена записи", "cancelled"],
+    ]);
+    const other = await bellPage(query, ids.owner, demo.business.id, "ru", "other", "all", null, now);
+    expect(other.items.map((x) => x.icon)).toEqual(["review"]);
+    expect(other.next).toBeNull();
   });
 
   it("a kind the salon switched off for push on «Уведомления» is left out, as the push leaves it out", async () => {
@@ -270,9 +347,9 @@ describe("bell: what a login reads", () => {
     expect((await bellFeed(query, ids.valentin, demo.business.id, "ru")).length).toBe(1);
   });
 
-  it("bounded: the newest 30 of the last 30 days; the cron prunes the rest", async () => {
+  it("bounded: the last 30 days; the first view the newest few; the cron prunes the rest", async () => {
     const now = Date.now();
-    for (let i = 0; i < BELL.limit + 5; i++) {
+    for (let i = 0; i < 5; i++) {
       await query("insert into bell (business_id, user_id, kind, payload, created_at) values ($1, $2, 'own_review', $3::jsonb, $4)", [
         demo.business.id,
         ids.owner,
@@ -287,13 +364,14 @@ describe("bell: what a login reads", () => {
       new Date(now - (BELL.days + 1) * 86_400_000),
     ]);
     const feed = await bellFeed(query, ids.owner, demo.business.id, "ru", now);
-    expect(feed).toHaveLength(BELL.limit);
+    expect(feed).toHaveLength(5);
     expect(feed[0].title).toBe("Новый отзыв");
     expect(Date.parse(feed[0].at)).toBe(now);
-    expect(await bellUnread(query, ids.owner, demo.business.id, now)).toBe(BELL.limit);
+    expect(await bellUnread(query, ids.owner, demo.business.id, now)).toBe(5);
+    expect((await bellSummary(query, ids.owner, demo.business.id, "ru", now)).other.items).toHaveLength(BELL.preview);
     expect(await pruneBell(query, now)).toBe(1);
     const [left] = await query<{ n: number }>("select count(*)::int as n from bell");
-    expect(left.n).toBe(BELL.limit + 5);
+    expect(left.n).toBe(5);
   });
 });
 
@@ -342,13 +420,11 @@ describe("bell: the evening plan", () => {
 
 describe("bell: when, as it says it", () => {
   const now = at("2026-11-24", "15:00");
-  it("just now, minutes, today, yesterday, then the day", () => {
-    expect(bellWhen(now - 20_000, now, TZ)).toEqual({ kind: "now" });
-    expect(bellWhen(now - 5 * MIN, now, TZ)).toEqual({ kind: "min", n: 5 });
-    expect(bellWhen(now - 59 * MIN, now, TZ)).toEqual({ kind: "min", n: 59 });
-    expect(bellWhen(at("2026-11-24", "09:05"), now, TZ)).toEqual({ kind: "today", time: "09:05" });
-    expect(bellWhen(at("2026-11-23", "18:20"), now, TZ)).toEqual({ kind: "yesterday", time: "18:20" });
-    expect(bellWhen(at("2026-11-02", "08:00"), now, TZ)).toEqual({ kind: "day", date: "02.11", time: "08:00" });
-    expect(bellWhen(at("2025-12-30", "08:00"), at("2026-01-02", "10:00"), TZ)).toEqual({ kind: "day", date: "30.12.2025", time: "08:00" });
+  it("the time today, the day and month before, the year for another year: on the salon's clock", () => {
+    expect(bellWhen(now - 60_000, now, TZ)).toEqual({ kind: "today", time: "14:59" });
+    expect(bellWhen(at("2026-11-24", "00:05"), now, TZ)).toEqual({ kind: "today", time: "00:05" });
+    expect(bellWhen(at("2026-11-23", "23:50"), now, TZ)).toEqual({ kind: "day", day: 23, month: 10 });
+    expect(bellWhen(at("2026-01-02", "08:00"), now, TZ)).toEqual({ kind: "day", day: 2, month: 0 });
+    expect(bellWhen(at("2025-12-30", "08:00"), at("2026-01-02", "10:00"), TZ)).toEqual({ kind: "day", day: 30, month: 11, year: 2025 });
   });
 });

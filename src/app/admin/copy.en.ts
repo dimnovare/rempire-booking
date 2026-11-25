@@ -1842,14 +1842,21 @@ export const en: typeof ru = {
 
   bell: {
     open: (unread: number) => (unread ? `Notifications, ${unread} new` : "Notifications"),
-    empty: "Nothing here yet",
+    visits: "Bookings",
+    other: "Other",
+    readAll: "Mark all read",
+    showAll: "Show all",
+    back: "Back",
+    empty: "No notifications",
     unread: "New",
+    read: "Mark as read",
+    count: (n: number) => (n > 99 ? "99+" : String(n)),
+    unreadCount: (n: number) => `${n} unread`,
+    filters: { all: "All", new: "New", moved: "Moved", cancelled: "Cancelled" },
+    filterLabel: "Which bookings",
     failed: "Could not load. Try again.",
-    now: "just now",
-    min: (n: number) => `${n} min ago`,
-    today: (time: string) => `today, ${time}`,
-    yesterday: (time: string) => `yesterday, ${time}`,
-    day: (date: string, time: string) => `${date}, ${time}`,
+    months: ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+    day: (d: number, m: string, y?: number) => (y ? `${d} ${m} ${y}` : `${d} ${m}`),
   },
 
   sale: {

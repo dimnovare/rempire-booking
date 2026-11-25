@@ -233,7 +233,7 @@ test.describe("«Уведомления» on a wide screen", () => {
     await shot(page, "type", true);
   });
 
-  test("the bell in the sidebar's head: a red dot for an online booking, the row in its panel, read once opened", async ({ page }) => {
+  test("the bell in the sidebar's head: a red dot for an online booking; its panel at the right edge, as the product we follow", async ({ page }) => {
     // booked online for a fake client through the booking's own API: Renat hears of it (own_online), phone or not
     const CLIENT = "Bell Test Client";
     const staff = demoId("staff", "milena");
@@ -251,6 +251,7 @@ test.describe("«Уведомления» on a wide screen", () => {
 
     await page.goto("/admin");
     await hydrated(page);
+    const vw = page.viewportSize()!;
     const bell = page.locator(".sb-head").getByRole("button", { name: /^Уведомления/ });
     await expect(bell).toBeVisible();
     await expect(bell).toHaveAttribute("aria-haspopup", "dialog");
@@ -261,42 +262,91 @@ test.describe("«Уведомления» on a wide screen", () => {
     expect(Math.round(box.x + box.width)).toBeGreaterThanOrEqual(200);
     expect(Math.round(box.x + box.width)).toBeLessThanOrEqual(220);
     await expect(bell).toHaveCSS("color", "rgb(198, 203, 211)");
-    // the dot: something is unread
+    // the dot: something is unread, the product's red
     const dot = bell.locator(".bell-dot");
     await expect(dot).toBeVisible();
-    await expect(dot).toHaveCSS("background-color", "rgb(255, 59, 48)");
+    await expect(dot).toHaveCSS("background-color", "rgb(247, 44, 50)");
 
     await bell.click();
     await expect(bell).toHaveAttribute("aria-expanded", "true");
     const panel = page.getByRole("dialog", { name: A.nav.notifications });
-    await expect(panel.getByRole("heading", { name: A.nav.notifications })).toBeVisible();
-    // beside the sidebar: a white card 360px wide, 12px corners
+    await expect(panel.getByRole("heading", { name: A.nav.notifications, level: 2 })).toBeVisible();
+    // over the right edge, top to bottom, 321px, white, square, no shade over the page; slid in
+    await expect(panel).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, 0)");
     const pbox = (await panel.boundingBox())!;
-    expect([Math.round(pbox.x), Math.round(pbox.width)]).toEqual([228, 360]);
-    await expect(panel).toHaveCSS("border-radius", "12px");
+    expect([Math.round(pbox.x), Math.round(pbox.y), Math.round(pbox.width), Math.round(pbox.height)]).toEqual([vw.width - 321, 0, 321, vw.height]);
     await expect(panel).toHaveCSS("background-color", "rgb(255, 255, 255)");
-    // the booking, newest first, unread, in the push's own words, a link to its day in the calendar
-    const row = panel.getByRole("link", { name: new RegExp(CLIENT) });
-    await expect(row).toHaveCount(1);
-    await expect(row.locator("b")).toHaveText("Онлайн-запись");
-    await expect(row).toHaveClass(/is-unread/);
-    await expect(row).toHaveAttribute("href", `/admin?d=${day!.d}`);
-    await expect(row.locator("time")).toHaveText(/только что|мин назад/);
-    // opened: read, the dot is gone
-    await expect(dot).toHaveCount(0);
+    await expect(panel).toHaveCSS("border-radius", "0px");
+    await expect(panel).toHaveCSS("animation-duration", "0.3s");
+    await expect(page.locator(".adm-sheet-wrap, .iv-dlg-wrap")).toHaveCount(0);
+
+    // «Записи»: its unread count, «Прочитать все», the newest rows in a light-blue box; «Остальные» below
+    const visits = panel.getByRole("region", { name: A.bell.visits });
+    await expect(visits.getByRole("heading", { name: A.bell.visits, level: 3 })).toHaveCSS("font-size", "16px");
+    await expect(visits.locator(".bell-count")).toHaveText(/^(\d+|99\+)$/);
+    await expect(visits.getByRole("button", { name: A.bell.readAll })).toBeVisible();
+    await expect(visits.locator(".bell-mini")).toHaveCSS("background-color", "rgb(240, 246, 255)");
+    expect(await visits.locator(".bell-mini li").count()).toBeLessThanOrEqual(3);
+    const mini = visits.locator(".bell-mini-row").first();
+    await expect(mini.locator(".bell-mini-title")).toHaveText("Новая онлайн-запись");
+    await expect(mini).toHaveAttribute("href", `/admin?d=${day!.d}`);
+    await expect(mini.locator("time")).toHaveText(/^\d\d:\d\d$/);
+    await expect(mini.locator(".bell-new")).toHaveCSS("background-color", "rgb(255, 203, 0)");
+    await expect(panel.getByRole("region", { name: A.bell.other })).toBeVisible();
+    await expectNoSideScroll(page);
     await shot(page, "bell", true);
 
-    // Esc closes it and gives the focus back
+    // a click on the page and on the bell again leave it open; opening read nothing
+    await page.locator(".sb-month-head span").click();
+    await bell.click();
+    await expect(panel).toBeVisible();
+    await expect(dot).toBeVisible();
+
+    // «Показать полностью»: «‹ Назад», the group's title, the filters, every row with its words
+    await visits.getByRole("button", { name: A.bell.showAll }).click();
+    await expect(panel.getByRole("button", { name: A.bell.back })).toBeVisible();
+    await expect(panel.getByRole("heading", { name: A.bell.visits, level: 2 })).toHaveCSS("font-size", "20px");
+    const chips = panel.getByRole("group", { name: A.bell.filterLabel }).getByRole("button");
+    await expect(chips).toHaveText(Object.values(A.bell.filters));
+    await expect(chips.first()).toHaveAttribute("aria-pressed", "true");
+    await expect(chips.first()).toHaveCSS("background-color", "rgb(68, 73, 81)");
+    const row = panel.locator(".bell-item", { hasText: CLIENT });
+    await expect(row).toHaveCount(1);
+    await expect(row).toHaveClass(/is-unread/);
+    await expect(row.locator(".bell-ic")).toHaveCSS("border-radius", "50%");
+    // the cancelled ones only: not this one
+    await chips.filter({ hasText: A.bell.filters.cancelled }).click();
+    await expect(chips.filter({ hasText: A.bell.filters.cancelled })).toHaveAttribute("aria-pressed", "true");
+    await expect(panel.locator(".bell-item", { hasText: CLIENT })).toHaveCount(0);
+    await chips.filter({ hasText: A.bell.filters.new }).click();
+    await expect(row).toHaveCount(1);
+    // on hover an unread row trades its dot for its «read» mark
+    await row.hover();
+    const mark = row.getByRole("button", { name: A.bell.read });
+    await expect(mark).toHaveCSS("opacity", "1");
+    await mark.click();
+    await expect(row).not.toHaveClass(/is-unread/);
+    await shot(page, "bell-all", true);
+
+    // back, and «Прочитать все» of each group: the red dot goes
+    await panel.getByRole("button", { name: A.bell.back }).click();
+    await expect(visits).toBeVisible();
+    for (const name of [A.bell.visits, A.bell.other]) {
+      const readAll = panel.getByRole("region", { name }).getByRole("button", { name: A.bell.readAll });
+      if (await readAll.count()) await readAll.click();
+    }
+    await expect(dot).toHaveCount(0);
+    await expect(panel.locator(".bell-new")).toHaveCount(0);
+
+    // Esc slides it out and gives the focus back
     await page.keyboard.press("Escape");
     await expect(panel).toHaveCount(0);
     await expect(bell).toBeFocused();
     await expect(bell).toHaveAttribute("aria-expanded", "false");
-    // open again: the row is read now; a click outside closes it
+    // a row clicked goes where the push's tap goes, and the panel closes
     await bell.press("Enter");
-    await expect(panel.getByRole("link", { name: new RegExp(CLIENT) })).not.toHaveClass(/is-unread/);
-    await expect(panel.getByRole("link", { name: new RegExp(CLIENT) })).toBeVisible();
-    // (the month's title: a click there does nothing else)
-    await page.locator(".sb-month-head span").click();
+    await panel.getByRole("region", { name: A.bell.visits }).locator(".bell-mini-row").first().click();
+    await expect(page).toHaveURL(/\/admin\?d=\d{4}-\d{2}-\d{2}$/);
     await expect(panel).toHaveCount(0);
     // still read after a reload
     await page.reload();

@@ -131,15 +131,21 @@ gets it → send.
        платёж», is not built.
      - **«Избранное»:** a star beside each section's title; the starred
        pages are the login's own (`users.favourites`, migration 017).
-     - **The bell: built 24.11.2026** (`bell.tsx`, `bell.css`,
-       `bell-actions.ts`; `src/lib/bell.ts`, migration 046): their 24 × 47
-       button at the right of the head row, a line bell in the sidebar's
-       grey, white on hover, an 8 px red dot while something is unread. It
-       lists what the staff pushes say (`src/lib/push-kinds.ts`, in the
-       login's language), for every login the push would reach, phone or
-       not: a white card of 360 px beside the sidebar, newest first, the
-       newest 30 of 30 days, each row a link to where the push's tap goes.
-       Opening it marks all read. The phone keeps its bar, with no bell.
+     - **The bell: built 24.11.2026, rebuilt 25.11.2026 as their panel**
+       (Dim: «The bell opens differently in real Altegio»; `bell.tsx`,
+       `bell.css`, `bell-actions.ts`; `src/lib/bell.ts`, migrations 046
+       and 047; measured in `docs/altegio-pages.md`, «Уведомления»): their
+       24 × 47 button at the right of the head row, a line bell in the
+       sidebar's grey, white on hover, an 8 px red dot while something is
+       unread. It lists what the staff pushes say (`src/lib/push-kinds.ts`,
+       in the login's language), for every login the push would reach,
+       phone or not, in their panel: 321 px over the right edge, top to
+       bottom, sliding in from the right; «Записи» and «Остальные» with
+       their counts, «Прочитать все» and the newest three; «Показать
+       полностью» for every row by a filter. Each row is read on its own
+       (clicked, or its mark on hover), a group by «Прочитать все»;
+       opening reads nothing. × or Esc closes it, a click on the page does
+       not. The phone keeps its bar, with no bell.
      - **The menu, re-measured 24.11.2026** from Dim's screen video at
        1920 × 1080 (`docs/altegio-pages.md`, «Sidebar, admin mode»): rows
        40 px tall and 12 px apart, 24 px icons, a light chevron, the head's
