@@ -71,7 +71,7 @@ the switch.
 
 | # | On staging now | At the move | Who | Done |
 |---|---|---|---|---|
-| S1 | Booking reads the shop's products through two read-only routes (`SHOP_API_URL`, a read secret); sales into the shop are off (`SHOP_SALES` unset), so staging can never sell into the live shop | The shop branch merged and deployed **only with Dim's explicit OK** (a push to the shop's `main` deploys the live shop). Production booking gets the write secret and `SHOP_SALES`; staging never does. The merge-day checklist comes from the shop-branch work of 25.11 | Dim (OK, shop env), Claude | |
+| S1 | Booking reads the shop's products with the read key (`SHOP_API_URL`, `SHOP_API_SECRET`); sales into the shop are off (`SHOP_SALES` unset). Since 25.11 booking also refuses to sell into any shop not on localhost while `ALLOW_INDEXING` is not `yes`, even with `SHOP_SALES=on` or a write key set by mistake (`shopWritesAllowed()` in `src/lib/shop.ts`). The shop's side waits on branch `booking-partner-api-2` (rempire-web, not pushed) | The shop branch merged and deployed **only with Dim's explicit OK** (a push to the shop's `main` deploys the live shop; never push it as a branch either: a Preview would migrate the live database). Merge-day checklist: rempire-web `docs/partner-api.md`, «Merge day». At the move: a new write key of 32+ characters, not the read key, as `BOOKING_API_WRITE_SECRET` in the shop and `SHOP_API_WRITE_SECRET` in booking production only; redeploy both; then `ALLOW_INDEXING=yes`, and `SHOP_SALES=on` last. Staging never gets the write key | Dim (OK, shop env), Claude | |
 | S2 | `@rempireshop_bot` (the shop's Telegram order pings) | Never touched, before or after | — | |
 
 ## Log
@@ -81,3 +81,4 @@ Newest last. One line per change to this list.
 - 25.11.2026: list started (H1–H4, T1–T5, D1–D7, M1–M5, R1–R3, S1–S2).
 - 25.11.2026: H2, two addresses built, off until `STAFF_URL`.
 - 25.11.2026: H2, staging trial on: `book-rempire.` and `staff-rempire.diipsolutions.eu` (domains, DNS, `SITE_URL`, `STAFF_URL`, Google URI, CI noindex on all three).
+- 25.11.2026: S1, read and write keys on booking's side merged; staging refuses to sell into a live shop whatever is set. Shop branch waits for Dim's OK.
