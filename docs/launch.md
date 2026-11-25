@@ -3,7 +3,8 @@
 *23.11.2026, at Dim's request. What must be true before REMPIRE's bookings
 move from Altegio to this app, in what order the move happens, and how to
 go back if it fails. Accounts and env vars: `docs/accounts.md`. The tests
-that must pass first: `docs/test-plan.md`.*
+that must pass first: `docs/test-plan.md`. Everything that lives only on
+staging, and what each becomes at the move: `docs/move-log.md`.*
 
 ## The date
 
