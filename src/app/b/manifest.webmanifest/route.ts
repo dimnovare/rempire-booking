@@ -6,8 +6,12 @@
  *   - start_url /b/start: a barber's day, or the side Renat had open last.
  *   - scope "/": the two sides share no narrower address, and inside one
  *     scope the switch between them stays in the app. The client pages do
- *     not link this manifest, so they never install as the staff app. The
- *     final addresses are open (docs/apps.md); the scope follows them.
+ *     not link this manifest, so they never install as the staff app.
+ *   - Every address in it is a path, so it is the app of the host it was
+ *     fetched from: on the staff address (STAFF_URL, src/lib/hosts.ts) the
+ *     whole host is the staff app, and the client address sends /admin and
+ *     /b there; a host that serves both halves (today's staging) installs
+ *     it as before.
  *   - id stays "/b": the phones that installed the barber app keep theirs.
  *
  * Public (a phone fetches it without the login cookie); built once.

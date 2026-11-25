@@ -8,7 +8,13 @@
  * Authorized redirect URIs on the client:
  *   https://rempire-booking.diipsolutions.eu/api/auth/google/callback
  *   http://localhost:3400/api/auth/google/callback
- *   (later the rempire.ee address)
+ *   (later the staff address, STAFF_URL: staff.rempire.ee; on the staging
+ *   trial of the two addresses, staff-rempire.diipsolutions.eu)
+ *
+ * The way back is always on the staff address when the two addresses are
+ * split (src/lib/hosts.ts): a start on the client address is first sent
+ * there, so the attempt's cookie and the session land on the staff host.
+ * Any other host (today's staging, localhost) keeps its own way back.
  *
  * The flow (authorization code + PKCE, scope «openid email»):
  *   1. /api/auth/google puts `state`, the PKCE verifier and the page to
@@ -30,9 +36,15 @@
  */
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import type { Querier } from "../db";
+import { originFor } from "../hosts";
 import { normalizeEmail } from "./login";
 
 type Env = Record<string, string | undefined>;
+
+/** Where Google sends the user back, for a request that came to `requestUrl`: the staff address's callback. Both legs must use the same one. */
+export function googleRedirectUri(requestUrl: URL, env: Env = process.env): string {
+  return `${originFor("staff", requestUrl, env)}/api/auth/google/callback`;
+}
 
 export const GOOGLE = {
   authUrl: "https://accounts.google.com/o/oauth2/v2/auth",

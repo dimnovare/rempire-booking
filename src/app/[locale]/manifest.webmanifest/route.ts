@@ -5,7 +5,10 @@
  * already remembers the client's visit, name and last choice.
  *
  *   - One app whatever the language: the id is "/" in all three.
- *   - scope "/": the three languages share no narrower address.
+ *   - scope "/": the three languages share no narrower address. On the
+ *     client address (SITE_URL, src/lib/hosts.ts) that is the whole host,
+ *     and the staff app lives on its own one, so an Android phone can
+ *     install both.
  *   - Its own icons (white tower on black), so it is never mistaken for
  *     the staff app (/b/manifest.webmanifest, dark tower on white).
  *

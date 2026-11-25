@@ -18,6 +18,10 @@ import { E2E_HTTPS_URL, E2E_PORT, E2E_URL } from "./e2e/env";
  *                                   login cookie is __Host- (Secure), and
  *                                   WebKit keeps no Secure cookie over plain
  *                                   http. Needs openssl on PATH
+ *   E2E_SPLIT=yes npm run e2e -- e2e/hosts.spec.ts --project=android
+ *                                   the two addresses (docs/launch.md B3):
+ *                                   127.0.0.1 the client one, localhost the
+ *                                   staff one; every other spec expects one
  *
  * One worker: every test talks to the same server and the same database.
  * Each phone logs in as its own barber (Valentin on Android, Jevgeni on the

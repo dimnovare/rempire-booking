@@ -26,6 +26,18 @@ const next = path.join(root, "node_modules", "next", "dist", "bin", "next");
 // pages that offer notifications can be looked at (e2e/app.spec.ts). No test
 // subscribes a phone with it, so nothing is ever sent.
 const vapid = process.env.E2E_VAPID === "yes" ? (await import("web-push")).default.generateVAPIDKeys() : null;
+// E2E_SPLIT=yes: the two addresses (docs/launch.md B3) on this one server, for
+// e2e/hosts.spec.ts: 127.0.0.1 is the client address, localhost (where
+// e2e/auth.setup.ts logs in) the staff one. Otherwise one address, as on
+// staging today: a STAFF_URL in a local .env file never splits a run.
+const splitRun = process.env.E2E_SPLIT === "yes";
+const split = splitRun ? { SITE_URL: `http://127.0.0.1:${port}`, STAFF_URL: `http://localhost:${port}` } : { STAFF_URL: "" };
+// Self-hosted, Next takes http://<--hostname, else localhost>:<port> as every
+// request's own address and turns a redirect to that origin into a relative
+// one, so a redirect from 127.0.0.1 to localhost would stay on 127.0.0.1
+// (on Vercel the two hosts are real and this never happens). "::" binds
+// what the default binds, every address, and is neither test host.
+const hostArgs = splitRun ? ["--hostname", "::"] : [];
 
 const env = {
   ...process.env,
@@ -60,12 +72,13 @@ const env = {
   VAPID_PRIVATE_KEY: vapid?.privateKey ?? "",
   VAPID_SUBJECT: "",
   DATABASE_URL: "",
+  ...split,
   NEXT_TELEMETRY_DISABLED: "1",
   // `next start` refuses some local conveniences without it; staging rules stay on
   ...(prod ? { NODE_ENV: "production" } : {}),
 };
 
-const child = spawn(process.execPath, [next, prod ? "start" : "dev", "--port", port], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
+const child = spawn(process.execPath, [next, prod ? "start" : "dev", "--port", port, ...hostArgs], { cwd: root, env, stdio: ["ignore", "pipe", "pipe"] });
 if (prod) httpsFront();
 child.stdout.pipe(log);
 child.stderr.pipe(log);

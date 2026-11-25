@@ -141,7 +141,11 @@ expects. Each one has its own test in the task named.
     created_at)`.
     - `purpose` is `booking` or `staff`; `status` is `pending` or
       `verified`.
-    - REMPIRE gets `book.rempire.ee` and `staff.rempire.ee` at the move.
+    - **REMPIRE's own two hosts are not rows:** they come from `SITE_URL`
+      (client) and `STAFF_URL` (staff), as built for launch blocker B3
+      (`src/lib/hosts.ts`, `docs/launch.md` «Two addresses»): at the move
+      `book.rempire.ee` and `staff.rempire.ee`. `business_hosts` rows are
+      for the other businesses' own domains, later (M8).
     - The neutral domain is not a row: it is `PLATFORM_HOST`, and the first
       part of its path names the business.
 - `049_users_drop_business.sql`
@@ -254,8 +258,8 @@ REMPIRE works exactly as before. One business is still all there is.
 
 **Files**
 - Move `src/app/[locale]/` to `src/app/[biz]/[locale]/`.
-- Modify: `src/proxy.ts`, `src/lib/business.ts`, `src/app/v/`, the visit
-  pages, `settings/online/`.
+- Modify: `src/proxy.ts`, `src/lib/hosts.ts` (B3's `hostRole`),
+  `src/lib/business.ts`, `src/app/v/`, the visit pages, `settings/online/`.
 - Create:
   - `src/app/[biz]/[locale]/manifest.webmanifest/route.ts` (replaces
     today's);
@@ -263,9 +267,20 @@ REMPIRE works exactly as before. One business is still all there is.
 - Test: `tests/business-routing.test.ts`, a new case in `e2e/book.spec.ts`
 
 **What it does**
+- **Built on B3's host function.** Since 25.11 `hostRole(host)` in
+  `src/lib/hosts.ts` says what a host serves (`booking`, `staff` or `all`)
+  from `SITE_URL` and `STAFF_URL`, and `src/proxy.ts` acts on it. M4
+  extends that same function to return the business too, instead of
+  writing a second host lookup:
+  - REMPIRE's two hosts stay `SITE_URL`'s and `STAFF_URL`'s (no
+    `business_hosts` rows for them), and they name the default business;
+  - a `business_hosts` row (another business's own domain, M8) gives its
+    business and its `purpose`, `booking` or `staff`;
+  - `PLATFORM_HOST` gives no business: the path's first part does;
+  - any other host stays `all`, as today.
 - `proxy.ts` reads the host first:
-  - **A business's own host** (a `business_hosts` row, for example
-    `book.rempire.ee`): every path belongs to that business, so
+  - **A business's own host** (REMPIRE's `SITE_URL` host, later a
+    `business_hosts` row): every path belongs to that business, so
     `/ru/…` is rewritten to `/<its slug>/ru/…`.
   - **The neutral host** (`PLATFORM_HOST`): `/<slug>/…` passes through and
     `/<slug>` alone goes to the client's language. A bare `/` shows a plain

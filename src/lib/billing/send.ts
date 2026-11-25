@@ -7,7 +7,7 @@ import type { Business } from "../availability";
 import type { Querier } from "../db";
 import type { LetterBody } from "../email";
 import { invoiceLetter } from "../letters";
-import { siteUrl } from "../site";
+import { staffUrl } from "../site";
 import { addDays, todayIn } from "../tz";
 import { invoiceById, invoiceLines, partyOfIssuer, partyOfReceiver } from "./invoices";
 import { issuerById, receiverById } from "./parties";
@@ -58,7 +58,8 @@ export async function invoiceMessage(
   const locale = row.locale === "ru" || row.locale === "en" ? row.locale : "et";
   const letter = invoiceLetter(
     { kind: inv.kind, number: inv.number, periodFrom: inv.periodFrom, periodTo: inv.periodTo, dueOn: inv.dueOn, grossCents: inv.grossCents, sellerName: inv.seller?.name ?? "REMPIRE" },
-    { locale, origin: siteUrl(env).origin, pdf: { filename: pdf.filename, content: pdf.bytes } },
+    // a letter to a barber's company: the staff address (src/lib/site.ts)
+    { locale, origin: staffUrl(env).origin, pdf: { filename: pdf.filename, content: pdf.bytes } },
   );
   return { subject: letter.subject, body: letter };
 }

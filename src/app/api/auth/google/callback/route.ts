@@ -8,14 +8,16 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { afterLogin, GOOGLE_COOKIE, loginPageFor, safeStaffPath, START_PATH } from "@/lib/auth/cookie";
 import { currentStaffUser, startSession } from "@/lib/auth/current";
-import { exchangeGoogleCode, googleLoginConfigured, loginWithGoogle, readGoogleIdToken, sameState, unpackAttempt } from "@/lib/auth/google";
+import { exchangeGoogleCode, googleLoginConfigured, googleRedirectUri, loginWithGoogle, readGoogleIdToken, sameState, unpackAttempt } from "@/lib/auth/google";
 import { dbConfigured, query } from "@/lib/db";
+import { requestUrlOf } from "@/lib/hosts";
 
 export async function GET(request: Request) {
   // env, cookies and a fresh state: never prerendered
   await connection();
   if (!googleLoginConfigured() || !dbConfigured()) redirect("/admin/login");
-  const url = new URL(request.url);
+  // the host asked for, from the Host header (src/lib/hosts.ts)
+  const url = requestUrlOf(request);
   const jar = await cookies();
   const attempt = unpackAttempt(jar.get(GOOGLE_COOKIE)?.value);
   jar.delete(GOOGLE_COOKIE);
@@ -32,7 +34,7 @@ export async function GET(request: Request) {
   let userId: string | null = null;
   let reason = "google";
   try {
-    const idToken = await exchangeGoogleCode({ code, verifier: attempt.verifier, redirectUri: `${url.origin}/api/auth/google/callback` });
+    const idToken = await exchangeGoogleCode({ code, verifier: attempt.verifier, redirectUri: googleRedirectUri(url) });
     const claims = readGoogleIdToken(idToken, process.env.GOOGLE_CLIENT_ID ?? "");
     if (claims) {
       const r = await loginWithGoogle(query, claims);
