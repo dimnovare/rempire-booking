@@ -300,6 +300,9 @@ async function main() {
     SALES_MINUTE_MS: String(MINUTE_MS),
     // the full branch takes sales; on staging (docs/test-run.md) this stays off
     SHOP_SALES: "on",
+    // from a worktree whose node_modules is a junction to the main checkout's,
+    // Turbopack finds `next` only with the main checkout as its root
+    ...(process.env.NEXT_PRIVATE_OUTPUT_TRACE_ROOT ? { NEXT_PRIVATE_OUTPUT_TRACE_ROOT: process.env.NEXT_PRIVATE_OUTPUT_TRACE_ROOT } : {}),
   }, ["SHOP_API_URL", "SHOP_API_SECRET", "SHOP_API_WRITE_SECRET", "CRON_SECRET"]);
   must(!("DATABASE_URL" in shopEnv) && !("DATABASE_URL" in bookingEnv), "DATABASE_URL in a server's environment");
 
