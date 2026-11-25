@@ -63,6 +63,8 @@ jobs:
       VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
       DOMAIN: rempire-booking.diipsolutions.eu
+      # the two-address trial (docs/launch.md, B3): SITE_URL and STAFF_URL's hosts
+      TRIAL_HOSTS: book-rempire.diipsolutions.eu staff-rempire.diipsolutions.eu
       VERCEL_CLI: vercel@65.15.0
     steps:
       - name: Token check
@@ -92,8 +94,10 @@ jobs:
       - name: noindex on staging
         if: env.VERCEL_TOKEN != ''
         run: |
-          if curl -s -o /dev/null --max-time 15 "https://$DOMAIN/robots.txt"; then
-            npm run check:noindex -- "https://$DOMAIN"
-          else
-            echo "::warning::https://$DOMAIN does not answer yet. Add the DNS record (docs/staging-setup.md)."
-          fi
+          for host in $DOMAIN $TRIAL_HOSTS; do
+            if curl -s -o /dev/null --max-time 15 "https://$host/robots.txt"; then
+              npm run check:noindex -- "https://$host"
+            else
+              echo "::warning::https://$host does not answer yet. Add the DNS record (docs/staging-setup.md)."
+            fi
+          done

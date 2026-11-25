@@ -31,7 +31,7 @@ staging, and what each becomes at the move: `docs/move-log.md`.*
 |---|---|---|---|
 | B1 | **Altegio import (A7):** clients with phones, future visits. Staff, services, prices and hours are already in from Altegio's public widget | Renat forwards Altegio's Excel exports; Claude builds the importer | Without the future visits, barbers lose every booking made in Altegio |
 | B2 | **rempire.ee DNS:** who holds the Cloudflare zone, and access for one DNS change per host | Renat (or whoever runs rempire.ee) | No address, no Resend domain on rempire.ee, no Google publish |
-| B3 | **Two addresses:** `book.rempire.ee` for clients, `staff.rempire.ee` for staff (round 13). **Built 25.11** (below, «Two addresses»): off until `STAFF_URL` is set. Still: the staging trial on two diipsolutions.eu addresses, then the rempire.ee DNS (B2) | Dim: two DNS records, two Vercel domains, two env vars, one Google redirect URI (below) | On Android only one of the two apps installs while they share an address (`docs/apps.md`). Renat's iPhone holds both, so his test does not need it |
+| B3 | **Two addresses:** `book.rempire.ee` for clients, `staff.rempire.ee` for staff (round 13). **Built 25.11** (below, «Two addresses»): on staging's trial addresses since 25.11 (`book-rempire.`, `staff-rempire.diipsolutions.eu`). Still: the two apps on one Android phone (Dim), then the rempire.ee DNS (B2) | Dim: two DNS records, two Vercel domains, two env vars, one Google redirect URI (below) | On Android only one of the two apps installs while they share an address (`docs/apps.md`). Renat's iPhone holds both, so his test does not need it |
 | B4 | **Messaggio:** project login and the sender code «REMPIRE» | Renat → Dim puts them into Vercel | No SMS reminders. A new sender name takes 1–5 working days |
 | B5 | **Production database** on Railway, empty, its own URL and CA | Waits for Renat's answer on which side the accounts go (`payer.side`): the shop's Railway or another. Two databases, one for staging and one live: the same app and setup, but live clients never mix with test data and a change is tried on staging first. Reusing today's database as the live one works too; staging then gets a new empty one (Dim, 23.11: asked) | Staging's database holds demo data |
 | B6 | **Privacy policy** page in RU, ET, EN | **Drafted 23.11:** `/ru/privacy`, text in `src/lib/privacy-content.ts` with 16 «[to confirm]» marks. Still: Renat reads it and answers what only the salon knows (his page, `privacy`, 23.11); the server regions are ours to check. The erasure request is built: «Обезличить» on the client's card (23.11) | Google needs it to publish the login; we hold clients' phones and e-mails (GDPR) |
@@ -87,8 +87,10 @@ on it:
   --project=android` (127.0.0.1 is the client address, localhost the
   staff one; the default run skips it).
 
-**Staging trial (Dim, not done yet).** Today's address keeps serving
-everything, so Renat's links do not change.
+**Staging trial: steps 1–5 done 25.11.2026** (Claude, at Dim's word;
+`docs/move-log.md`, H2). Step 6 is Dim's on a phone. Today's address
+keeps serving everything, so Renat's links do not change. CI's noindex
+step checks all three hosts (`TRIAL_HOSTS` in `.github/workflows/ci.yml`).
 1. Vercel, project `rempire-booking` → Settings → Domains: add
    `book-rempire.diipsolutions.eu` and `staff-rempire.diipsolutions.eu`,
    both to Production. Vercel shows the CNAME value for each, and maybe a

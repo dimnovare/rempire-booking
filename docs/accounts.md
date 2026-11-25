@@ -124,7 +124,8 @@ new account as Owner; they accept; change the support and contact
 e-mails under Branding; remove rempireshopinfo@gmail.com if wanted. The
 client ID and secret stay, so Vercel needs no change.
 
-**The staging trial of the two addresses** (`docs/launch.md`, B3): add
+**The staging trial of the two addresses** (`docs/launch.md`, B3): added
+25.11.2026 as the third redirect URI,
 `https://staff-rempire.diipsolutions.eu/api/auth/google/callback`. While
 the two addresses are split, Google always comes back to the staff
 address; today's staging address keeps its own URI.
