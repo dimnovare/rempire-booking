@@ -219,7 +219,3 @@
 @container (max-width: 860px) {
   .sv-cols, .sv-row { grid-template-columns: minmax(160px, 1fr) 124px 104px 132px 120px 40px; }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .sv-sw::after, .sv-chev > svg { transition: none; }
-}

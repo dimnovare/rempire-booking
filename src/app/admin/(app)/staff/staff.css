@@ -47,7 +47,3 @@
   :where(.adm) input.st-sw:disabled { cursor: default; opacity: .5; }
   .st-c-count { color: #262626; font-size: 14px; line-height: 20px; font-variant-numeric: tabular-nums; }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .st-sw::after { transition: none; }
-}

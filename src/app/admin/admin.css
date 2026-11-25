@@ -66,12 +66,13 @@ html, body { background: var(--ink); }
 .num { font-variant-numeric: tabular-nums; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /*
- * «Reduce motion» stops the admin's transitions, except the sidebar's open
- * and fold (the list, its card, the chevron). Altegio slides them whatever
- * the setting, and Dim's Chrome reports «reduce» (25.11): with it, ours
- * opened as a plain click while Altegio's slid.
+ * No «reduce motion» rules in the staff app (admin and barber app), on
+ * purpose (Dim, 25.11.2026: «Whole admin»). Altegio's admin moves the same
+ * whatever the setting, and Dim's Chrome reports «reduce»: with the rules,
+ * the sidebar opened as a plain click while Altegio's slid. Every motion
+ * here is short (.12–.25s) and starts from a tap. The client pages keep
+ * theirs (globals.css). e2e/frame.spec.ts checks it.
  */
-@media (prefers-reduced-motion: reduce) { .adm *:not(.sb-subs, .sb-group, .sb-row > svg) { transition: none !important; } }
 
 /* ---------- shell ---------- */
 .adm-app { min-height: 100dvh; }
@@ -364,7 +365,6 @@ html, body { background: var(--ink); }
 .adm-savetoast small { flex: 1 0 100%; padding: 2px 0 6px; color: var(--mute); font-size: 13px; }
 /* it only slides up a little: a box that starts invisible stays invisible when the browser is slow to draw */
 @keyframes adm-savetoast-in { from { transform: translateY(8px); } }
-@media (prefers-reduced-motion: reduce) { .adm-savetoast { animation: none; } }
 .adm-btns-col { display: flex; flex-direction: column; gap: 8px; }
 
 /* the barber picker: portraits, the current one lime */
@@ -1911,7 +1911,6 @@ th.n .iv-sort { flex-direction: row-reverse; }
 .vw-slide-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .vw-slide-head h3, .vw-h { font: 500 14px/20px var(--body); }
 @keyframes vw-in { from { transform: translateX(-12px); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .vw-slide { animation: none; } }
 .vw-list { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .vw-list li { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 8px; background: #fff; overflow-wrap: anywhere; }
 .vw-right .vw-list li { padding: 8px 10px; background: #f7f9fc; }
