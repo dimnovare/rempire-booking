@@ -196,6 +196,13 @@ test.describe("the frame", () => {
       expect(await look(".sb-group.is-open .sb-sub")).toMatchObject({ h: 40, color: "rgb(198, 203, 211)", font: "500 14px/20px" });
       expect(await page.locator(".sb-group.is-open > .sb-subs").evaluate((el) => [getComputedStyle(el).transitionProperty, getComputedStyle(el).transitionDuration])).toEqual(["grid-template-rows, visibility", "0.25s, 0s"]);
       expect(await page.locator(".sb-group:not(.is-open) > .sb-subs").first().evaluate((el) => [el.getBoundingClientRect().height, getComputedStyle(el).visibility, (el as HTMLElement).inert])).toEqual([0, "hidden", true]);
+      // «reduce motion» on (Dim's Chrome, 25.11): it still slides, as Altegio's does; other transitions stop
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      expect(await page.locator(".sb-group.is-open > .sb-subs").evaluate((el) => [getComputedStyle(el).transitionProperty, getComputedStyle(el).transitionDuration])).toEqual(["grid-template-rows, visibility", "0.25s, 0s"]);
+      expect(await page.locator(".sb-group.is-open").evaluate((el) => getComputedStyle(el).transitionDuration)).toBe("0.25s, 0.25s");
+      expect(await page.locator(".sb-group.is-open > .sb-row > svg:last-child").evaluate((el) => getComputedStyle(el).transitionDuration)).toBe("0.25s");
+      expect(await page.locator(".sb-menu > a.sb-row").first().evaluate((el) => getComputedStyle(el).transitionDuration)).toBe("0s");
+      await page.emulateMedia({ reducedMotion: "no-preference" });
       expect(await look(".sb-bar")).toMatchObject({ w: 220, h: 44, bg: "rgb(255, 203, 0)" });
       expect(await page.locator(".sb-bar").evaluate((el) => window.innerHeight - el.getBoundingClientRect().bottom)).toBe(0);
       // on its page the group's row is white and heavier

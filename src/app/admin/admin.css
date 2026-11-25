@@ -65,7 +65,13 @@ html, body { background: var(--ink); }
 .logo { display: block; height: 19px; width: auto; }
 .num { font-variant-numeric: tabular-nums; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-@media (prefers-reduced-motion: reduce) { .adm * { transition: none !important; } }
+/*
+ * «Reduce motion» stops the admin's transitions, except the sidebar's open
+ * and fold (the list, its card, the chevron). Altegio slides them whatever
+ * the setting, and Dim's Chrome reports «reduce» (25.11): with it, ours
+ * opened as a plain click while Altegio's slid.
+ */
+@media (prefers-reduced-motion: reduce) { .adm *:not(.sb-subs, .sb-group, .sb-row > svg) { transition: none !important; } }
 
 /* ---------- shell ---------- */
 .adm-app { min-height: 100dvh; }
