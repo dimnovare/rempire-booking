@@ -120,6 +120,9 @@ async function crawl(browser: Browser, login: Login, size: (typeof SIZES)[number
   };
   page.on("pageerror", (e) => note(`script error: ${e.message.slice(0, 200)}`));
   page.on("console", (m) => {
+    // Playwright's trace recorder puts a script into every frame; the letter preview's sandbox (no scripts) refuses it.
+    // Not the app's: without the trace the preview logs nothing (26.11).
+    if (/^Blocked script execution in 'about:(srcdoc|blank)'/.test(m.text())) return;
     if (m.type() === "error") note(`console: ${m.text().slice(0, 200)}`);
   });
   page.on("response", (r) => {
@@ -140,6 +143,8 @@ async function crawl(browser: Browser, login: Login, size: (typeof SIZES)[number
     await settle(page);
     const landed = new URL(page.url()).pathname + new URL(page.url()).search;
     if (status >= 400) note(`answers ${status}`);
+    // the admin's and the barber app's 404 page streams inside the frame, so it answers 200: read its mark
+    else if (await page.locator("main[data-not-found]:visible").count()) note("answers 404 (its page, status 200)");
     if (await page.locator("main[role=alert]").count()) note("the error page");
 
     // sideways scroll on a phone
@@ -149,13 +154,14 @@ async function crawl(browser: Browser, login: Login, size: (typeof SIZES)[number
     }
 
     // its links: pages to visit, files to fetch
-    const hrefs = await page.$$eval("a[href]", (as) => as.map((a) => (a as HTMLAnchorElement).getAttribute("href") ?? ""));
-    for (const h of hrefs) {
+    // a link with «download» is a file whatever its address (the invoices' CSV is /admin/invoices/csv?m=…)
+    const links = await page.$$eval("a[href]", (as) => as.map((a) => ({ h: a.getAttribute("href") ?? "", file: a.hasAttribute("download") })));
+    for (const { h, file } of links) {
       if (!h || h.startsWith("#")) continue;
       const u = new URL(h, page.url());
       if (u.origin !== new URL(E2E_URL).origin) continue;
       const p = u.pathname + u.search;
-      if (/\/api\/|\.(csv|xlsx|pdf|ics)(\?|$)/i.test(p)) {
+      if (file || /\/api\/|\.(csv|xlsx|pdf|ics)(\?|$)/i.test(p)) {
         if (fetched.has(pattern(p)) || /logout|signout/i.test(p)) continue;
         fetched.add(pattern(p));
         const r = await ctx.request.get(p).catch(() => null);
