@@ -1141,7 +1141,7 @@ button.cal-head:hover b { color: var(--accent); }
 .rq-acts .adm-btn { width: 100%; justify-content: center; gap: 6px; }
 .rq-yes { grid-area: yes; }
 .rq-no { grid-area: no; position: relative; }
-/* «Отклонить»'s small window, under its button (design artifact, 25.11): over the card on a phone, 340px from its right edge on a computer */
+/* «Отклонить»'s small window, under its button (design artifact, 25.11): 340px from its right edge on a computer; on a phone over the bottom bar (below) */
 .rq-pop { position: absolute; top: calc(100% + 8px); left: 0; z-index: 5; width: calc(200% + 8px); padding: 16px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--raise); box-shadow: 0 12px 32px rgba(8, 8, 12, .18); }
 .rq-pop-title { margin: 0 0 8px; font-weight: 600; font-size: 15px; }
 .rq-pop .rq-note { margin-top: 0; }
@@ -1155,6 +1155,10 @@ button.cal-head:hover b { color: var(--accent); }
 .rq-state.is-ok { background: #e3f4ec; color: #0f6b47; }
 .rq-state.is-red { background: #fde8e6; color: #b42318; }
 .rq-none { margin: 0; padding: 32px 12px; border-radius: 12px; background: var(--raise); color: var(--dim); text-align: center; }
+@media (max-width: 899px) {
+  /* on a phone it rests just over the bottom bar, as «Счета»'s windows do: under a card near the page's end its buttons fell behind the bar (26.11) */
+  .rq-pop { position: fixed; top: auto; left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(var(--nav-h) + 16px + env(safe-area-inset-bottom, 0px)); z-index: 40; width: auto; max-height: 60dvh; overflow-y: auto; }
+}
 @media (min-width: 600px) {
   .rq-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; }
   .rq-tools select { flex: none; width: auto; min-height: 36px; font-size: 13px; }

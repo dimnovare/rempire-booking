@@ -155,6 +155,9 @@ test.describe("his time", () => {
       // «Отклонить» asks first, with the answer to the barber
       await req.getByRole("button", { name: A.req.decline }).click();
       const ask = owner.getByRole("alertdialog", { name: A.req.declineAsk(barber.name) });
+      // on a phone it rests over the bottom bar, never behind it, wherever the card is (26.11)
+      const [box, tabs] = [(await ask.boundingBox())!, (await owner.locator(".adm-nav").boundingBox())!];
+      expect(box.y + box.height).toBeLessThanOrEqual(tabs.y);
       await ask.getByRole("button", { name: A.req.decline }).click();
       await expect(owner.locator(".adm-toast")).toContainText(A.req.declinedWhat(barber.name, ""));
 
