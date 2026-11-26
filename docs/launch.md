@@ -143,6 +143,43 @@ read (`docs/renat-before-30-11.ru.md`). Settled the same evening (Dim,
 kickoff decision 38): no client app of our own, and another business
 (tattoo or other) is added when Renat wants it.
 
+## Setup copy (D3, built 26.11.2026)
+
+`tools/setup-copy.mjs` copies the salon's setup from staging into an
+empty production database: the business and its «Настройки», the location
+with its profile, logo and gallery, service categories, services, barbers
+with their photos, prices, times and weekly hours, and shifts and online
+hours from today on. Nothing made-up comes along: no clients, visits,
+logins, time off, special time, sales, invoices or logs. Every table is
+sorted into SETUP or DATA in the tool, and `tests/setup-copy.test.ts` fails
+when a new migration adds a table that is in neither.
+
+Two steps, so the two database addresses are never in one shell. Dim runs
+them in his terminal, pasting each database's public address into a
+hidden prompt (`Read-Host -MaskInput`) that sets `DATABASE_URL` for that run
+only (plus `DATABASE_SSL_NO_VERIFY=1` when the CA is not at hand), the way
+staging's one-off imports ran; Claude never sees the address. The file
+goes outside the repository (the tool refuses a path inside it: the repo
+is public):
+
+```
+node tools/setup-copy.mjs export --out <file outside the repo>   # DATABASE_URL = staging
+node tools/setup-copy.mjs import <file> --dry-run                # DATABASE_URL = production
+node tools/setup-copy.mjs import <file>                          # DATABASE_URL = production
+```
+
+- The import refuses a database that is not empty, or that is at another
+  migration than the file. It writes everything in one transaction or
+  nothing.
+- The invoice setup (the salon's company, the barbers' companies, chair
+  rents) comes only with `--with-invoices`. The export refuses it while any
+  of it is still the demo's «Näidis» rows, so it goes in by hand in
+  production's «Счета → Настройки» unless the real details are entered on
+  staging first.
+- Both steps print what the file holds: the barbers, the services on and
+  off, the settings keys, and a warning when a value holds staging's
+  address. Read it before the real import.
+
 ## The move, in order
 
 **Days before**
@@ -153,8 +190,12 @@ kickoff decision 38): no client app of our own, and another business
 3. Resend: the rempire.ee sending domain, `EMAIL_FROM`, webhook.
 4. Google: the redirect URI on the staff host, privacy policy, publish.
 5. Deploy production **with `ALLOW_INDEXING` still unset**: the test run
-   stays on, so nothing reaches a real client. Run the production smoke
-   test (`docs/test-plan.md` § 9).
+   stays on, so nothing reaches a real client. Its build migrates the empty
+   database. Copy the salon's setup from staging («Setup copy» below), then
+   redeploy so the owner logins are made (`tools/bootstrap-owner.mjs` skips
+   while there is no business). From here on the setup is changed in
+   production, not on staging. Run the production smoke test
+   (`docs/test-plan.md` § 9).
 6. Dress rehearsal: import Altegio's exports into production, compare
    counts and 20 random visits with Altegio, then wipe them.
 
