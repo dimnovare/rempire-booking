@@ -23,7 +23,12 @@ const at = (date: string, time: string) => zonedToUtc(date, time, TZ);
 // The route asks the real clock whether a visit is still ahead, so the visits
 // here are on a real day to come: the first day Slava works, three or more days on.
 const NOW = Date.now();
-const DAY = demoWorkday("slava", addDays(todayIn(TZ, NOW), 3));
+// a day both Slava and Renat work: the «push» test books them both (Renat is off some days, 26.11.2026)
+const bothWork = (from: string): string => {
+  const d = demoWorkday("slava", from);
+  return demoWorkday("renat", d) === d ? d : bothWork(addDays(d, 1));
+};
+const DAY = bothWork(addDays(todayIn(TZ, NOW), 3));
 const DDMM = `${DAY.slice(8, 10)}.${DAY.slice(5, 7)}`;
 // when the 12:00 visits are reminded: two hours before. Reminders are planned at most 48 hours ahead.
 const DUE = at(DAY, "10:00");

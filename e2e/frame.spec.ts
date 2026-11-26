@@ -423,13 +423,30 @@ test.describe("the frame", () => {
       // in «Счета», the barber's month: the same list his own sales are on, with the client and «тест» (no shop on staging)
       await page.goto(`/admin/invoices/barber/${demoId("staff", SELLER.toLowerCase())}?m=${tallinnDate(0).slice(0, 7)}`);
       await hydrated(page);
-      const sold = page.locator(".adm-inv-sales > li", { hasText: `${PRODUCT} × 2` }).first();
+      const sold = page.locator(".iv-bm-sale", { hasText: `${PRODUCT} × 2` }).first();
       await expect(sold).toBeVisible();
       await expect(sold).toContainText(buyer);
       await expect(sold).toContainText(A.inv.mode.client);
-      await expect(sold).toContainText("8,47 €");
+      await expect(sold).toContainText(A.inv.bm.barber("8,47 €"));
       await expect(sold.locator(".adm-tag", { hasText: A.inv.sync.test })).toBeVisible();
       await expect(sold.locator(".end")).toHaveText("49,80 €");
+      // its «⋯» (Dim, 26.11: as «Удалить вход» in «Доступ»): a menu with «Сторно» last, in red, that asks first
+      const acts = A.inv.bm.acts(`${PRODUCT} × 2`);
+      const more = sold.getByRole("button", { name: acts });
+      expect((await more.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      await more.click();
+      const item = page.getByRole("menu", { name: acts }).getByRole("menuitem").last();
+      await expect(item).toHaveText(A.inv.bm.reverseItem);
+      await expect(item).toHaveCSS("color", "rgb(217, 45, 32)");
+      await item.click();
+      const ask = page.getByRole("alertdialog", { name: A.inv.reverse });
+      await expect(ask).toContainText(A.inv.reverseAsk);
+      await expect(ask.getByRole("textbox", { name: A.inv.reverseNote })).toBeVisible();
+      await ask.getByRole("button", { name: A.cancel }).click();
+      await expect(ask).toHaveCount(0);
+      // cancelled: nothing taken back
+      await expect(sold.locator(".adm-tag", { hasText: A.inv.reversal })).toHaveCount(0);
+      await expectNoSideScroll(page);
       // and in the barber's own app, on «Продать», among today's
       await page.goto("/b/pick");
       await hydrated(page);
@@ -440,7 +457,7 @@ test.describe("the frame", () => {
       await expect(page.locator(".bx-sale", { hasText: `${PRODUCT} × 2` }).first()).toContainText(B.sell.testSale);
     });
 
-    test("«Каталог товаров» lists the shop's products by a search, read-only", async ({ page }) => {
+    test("«Каталог товаров»: the shop's whole list, a brand and the stock, a search; a row opens the product's card; read-only", async ({ page }) => {
       const C = A.catalogue;
       await page.goto("/admin");
       await hydrated(page);
@@ -449,35 +466,87 @@ test.describe("the frame", () => {
       await hydrated(page);
       await expect(page.getByRole("heading", { level: 1, name: C.title })).toBeVisible();
       await expect(page).toHaveTitle(`${C.title} · REMPIRE`);
+      await expect(page.getByText(C.lead)).toBeVisible();
       // the sidebar stays as it was: the month and the tiles, this page's tile marked
       await expect(month(page)).toBeVisible();
       await expect(tile(page, A.nav.catalogue)).toHaveAttribute("aria-current", "page");
       // no shop is connected here, and the page says so
       await expect(page.getByText(C.demo)).toBeVisible();
-      await expect(page.locator(".adm-cat [role=status]:visible")).toHaveText(C.hint);
-      await expect(page.locator(".cat-table")).toHaveCount(0);
 
-      const search = page.getByRole("searchbox", { name: C.search });
-      await search.fill("demo");
+      // the whole list without a search (Dim, 26.11.2026), in the shop's order: brand, name, variant
       const rows = page.locator(".cat-table tbody tr");
       await expect(rows).toHaveCount(8);
-      await expect(page.locator(".cat-table thead th")).toHaveText([C.cols.name, C.cols.price, C.cols.stock]);
-      await expect(page.locator(".adm-cat [role=status]:visible")).toHaveText(C.found(8));
-      const paste = rows.filter({ hasText: PRODUCT });
-      await expect(paste.locator("td")).toHaveText(["", PRODUCT, "24,90 €", "12"]);
+      await expect(page.locator(".cat-table thead th")).toHaveText([C.cols.name, C.cols.barcode, C.cols.price, C.cols.stock, C.cols.sold]);
+      await expect(rows.locator(".cat-open > span")).toHaveText(["Aftershave Balm 100 ml", "Beard Oil Cedar 30 ml", "Daily Shampoo 250 ml", "Matte Paste 100 ml", "Sea Salt Spray 200 ml", "Shine Pomade 100 ml", "Texture Powder 20 g", "Pocket Comb"]);
+      const paste = rows.filter({ hasText: "Matte Paste" });
+      await expect(paste.locator(".cat-open small")).toHaveText("Demo Grooming");
+      await expect(paste.locator("td").nth(2)).toHaveText("2000000000015");
+      await expect(paste.locator("td").nth(3)).toHaveText("24,90 €");
+      await expect(paste.locator("td").nth(4)).toHaveText("12");
+      // «Продано за 30 дн.»: our barbers' own sales (other tests sell it too), a number of pieces or «—»
+      await expect(paste.locator("td").nth(5)).toHaveText(/^(—|\d+ \S+)$/);
+      // sold out in the shop: a red «нет»
+      await expect(rows.first().locator(".cat-out")).toHaveText(C.out);
+      await expect(page.locator(".cat-pager")).toHaveText(C.shown(1, 8, 8));
+      await expect(page.locator(".cat-sold-total")).toBeVisible();
       await expectNoSideScroll(page);
       await shot(page, "catalogue");
-      // by a barcode; a word nobody sells
+
+      // a brand, and the stock: each asks the list again
+      const brand = page.getByRole("combobox", { name: C.brand });
+      await expect(brand.locator("option")).toHaveText([C.brandAll, "Demo Beard Co", "Demo Grooming", "Demo Tools"]);
+      await brand.selectOption("Demo Tools");
+      await expect(rows).toHaveCount(1);
+      await expect(rows).toContainText("Pocket Comb");
+      const stock = page.getByRole("group", { name: C.stockLabel });
+      await expect(stock.getByRole("button")).toHaveText([C.stockAll, C.stockIn, C.stockOut]);
+      await brand.selectOption("");
+      await expect(rows).toHaveCount(8);
+      await stock.getByRole("button", { name: C.stockOut }).click();
+      await expect(stock.getByRole("button", { name: C.stockOut })).toHaveAttribute("aria-pressed", "true");
+      await expect(rows).toHaveCount(1);
+      await expect(rows).toContainText("Aftershave Balm");
+      await stock.getByRole("button", { name: C.stockIn }).click();
+      await expect(rows).toHaveCount(7);
+      await brand.selectOption("Demo Beard Co");
+      await expect(rows.locator(".cat-open > span")).toHaveText(["Beard Oil Cedar 30 ml", "Daily Shampoo 250 ml"]);
+      await stock.getByRole("button", { name: C.stockAll }).click();
+      await brand.selectOption("");
+      await expect(rows).toHaveCount(8);
+
+      // a search goes through the whole shop: a barcode, a word nobody sells; emptied, the list again
+      const search = page.getByRole("searchbox", { name: C.searchAll });
       await search.fill("2000000000022");
       await expect(rows).toHaveCount(1);
       await expect(rows).toContainText("Sea Salt Spray");
+      await expect(page.locator(".adm-cat [role=status]:visible")).toHaveText(C.found(1));
       await search.fill("nothing like this");
       await expect(page.locator(".adm-cat [role=status]:visible")).toHaveText(C.nothing);
       await expect(rows).toHaveCount(0);
-      // read-only, and never a way out to the shop
-      await search.fill("demo");
+      await search.fill("");
       await expect(rows).toHaveCount(8);
-      await expect(page.locator(".adm-cat :is(a, button, input:not([type=search]), select, textarea):visible")).toHaveCount(1);
+
+      // a row opens the product's card: the shop's price, stock and barcode, the barber's share, who sold it this month
+      await paste.click();
+      const card = page.getByRole("dialog", { name: C.card });
+      await expect(card).toBeVisible();
+      await expect(card.locator(".cat-card-name")).toContainText("Matte Paste 100 ml");
+      await expect(card.locator(".cat-dl dt")).toHaveText([C.cols.price, C.cols.stock, C.cols.barcode, C.share]);
+      // 17 % of the shop's price with VAT (the demo's setting, as the sale's 8,47 € on 49,80 €)
+      await expect(card.locator(".cat-dl dd")).toHaveText(["24,90 €", C.pcs(12), "2000000000015", "4,23 € (17 %)"]);
+      await expect(card.getByRole("heading", { name: C.soldIn(Number(tallinnDate(0).slice(5, 7)) - 1) })).toBeVisible();
+      await expect(card.locator(".cat-sold li, .cat-month > .adm-meta").first()).toBeVisible();
+      // nothing to save or cancel, and no way out to the shop
+      await expect(card.locator(".dw-foot")).toBeHidden();
+      await expect(card.locator("a[href]")).toHaveCount(0);
+      await expect(paste).toHaveClass(/is-open/);
+      await expectNoSideScroll(page);
+      await shot(page, "catalogue-card");
+      await page.keyboard.press("Escape");
+      await expect(card).toHaveCount(0);
+
+      // read-only, and never a way out to the shop
+      await expect(page.locator(".adm-cat :is(input:not([type=search]), textarea):visible")).toHaveCount(0);
       await expect(page.locator('.adm-cat a[href^="http"]')).toHaveCount(0);
       // it is in the menu too, under «Товары»
       await sb(page).getByRole("button", { name: F.all }).click();
@@ -615,13 +684,36 @@ test.describe("the frame", () => {
       await expect(menu(page).getByRole("link", { name: A.nav.more })).toHaveAttribute("aria-current", "page");
       await expect(page).toHaveTitle(`${C.title} · REMPIRE`);
       await expect(page.getByText(C.demo)).toBeVisible();
-      await page.getByRole("searchbox", { name: C.search }).fill("demo");
+      // the whole list without a search, a row per product: the name, the brand, the stock, the price
       const items = page.locator(".cat-item:visible");
       await expect(items).toHaveCount(8);
       await expect(items.first()).toContainText("€");
+      await expect(items.first()).toContainText(`${C.cols.stock}: ${C.out}`);
+      await expect(items.first().locator(".cat-out")).toBeVisible();
       await expectNoSideScroll(page);
       expect(await smallTargets(page)).toEqual([]);
+      // a thumb's width to tap: the rows and the stock's chips
+      const chips = page.getByRole("group", { name: C.stockLabel }).getByRole("button");
+      for (const el of [items.first(), chips.first(), chips.last(), page.getByRole("combobox", { name: C.brand })]) expect((await el.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       await phoneShot(page, "catalogue");
+      // a row opens the product's card on the whole screen
+      await items.filter({ hasText: "Matte Paste" }).click();
+      const card = page.getByRole("dialog", { name: C.card });
+      await expect(card.locator(".cat-dl dd").first()).toHaveText("24,90 €");
+      expect((await card.boundingBox())!.height).toBeGreaterThanOrEqual(page.viewportSize()!.height - 1);
+      await expectNoSideScroll(page);
+      expect(await smallTargets(page)).toEqual([]);
+      await phoneShot(page, "catalogue-card");
+      await card.getByRole("button", { name: A.close, exact: true }).click();
+      await expect(card).toHaveCount(0);
+      // the stock's chip; a search by a name
+      await chips.last().click();
+      await expect(items).toHaveCount(1);
+      await chips.first().click();
+      await expect(items).toHaveCount(8);
+      await page.getByRole("searchbox", { name: C.searchAll }).fill("matte");
+      await expect(items).toHaveCount(1);
+      await expect(items).toContainText("Matte Paste 100 ml");
     });
 
     test.describe("the narrowest", () => {
@@ -640,8 +732,11 @@ test.describe("the frame", () => {
         await expect(drawer).toHaveCount(0);
         await page.goto("/admin/catalogue");
         await hydrated(page);
-        await page.getByRole("searchbox", { name: A.catalogue.search }).fill("demo");
         await expect(page.locator(".cat-item:visible")).toHaveCount(8);
+        await expectNoSideScroll(page);
+        expect(await smallTargets(page)).toEqual([]);
+        await page.locator(".cat-item:visible").first().click();
+        await expect(page.getByRole("dialog", { name: A.catalogue.card })).toBeVisible();
         await expectNoSideScroll(page);
         expect(await smallTargets(page)).toEqual([]);
       });

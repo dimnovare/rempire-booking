@@ -14,6 +14,7 @@ import { Titled } from "../star";
 import { AccessList, AddLogin, type AccessRow, type RoleOption } from "./access";
 import { logout } from "./actions";
 import { MyLang, PasswordForm } from "./forms";
+import { lastShort } from "./last-login";
 
 /** «Новый вход» offers the rights page's eight roles, in the order of their reach. */
 const ROLE_ORDER: RoleCode[] = ["OW", "MG", "AD", "SP", "CC", "AC", "SM", "VW"];
@@ -86,8 +87,10 @@ async function Loaded({ searchParams }: { searchParams: PageProps<"/admin/accoun
 
   if (tab === "list") {
     const when = new Intl.DateTimeFormat(A.intl, { timeZone: business.timezone, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+    const now = Date.now();
     const rows: AccessRow[] = users.map((u) => {
       const code = presets.find((x) => x.id === u.id)?.rights_preset ?? null;
+      const at = u.lastLoginAt ? Date.parse(u.lastLoginAt) : null;
       return {
         id: u.id,
         email: u.email,
@@ -98,7 +101,8 @@ async function Loaded({ searchParams }: { searchParams: PageProps<"/admin/accoun
         staffId: u.staffId,
         staffName: u.staffId ? (staff.find((s) => s.id === u.staffId)?.name ?? null) : null,
         hasPassword: u.hasPassword,
-        last: u.lastLoginAt ? when.format(Date.parse(u.lastLoginAt)) : null,
+        last: at === null ? null : when.format(at),
+        lastShort: at === null ? null : lastShort(at, business.timezone, now, T, (ms) => when.format(ms)),
         active: u.active,
         // the barbers a login can be: the working ones, and the one it already is
         linkable: staff.filter((s) => s.active || s.id === u.staffId).map((s) => ({ id: s.id, name: s.name })),

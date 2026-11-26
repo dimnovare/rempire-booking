@@ -1,7 +1,9 @@
 /**
  * The salon's phone and address for the error pages only: they show when
  * the database can't be read, so they can't ask «Настройки → Контакты»
- * for the live numbers. Everywhere else the contacts come from there.
+ * for the live numbers; and the client's «Такой страницы нет»
+ * ([locale]/not-found.tsx), a client component that can't read it either.
+ * Everywhere else the contacts come from there.
  * If Renat changes the main number, change it here too
  * (docs/test-plan.md § 11).
  */

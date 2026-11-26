@@ -454,6 +454,8 @@ test.describe("an owner who does not cut, on a phone", () => {
 
   test("«Доступ»: a login is linked to the barber it is, and unlinked again", async ({ page }, info) => {
     const email = `desk-${info.project.name}@example.test`;
+    // the row's select is the wide screen's; on a phone «Он же барбер» is in the «⋯» sheet (26.11, e2e/logins.spec.ts)
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/admin/account");
     await hydrated(page);
     await page.getByRole("button", { name: A.account.addUser }).click();

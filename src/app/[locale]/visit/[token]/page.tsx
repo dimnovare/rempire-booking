@@ -14,6 +14,7 @@ import { clientPushOffered } from "@/lib/client-push";
 import { dbConfigured, dbKind, query } from "@/lib/db";
 import { COPY, duration, eur, INTL, isLocale, LOCALES, pick, type Locale } from "@/lib/i18n";
 import { pushPublicKey } from "@/lib/push";
+import { SALON_FALLBACK } from "@/lib/salon-fallback";
 import { canChange, findVisit } from "@/lib/visits";
 import { cancelVisit } from "./actions";
 import { CancelButton } from "./cancel-button";
@@ -66,6 +67,9 @@ async function Visit({ params, searchParams }: Pick<PageProps<"/[locale]/visit/[
   );
 
   if (!v || !business) {
+    // an old or mistyped link: book anew, or call the salon (round 18, 26.11.2026)
+    const main = business ? await query<{ phone: string }>("select phone from locations where business_id = $1 and active order by sort, name limit 1", [business.id]) : [];
+    const tel = (main[0]?.phone || SALON_FALLBACK.phone).replace(/\s/g, "");
     return (
       <>
         {header}
@@ -73,6 +77,9 @@ async function Visit({ params, searchParams }: Pick<PageProps<"/[locale]/visit/[
           <p className="lead">{c.notFound}</p>
           <a className="btn btn-primary" href={`/${locale}`}>
             {c.again}
+          </a>
+          <a className="btn btn-soft" href={`tel:${tel}`}>
+            {c.callSalon}
           </a>
         </div>
       </>

@@ -956,6 +956,18 @@ button.cal-head:hover b { color: var(--accent); }
 .ac-sheet-sep { height: 1px; margin: 4px 0; background: var(--line); }
 .ac-own { display: block; padding: 0 4px 6px; color: var(--dim); font-size: 13px; line-height: 18px; white-space: normal; }
 .ac-sheet-cancel { width: 100%; }
+/* «Он же барбер» in the sheet (design «Доступ, телефон: он же барбер», 26.11): the barber it is now on the right and a caret;
+   open, «Нет» and the barbers as 52px radio rows in a box under it */
+.ac-sheet-val { min-width: 0; margin-left: auto; overflow: hidden; color: var(--dim); font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.ac-sheet-also > svg { transition: transform .15s ease-out; }
+.ac-sheet-also[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.ac-pick { display: flex; flex-direction: column; margin: 0 0 8px; border: 1px solid var(--line-2); border-radius: 12px; overflow: hidden; }
+.ac-pick-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 52px; padding: 0 14px; border: 0; border-top: 1px solid var(--line); background: none; color: var(--fg); font: 400 16px/20px var(--body); text-align: left; }
+.ac-pick-item:first-child { border-top: 0; }
+.ac-pick-item:active { background: #f0f3f8; }
+.ac-pick-item:focus-visible { outline-offset: -2px; }
+.ac-dot { flex: none; width: 20px; height: 20px; border: 1.5px solid var(--mute); border-radius: 50%; }
+.ac-pick-item[aria-checked="true"] .ac-dot { border-color: var(--fg); background: radial-gradient(circle, var(--fg) 0 5px, transparent 5.5px); }
 /* «Удалить этот вход?»: who exactly, what goes and stays, the softer way for a login still on */
 .cc-ask.ac-del { max-width: 460px; }
 .cc-ask.ac-del h2 { font-weight: 600; line-height: 26px; }
@@ -993,6 +1005,27 @@ button.cal-head:hover b { color: var(--accent); }
 .ac-mute, .ac-ph { color: var(--dim); }
 .ac-barber .adm-linkstaff { margin: 0; }
 .ac-none { margin: 0; padding: 24px 12px; text-align: center; color: var(--dim); }
+/* a phone's card (design «Доступ, телефон: карточки», 26.11): the avatar, the name over the e-mail, the switch and «⋯» on one line;
+   under them, from the name to the card's right edge, the role with « · барбер X», then the last login, one line each.
+   «Он же барбер» is changed in the «⋯» sheet; the wide row keeps its select (.ac-barber). */
+@media (max-width: 899px) {
+  .ac-row { gap: 0 12px; padding: 14px; }
+  .ac-sw, .ac-acts { grid-row: 1; align-self: center; }
+  .ac-sw { min-height: 0; }
+  .ac-acts { margin: 0 -8px 0 -6px; }
+  .ac-row .ac-name { flex-wrap: nowrap; }
+  .ac-row .ac-name b { min-width: 0; overflow: hidden; font-size: 15px; line-height: 20px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+  .ac-row .ac-id small { font-size: 13px; line-height: 18px; }
+  .ac-role, .ac-last { grid-column: 1 / -1; white-space: nowrap; }
+  .ac-role { display: flex; margin-top: 6px; line-height: 20px; }
+  .ac-role > * { flex: none; }
+  .ac-role a { position: relative; min-height: 0; }
+  /* the role's link: a 44px target on its 20px line */
+  .ac-role a::before { content: ""; position: absolute; inset: -12px -8px; }
+  .ac-role .ac-also { flex: 0 1 auto; min-width: 0; overflow: hidden; color: var(--dim); text-overflow: ellipsis; white-space: pre; }
+  .ac-last { overflow: hidden; color: var(--dim); font-size: 13px; line-height: 18px; text-overflow: ellipsis; }
+  .ac-barber, .ac-wd { display: none; }
+}
 /* «Мой вход» */
 .ac-me-wrap { display: flex; flex-direction: column; gap: 16px; max-width: 720px; margin-top: 16px; }
 .ac-card { padding: 16px; border: 1px solid #eef0f4; border-radius: 12px; background: var(--raise); }
@@ -1542,6 +1575,8 @@ th.n .iv-sort { flex-direction: row-reverse; }
 .inv-row > label > span:first-child, .inv-row > .c > span:first-child { font-size: 12px; line-height: 16px; color: var(--iv-mute); }
 .inv-row .inv-c-text, .inv-row .inv-c-err { grid-column: 1 / -1; }
 .inv-row .inv-c-no:empty { display: none; }
+/* a product's number is its 13-digit barcode: it breaks inside its own column, never over the name */
+.inv-row .inv-c-no { overflow-wrap: anywhere; }
 .inv-row small { font-size: 12px; line-height: 16px; color: var(--iv-mute); }
 .inv-row .n { text-align: right; }
 :where(.adm) .inv-row input { width: 100%; height: 40px; min-height: 40px; padding: 0 8px; border: 1px solid rgba(0, 0, 0, .23); border-radius: 6px; background: none; font-size: 16px; color: var(--iv-text); }
@@ -1554,7 +1589,7 @@ th.n .iv-sort { flex-direction: row-reverse; }
 .inv-new-acts > p { flex: 1 1 200px; margin: 0; }
 .inv-lines-wrap > .inv-hint { padding: 8px 12px; border-bottom: 1px solid var(--iv-line); color: var(--iv-mute); }
 @container (min-width: 760px) {
-  .inv-row, .inv-row.inv-row-head { display: grid; grid-template-columns: 100px minmax(0, 1fr) 130px 64px 64px 76px 100px 48px; gap: 0; align-items: center; min-height: 72px; padding: 0; }
+  .inv-row, .inv-row.inv-row-head { display: grid; grid-template-columns: 140px minmax(0, 1fr) 130px 64px 64px 76px 100px 48px; gap: 0; align-items: center; min-height: 72px; padding: 0; }
   .inv-row.inv-row-head { min-height: 56px; font-weight: 500; color: var(--iv-mute); }
   .inv-row.inv-row-head > span { white-space: nowrap; }
   .inv-row.inv-row-head > span:nth-child(3) { white-space: normal; }
@@ -1602,11 +1637,86 @@ th.n .iv-sort { flex-direction: row-reverse; }
 .adm-inv-table td small { color: var(--mute); font-size: 12px; }
 .adm-inv-table td.b { font-weight: 700; }
 .adm-inv-table tfoot td { border-bottom: 0; color: var(--mute); font-weight: 700; }
-.adm-inv-failed, .adm-inv-sales > li { display: flex; align-items: center; gap: 12px; padding: 10px 2px; }
-.adm-inv-failed .txt, .adm-inv-sales .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.adm-inv-failed small, .adm-inv-sales small { color: var(--mute); font-size: 13px; overflow-wrap: anywhere; }
-.adm-inv-sales .end { flex: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.adm-inv-sales > li.is-off .txt, .adm-inv-sales > li.is-off .end { opacity: .5; text-decoration: line-through; }
+.adm-inv-failed { display: flex; align-items: center; gap: 12px; padding: 10px 2px; }
+.adm-inv-failed .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.adm-inv-failed small { color: var(--mute); font-size: 13px; overflow-wrap: anywhere; }
+
+/* «Отчёты» → a barber's month (invoices/barber/[id]; the design board «Расчёт барбера», Dim 26.11.2026).
+   It reads as the barber's own «Мои расчёты» (barber.css, .bx-owe-*, .bx-dl, .bx-dayh): the back link
+   above his name, the month switcher, «К оплате» and the month's invoice side by side from 1100px, then
+   the sales by day. A sale's «⋯»: a menu from 900px, a sheet on a phone (as «Доступ», .ac-acts). */
+.iv-bm .iv-top { row-gap: 4px; }
+.iv-bm .iv-top > .iv-acts { order: -1; flex: 1 0 100%; }
+.iv-bm .iv-chips { margin-top: 8px; }
+.iv-bm-back { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; margin: -10px 0 -6px; color: #312e6b; font: 500 14px/20px var(--body); text-decoration: none; }
+.iv-bm-back:hover { text-decoration: underline; text-underline-offset: 3px; }
+.iv-bm-months { display: flex; align-items: center; gap: 8px; }
+.iv-bm-months h2 { flex: 1 1 auto; min-width: 0; margin: 0; font: 600 17px/22px var(--body); color: #252442; text-align: center; overflow-wrap: anywhere; }
+.iv-bm-months .iv-btn { height: 44px; gap: 4px; padding: 0 10px; font-size: 13px; }
+.iv-bm-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.iv-bm-owe-head { display: flex; flex-direction: column; gap: 2px; }
+.iv-bm-owe-head h2, .iv-bm-inv > h2, .iv-bm-sales > h2 { margin: 0; }
+.iv-bm-owe-head h2 { font: 400 14px/20px var(--body); color: var(--iv-mute); }
+.iv-bm-owe-head p { font: 600 32px/40px var(--body); color: #252442; font-variant-numeric: tabular-nums; }
+/* no column gap: the rule over «Итого» runs the card's whole width */
+.iv-bm-dl { margin: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 0; font-size: 15px; line-height: 20px; }
+.iv-bm-dl dt { min-width: 0; overflow-wrap: anywhere; }
+.iv-bm-dl dd { margin: 0; padding-left: 16px; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.iv-bm-dl .is-ok { color: #0f8a71; }
+.iv-bm-dl .tot { padding-top: 10px; border-top: 1px solid var(--iv-line); font-weight: 600; color: #252442; }
+.iv-bm-where { margin: 0; padding-top: 12px; border-top: 1px dashed var(--iv-line); display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.iv-bm-where > div { display: flex; justify-content: space-between; gap: 12px; }
+.iv-bm-where dt { min-width: 0; color: var(--iv-mute); overflow-wrap: anywhere; }
+.iv-bm-where dd { margin: 0; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.iv-bm-inv > h2, .iv-bm-sales > h2 { font: 600 18px/24px var(--body); color: #252442; }
+.iv-bm-inv-head { display: flex; align-items: flex-start; gap: 12px; }
+.iv-bm-inv-head > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.iv-bm-inv-no { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.iv-bm-inv-no b { font-weight: 700; overflow-wrap: anywhere; }
+.iv-bm-inv-head small { font-size: 13px; line-height: 18px; color: var(--iv-mute); }
+.iv-bm-inv-sum { flex: none; font-weight: 600; color: #252442; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.iv-bm-inv > .iv-btn { align-self: flex-start; height: 44px; }
+.iv-bm-older { font-size: 13px; line-height: 18px; }
+.iv-bm-sales { padding: 16px 0 0; gap: 8px; }
+.iv-bm-sales > h2, .iv-bm-sales > p { padding: 0 16px; }
+.iv-bm-sales > p { padding-bottom: 16px; }
+.iv-bm-list { list-style: none; margin: 0; padding: 0; }
+.iv-bm-dayh { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; padding: 6px 16px; border-top: 1px solid var(--iv-line); background: #f7f9fc; font-size: 14px; }
+.iv-bm-dayh span { color: var(--iv-mute); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.iv-bm-sale { display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 6px 4px 6px 16px; border-top: 1px solid var(--iv-line); }
+.iv-bm-sale .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.iv-bm-sale .what { overflow-wrap: anywhere; }
+.iv-bm-sale small { font-size: 13px; line-height: 18px; color: var(--iv-mute); overflow-wrap: anywhere; }
+.iv-bm-sale .tags { margin-top: 2px; }
+.iv-bm-sale .end { flex: none; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.iv-bm-sale.is-off .txt, .iv-bm-sale.is-off .end { opacity: .5; text-decoration: line-through; }
+.iv-bm-acts { flex: none; width: 44px; display: flex; justify-content: center; }
+.iv-bm-acts .jr-pop-wrap { display: none; }
+.iv-bm-more.adm-ibtn { border-color: transparent !important; background: none; color: var(--iv-mute); }
+.iv-bm-ask { font-weight: 600; overflow-wrap: anywhere; }
+@media (min-width: 900px) {
+  .iv-bm-back { min-height: 24px; margin: 0; font-size: 13px; }
+  .iv-bm-months { gap: 12px; }
+  .iv-bm-months h2 { flex: none; min-width: 150px; font-size: 18px; line-height: 24px; }
+  .iv-bm-months .iv-btn { height: 32px; }
+  .iv-bm-inv > .iv-btn { height: 32px; padding: 0 12px; font-size: 13px; }
+  .iv-bm-sales { padding-top: 20px; }
+  .iv-bm-sales > h2, .iv-bm-sales > p { padding: 0 20px; }
+  .iv-bm-sales > p { padding-bottom: 20px; }
+  .iv-bm-dayh { padding: 6px 20px; }
+  .iv-bm-sale { padding: 6px 12px 6px 20px; }
+  .iv-bm-acts .jr-pop-wrap { display: flex; }
+  .iv-bm-more.adm-ibtn { display: none; }
+  .iv-bm-acts .jr-ibtn { width: 44px; height: 44px; border-color: transparent; background: none; color: var(--iv-mute); }
+  .iv-bm-acts .jr-ibtn:hover, .iv-bm-acts .jr-ibtn[aria-expanded="true"] { background: #f0f3f8; }
+  .iv-bm-acts .jr-pop { top: 44px; width: 248px; }
+  .iv-bm-acts .jr-item { min-height: 36px; padding: 0 10px; font-size: 13px; }
+  .iv-bm-acts .jr-item.is-red { color: #d92d20; }
+  .iv-bm-acts .jr-item.is-red:hover { background: #fef3f2; }
+}
+@media (min-width: 1100px) {
+  .iv-bm-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 24px; }
+}
 .adm-inv-fs { margin: 0; padding: 0; border: 0; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
 .adm-inv-fs:disabled { opacity: .6; }
 /* the older cards and lists inside the section's body (the barber's month, the month's invoices) */
@@ -2300,11 +2410,59 @@ th.n .iv-sort { flex-direction: row-reverse; }
 .adm-frame-toast { z-index: 70; }
 
 /* ---------- «Каталог товаров» (/admin/catalogue): the shop's products, read-only ----------
-   The list is «Клиенты»'s (cl-): the search with its icon, one table on a white sheet from 900px. */
+   The whole list (design boards «Catalogue» and «CatalogueItem», Dim 26.11.2026). The list is «Клиенты»'s (cl-):
+   the search with its icon, one table on a white sheet from 900px, a row per product on a phone; then a brand,
+   three chips for the stock (dark when on, as «Запросы»' chips) and the 30 days' sales on the right. A row opens
+   the product's card: drawer.tsx with its title on top, and no foot (nothing to save or cancel). */
+.cat-head { display: flex; flex-direction: column; gap: 2px; }
+.cat-filters { align-items: center; }
+.cat-chips { flex: 1 1 100%; display: flex; flex-wrap: wrap; gap: 6px; }
+.cat-chip { min-height: 44px; padding: 0 14px; border: 1px solid var(--line-2) !important; border-radius: 22px; background: var(--raise); color: var(--fg); font-size: 14px; font-weight: 500; white-space: nowrap; }
+.cat-chip[aria-pressed="true"] { background: var(--fg); border-color: var(--fg) !important; color: #fff; }
+.cat-sold-total { flex: 1 1 100%; color: var(--dim); font-size: 13px; }
+.cat-status:empty { display: none; }
+.cat-rows { display: flex; flex-direction: column; min-width: 0; }
+.cat-rows.is-busy { opacity: .55; transition: opacity .2s .15s; }
+.cat-thumb { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 8px; background: #eef1f6; color: #9aa3b1; object-fit: cover; }
+.cat-out { display: inline-flex; align-items: center; height: 20px; padding: 0 8px; border-radius: 10px; background: #fde8e6; color: #b42318; font-size: 12px; font-weight: 500; line-height: 20px; white-space: nowrap; vertical-align: middle; }
 .cat-table .cat-pic { width: 56px; padding-right: 0; }
-.cat-table .c-name { font-weight: 500; }
-.cat-item { cursor: default; }
-@media (hover: hover) { .cat-item:hover { background: none; } }
+.cat-table tbody tr { cursor: pointer; }
+.cat-table .cat-code { color: var(--mute); }
+.cat-open { display: flex; flex-direction: column; gap: 2px; min-height: 40px; justify-content: center; font-weight: 500; text-align: left; }
+.cat-open small { color: var(--mute); font-size: 12px; font-weight: 400; }
+.cat-item .cat-thumb { align-self: flex-start; }
+.cat-item .txt small { overflow-wrap: anywhere; }
+.cat-pager { display: flex; align-items: center; justify-content: space-between; gap: 16px; color: var(--mute); font-size: 13px; }
+/* the card */
+.dw:has(.cat-card) > .dw-foot { display: none; }
+.cat-card { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 16px; padding-bottom: 8px; color: var(--fg); font: 400 14px/20px var(--body); }
+.cat-photo { display: grid; place-items: center; height: 200px; border-radius: 12px; background: #eef1f6; color: #9aa3b1; overflow: hidden; }
+.cat-photo img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.cat-card-name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cat-card-name small { color: var(--mute); font-size: 12px; line-height: 16px; }
+.cat-card-name b { font: 600 18px/24px var(--display); overflow-wrap: anywhere; }
+.cat-dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px 16px; margin: 0; }
+.cat-dl dt { margin: 0; color: var(--mute); }
+.cat-dl dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.cat-month { display: flex; flex-direction: column; gap: 8px; }
+.cat-month h3 { margin: 0; font: 600 14px/20px var(--display); }
+.cat-sold { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line-2); border-radius: 12px; overflow: hidden; }
+.cat-sold li { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 14px; }
+.cat-sold li + li { border-top: 1px solid var(--line); }
+.cat-sold .adm-ava { width: 28px; height: 28px; border-radius: 50%; background: var(--fg); color: #fff; font-size: 11px; }
+.cat-sold .txt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.cat-sold .n { flex: none; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (min-width: 900px) {
+  .cat-filters { gap: 8px; }
+  .cat-filters .cl-search { flex: 0 1 360px; }
+  .cat-filters .cat-brand { flex: 0 1 220px; }
+  :where(.adm) .cat-filters :is(input, select) { min-height: 36px; font-size: 13px; }
+  .cat-chips { flex: 0 1 auto; }
+  .cat-chip { min-height: 32px; padding: 0 12px; border-radius: 16px; font-size: 13px; }
+  .cat-sold-total { flex: 0 1 auto; margin-left: auto; }
+  .cat-table td { height: 56px; }
+  .dw-narrow:has(.cat-card) { width: 420px; }
+}
 
 /* ---------- the test line (staging only; src/components/test-banner.tsx, Phase C) ----------
  * Its place and height are in the shell block above; this is its look. Loud

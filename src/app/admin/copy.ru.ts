@@ -65,6 +65,8 @@ export const ru = {
   /** A {ru, et, en} text from the data (a service, a barber's label): this language first. */
   pick: (t: Text3) => t?.ru || t?.et || t?.en || "",
   title: "Админ",
+  // an address the admin does not have (not-found.tsx)
+  missing: { title: "Такой страницы нет", lead: "Возможно, ссылка устарела или в ней опечатка.", home: "Открыть журнал" },
   // the sections (sections.tsx lists them); `more` is the fifth tab of a phone's bar;
   // `goods` and `clientBase` are a group and a page of the wide sidebar's menu
   nav: {
@@ -1982,10 +1984,29 @@ export const ru = {
   /** «Каталог товаров»: the shop's products, read-only (docs/one-place.md). */
   catalogue: {
     title: "Каталог товаров",
-    lead: "Товары, цены и остатки из магазина. Меняются они в магазине.",
+    lead: "Товары, цены и остатки из магазина rempireshop.com. Меняются в магазине.",
     search: "Название или штрихкод",
+    // the whole list (Dim, 26.11.2026): its search, filters, columns and the product's card
+    searchAll: "Название, бренд или штрихкод",
     hint: "Введите название или штрихкод. Магазин отдаёт товары по поиску, не весь список сразу.",
-    cols: { name: "Товар", price: "Цена", stock: "На складе" },
+    cols: { name: "Товар", price: "Цена", stock: "На складе", barcode: "Штрихкод", sold: "Продано за 30 дн." },
+    brand: "Бренд",
+    brandAll: "Все бренды",
+    stockLabel: "Наличие",
+    stockAll: "Все",
+    stockIn: "Есть на складе",
+    stockOut: "Нет на складе",
+    out: "нет",
+    pcs: (n: number) => `${n} шт.`,
+    soldTotal: (n: number) => `Продано барберами за 30 дней: ${n} шт.`,
+    soldShort: "Продано",
+    shown: (from: number, to: number, total: number) => `${from}–${to} из ${total}`,
+    empty: "В магазине пока нет товаров.",
+    noneFiltered: "Таких товаров нет.",
+    card: "Товар",
+    share: "Барберу с продажи",
+    soldIn: (month: number) => `Продали в ${["январе", "феврале", "марте", "апреле", "мае", "июне", "июле", "августе", "сентябре", "октябре", "ноябре", "декабре"][month] ?? ""}`,
+    soldNone: "В этом месяце его ещё не продавали.",
     demo: "Магазин не подключён. Это демо-товары, не настоящие.",
     notConfigured: "Связь с магазином не настроена: нет адреса или ключа. Товары показать нельзя.",
     shopDown: "Магазин не отвечает. Попробуйте ещё раз.",
@@ -2088,8 +2109,15 @@ export const ru = {
     alsoHint: "Тогда приложение открывается на его дне.",
     firstPassword: "Первый пароль (от 8 знаков)",
     noPassword: "без пароля",
-    lastLogin: "Последний вход",
     never: "ещё не входил",
+    // a phone's card (design «Доступ, телефон: карточки», 26.11.2026): «Вход: сегодня, 09:12», «Владелец · барбер Renat»
+    lastIn: "Вход",
+    today: "сегодня",
+    yesterday: "вчера",
+    barberIs: (name: string) => `барбер ${name}`,
+    /** why «Он же барбер» in a phone's «⋯» sheet is greyed */
+    linkOwn: "Это вход самого барбера: другого барбера ему не выбрать.",
+    linkOff: "Вход отключён: сначала включите его.",
     disable: "Отключить",
     enable: "Включить",
     disabled: "отключён",
@@ -2406,7 +2434,6 @@ export const ru = {
     } as Record<string, string>,
     // a barber's month
     statement: "Расчёт",
-    sums: { client: (n: number) => `Продажи клиентам, ${n} шт.`, commission: "Комиссия барбера", self: "Товары себе", rent: "Аренда места", owed: "Итого за месяц", open: "Не оплачено по счетам", unbilled: "Ещё не в счёте" },
     sales: "Продажи",
     noSales: "В этом месяце продаж нет.",
     mode: { client: "клиенту", self: "себе" } as Record<string, string>,
@@ -2418,6 +2445,41 @@ export const ru = {
     reverseAsk: "Вернуть продажу минусом? В магазине склад поправьте сами: «Склад» → приход.",
     reverseNote: "Причина",
     alreadyReversed: "Эта продажа уже возвращена.",
+    // a barber's month (the design board «Расчёт барбера», Dim 26.11.2026): read as his own «Мои расчёты»
+    bm: {
+      /** the month alone: «Ноябрь 2026», «‹ Октябрь», «· октябрь, ноябрь» */
+      months: ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"],
+      /** the month after «за»: «за ноябрь» */
+      monthsFor: ["январь", "февраль", "март", "апрель", "май", "июнь", "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"],
+      rentMonth: (sum: string) => `аренда места ${sum} в месяц`,
+      noReceiver: "получателя счёта нет",
+      owedFor: (m: string) => `К оплате REMPIRE за ${m}`,
+      client: (n: number) => `Продажи клиентам · ${n} шт.`,
+      commission: (pct: string) => `Минус ${pct} барбера`,
+      self: (n: number) => `Товары себе · ${n} шт.`,
+      rent: "Аренда места",
+      total: "Итого",
+      inInvoice: (m: string, status: string) => `В счёте за ${m} (${status})`,
+      open: (months: string) => (months ? `Выставлено, ждёт оплаты · ${months}` : "Выставлено, ждёт оплаты"),
+      unbilled: (months: string) => (months ? `Продажи ни в одном счёте · ${months}` : "Продажи ни в одном счёте"),
+      invoiceFor: (m: string) => `Счёт за ${m}`,
+      noNumber: "Без номера",
+      sent: (d: string) => `отправлен ${d}`,
+      due: (d: string) => `оплатить до ${d}`,
+      openInvoice: "Открыть счёт",
+      noInvoice: (m: string) => `Счёта за ${m} пока нет.`,
+      draftOn: (d: string) => `Черновик сделается сам ${d}.`,
+      /** around the receiver's name, a link to his page */
+      older: ["Прошлые счета ", " — на его странице, вкладка «Счета»."],
+      olderAll: "Все счета — в разделе «Счета».",
+      salesFor: (m: string) => `Продажи за ${m}`,
+      /** «6 ноября» */
+      day: (iso: string) => new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", timeZone: "UTC" }).format(new Date(`${iso.slice(0, 10)}T12:00:00Z`)),
+      dayHead: (n: number, sum: string) => `${n} ${plural(n, "продажа", "продажи", "продаж")} · ${sum}`,
+      barber: (sum: string) => `барберу ${sum}`,
+      acts: (sale: string) => `Действия: ${sale}`,
+      reverseItem: "Сторно: продажа ошибочная",
+    },
     // receivers
     receivers: "Получатели",
     receiversHint: "Компания или человек, кому REMPIRE выставляет счёт: обычно FIE или OÜ барбера.",

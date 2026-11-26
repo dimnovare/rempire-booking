@@ -9,6 +9,7 @@ export const et: Copy = {
   noDb: "Andmebaas pole ühendatud.",
   error: "Ei õnnestunud. Proovi uuesti.",
   offline: "Internetti pole. Näitan seda, mis oli laaditud.",
+  missing: { title: "Sellist lehte pole", lead: "Võib-olla on link vananenud või selles on trükiviga.", home: "Ava minu päev" },
   close: "Sulge",
   back: "Tagasi",
   save: "Salvesta",
@@ -37,10 +38,11 @@ export const et: Copy = {
     mine: "see olete teie",
     find: "Barberi nimi",
     nobody: "Sellise nimega kedagi pole.",
-    working: "Töötavad",
-    gone: (n: number) => `Salongis enam ei tööta · ${n}`,
-    hours: (h: string) => `täna ${h}`,
-    dayOff: "täna vaba päev",
+    working: (n: number) => `Täna tööl · ${n}`,
+    offToday: (n: number) => `Täna vaba päev · ${n}`,
+    next: (d: string) => `järgmine tööpäev: ${d}`,
+    noNext: "kahe nädala jooksul tööpäeva pole",
+    gone: (n: number) => `Lahkunud salongist · ${n}`,
   },
 
   install: {

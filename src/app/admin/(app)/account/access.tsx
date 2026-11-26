@@ -5,13 +5,17 @@
  * (Dim, 25.11.2026, design artifact 53PfD3DxCRkbDyjwLVvBHB): a row per login
  * with its role (a link to its rights), the barber it is, how it logs in,
  * its last login and an on/off switch. From 900px a table; on a phone the
- * same rows as cards. «Добавить вход» opens the admin's drawer with the
- * rights page's eight roles. A row's «⋯» (a menu wide, a sheet on a
- * phone) has «Удалить вход» last (delete-login.tsx); the toast after it
- * has «Вернуть».
+ * same rows as cards (design «Доступ, телефон: карточки», 26.11): name over
+ * e-mail beside the switch and «⋯», then one line for the role and the
+ * barber it is, one for the last login, short («Вход: сегодня, 09:12»).
+ * «Добавить вход» opens the admin's drawer with the rights page's eight
+ * roles. A row's «⋯» (a menu wide, a sheet on a phone) has «Удалить вход»
+ * last (delete-login.tsx); the toast after it has «Вернуть». «Он же барбер»
+ * is a select in the wide row and, on a phone, a row of the «⋯» sheet
+ * (design «Доступ, телефон: он же барбер»).
  */
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useOptimistic, useState, useTransition } from "react";
 import { LOCALES, type Locale } from "@/lib/i18n";
 import { LANG_NAMES } from "../../copy";
 import { DotsIcon, InfoIcon, PlusIcon, SearchIcon } from "../../icons";
@@ -19,7 +23,7 @@ import { useA } from "../../lang";
 import { Drawer } from "../drawer";
 import { useFrame } from "../frame";
 import { Pop } from "../pop";
-import { addUser, deleteUserAction, restoreUserAction, toggleUser } from "./actions";
+import { addUser, deleteUserAction, linkUserStaff, restoreUserAction, toggleUser } from "./actions";
 import { DeleteAsk, RowSheet } from "./delete-login";
 import { LinkStaff } from "./forms";
 
@@ -36,6 +40,8 @@ export type AccessRow = {
   hasPassword: boolean;
   /** the last login, formatted; null: never */
   last: string | null;
+  /** the same, short, for a phone's card: «сегодня, 09:12», «вчера, 19:30», «20 нояб., 17:45» */
+  lastShort: string | null;
   active: boolean;
   /** the barbers an owner's or admin's login may be */
   linkable: { id: string; name: string }[];
@@ -67,8 +73,13 @@ export function AccessList({
   const [state, setState] = useState<"" | "on" | "off">("");
   const [asking, setAsking] = useState<AccessRow | null>(null);
   const [deleting, setDeleting] = useState<AccessRow | null>(null);
-  const [acts, setActs] = useState<AccessRow | null>(null);
+  // the row whose sheet is open, by id: the sheet shows the row as the page now has it
+  const [actsId, setActs] = useState<string | null>(null);
+  const acts = actsId ? (rows.find((r) => r.id === actsId) ?? null) : null;
   const [busy, setBusy] = useState<string | null>(null);
+  // «Он же барбер» from a phone's sheet: it shows at once, until the page comes back with what was saved
+  const [linking, startLink] = useTransition();
+  const [linkNow, setLinkNow] = useOptimistic<Record<string, string>, [string, string]>({}, (cur, [id, v]) => ({ ...cur, [id]: v }));
 
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -89,6 +100,21 @@ export function AccessList({
   const flip = (r: AccessRow) => (r.active ? setAsking(r) : void switchOn(r));
   /** why this login cannot be switched off or deleted by this one; null: it can */
   const blockedWhy = (r: AccessRow, del: boolean) => (r.id === me ? (del ? T.ownNoDel : T.ownNo) : !ownerMe && r.role === "owner" ? T.ownerOnly : null);
+
+  /** the barber a login is, as it shows now: "" and null, none */
+  const barberOf = (r: AccessRow): { id: string; name: string | null } => {
+    const id = r.id in linkNow ? linkNow[r.id] : (r.staffId ?? "");
+    return { id, name: !id ? null : id === r.staffId ? r.staffName : (r.linkable.find((s) => s.id === id)?.name ?? null) };
+  };
+  /** why «Он же барбер» cannot be changed, as the wide row has no select then: a barber's own login, a login switched off; null: it can */
+  const linkWhy = (r: AccessRow) => (r.role === "staff" ? T.linkOwn : !r.active ? T.linkOff : null);
+  /** the same door as the wide row's select (linkUserStaff); "" unlinks */
+  const link = (r: AccessRow, staffId: string) =>
+    startLink(async () => {
+      setLinkNow([r.id, staffId]);
+      const ok = await linkUserStaff(r.id, staffId).catch(() => false);
+      if (!ok) frame.say(A.error, true);
+    });
 
   // «Вернуть» in the toast: the login as it was, while the server still allows it
   const restore = async (r: AccessRow) => {
@@ -154,6 +180,7 @@ export function AccessList({
           const mine = r.id === me;
           const why = blockedWhy(r, true);
           const mayFlip = mayRemove && !why;
+          const also = barberOf(r).name;
           return (
             <div role="row" key={r.id} className={`ac-row${r.active ? "" : " is-off"}`}>
               <span role="cell" className="ac-who">
@@ -175,17 +202,16 @@ export function AccessList({
                     {r.roleName}
                   </Link>
                 ) : (
-                  r.roleName
+                  <span>{r.roleName}</span>
                 )}
+                {/* a phone: the barber it is, on the role's line; wide has its own column */}
+                {also && <span className="ac-ph ac-also"> · {T.barberIs(also)}</span>}
               </span>
               <span role="cell" className="ac-barber">
                 {r.role !== "staff" && r.active ? (
                   <LinkStaff key={r.staffId ?? ""} id={r.id} email={r.email} staffId={r.staffId} staff={r.linkable} />
                 ) : r.staffName ? (
-                  <>
-                    <span className="ac-ph">{T.barber}: </span>
-                    {r.staffName}
-                  </>
+                  r.staffName
                 ) : (
                   <span className="ac-mute">{T.notBarber}</span>
                 )}
@@ -195,8 +221,16 @@ export function AccessList({
                 {r.hasPassword ? T.howPw : T.howCode}
               </span>
               <span role="cell" className={`ac-last${r.last ? "" : " ac-mute"}`}>
-                <span className="ac-ph">{T.lastLogin}: </span>
-                {r.last ?? T.never}
+                {r.last ? (
+                  <>
+                    <span className="ac-ph">
+                      {T.lastIn}: {r.lastShort}
+                    </span>
+                    <span className="ac-wd">{r.last}</span>
+                  </>
+                ) : (
+                  T.never
+                )}
               </span>
               <span role="cell" className="ac-sw">
                 <input
@@ -212,61 +246,59 @@ export function AccessList({
               </span>
               <span role="cell" className="ac-acts">
                 {(mayRights || mayRemove) && (
-                  <>
-                    {/* from 900px: the row's menu; «Удалить вход» last, apart, in red (design «Доступ: меню строки») */}
-                    <Pop kind="menu" name={T.actsOf(r.email)} label={T.actsOf(r.email)} icon button={<DotsIcon size={18} />}>
-                      {(close) => (
-                        <>
-                          {mayRights && (
-                            <Link role="menuitem" className="jr-item" href={`/admin/account/${r.id}`} prefetch={false} onClick={close}>
-                              <span>{A.rights.title}</span>
-                            </Link>
-                          )}
-                          {mayFlip && (
+                  /* from 900px: the row's menu; «Удалить вход» last, apart, in red (design «Доступ: меню строки») */
+                  <Pop kind="menu" name={T.actsOf(r.email)} label={T.actsOf(r.email)} icon button={<DotsIcon size={18} />}>
+                    {(close) => (
+                      <>
+                        {mayRights && (
+                          <Link role="menuitem" className="jr-item" href={`/admin/account/${r.id}`} prefetch={false} onClick={close}>
+                            <span>{A.rights.title}</span>
+                          </Link>
+                        )}
+                        {mayFlip && (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            className="jr-item"
+                            onClick={() => {
+                              close();
+                              flip(r);
+                            }}
+                          >
+                            <span>{r.active ? T.offYes : T.enable}</span>
+                          </button>
+                        )}
+                        {mayRemove && (
+                          <>
+                            <div role="separator" className="ac-sep" />
                             <button
                               type="button"
                               role="menuitem"
-                              className="jr-item"
+                              className="jr-item is-red"
+                              disabled={!!why}
+                              aria-describedby={why ? `ac-own-w-${r.id}` : undefined}
                               onClick={() => {
                                 close();
-                                flip(r);
+                                setDeleting(r);
                               }}
                             >
-                              <span>{r.active ? T.offYes : T.enable}</span>
+                              <span>{T.delYes}</span>
                             </button>
-                          )}
-                          {mayRemove && (
-                            <>
-                              <div role="separator" className="ac-sep" />
-                              <button
-                                type="button"
-                                role="menuitem"
-                                className="jr-item is-red"
-                                disabled={!!why}
-                                aria-describedby={why ? `ac-own-w-${r.id}` : undefined}
-                                onClick={() => {
-                                  close();
-                                  setDeleting(r);
-                                }}
-                              >
-                                <span>{T.delYes}</span>
-                              </button>
-                              {why && (
-                                <small className="ac-own" id={`ac-own-w-${r.id}`}>
-                                  {why}
-                                </small>
-                              )}
-                            </>
-                          )}
-                        </>
-                      )}
-                    </Pop>
-                    {/* on a phone: «⋯» opens a sheet from the bottom with the same actions */}
-                    <button type="button" className="adm-ibtn ac-more" aria-label={T.actsOf(r.email)} aria-haspopup="dialog" onClick={() => setActs(r)}>
-                      <DotsIcon size={20} />
-                    </button>
-                  </>
+                            {why && (
+                              <small className="ac-own" id={`ac-own-w-${r.id}`}>
+                                {why}
+                              </small>
+                            )}
+                          </>
+                        )}
+                      </>
+                    )}
+                  </Pop>
                 )}
+                {/* on a phone: «⋯» opens a sheet from the bottom with the same actions, and «Он же барбер», so it is always there */}
+                <button type="button" className="adm-ibtn ac-more" aria-label={T.actsOf(r.email)} aria-haspopup="dialog" onClick={() => setActs(r.id)}>
+                  <DotsIcon size={20} />
+                </button>
               </span>
             </div>
           );
@@ -282,6 +314,10 @@ export function AccessList({
           mayRights={mayRights}
           mayFlip={mayRemove && !blockedWhy(acts, true)}
           mayDelete={mayRemove}
+          barber={barberOf(acts)}
+          linkWhy={linkWhy(acts)}
+          linking={linking}
+          onLink={(staffId) => link(acts, staffId)}
           onClose={() => setActs(null)}
           onFlip={() => {
             setActs(null);

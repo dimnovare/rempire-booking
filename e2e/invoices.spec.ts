@@ -6,7 +6,7 @@ import { referenceNumber } from "../src/lib/billing/reference";
 import { euroText } from "../src/lib/money";
 import { readXlsx } from "../src/lib/xlsx";
 import { authFile, OUT } from "./env";
-import { A, asOwner, expect, expectNoSideScroll, hydrated, test, toast } from "./helpers";
+import { A, asOwner, demoId, expect, expectNoSideScroll, hydrated, tallinnDate, test, toast } from "./helpers";
 
 /**
  * «Счета» in the invoicing tool's own frame (docs/reference-looks.md; the
@@ -238,6 +238,89 @@ test.describe("invoices", () => {
     expect(col).toEqual({ same: 1, order: true, stats: 1, tilesPerRow: 2 });
     await expectNoSideScroll(page);
     await shot(page, "desk");
+  });
+
+  test("a barber's month on a phone (the board «Расчёт барбера»): the sum line by line, the month's invoice, the sales by day; «⋯» → «Сторно» asks first", async ({ page }) => {
+    const BM = I.bm;
+    // without ?m it is the month being invoiced, the one before this: the demo seeds Slava two sales in it, on the 5th and the 6th
+    const thisMonth = tallinnDate(0).slice(0, 7);
+    const [y, mo] = thisMonth.split("-").map(Number);
+    const m = mo === 1 ? `${y - 1}-12` : `${y}-${String(mo - 1).padStart(2, "0")}`;
+    const mi = Number(m.slice(5, 7)) - 1;
+    const slava = demoId("staff", "slava");
+    const PASTE = "Demo Grooming Matte Paste 100 ml × 1";
+    await page.goto(`/admin/invoices/barber/${slava}`);
+    await hydrated(page);
+    const main = page.locator("main.iv-bm:visible");
+    // the head: back to «Отчёты» of that month, his name, his company and his rent
+    await expect(main.locator(".iv-bm-back")).toHaveAttribute("href", `/admin/invoices/reports?m=${m}`);
+    await expect(main.locator(".iv-top h1")).toContainText("Slava");
+    await expect(main.locator(".iv-top h1 small")).toHaveText(`Näidis FIE (Slava) · ${BM.rentMonth("380,00 €")}`);
+    // the months keep their places: ‹ the one before · this one · the next, a link until this month
+    const months = main.getByRole("navigation", { name: I.grans.month });
+    await expect(months.locator("h2")).toHaveText(`${cap(BM.months[mi])} ${m.slice(0, 4)}`);
+    await expect(months.getByRole("link").last()).toHaveAttribute("href", `/admin/invoices/barber/${slava}?m=${thisMonth}`);
+
+    // «К оплате REMPIRE за …»: the big sum, the sum line by line, «Итого» the same; then where the money stands
+    const owe = main.locator(".iv-bm-owe");
+    await expect(owe.getByRole("heading", { level: 2 })).toHaveText(BM.owedFor(BM.monthsFor[mi]));
+    const dts = owe.locator(".iv-bm-dl dt");
+    await expect(dts).toHaveCount(5);
+    await expect(dts.first()).toHaveText(BM.client(2));
+    await expect(dts.nth(1)).toHaveClass(/is-ok/);
+    await expect(dts.last()).toHaveText(BM.total);
+    await expect(owe.locator(".iv-bm-dl dd.tot")).toHaveText((await owe.locator(".iv-bm-owe-head p").innerText()).trim());
+    await expect(owe.locator(".iv-bm-where dt", { hasText: BM.open("") })).toHaveCount(1);
+    await expect(owe.locator(".iv-bm-where dt", { hasText: BM.unbilled("") })).toHaveCount(1);
+    // the month's invoice (or that there is none yet); the stack is one column on a phone
+    await expect(main.locator(".iv-bm-inv > h2")).toHaveText(BM.invoiceFor(BM.monthsFor[mi]));
+    const [oweBox, invBox] = [await owe.boundingBox(), await main.locator(".iv-bm-inv").boundingBox()];
+    expect(invBox!.y).toBeGreaterThan(oweBox!.y + oweBox!.height - 1);
+
+    // the sales by day, the newest first; the usual state («в магазине») has no tag
+    const sales = main.locator(".iv-bm-sales");
+    await expect(sales.getByRole("heading", { level: 2 })).toHaveText(BM.salesFor(BM.monthsFor[mi]));
+    await expect(sales.locator(".iv-bm-dayh b").first()).toHaveText(BM.day(`${m}-06`));
+    await expect(sales.locator(".iv-bm-dayh span").first()).toHaveText(BM.dayHead(1, "24,90 €"));
+    const sale = sales.locator(".iv-bm-sale", { hasText: PASTE }).first();
+    await expect(sale.locator("small")).toHaveText(`${I.mode.client} · ${BM.barber("3,41 €")}`);
+    await expect(sale.locator(".adm-tag")).toHaveCount(0);
+
+    // touch targets: 44px; nothing scrolls sideways
+    const small = await main.evaluate((el) =>
+      [...el.querySelectorAll<HTMLElement>(".iv-bm-back, .iv-bm-months .iv-btn, .iv-bm-inv > .iv-btn, .iv-bm-more")]
+        .map((b) => b.getBoundingClientRect())
+        .filter((r) => r.width > 0 && (r.height < 44 || r.width < 44))
+        .map((r) => `${Math.round(r.width)}×${Math.round(r.height)}`),
+    );
+    expect(small).toEqual([]);
+    await expectNoSideScroll(page);
+    await shot(page, "barber-month");
+
+    // «⋯» names the sale and opens a sheet from the bottom; «Сторно» is in red and asks first
+    await sale.getByRole("button", { name: BM.acts(PASTE) }).click();
+    const sheet = page.getByRole("dialog", { name: PASTE });
+    const item = sheet.getByRole("menuitem", { name: BM.reverseItem });
+    await expect(item).toHaveCSS("color", "rgb(217, 45, 32)");
+    await expectNoSideScroll(page);
+    await shot(page, "barber-month-sheet");
+    await item.click();
+    await expect(sheet).toHaveCount(0);
+    const ask = page.getByRole("alertdialog", { name: I.reverse });
+    await expect(ask).toContainText(I.reverseAsk);
+    await expect(ask).toContainText(`${PASTE} · 24,90 €`);
+    await expect(ask.getByRole("textbox", { name: I.reverseNote })).toBeVisible();
+    await ask.getByRole("button", { name: A.cancel }).click();
+    await expect(ask).toHaveCount(0);
+    // cancelled: nothing taken back
+    await expect(sale.locator(".adm-tag")).toHaveCount(0);
+
+    // this month: the next one is greyed, not a link
+    await months.getByRole("link").last().click();
+    await page.waitForURL((u) => u.search === `?m=${thisMonth}`);
+    await hydrated(page);
+    await expect(page.locator(".iv-bm-months:visible [aria-disabled='true']")).toBeVisible();
+    await expect(page.locator(".iv-bm-months:visible h2")).toHaveText(`${cap(BM.months[mo - 1])} ${y}`);
   });
 
   test.describe("on a wide screen", () => {

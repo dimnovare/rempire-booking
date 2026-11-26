@@ -9,6 +9,7 @@ export const en: Copy = {
   noDb: "No database connected.",
   error: "That didn't work. Please try again.",
   offline: "No internet. Showing what was loaded.",
+  missing: { title: "There is no such page", lead: "The link may be old or mistyped.", home: "Open my day" },
   close: "Close",
   back: "Back",
   save: "Save",
@@ -37,10 +38,11 @@ export const en: Copy = {
     mine: "this is you",
     find: "Barber's name",
     nobody: "Nobody by that name.",
-    working: "Working",
-    gone: (n: number) => `No longer at the salon · ${n}`,
-    hours: (h: string) => `today ${h}`,
-    dayOff: "day off today",
+    working: (n: number) => `Working today · ${n}`,
+    offToday: (n: number) => `Day off today · ${n}`,
+    next: (d: string) => `next working day: ${d}`,
+    noNext: "no working day in the next two weeks",
+    gone: (n: number) => `Left the salon · ${n}`,
   },
 
   install: {

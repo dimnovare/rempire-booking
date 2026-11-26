@@ -66,6 +66,13 @@ test.describe("Renat on /b", () => {
     await hydrated(page);
     await expect(page.getByRole("heading", { level: 1, name: B.pick.title })).toBeVisible();
     await expectNoSideScroll(page);
+    // grouped by today (26.11): «Сегодня работают · N», «Сегодня выходной · N»; the demo's today may be anyone's day off
+    const groups = await page.locator(".bx-pick .bx-gh").all();
+    expect(groups.length).toBeGreaterThan(0);
+    for (const g of groups) {
+      const n = await g.locator("xpath=following-sibling::ul[1]/li").count();
+      expect([B.pick.working(n), B.pick.offToday(n)]).toContain((await g.textContent())?.trim());
+    }
     await page.getByRole("button", { name: barber.name }).click();
     await page.waitForURL((u) => u.pathname === "/b");
     await expect(page.getByRole("link", { name: B.pick.viewing(barber.name) })).toBeVisible();

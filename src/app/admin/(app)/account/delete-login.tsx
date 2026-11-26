@@ -12,11 +12,14 @@
  *
  * On a phone a row's «⋯» opens a sheet from the bottom with the same
  * actions as the wide menu: «Права доступа», «Отключить вход», then
- * «Удалить вход» apart and in red.
+ * «Удалить вход» apart and in red. Between the first two, «Он же барбер»
+ * (26.11.2026, design «Доступ, телефон: он же барбер»): the wide row's
+ * select, moved off the phone's card. It opens a list of «Нет» and the
+ * barbers in the sheet; a pick saves at once.
  */
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { InfoIcon, NextIcon } from "../../icons";
+import { useEffect, useRef, useState } from "react";
+import { CaretIcon, InfoIcon, NextIcon } from "../../icons";
 import { useA } from "../../lang";
 import { Sheet } from "../sheet";
 import type { AccessRow } from "./access";
@@ -99,7 +102,9 @@ export function DeleteAsk({ row, onClose, onYes, onOff }: { row: AccessRow; onCl
  * A phone's sheet of one row's actions. `mayRights`: the rights page;
  * `mayFlip`: switching off or on. `blocked`: why this login may not be
  * switched off or deleted (one's own; an owner's, for an admin), shown
- * under a greyed «Удалить вход».
+ * under a greyed «Удалить вход». `barber`: the barber the login is now;
+ * `linkWhy`: why that cannot be changed here, shown under a greyed
+ * «Он же барбер»; `onLink` saves a pick ("" for «Нет»).
  */
 export function RowSheet({
   row,
@@ -107,6 +112,10 @@ export function RowSheet({
   mayRights,
   mayFlip,
   mayDelete,
+  barber,
+  linkWhy,
+  linking,
+  onLink,
   onClose,
   onFlip,
   onDelete,
@@ -117,12 +126,41 @@ export function RowSheet({
   mayFlip: boolean;
   /** the right to delete at all («Удалять пользователей»): without it the item is not there */
   mayDelete: boolean;
+  barber: { id: string; name: string | null };
+  linkWhy: string | null;
+  /** a pick is being saved */
+  linking: boolean;
+  onLink: (staffId: string) => void;
   onClose: () => void;
   onFlip: () => void;
   onDelete: () => void;
 }) {
   const A = useA();
   const T = A.account;
+  const [open, setOpen] = useState(false);
+  const head = useRef<HTMLButtonElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  // opened: the focus on the barber it is now (or «Нет»), so the next tap or arrow starts there
+  useEffect(() => {
+    if (open) list.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus();
+  }, [open]);
+  const pick = (id: string) => {
+    if (id !== barber.id) onLink(id);
+    setOpen(false);
+    head.current?.focus();
+  };
+  // ↑ ↓ move between the list's rows, as in any menu
+  const arrows = (e: React.KeyboardEvent) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    const items = Array.from(list.current?.querySelectorAll<HTMLElement>('[role="menuitemradio"]') ?? []);
+    const at = items.indexOf(document.activeElement as HTMLElement);
+    const next = items[(at + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length];
+    if (next) {
+      e.preventDefault();
+      next.focus();
+    }
+  };
+  const choices = [{ id: "", name: T.notBarber }, ...row.linkable];
   return (
     <Sheet title={row.name || row.email.split("@")[0]} onClose={onClose}>
       <p className="ac-sheet-mail">{row.email}</p>
@@ -132,6 +170,41 @@ export function RowSheet({
             <span>{A.rights.title}</span>
             <NextIcon size={18} />
           </Link>
+        )}
+        {/* while a pick saves, the row keeps the focus (a disabled button would drop it); it only does not open */}
+        <button
+          ref={head}
+          type="button"
+          role="menuitem"
+          className="ac-sheet-item ac-sheet-also"
+          aria-expanded={linkWhy ? undefined : open}
+          aria-controls={open ? `ac-also-${row.id}` : undefined}
+          aria-describedby={linkWhy ? `ac-also-w-${row.id}` : undefined}
+          aria-busy={linking || undefined}
+          disabled={!!linkWhy}
+          onClick={() => !linking && setOpen(!open)}
+        >
+          <span>{T.alsoBarber}</span>
+          <span className="ac-sheet-val">
+            <span className="sr">: </span>
+            {barber.name ?? T.notBarber}
+          </span>
+          {!linkWhy && <CaretIcon size={18} />}
+        </button>
+        {linkWhy && (
+          <small className="ac-own" id={`ac-also-w-${row.id}`}>
+            {linkWhy}
+          </small>
+        )}
+        {open && !linkWhy && (
+          <div role="group" aria-label={T.alsoBarber} id={`ac-also-${row.id}`} className="ac-pick" ref={list} onKeyDown={arrows}>
+            {choices.map((s) => (
+              <button key={s.id} type="button" role="menuitemradio" aria-checked={s.id === barber.id} className="ac-pick-item" onClick={() => pick(s.id)}>
+                <span>{s.name}</span>
+                <i className="ac-dot" aria-hidden="true" />
+              </button>
+            ))}
+          </div>
         )}
         {mayFlip && (
           <button type="button" role="menuitem" className="ac-sheet-item" onClick={onFlip}>

@@ -6,9 +6,10 @@
  * for an owner or the front desk with no barber of their own and nobody's
  * app open (requireStaff, src/lib/auth/current.ts).
  *
- * The design board «Чей день смотреть» (25.11): «‹ Салон» back to the
- * admin, a search by name, each barber with today's hours and visits, and
- * those who no longer work in the salon folded away.
+ * The design board «Чей день смотреть» (25.11, grouped by today 26.11):
+ * «‹ Салон» back to the admin, a search by name, «Сегодня работают» with
+ * today's hours and visits, «Сегодня выходной» with the next working day,
+ * and those who left the salon folded away.
  */
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -18,9 +19,11 @@ import { can } from "@/lib/auth/rights";
 import { staffToPick } from "@/lib/barber/account";
 import { dbConfigured, query } from "@/lib/db";
 import { localParts, todayIn } from "@/lib/tz";
-import { getB } from "../../lang-server";
+import { barberLang, getB } from "../../lang-server";
 import { Ic } from "../sell/icons";
 import { PickList, type PickRow } from "./pick-list";
+
+const TAG = { ru: "ru-RU", et: "et-EE", en: "en-GB" } as const;
 
 export default function PickPage() {
   return (
@@ -37,7 +40,9 @@ async function Pick() {
   if (user.role === "staff") redirect("/b");
   const tz = business.timezone;
   const today = todayIn(tz);
-  const [staff, day] = await Promise.all([staffToPick(query, business.id), loadCalendar(query, business, today, 1)]);
+  // two weeks: for a barber off today, his next working day
+  const [staff, day, lang] = await Promise.all([staffToPick(query, business.id), loadCalendar(query, business, today, 14), barberLang()]);
+  const dayName = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString(TAG[lang], { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   // his own day first, if this login is a barber too
   const all = staff.filter((s) => can(user, "journal.staff", { staffId: s.id }));
   const list = [...all.filter((s) => s.id === user.staffId), ...all.filter((s) => s.id !== user.staffId)];
@@ -48,16 +53,20 @@ async function Pick() {
   };
   const rows: PickRow[] = list.map((s) => {
     const spans = day.work[s.id]?.[today] ?? [];
-    const visits = day.visits.filter((v) => v.staffId === s.id && v.status !== "cancelled").length;
-    const hours = spans.length ? B.pick.hours(spans.map(([a, b]) => `${hm(a)}–${hm(b)}`).join(", ")) : B.pick.dayOff;
+    const visits = day.visits.filter((v) => v.staffId === s.id && v.status !== "cancelled" && localParts(v.start, tz).date === today).length;
+    const hours = spans.map(([a, b]) => `${hm(a)}–${hm(b)}`).join(", ");
+    const next = Object.keys(day.work[s.id] ?? {})
+      .filter((d) => d > today && (day.work[s.id]?.[d]?.length ?? 0) > 0)
+      .sort()[0];
     return {
       id: s.id,
       name: s.name,
       photoUrl: s.photoUrl,
       active: s.active,
+      today: s.active && spans.length > 0,
       mine: s.id === user.staffId,
-      // those who left: no day to tell
-      sub: s.active ? (visits ? `${hours} · ${B.day.visits(visits)}` : hours) : B.pick.off,
+      // working today: hours and visits; off today: the next working day; those who left: no day to tell
+      sub: !s.active ? B.pick.off : spans.length ? (visits ? `${hours} · ${B.day.visits(visits)}` : hours) : next ? B.pick.next(dayName(next)) : B.pick.noNext,
     };
   });
   return (

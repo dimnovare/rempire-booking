@@ -4,6 +4,9 @@
  * branch of rempire-web (docs/phase-c.md) and is pushed only with Dim's OK.
  *
  *   GET  /api/partner/products/lookup?barcode=… | ?q=…&limit=… | ?id=…&variant=…
+ *   GET  /api/partner/products/list?offset=…&limit=…&brand=…&stock=in|out&lang=…
+ *        the whole list a page at a time (Dim, 26.11.2026); a shop that does
+ *        not have this route yet answers 404, which is «not_supported» here
  *   POST /api/partner/products/identify   {image: "data:image/jpeg;base64,…"}
  *   POST /api/partner/barber-sales        {ref, barber: {ref, name}, mode, items}
  *
@@ -64,7 +67,12 @@ export type BarberSaleRequest = {
   items: { productId: string; variant: string; qty: number; unitCents: number }[];
 };
 
-export type ShopErrorCode = "not_configured" | "unavailable" | "bad_request" | "unknown_product" | "unauthorized";
+/**
+ * `not_supported`: the shop answered 404, it has no such route (yet). Every
+ * caller that does not ask for it treats it as `unavailable`, as a 404 was
+ * before.
+ */
+export type ShopErrorCode = "not_configured" | "unavailable" | "bad_request" | "unknown_product" | "unauthorized" | "not_supported";
 
 export class ShopError extends Error {
   constructor(
@@ -106,7 +114,8 @@ export const FAKE_PRODUCTS: ShopProduct[] = [
   P("demo-shampoo", "250ml", "Daily Shampoo", "250 ml", "Demo Beard Co", 1790, 720, 20, "2000000000046"),
   P("demo-pomade", "100ml", "Shine Pomade", "100 ml", "Demo Grooming", 2290, null, 6, "2000000000053"),
   P("demo-comb", "", "Pocket Comb", "", "Demo Tools", 990, 310, 30, "2000000000060"),
-  P("demo-aftershave", "100ml", "Aftershave Balm", "100 ml", "Demo Beard Co", 2690, 1240, 5, "2000000000077"),
+  // sold out: the catalogue's «Нет на складе» has one to show
+  P("demo-aftershave", "100ml", "Aftershave Balm", "100 ml", "Demo Beard Co", 2690, 1240, 0, "2000000000077"),
   P("demo-powder", "20g", "Texture Powder", "20 g", "Demo Grooming", 1890, 790, 9, "2000000000084"),
 ];
 
@@ -206,6 +215,8 @@ async function call<T>(env: Env, path: string, init?: { method?: string; body?: 
   if (res.status === 503 && err === "not_configured") throw new ShopError("not_configured", "the shop has no partner secret or AI key");
   if (res.status === 422 || err === "unknown_product") throw new ShopError("unknown_product");
   if (res.status === 400 || res.status === 413) throw new ShopError("bad_request", err);
+  // the same words as any other status, so a sale's sync_error reads as before
+  if (res.status === 404) throw new ShopError("not_supported", `shop answered ${res.status}`);
   throw new ShopError("unavailable", `shop answered ${res.status}`);
 }
 
@@ -237,7 +248,7 @@ export function cleanProduct(raw: unknown): ShopProduct | null {
 
 const items = (body: { items?: unknown }): ShopProduct[] => (Array.isArray(body.items) ? body.items.map(cleanProduct).filter((p): p is ShopProduct => !!p) : []);
 
-/* ---------- the four calls ---------- */
+/* ---------- the calls ---------- */
 
 export async function lookupBarcode(code: string, env: Env = process.env): Promise<ShopProduct | null> {
   const c = String(code ?? "").trim().slice(0, 64);
@@ -261,6 +272,64 @@ export async function productById(productId: string, variant: string, env: Env =
   if (!id) return null;
   if (shopMode(env) === "fake") return FAKE_PRODUCTS.find((p) => p.productId === id && p.variant === v) ?? null;
   return items(await call<{ items?: unknown }>(env, `/api/partner/products/lookup?id=${encodeURIComponent(id)}&variant=${encodeURIComponent(v)}`))[0] ?? null;
+}
+
+/* ---------- the whole list, a page at a time («Каталог товаров», Dim 26.11.2026) ---------- */
+
+export type StockFilter = "in" | "out";
+export type ListQuery = { offset?: number; limit?: number; brand?: string | null; stock?: string | null; lang?: string };
+/** `brands`: every brand with a listed item, A→Z, whatever the filter. */
+export type ProductList = { items: ShopProduct[]; total: number; brands: string[] };
+
+/** The most one page of the list holds (the shop's own cap). */
+export const LIST_MOST = 100;
+const LIST_DEFAULT = 50;
+const LIST_FAR = 100_000;
+
+const asStock = (v: unknown): StockFilter | null => (v === "in" || v === "out" ? v : null);
+/** In stock: more than none. No number from the shop is not in stock. */
+const inStock = (p: ShopProduct) => (p.stock ?? 0) > 0;
+const byName = (a: string, b: string) => a.localeCompare(b, "en", { sensitivity: "base" }) || (a < b ? -1 : a > b ? 1 : 0);
+/** The shop's own order: brand, name, variant. */
+const listOrder = (a: ShopProduct, b: ShopProduct) => byName(a.brand, b.brand) || byName(a.name, b.name) || byName(a.variant, b.variant);
+
+function bounded(query: ListQuery) {
+  const whole = (v: unknown, dflt: number, lo: number, hi: number) => {
+    const n = Math.floor(Number(v));
+    return Number.isFinite(n) ? Math.min(Math.max(n, lo), hi) : dflt;
+  };
+  return {
+    offset: query.offset == null ? 0 : whole(query.offset, 0, 0, LIST_FAR),
+    limit: query.limit == null ? LIST_DEFAULT : whole(query.limit, LIST_DEFAULT, 1, LIST_MOST),
+    brand: String(query.brand ?? "").trim().slice(0, 80),
+    stock: asStock(query.stock),
+    lang: query.lang === "et" || query.lang === "en" ? query.lang : "ru",
+  };
+}
+
+/**
+ * One page of the shop's whole product list, in its order (brand, name,
+ * variant), filtered by an exact brand and by stock. The read key. A shop
+ * without the route throws ShopError «not_supported».
+ */
+export async function listProducts(query: ListQuery = {}, env: Env = process.env): Promise<ProductList> {
+  const { offset, limit, brand, stock, lang } = bounded(query);
+  if (shopMode(env) === "fake") {
+    const all = [...FAKE_PRODUCTS].sort(listOrder);
+    const hits = all.filter((p) => (!brand || p.brand === brand) && (!stock || (stock === "in") === inStock(p)));
+    const brands = [...new Set(all.map((p) => p.brand).filter(Boolean))].sort(byName);
+    return { items: hits.slice(offset, offset + limit), total: hits.length, brands };
+  }
+  const qs = new URLSearchParams({ offset: String(offset), limit: String(limit), lang });
+  if (brand) qs.set("brand", brand);
+  if (stock) qs.set("stock", stock);
+  const body = await call<{ items?: unknown; total?: unknown; brands?: unknown }>(env, `/api/partner/products/list?${qs}`);
+  const got = items(body).slice(0, limit);
+  const total = typeof body.total === "number" && Number.isInteger(body.total) && body.total >= 0 && body.total <= 1_000_000 ? Math.max(body.total, offset + got.length) : offset + got.length;
+  const brands = Array.isArray(body.brands)
+    ? [...new Set(body.brands.filter((b): b is string => typeof b === "string").map((b) => b.trim().slice(0, 80)).filter(Boolean))].slice(0, 1000)
+    : [];
+  return { items: got, total, brands };
 }
 
 /** Up to three products that look like the photo (C7); the shop's own AI key, never ours. */
