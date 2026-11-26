@@ -321,6 +321,12 @@ test.describe("invoices", () => {
     await hydrated(page);
     await expect(page.locator(".iv-bm-months:visible [aria-disabled='true']")).toBeVisible();
     await expect(page.locator(".iv-bm-months:visible h2")).toHaveText(`${cap(BM.months[mo - 1])} ${y}`);
+
+    // his older invoices: his receiver's page, opened on «Счета»
+    await page.locator(".iv-bm-older:visible a").click();
+    await page.waitForURL(/\/admin\/invoices\/receivers\/[0-9a-f-]{36}\?tab=invoices$/);
+    await hydrated(page);
+    await expect(page.getByRole("tab", { name: I.rcv.tabs.invoices })).toHaveAttribute("aria-selected", "true");
   });
 
   test.describe("on a wide screen", () => {

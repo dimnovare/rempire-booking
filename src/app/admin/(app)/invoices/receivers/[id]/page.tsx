@@ -19,21 +19,22 @@ import { getA } from "../../../../lang-server";
 import { eventLines } from "../../common";
 import { ReceiverView } from "./receiver-view";
 
-export default function ReceiverPage({ params }: PageProps<"/admin/invoices/receivers/[id]">) {
+export default function ReceiverPage({ params, searchParams }: PageProps<"/admin/invoices/receivers/[id]">) {
   return (
     <main className="iv-page">
       <Suspense fallback={<Wait />}>
-        <Loaded params={params} />
+        <Loaded params={params} searchParams={searchParams} />
       </Suspense>
     </main>
   );
 }
 
-async function Loaded({ params }: { params: PageProps<"/admin/invoices/receivers/[id]">["params"] }) {
+async function Loaded({ params, searchParams }: Pick<PageProps<"/admin/invoices/receivers/[id]">, "params" | "searchParams">) {
   const A = await getA();
   if (!dbConfigured()) return <p className="adm-wait">{A.noDb}</p>;
   const { business } = await requireAdmin();
-  const { id } = await params;
+  // ?tab=invoices opens on «Счета» (from a barber's month: «Прошлые счета»)
+  const [{ id }, sp] = await Promise.all([params, searchParams]);
   const receiver = /^[0-9a-f-]{36}$/i.test(id) ? await receiverById(query, business.id, id) : null;
   if (!receiver) notFound();
   const [list, events, rents, staff, issuers] = await Promise.all([
@@ -48,6 +49,7 @@ async function Loaded({ params }: { params: PageProps<"/admin/invoices/receivers
       <Title text={receiver.legalName} />
       <ReceiverView
         key={receiver.id}
+        tab0={sp.tab === "invoices" ? "invoices" : "log"}
         receiver={receiver}
         rows={list.rows.filter((r) => r.receiverId === receiver.id)}
         today={list.today}

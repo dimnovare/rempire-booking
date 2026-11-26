@@ -18,6 +18,7 @@ import { ReceiverDialog, type Opt } from "../receiver-dialog";
 type Tab = "log" | "invoices";
 
 export function ReceiverView({
+  tab0 = "log",
   receiver,
   rows,
   today,
@@ -27,6 +28,8 @@ export function ReceiverView({
   issuers,
   canInvoice,
 }: {
+  /** the tab it opens on */
+  tab0?: Tab;
   receiver: Receiver;
   rows: ListRow[];
   today: string;
@@ -40,7 +43,7 @@ export function ReceiverView({
   const R = A.inv.rcv;
   const router = useRouter();
   const frame = useFrame();
-  const [tab, setTab] = useState<Tab>("log");
+  const [tab, setTab] = useState<Tab>(tab0);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const LOCALE: Record<string, string> = { et: "Eesti", ru: "Русский", en: "English" };

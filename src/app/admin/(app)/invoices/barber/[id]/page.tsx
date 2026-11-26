@@ -174,12 +174,12 @@ async function Loaded({ params, searchParams }: { params: P["params"]; searchPar
                 {draftComing && ` ${M.draftOn(M.day(draftDay))}`}
               </p>
             )}
-            {/* older ones: the receiver's own page lists his invoices (its tab «Счета»); the list has no filter by address */}
+            {/* older ones: the receiver's own page, opened on its tab «Счета»; the list has no filter by address */}
             <p className="iv-mute iv-bm-older">
               {receiver ? (
                 <>
                   {M.older[0]}
-                  <Link className="iv-link" href={`${INV_ROOT}/receivers/${receiver.id}`} prefetch={false}>
+                  <Link className="iv-link" href={`${INV_ROOT}/receivers/${receiver.id}?tab=invoices`} prefetch={false}>
                     {receiver.legalName}
                   </Link>
                   {M.older[1]}
