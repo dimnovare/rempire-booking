@@ -37,7 +37,9 @@ bottom bars behind it. Three variants were drawn on the design canvas (boards
 - **An owner or front desk not linked to a barber** has no «Мой день»; the bar
   stays Журнал · Клиенты · Запросы · Счета · Ещё. A barber's own app is opened
   from «Барберы» → the barber, for support.
-- **A barber** keeps his bar (День · Неделя · Моё время · Продать · Ещё).
+- **A barber** keeps his bar (Мой день · Моё время · Продать · Ещё). His week
+  is «День | Неделя» in the dark bar of «Мой день», in the same place on the
+  day and on the week (Dim, 26.11.2026, option А; kickoff row 41).
 - The dot for waiting requests sits on «Запросы».
 
 ### As built (20.11.2026)

@@ -22,7 +22,7 @@ export const et: Copy = {
 
   /** What a page says to a login that has no right to it (src/lib/auth/rights.ts). */
   rights: { none: "Ligipääs puudub", noneLead: "See jaotis on teie kontole suletud. Õigusi muudab salongi omanik." },
-  nav: { label: "Jaotised", day: "Päev", week: "Nädal", time: "Minu aeg", sell: "Müü", more: "Veel" },
+  nav: { label: "Jaotised", day: "Minu päev", week: "Nädal", time: "Minu aeg", sell: "Müü", more: "Veel" },
 
   own: { title: "Minu päev", view: "Päev või nädal", day: "Päev", week: "Nädal", add: "Broneering" },
 
@@ -167,7 +167,7 @@ export const et: Copy = {
     answer: (s: string) => `Vastus: «${s}»`,
   },
 
-  week: { title: "Nädal", total: "Nädal kokku", off: "puhkepäev" },
+  week: { title: "Nädal", total: "Nädal kokku", off: "puhkepäev", weeks: "Nädalad", thisWeek: "see nädal" },
 
   visit: {
     status: { booked: "Broneeritud", arrived: "Saabus", done: "Saabus", no_show: "Ei tulnud", pending: "Ootab", cancelled: "Tühistatud" },

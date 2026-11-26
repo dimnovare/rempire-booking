@@ -170,7 +170,8 @@ test.describe("an owner who cuts too, on a phone", () => {
     await hydrated(page);
     await expect(page.locator("main:visible").getByRole("heading", { level: 1, name: B.own.title })).toBeVisible();
     await expect(page.locator("main:visible").getByRole("navigation", { name: B.own.view }).getByRole("link", { name: B.own.week })).toHaveAttribute("aria-current", "page");
-    await expect(page.locator("main:visible .bx-own-line")).toContainText(/ · \d+ [а-я]+ · \d+([.,]\d\d)? €$/);
+    // the day's own head (option А, 26.11): his row with the week's visits and money
+    await expect(page.locator("main:visible .bx-cal-sum p")).toHaveText(new RegExp(`^${B.week.total}: \\d+ [а-я]+ · \\d+([.,]\\d\\d)? €$`));
     await expect(page.locator(".bx-wk:visible > li")).toHaveCount(7);
     await expectOneFrame(page, OWN_BAR, A.nav.mine);
     await expectNoSideScroll(page);

@@ -36,9 +36,10 @@ function Icon({ name }: { name: string }) {
 
 /**
  * The four sections; the current one is lit. «Мои расчёты» sits under «Ещё».
- * The week has no tab: «День | Неделя» sits in the bar of the day and of
- * the week (own-head.tsx), as the journal we follow has them side by side
- * (Dim, round 13), so «День» stays lit on the week.
+ * The week has no tab: «День | Неделя» sits in the same dark bar of the day
+ * and of the week (own-head.tsx), as the journal we follow has them side by
+ * side (Dim, round 13). The tab is «Мой день», as in Renat's bar, and stays
+ * lit on the week (Dim, 26.11.2026: option А).
  */
 export function BNav() {
   const B = useB();

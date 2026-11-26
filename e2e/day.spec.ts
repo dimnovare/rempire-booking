@@ -110,16 +110,51 @@ test.describe("his day", () => {
     await expect(s).toHaveCount(0);
   });
 
-  test("the week: seven days with their visits and the week's total", async ({ page }) => {
-    await page.goto("/b/week");
+  test("the week: the day's own head, seven days with their visits, the weeks before and after", async ({ page }) => {
+    await page.goto("/b");
+    await hydrated(page);
+    const segAt = async () => (await page.locator(".cal-bar:visible .bx-own-seg").boundingBox())!;
+    const onDay = await segAt();
+    await page.locator(".cal-bar:visible").getByRole("navigation", { name: B.own.view }).getByRole("link", { name: B.own.week }).click();
+    await page.waitForURL((u) => u.pathname === "/b/week");
+    await hydrated(page);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    await expect(page.getByText(B.week.total)).toBeVisible();
-    // no tab of its own (Dim, round 13): «День | Неделя» is on the page, and «День» in the bar stays lit
-    const seg = page.locator("main:visible").getByRole("navigation", { name: B.own.view });
-    await expect(seg.getByRole("link", { name: B.own.week })).toHaveAttribute("aria-current", "page");
+    // option А (Dim, 26.11): «День | Неделя» stays in the dark bar, in the same place as on the day
+    const bar = page.locator(".cal-bar:visible");
+    await expect(bar.getByRole("navigation", { name: B.own.view }).getByRole("link", { name: B.own.week })).toHaveAttribute("aria-current", "page");
+    const onWeek = await segAt();
+    expect([Math.round(onWeek.x), Math.round(onWeek.y), Math.round(onWeek.width)]).toEqual([Math.round(onDay.x), Math.round(onDay.y), Math.round(onDay.width)]);
+    // the bar's title is the week; its ▾ picks a date; «Сегодня» only off this week
+    await expect(bar.locator(".cal-title")).toContainText(/\d/);
+    await expect(bar.getByLabel(B.day.pickDate)).toHaveCount(1);
+    await expect(bar.getByRole("button", { name: B.day.today, exact: true })).toHaveCount(0);
+    // his row: the week's visits and money, how full it is
+    await expect(page.locator(".bx-wkv .bx-cal-sum p")).toContainText(new RegExp(`^${B.week.total}: \\d+ `));
+    await expect(page.locator(".bx-wkv .bx-cal-load")).toBeVisible();
+    // seven days, today marked; «Мой день» in the tabs stays lit
+    await expect(page.locator(".bx-wk > li")).toHaveCount(7);
+    await expect(page.locator(".bx-wk > li.is-today .bx-wk-now")).toHaveText(B.day.today);
     await expect(page.getByRole("navigation", { name: B.nav.label }).getByRole("link", { name: B.nav.day, exact: true })).toHaveAttribute("aria-current", "page");
     await expectNoSideScroll(page);
     expect(await smallTargets(page)).toEqual([]);
+
+    // the weeks float at the bottom: the next one, then «Сегодня» brings this week back
+    const weeks = page.getByRole("navigation", { name: B.week.weeks });
+    await expect(weeks.locator("small")).toHaveText(B.week.thisWeek);
+    await weeks.getByRole("link", { name: B.day.nextWeek }).click();
+    await page.waitForURL((u) => u.pathname === "/b/week" && u.searchParams.has("d"));
+    await hydrated(page);
+    await expect(page.locator(".bx-wk > li.is-today")).toHaveCount(0);
+    await expect(weeks.locator("small")).toHaveCount(0);
+    await bar.getByRole("button", { name: B.day.today, exact: true }).click();
+    await page.waitForURL((u) => u.pathname === "/b/week" && !u.search);
+    await hydrated(page);
+    await expect(page.locator(".bx-wk > li.is-today")).toHaveCount(1);
+
+    // a day's card opens that day
+    await page.locator(".bx-wk > li.is-today a").click();
+    await page.waitForURL((u) => u.pathname === "/b" && !u.search);
+    await expect(page.locator(".cal-bar:visible .bx-own-seg [aria-current='page']")).toHaveText(B.own.day);
   });
 
   test("the bottom bar takes him everywhere", async ({ page }) => {

@@ -26,7 +26,7 @@ export const ru = {
 
   /** What a page says to a login that has no right to it (src/lib/auth/rights.ts). */
   rights: { none: "Нет доступа", noneLead: "Этот раздел закрыт для вашего входа. Права меняет владелец салона." },
-  nav: { label: "Разделы", day: "День", week: "Неделя", time: "Моё время", sell: "Продать", more: "Ещё" },
+  nav: { label: "Разделы", day: "Мой день", week: "Неделя", time: "Моё время", sell: "Продать", more: "Ещё" },
 
   /**
    * «Мой день» of an owner or the front desk who cuts too (docs/apps.md,
@@ -193,6 +193,8 @@ export const ru = {
     title: "Неделя",
     total: "Итого за неделю",
     off: "выходной",
+    weeks: "Недели",
+    thisWeek: "эта неделя",
   },
 
   visit: {

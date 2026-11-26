@@ -22,7 +22,7 @@ export const en: Copy = {
 
   /** What a page says to a login that has no right to it (src/lib/auth/rights.ts). */
   rights: { none: "No access", noneLead: "This section is closed to your login. The salon's owner changes rights." },
-  nav: { label: "Sections", day: "Day", week: "Week", time: "My time", sell: "Sell", more: "More" },
+  nav: { label: "Sections", day: "My day", week: "Week", time: "My time", sell: "Sell", more: "More" },
 
   own: { title: "My day", view: "Day or week", day: "Day", week: "Week", add: "Visit" },
 
@@ -167,7 +167,7 @@ export const en: Copy = {
     answer: (s: string) => `Answer: «${s}»`,
   },
 
-  week: { title: "Week", total: "Week total", off: "day off" },
+  week: { title: "Week", total: "Week total", off: "day off", weeks: "Weeks", thisWeek: "this week" },
 
   visit: {
     status: { booked: "Booked", arrived: "Arrived", done: "Arrived", no_show: "No-show", pending: "Waiting", cancelled: "Cancelled" },

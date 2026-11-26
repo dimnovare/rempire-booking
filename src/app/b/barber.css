@@ -102,25 +102,31 @@ html:has(.bx-cal) { overscroll-behavior-y: contain; }
 .bx-state { margin: 0; padding: 6px 10px; font-size: 13px; color: var(--mute); border: 1px solid var(--line-2); }
 .bx-state.is-off { color: var(--warn); border-color: var(--warn); }
 
-/* the head of the week (B2) */
-.bx-sum { margin: 4px 0 0; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 15px; color: var(--mute); }
-.bx-sum b { color: var(--fg); font: 600 17px/1 var(--display); }
-
-/* ---------- the week (B2) ---------- */
-.bx-week { gap: 14px; padding-top: 12px; }
-.bx-wnav { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.bx-wnav > div { flex: 1; min-width: 0; text-align: center; display: flex; flex-direction: column; gap: 4px; }
-.bx-wk { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; border-top: 1px solid var(--line); min-width: 0; }
+/* ---------- the week (B2) ----------
+   Option А of «День | Неделя на телефоне» (26.11): the day's dark bar and its row (day-grid.css, .bx-cal),
+   then the days as cards on the grid's grey; the weeks before and after float where the day has its days. */
+.bx-cal.bx-wkv { background: #f1f3f7; }
+.bx-wk { list-style: none; margin: 0; padding: 8px max(12px, env(safe-area-inset-right, 0px)) 76px max(12px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 /* min-width: 0 all the way down: the one-line visits end in «…» instead of widening the page (WebKit) */
-.bx-wk > li { border-bottom: 1px solid var(--line); min-width: 0; }
-.bx-wk > li > a { display: flex; flex-direction: column; gap: 4px; padding: 12px 0 12px 12px; text-decoration: none; border-left: 3px solid transparent; min-width: 0; }
-.bx-wk > li.is-today > a { border-left-color: var(--lime); }
-.bx-wk-head { display: flex; justify-content: space-between; gap: 12px; }
-.bx-wk-head b { font: 600 17px/1.1 var(--display); }
-.bx-wk-head span { font-variant-numeric: tabular-nums; }
-.bx-wk > li > a > small { color: var(--mute); font-size: 13px; }
-.bx-wk > li.is-off .bx-wk-head b { color: var(--dim); }
+.bx-wk > li { min-width: 0; border-radius: 12px; background: #fff; box-shadow: 0 0 0 1px #e3e6ee; }
+.bx-wk > li > a { display: flex; flex-direction: column; gap: 4px; min-height: 44px; padding: 10px 12px; border-radius: 12px; color: #2b3134; text-decoration: none; min-width: 0; }
+.bx-wk > li.is-today { box-shadow: inset 3px 0 0 var(--lime), 0 0 0 1px #e3e6ee; }
+.bx-wk > li.is-off { background: transparent; box-shadow: none; }
+.bx-wk > li.is-off > a { padding-top: 6px; padding-bottom: 6px; }
+.bx-wk-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bx-wk-head b { min-width: 0; font: 600 16px/22px var(--body); }
+.bx-wk-head > svg { flex: none; margin-left: auto; color: #9aa0ab; }
+.bx-wk-now { flex: none; display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 10px; background: var(--lime); color: var(--on-lime); font: 600 11px/1 var(--body); }
+.bx-wk-sum { flex: none; margin-left: auto; font: 600 15px/1 var(--body); font-variant-numeric: tabular-nums; }
+.bx-wk-sum + svg { margin-left: 0; }
+.bx-wk > li > a > small { color: #71757f; font-size: 13px; }
+.bx-wk > li.is-off .bx-wk-head b { color: #71757f; font-weight: 500; }
 .bx-wk-list { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; font-size: 14px; min-width: 0; }
+/* the weeks before and after: links in the journal's week strip (admin.css, .cal-strip.is-weeks) */
+.bx-wkv .cal-strip.is-weeks { height: 56px; grid-template-columns: 48px minmax(0, 1fr) 48px; }
+.bx-wkv .cal-strip.is-weeks a { height: 48px; display: grid; place-items: center; border-radius: 10px; color: var(--chrome-fg); }
+.bx-wkv .cal-strip.is-weeks b { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.bx-wkv .cal-strip.is-weeks small { color: var(--chrome-mute); font: 400 12px/14px var(--body); }
 .bx-wk-list > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .bx-wk-list b { font-variant-numeric: tabular-nums; }
 .bx-wk-list small { color: var(--dim); font-size: 13px; }
@@ -360,13 +366,9 @@ html:has(.bx-cal) { overscroll-behavior-y: contain; }
 /* five sections in the bottom bar */
 .bx-nav:not(.one-nav):has(a:nth-child(5)) a { font-size: 10px; }
 
-/* ---------- «Мой день» of an owner or the front desk who cuts too (docs/apps.md, «One app for Renat») ----------
-   His own day is a barber's day, the journal's grid (day-grid.css); his week keeps the head of the design
-   board «A: Мой день как вкладка»: the title with a line of the week, and «День | Неделя». */
-.bx-own-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
-.bx-own-head > div { min-width: 0; }
-.bx-own-head .adm-h1 { font: 600 22px/28px var(--body); }
-.bx-own-line { margin: 0; font: 400 13px/18px var(--body); color: #71757f; }
+/* ---------- «День | Неделя» (own-head.tsx) ----------
+   In the dark bar of the day and of the week alike, for a barber and for «Мой день» of an owner or the front
+   desk who cuts too (docs/apps.md, «One app for Renat»); its colours there are day-grid.css's. */
 .bx-own-seg { flex: none; display: flex; }
 .bx-own-seg a { height: 36px; display: inline-flex; align-items: center; padding: 0 12px; border: 1px solid #e0e3eb; background: #fff; color: #2b3134; font: 500 13px/1 var(--body); text-decoration: none; white-space: nowrap; }
 .bx-own-seg a:first-child { border-radius: 8px 0 0 8px; }
@@ -374,7 +376,3 @@ html:has(.bx-cal) { overscroll-behavior-y: contain; }
 .bx-own-seg a + a { border-left: 0; }
 .bx-own-seg a[aria-current="page"] { border-color: #2b3134; background: #2b3134; color: #fff; }
 .bx-own-seg a[aria-current="page"] + a { border-left: 0; }
-.bx-week.is-own { padding-top: 16px; }
-.bx-week.is-own .bx-own-head { margin-bottom: 6px; }
-/* a barber's week: «День | Неделя» on the right, above the week (the week has no tab of its own) */
-.bx-week-seg { display: flex; justify-content: flex-end; margin-bottom: 6px; }
